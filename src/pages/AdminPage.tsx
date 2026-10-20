@@ -3,6 +3,9 @@ import { useApp, generateId } from '../store/AppContext';
 import { Package, DollarSign, BookOpen, Download, Plus, Trash2, Edit2, Check, X, AlertTriangle } from 'lucide-react';
 import { UnitOfMeasure, MealType, RecipeSource } from '../types';
 import { formatAmount } from '../utils/calculations';
+import { ConflictError, ValidationError, NotFoundError } from '../utils/errors';
+import { validateIngredient, validateRecipe } from '../utils/validation';
+import { useToast } from '../components/ToastProvider';
 
 type AdminTab = 'ingredients' | 'prices' | 'recipes' | 'import';
 
@@ -11,6 +14,7 @@ const mealTypeLabels: Record<MealType, string> = { BREAKFAST: 'Завтрак', 
 
 export default function AdminPage() {
   const { state, dispatch } = useApp();
+  const { showError, showSuccess } = useToast();
   const [tab, setTab] = useState<AdminTab>('ingredients');
   
   // Ingredient form
@@ -42,12 +46,29 @@ export default function AdminPage() {
   const isRecipeUsed = (recId: string) => state.trips.some(t => t.days?.some(d => d.meals?.some(m => m.recipeId === recId)));
 
   const handleSaveIngredient = () => {
-    if (!ingForm.name || !ingForm.category) return;
+    // Validate ingredient data
+    const errors = validateIngredient({ name: ingForm.name, unit: ingForm.unit, category: ingForm.category });
+    if (errors.length > 0) {
+      const validationError = new ValidationError(errors, 'Некорректные данные компонента');
+      showError(validationError.toProblemDetail());
+      return;
+    }
+
     if (editingIng) {
-      if (isIngredientUsed(editingIng)) { alert('Компонент используется в рецептах и не может быть изменён'); return; }
+      if (isIngredientUsed(editingIng)) {
+        const recipes = getIngredientRecipes(editingIng);
+        const conflictError = new ConflictError(
+          'Компонент используется в рецептах и не может быть изменён',
+          recipes.map(r => ({ resourceType: 'recipe', resourceId: r.id, resourceName: r.name }))
+        );
+        showError(conflictError.toProblemDetail());
+        return;
+      }
       dispatch({ type: 'UPDATE_INGREDIENT', payload: { id: editingIng, name: ingForm.name, unit: ingForm.unit, category: ingForm.category, createdAt: state.ingredients.find(i => i.id === editingIng)?.createdAt || '' } });
+      showSuccess('Компонент обновлён');
     } else {
       dispatch({ type: 'ADD_INGREDIENT', payload: { id: generateId(), name: ingForm.name, unit: ingForm.unit, category: ingForm.category, createdAt: new Date().toISOString() } });
+      showSuccess('Компонент добавлен');
     }
     setShowIngForm(false);
     setEditingIng(null);
@@ -57,10 +78,15 @@ export default function AdminPage() {
   const handleDeleteIngredient = (id: string) => {
     if (isIngredientUsed(id)) {
       const recipes = getIngredientRecipes(id);
-      alert(`Компонент используется в рецептах: ${recipes.map(r => r.name).join(', ')}`);
+      const conflictError = new ConflictError(
+        `Компонент "${state.ingredients.find(i => i.id === id)?.name}" используется в рецептах и не может быть удалён`,
+        recipes.map(r => ({ resourceType: 'recipe', resourceId: r.id, resourceName: r.name }))
+      );
+      showError(conflictError.toProblemDetail());
       return;
     }
     dispatch({ type: 'DELETE_INGREDIENT', payload: id });
+    showSuccess('Компонент удалён');
   };
 
   const handleSavePrice = () => {
@@ -74,7 +100,19 @@ export default function AdminPage() {
   };
 
   const handleSaveRecipe = () => {
-    if (!recForm.name || recForm.ingredients.length === 0 || !recForm.ingredients[0].ingredientId) return;
+    // Validate recipe data
+    const errors = validateRecipe({
+      name: recForm.name,
+      mealType: recForm.mealType,
+      baseServings: recForm.baseServings,
+      ingredients: recForm.ingredients.filter(i => i.ingredientId && i.amount),
+    });
+    if (errors.length > 0) {
+      const validationError = new ValidationError(errors, 'Некорректные данные рецепта');
+      showError(validationError.toProblemDetail());
+      return;
+    }
+
     const recipeIngredients = recForm.ingredients
       .filter(i => i.ingredientId && i.amount)
       .map(i => ({ ingredientId: i.ingredientId, amount: parseFloat(i.amount), ingredient: state.ingredients.find(ing => ing.id === i.ingredientId) }));
@@ -94,14 +132,21 @@ export default function AdminPage() {
     });
     setShowRecForm(false);
     setRecForm({ name: '', mealType: 'LUNCH', baseServings: 4, caloriesPerServing: '', ingredients: [{ ingredientId: '', amount: '' }] });
+    showSuccess('Рецепт добавлен');
   };
 
   const handleDeleteRecipe = (id: string) => {
     if (isRecipeUsed(id)) {
-      alert('Рецепт используется в походах и не может быть удалён');
+      const trips = state.trips.filter(t => t.days?.some(d => d.meals?.some(m => m.recipeId === id)));
+      const conflictError = new ConflictError(
+        `Рецепт "${state.recipes.find(r => r.id === id)?.name}" используется в походах и не может быть удалён`,
+        trips.map(t => ({ resourceType: 'trip', resourceId: t.id, resourceName: t.name }))
+      );
+      showError(conflictError.toProblemDetail());
       return;
     }
     dispatch({ type: 'DELETE_RECIPE', payload: id });
+    showSuccess('Рецепт удалён');
   };
 
   const handleApproveStaging = (stagingId: string) => {

@@ -2,18 +2,31 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp, generateId } from '../store/AppContext';
 import { Plus, Mountain, Calendar, Users, Trash2, Edit2 } from 'lucide-react';
+import { validateTrip } from '../utils/validation';
+import { ValidationError } from '../utils/errors';
+import { ProblemDetailAlert } from '../components/ProblemDetailAlert';
+import { useToast } from '../components/ToastProvider';
 
 export default function TripsPage() {
   const { state, dispatch } = useApp();
   const navigate = useNavigate();
+  const { showError, showSuccess } = useToast();
   const [showCreate, setShowCreate] = useState(false);
   const [newTrip, setNewTrip] = useState({ name: '', startDate: '', endDate: '', defaultPeople: 4, notes: '' });
+  const [formErrors, setFormErrors] = useState<{ field: string; message: string }[]>([]);
 
   const myTrips = state.trips.filter(t => t.userId === state.currentUser?.id);
 
   const handleCreate = () => {
-    if (!newTrip.name || !newTrip.startDate || !newTrip.endDate) return;
-    if (newTrip.endDate < newTrip.startDate) return;
+    // Validate trip data
+    const errors = validateTrip(newTrip);
+    if (errors.length > 0) {
+      setFormErrors(errors);
+      const validationError = new ValidationError(errors, 'Не удалось создать поход');
+      showError(validationError.toProblemDetail());
+      return;
+    }
+    setFormErrors([]);
     
     const trip = {
       id: generateId(),
@@ -28,6 +41,7 @@ export default function TripsPage() {
     dispatch({ type: 'ADD_TRIP', payload: trip });
     setShowCreate(false);
     setNewTrip({ name: '', startDate: '', endDate: '', defaultPeople: 4, notes: '' });
+    showSuccess('Поход успешно создан');
   };
 
   const handleDelete = (id: string) => {
@@ -57,14 +71,27 @@ export default function TripsPage() {
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
             <h2 className="text-xl font-bold text-slate-900 mb-4">Новый поход</h2>
+            
+            {formErrors.length > 0 && (
+              <div className="mb-4 space-y-1">
+                {formErrors.map((err, idx) => (
+                  <p key={idx} className="text-sm text-red-600">
+                    <span className="font-medium">{err.field}:</span> {err.message}
+                  </p>
+                ))}
+              </div>
+            )}
+            
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Название</label>
                 <input
                   type="text"
                   value={newTrip.name}
-                  onChange={e => setNewTrip({ ...newTrip, name: e.target.value })}
-                  className="w-full px-3 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
+                  onChange={e => { setNewTrip({ ...newTrip, name: e.target.value }); setFormErrors([]); }}
+                  className={`w-full px-3 py-2.5 border rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none ${
+                    formErrors.find(e => e.field === 'name') ? 'border-red-300 bg-red-50' : 'border-slate-300'
+                  }`}
                   placeholder="Поход на Алтай"
                 />
               </div>
@@ -74,8 +101,10 @@ export default function TripsPage() {
                   <input
                     type="date"
                     value={newTrip.startDate}
-                    onChange={e => setNewTrip({ ...newTrip, startDate: e.target.value })}
-                    className="w-full px-3 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
+                    onChange={e => { setNewTrip({ ...newTrip, startDate: e.target.value }); setFormErrors([]); }}
+                    className={`w-full px-3 py-2.5 border rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none ${
+                      formErrors.find(e => e.field === 'startDate') ? 'border-red-300 bg-red-50' : 'border-slate-300'
+                    }`}
                   />
                 </div>
                 <div>
@@ -83,8 +112,10 @@ export default function TripsPage() {
                   <input
                     type="date"
                     value={newTrip.endDate}
-                    onChange={e => setNewTrip({ ...newTrip, endDate: e.target.value })}
-                    className="w-full px-3 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
+                    onChange={e => { setNewTrip({ ...newTrip, endDate: e.target.value }); setFormErrors([]); }}
+                    className={`w-full px-3 py-2.5 border rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none ${
+                      formErrors.find(e => e.field === 'endDate') ? 'border-red-300 bg-red-50' : 'border-slate-300'
+                    }`}
                   />
                 </div>
               </div>
@@ -94,8 +125,10 @@ export default function TripsPage() {
                   type="number"
                   min={1}
                   value={newTrip.defaultPeople}
-                  onChange={e => setNewTrip({ ...newTrip, defaultPeople: parseInt(e.target.value) || 1 })}
-                  className="w-full px-3 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
+                  onChange={e => { setNewTrip({ ...newTrip, defaultPeople: parseInt(e.target.value) || 1 }); setFormErrors([]); }}
+                  className={`w-full px-3 py-2.5 border rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none ${
+                    formErrors.find(e => e.field === 'defaultPeople') ? 'border-red-300 bg-red-50' : 'border-slate-300'
+                  }`}
                 />
               </div>
               <div>

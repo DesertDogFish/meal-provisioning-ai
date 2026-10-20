@@ -18,6 +18,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     { to: '/dashboard', label: 'Главная', icon: <Compass size={20} /> },
     { to: '/trips', label: 'Походы', icon: <Mountain size={20} /> },
     { to: '/recipes', label: 'Рецепты', icon: <Ship size={20} /> },
+    { to: '/errors-demo', label: 'Ошибки (демо)', icon: <Menu size={20} /> },
     ...(isAdmin ? [{ to: '/admin', label: 'Админка', icon: <Menu size={20} /> }] : []),
   ];
 
