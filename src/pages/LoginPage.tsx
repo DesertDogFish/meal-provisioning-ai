@@ -49,23 +49,31 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-emerald-900 flex items-center justify-center p-4">
+    <div className="min-h-screen flex items-center justify-center p-4" style={{
+      background: 'radial-gradient(1100px 500px at 85% -10%, rgba(56, 189, 248, 0.09), transparent), radial-gradient(900px 500px at -10% 30%, rgba(45, 212, 191, 0.07), transparent), var(--bg)'
+    }}>
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-emerald-400 to-cyan-500 rounded-2xl mb-4 shadow-lg shadow-emerald-500/20">
-            <Compass size={32} className="text-white" />
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-4" style={{
+            background: 'linear-gradient(135deg, var(--w1), var(--w2))',
+            boxShadow: '0 8px 30px rgba(45, 212, 191, 0.35)'
+          }}>
+            <svg width="32" height="32" viewBox="0 0 96 96">
+              <path d="M48 18 L70 70 H26 Z" fill="#fff"/>
+              <path d="M18 80 q8 -6 15 0 t15 0 t15 0 t15 0" stroke="#04121A" strokeWidth="5" fill="none"/>
+            </svg>
           </div>
-          <h1 className="text-3xl font-bold text-white mb-2">Provision</h1>
-          <p className="text-slate-400">Планировщик питания для походов и яхт</p>
+          <h1 className="text-3xl font-bold mb-2" style={{ fontFamily: 'Unbounded', color: 'var(--text)' }}>Провиант</h1>
+          <p style={{ color: 'var(--muted)' }}>Планировщик питания для походов и яхт</p>
         </div>
 
-        <div className="bg-white rounded-2xl shadow-xl p-8">
-          <h2 className="text-xl font-bold text-slate-900 mb-6">
+        <div className="rounded-2xl p-8" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+          <h2 className="text-xl font-bold mb-6" style={{ color: 'var(--text)' }}>
             {isRegister ? 'Регистрация' : 'Вход в систему'}
           </h2>
 
           {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4 text-sm">
+            <div className="px-4 py-3 rounded-lg mb-4 text-sm" style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)', color: '#FCA5A5' }}>
               {error}
             </div>
           )}
@@ -74,27 +82,29 @@ export default function LoginPage() {
             {isRegister && (
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Имя</label>
+                  <label className="block text-sm font-medium mb-1" style={{ color: 'var(--muted)' }}>Имя</label>
                   <div className="relative">
-                    <User size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <User size={18} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--muted)' }} />
                     <input
                       type="text"
                       value={firstName}
                       onChange={e => setFirstName(e.target.value)}
-                      className="w-full pl-10 pr-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
+                      className="w-full pl-10 pr-4 py-2.5 rounded-lg outline-none"
+                      style={{ background: 'var(--elev)', border: '1px solid var(--border)', color: 'var(--text)' }}
                       placeholder="Иван"
                     />
                   </div>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Фамилия</label>
+                  <label className="block text-sm font-medium mb-1" style={{ color: 'var(--muted)' }}>Фамилия</label>
                   <div className="relative">
-                    <User size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <User size={18} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--muted)' }} />
                     <input
                       type="text"
                       value={lastName}
                       onChange={e => setLastName(e.target.value)}
-                      className="w-full pl-10 pr-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
+                      className="w-full pl-10 pr-4 py-2.5 rounded-lg outline-none"
+                      style={{ background: 'var(--elev)', border: '1px solid var(--border)', color: 'var(--text)' }}
                       placeholder="Петров"
                     />
                   </div>
@@ -103,34 +113,37 @@ export default function LoginPage() {
             )}
 
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
+              <label className="block text-sm font-medium mb-1" style={{ color: 'var(--muted)' }}>Email</label>
               <div className="relative">
-                <Mail size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <Mail size={18} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--muted)' }} />
                 <input
                   type="email"
                   value={email}
                   onChange={e => setEmail(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
+                  className="w-full pl-10 pr-4 py-2.5 rounded-lg outline-none"
+                  style={{ background: 'var(--elev)', border: '1px solid var(--border)', color: 'var(--text)' }}
                   placeholder="you@example.com"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Пароль</label>
+              <label className="block text-sm font-medium mb-1" style={{ color: 'var(--muted)' }}>Пароль</label>
               <div className="relative">
-                <Lock size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <Lock size={18} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--muted)' }} />
                 <input
                   type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={e => setPassword(e.target.value)}
-                  className="w-full pl-10 pr-10 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
+                  className="w-full pl-10 pr-10 py-2.5 rounded-lg outline-none"
+                  style={{ background: 'var(--elev)', border: '1px solid var(--border)', color: 'var(--text)' }}
                   placeholder="••••••••"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  className="absolute right-3 top-1/2 -translate-y-1/2"
+                  style={{ color: 'var(--muted)' }}
                 >
                   {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
@@ -139,7 +152,8 @@ export default function LoginPage() {
 
             <button
               type="submit"
-              className="w-full py-3 bg-gradient-to-r from-emerald-500 to-cyan-600 text-white font-semibold rounded-lg hover:from-emerald-600 hover:to-cyan-700 transition-all shadow-lg shadow-emerald-500/20"
+              className="w-full py-3 font-semibold rounded-full transition-all"
+              style={{ background: 'linear-gradient(90deg, var(--w1), var(--w2))', color: '#04121A' }}
             >
               {isRegister ? 'Зарегистрироваться' : 'Войти'}
             </button>
@@ -148,22 +162,23 @@ export default function LoginPage() {
           <div className="mt-6 text-center">
             <button
               onClick={() => { setIsRegister(!isRegister); setError(''); }}
-              className="text-sm text-emerald-600 hover:text-emerald-700 font-medium"
+              className="text-sm font-medium"
+              style={{ color: 'var(--w1)' }}
             >
               {isRegister ? 'Уже есть аккаунт? Войти' : 'Нет аккаунта? Зарегистрироваться'}
             </button>
           </div>
 
-          <div className="mt-6 pt-6 border-t border-slate-200">
-            <p className="text-xs text-slate-500 text-center mb-3">Демо-доступ:</p>
+          <div className="mt-6 pt-6" style={{ borderTop: '1px solid var(--border)' }}>
+            <p className="text-xs text-center mb-3" style={{ color: 'var(--muted)' }}>Демо-доступ:</p>
             <div className="grid grid-cols-2 gap-2 text-xs">
-              <div className="bg-slate-50 rounded-lg p-2">
-                <p className="font-medium text-slate-700">Админ</p>
-                <p className="text-slate-500">admin@provision.app</p>
+              <div className="rounded-lg p-2" style={{ background: 'var(--elev)' }}>
+                <p className="font-medium" style={{ color: 'var(--text)' }}>Админ</p>
+                <p style={{ color: 'var(--muted)' }}>admin@provision.app</p>
               </div>
-              <div className="bg-slate-50 rounded-lg p-2">
-                <p className="font-medium text-slate-700">Пользователь</p>
-                <p className="text-slate-500">user@provision.app</p>
+              <div className="rounded-lg p-2" style={{ background: 'var(--elev)' }}>
+                <p className="font-medium" style={{ color: 'var(--text)' }}>Пользователь</p>
+                <p style={{ color: 'var(--muted)' }}>user@provision.app</p>
               </div>
             </div>
           </div>

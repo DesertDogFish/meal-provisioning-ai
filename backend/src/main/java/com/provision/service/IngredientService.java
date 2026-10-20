@@ -1,5 +1,6 @@
 package com.provision.service;
 
+import com.provision.dto.PageResponse;
 import com.provision.dto.ingredient.*;
 import com.provision.entity.Ingredient;
 import com.provision.entity.Recipe;
@@ -9,6 +10,10 @@ import com.provision.repository.IngredientRepository;
 import com.provision.repository.RecipeRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,6 +32,26 @@ public class IngredientService {
         return ingredientRepository.findAllOrderByname().stream()
                 .map(this::toResponse)
                 .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public PageResponse<IngredientResponse> getIngredientsPaginated(int page, int size, String sortBy, String sortDir) {
+        Sort sort = sortDir.equalsIgnoreCase("desc") 
+            ? Sort.by(sortBy).descending() 
+            : Sort.by(sortBy).ascending();
+        Pageable pageable = PageRequest.of(page, size, sort);
+        
+        Page<Ingredient> ingredientPage = ingredientRepository.findAll(pageable);
+        List<IngredientResponse> content = ingredientPage.getContent().stream()
+                .map(this::toResponse)
+                .toList();
+        
+        return PageResponse.of(
+            content,
+            page,
+            size,
+            ingredientPage.getTotalElements()
+        );
     }
 
     @Transactional(readOnly = true)

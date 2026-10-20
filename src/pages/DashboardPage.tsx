@@ -1,7 +1,7 @@
 import { useApp } from '../store/AppContext';
 import { useNavigate } from 'react-router-dom';
-import { Mountain, Utensils, TrendingUp, Users, Calendar, DollarSign } from 'lucide-react';
-import { calculateShoppingList, calculatePersonSummary } from '../utils/calculations';
+import { Calendar } from 'lucide-react';
+import { calculatePersonSummary } from '../utils/calculations';
 
 export default function DashboardPage() {
   const { state } = useApp();
@@ -11,131 +11,116 @@ export default function DashboardPage() {
   const recipesMap = new Map(state.recipes.map(r => [r.id, r]));
   
   const stats = myTrips.map(trip => {
-    const shopping = calculateShoppingList(trip, recipesMap, state.prices);
     const { tripSummary } = calculatePersonSummary(trip, recipesMap, state.prices);
     const totalDays = trip.days?.length || 0;
     const totalMeals = trip.days?.reduce((acc, d) => acc + (d.meals?.length || 0), 0) || 0;
-    return { trip, shopping, tripSummary, totalDays, totalMeals };
+    return { trip, tripSummary, totalDays, totalMeals };
   });
+
+  const totalPeople = myTrips.reduce((acc, t) => acc + t.defaultPeople, 0);
+  const totalBudget = stats.reduce((acc, s) => acc + s.tripSummary.totalCost, 0);
 
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-2xl md:text-3xl font-bold text-slate-900">Добро пожаловать, {state.currentUser?.firstName}!</h1>
-        <p className="text-slate-500 mt-1">Обзор ваших походов и запасов</p>
+        <h1 className="text-2xl md:text-3xl font-bold" style={{ color: 'var(--text)' }}>Мои походы</h1>
+        <p className="text-sm mt-1" style={{ color: 'var(--muted)' }}>Добро пожаловать, {state.currentUser?.firstName}!</p>
       </div>
 
-      {/* Quick stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-sm">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-emerald-100 rounded-lg flex items-center justify-center">
-              <Mountain size={20} className="text-emerald-600" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-slate-900">{myTrips.length}</p>
-              <p className="text-sm text-slate-500">Походов</p>
-            </div>
-          </div>
+      {/* Stats */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="rounded-2xl p-5" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+          <span className="text-xs" style={{ color: 'var(--muted)' }}>Активных походов</span>
+          <p className="text-2xl font-bold mt-1" style={{ color: 'var(--text)' }}>{myTrips.length}</p>
+          <div className="h-6 mt-2" style={{ background: 'linear-gradient(90deg, transparent, rgba(45, 212, 191, 0.25))', clipPath: 'polygon(0 80%, 15% 60%, 30% 70%, 45% 40%, 60% 55%, 75% 25%, 100% 45%, 100% 100%, 0 100%)' }}></div>
         </div>
-        <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-sm">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-              <Utensils size={20} className="text-blue-600" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-slate-900">{state.recipes.length}</p>
-              <p className="text-sm text-slate-500">Рецептов</p>
-            </div>
-          </div>
+        <div className="rounded-2xl p-5" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+          <span className="text-xs" style={{ color: 'var(--muted)' }}>Всего людей</span>
+          <p className="text-2xl font-bold mt-1" style={{ color: 'var(--text)' }}>{totalPeople}</p>
+          <div className="h-6 mt-2" style={{ background: 'linear-gradient(90deg, transparent, rgba(56, 189, 248, 0.25))', clipPath: 'polygon(0 70%, 20% 50%, 40% 60%, 60% 30%, 80% 45%, 100% 35%, 100% 100%, 0 100%)' }}></div>
         </div>
-        <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-sm">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
-              <Users size={20} className="text-purple-600" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-slate-900">{state.ingredients.length}</p>
-              <p className="text-sm text-slate-500">Компонентов</p>
-            </div>
-          </div>
-        </div>
-        <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-sm">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center">
-              <DollarSign size={20} className="text-amber-600" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-slate-900">
-                {stats.reduce((acc, s) => acc + s.tripSummary.totalCost, 0).toLocaleString('ru-RU')} ₽
-              </p>
-              <p className="text-sm text-slate-500">Общая стоимость</p>
-            </div>
-          </div>
+        <div className="rounded-2xl p-5" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+          <span className="text-xs" style={{ color: 'var(--muted)' }}>Бюджет</span>
+          <p className="text-2xl font-bold mt-1" style={{ color: 'var(--text)' }}>{totalBudget.toLocaleString('ru-RU')} ₽</p>
+          <div className="h-6 mt-2" style={{ background: 'linear-gradient(90deg, transparent, rgba(245, 158, 11, 0.25))', clipPath: 'polygon(0 60%, 25% 45%, 50% 55%, 75% 35%, 100% 50%, 100% 100%, 0 100%)' }}></div>
         </div>
       </div>
 
-      {/* Trips overview */}
+      {/* Trips */}
       <div>
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-bold text-slate-900">Ваши походы</h2>
+          <h2 className="text-xl font-bold" style={{ color: 'var(--text)' }}>Ваши походы</h2>
           <button
             onClick={() => navigate('/trips')}
-            className="text-sm text-emerald-600 hover:text-emerald-700 font-medium"
+            className="text-sm font-medium"
+            style={{ color: 'var(--w1)' }}
           >
             Все походы →
           </button>
         </div>
 
         {myTrips.length === 0 ? (
-          <div className="bg-white rounded-xl border border-slate-200 p-12 text-center">
-            <Mountain size={48} className="mx-auto text-slate-300 mb-4" />
-            <p className="text-slate-500 mb-4">У вас пока нет походов</p>
+          <div className="rounded-2xl p-12 text-center" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+            <svg width="48" height="48" viewBox="0 0 96 96" className="mx-auto mb-4 opacity-30">
+              <path d="M48 18 L70 70 H26 Z" fill="var(--muted)"/>
+            </svg>
+            <p className="mb-4" style={{ color: 'var(--muted)' }}>У вас пока нет походов</p>
             <button
               onClick={() => navigate('/trips')}
-              className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
+              className="grad-btn"
             >
               Создать поход
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {stats.map(({ trip, tripSummary, totalDays, totalMeals }) => (
-              <div
-                key={trip.id}
-                onClick={() => navigate(`/trips/${trip.id}`)}
-                className="bg-white rounded-xl border border-slate-200 p-5 hover:shadow-md transition-shadow cursor-pointer"
-              >
-                <div className="flex items-start justify-between mb-3">
-                  <h3 className="font-bold text-slate-900 text-lg">{trip.name}</h3>
-                  {tripSummary.hasMissingPrices && (
-                    <span className="px-2 py-0.5 bg-amber-100 text-amber-700 text-xs font-medium rounded-full">
-                      Нет цен
-                    </span>
-                  )}
-                </div>
-                <div className="flex items-center gap-4 text-sm text-slate-500 mb-4">
-                  <span className="flex items-center gap-1">
-                    <Calendar size={14} />
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {stats.map(({ trip, tripSummary, totalDays }) => {
+              const completion = Math.min(100, Math.round((trip.days?.reduce((acc, d) => acc + (d.meals?.length || 0), 0) || 0) / (totalDays * 3) * 100));
+              return (
+                <div
+                  key={trip.id}
+                  onClick={() => navigate(`/trips/${trip.id}`)}
+                  className="rounded-2xl p-5 cursor-pointer transition-all hover:scale-[1.02]"
+                  style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
+                >
+                  <div className="h-24 rounded-xl mb-3" style={{
+                    background: trip.id === 'trip1' 
+                      ? 'radial-gradient(90px 40px at 70% 85%, rgba(245, 158, 11, 0.5), transparent), linear-gradient(180deg, #2B4A6F, #0B1626)'
+                      : trip.id === 'trip2'
+                      ? 'linear-gradient(180deg, #33465e, #101c2b 70%)'
+                      : 'radial-gradient(60px 26px at 50% 80%, rgba(245, 158, 11, 0.55), transparent), linear-gradient(180deg, #1d3326, #0c1512)'
+                  }}></div>
+                  <h3 className="font-bold text-base" style={{ color: 'var(--text)' }}>{trip.name}</h3>
+                  <div className="text-xs mt-1" style={{ color: 'var(--muted)' }}>
                     {new Date(trip.startDate).toLocaleDateString('ru-RU')} — {new Date(trip.endDate).toLocaleDateString('ru-RU')}
-                  </span>
+                  </div>
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    <span className="inline-block rounded-full px-2.5 py-1 text-xs font-bold" style={{ background: 'rgba(56, 189, 248, 0.14)', color: '#9BD8F5' }}>
+                      {trip.defaultPeople} чел
+                    </span>
+                    {tripSummary.hasMissingPrices ? (
+                      <span className="inline-block rounded-full px-2.5 py-1 text-xs font-bold" style={{ background: 'rgba(245, 158, 11, 0.16)', color: '#F8C468' }}>
+                        нет цен
+                      </span>
+                    ) : (
+                      <span className="inline-block rounded-full px-2.5 py-1 text-xs font-bold" style={{ background: 'rgba(56, 189, 248, 0.14)', color: '#9BD8F5' }}>
+                        {tripSummary.totalCost.toLocaleString('ru-RU')} ₽
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center justify-between mt-3">
+                    <span className="text-xs" style={{ color: 'var(--muted)' }}>Меню {completion}%</span>
+                    <div className="w-8 h-8 rounded-full flex items-center justify-center" style={{
+                      background: `conic-gradient(var(--w1) 0 ${completion}%, rgba(255,255,255,0.1) 0)`,
+                    }}>
+                      <div className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold" style={{ background: 'var(--surface)', color: 'var(--text)' }}>
+                        {completion === 100 ? '✓' : completion}
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                <div className="grid grid-cols-3 gap-3">
-                  <div className="bg-slate-50 rounded-lg p-2 text-center">
-                    <p className="text-lg font-bold text-slate-900">{totalDays}</p>
-                    <p className="text-xs text-slate-500">Дней</p>
-                  </div>
-                  <div className="bg-slate-50 rounded-lg p-2 text-center">
-                    <p className="text-lg font-bold text-slate-900">{totalMeals}</p>
-                    <p className="text-xs text-slate-500">Приёмов пищи</p>
-                  </div>
-                  <div className="bg-slate-50 rounded-lg p-2 text-center">
-                    <p className="text-lg font-bold text-slate-900">{tripSummary.totalCost.toLocaleString('ru-RU')} ₽</p>
-                    <p className="text-xs text-slate-500">Стоимость</p>
-                  </div>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

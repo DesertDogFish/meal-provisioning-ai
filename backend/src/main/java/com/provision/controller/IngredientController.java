@@ -1,5 +1,6 @@
 package com.provision.controller;
 
+import com.provision.dto.PageResponse;
 import com.provision.dto.ingredient.IngredientRequest;
 import com.provision.dto.ingredient.IngredientResponse;
 import com.provision.service.IngredientService;
@@ -22,6 +23,16 @@ public class IngredientController {
     @GetMapping
     public List<IngredientResponse> getAllIngredients() {
         return ingredientService.getAllIngredients();
+    }
+
+    @GetMapping("/paginated")
+    public PageResponse<IngredientResponse> getIngredientsPaginated(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(defaultValue = "name") String sortBy,
+            @RequestParam(defaultValue = "asc") String sortDir
+    ) {
+        return ingredientService.getIngredientsPaginated(page, size, sortBy, sortDir);
     }
 
     @GetMapping("/{id}")

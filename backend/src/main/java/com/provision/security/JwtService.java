@@ -1,10 +1,11 @@
 package com.provision.security;
 
+import com.provision.config.JwtProperties;
 import com.provision.entity.User;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
-import org.springframework.beans.factory.annotation.Value;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import javax.crypto.SecretKey;
@@ -15,18 +16,15 @@ import java.util.Map;
 import java.util.function.Function;
 
 @Service
+@RequiredArgsConstructor
 public class JwtService {
 
-    @Value("${jwt.secret}")
-    private String secretKey;
-
-    @Value("${jwt.access-token-expiration}")
-    private long accessTokenExpiration;
+    private final JwtProperties jwtProperties;
 
     public String generateAccessToken(User user) {
         Map<String, Object> claims = new HashMap<>();
         claims.put("role", user.getRole().name());
-        return createToken(claims, user.getEmail(), accessTokenExpiration);
+        return createToken(claims, user.getEmail(), jwtProperties.getAccessTokenExpiration());
     }
 
     public String extractUsername(String token) {
@@ -70,7 +68,7 @@ public class JwtService {
     }
 
     private SecretKey getSigningKey() {
-        byte[] keyBytes = secretKey.getBytes(StandardCharsets.UTF_8);
+        byte[] keyBytes = jwtProperties.getSecret().getBytes(StandardCharsets.UTF_8);
         return Keys.hmacShaKeyFor(keyBytes);
     }
 }
