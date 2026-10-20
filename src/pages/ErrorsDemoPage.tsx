@@ -86,26 +86,27 @@ export default function ErrorsDemoPage() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-2xl md:text-3xl font-bold text-slate-900">Демонстрация обработки ошибок</h1>
-        <p className="text-slate-500 mt-1">GlobalExceptionHandler, ProblemDetail (RFC 7807), валидация</p>
+        <h1 className="text-2xl md:text-3xl font-bold" style={{ color: 'var(--text)' }}>Демонстрация обработки ошибок</h1>
+        <p className="mt-1" style={{ color: 'var(--muted)' }}>GlobalExceptionHandler, ProblemDetail (RFC 7807), валидация</p>
       </div>
 
       {/* Error examples */}
       <div>
-        <h2 className="text-xl font-bold text-slate-900 mb-4">Типы ошибок</h2>
+        <h2 className="text-xl font-bold mb-4" style={{ color: 'var(--text)' }}>Типы ошибок</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {errorExamples.map((example, idx) => (
             <button
               key={idx}
               onClick={example.onClick}
-              className={`flex items-center gap-3 p-4 bg-white rounded-xl border border-slate-200 hover:shadow-md transition-shadow text-left`}
+              className="flex items-center gap-3 p-4 rounded-xl transition-all hover:scale-[1.02] text-left"
+              style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
             >
-              <div className={`w-10 h-10 bg-${example.color}-100 rounded-lg flex items-center justify-center text-${example.color}-600`}>
+              <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ background: 'var(--elev)' }}>
                 {example.icon}
               </div>
               <div>
-                <p className="font-semibold text-slate-900">{example.title}</p>
-                <p className="text-xs text-slate-500">Нажмите для демонстрации</p>
+                <p className="font-semibold" style={{ color: 'var(--text)' }}>{example.title}</p>
+                <p className="text-xs" style={{ color: 'var(--muted)' }}>Нажмите для демонстрации</p>
               </div>
             </button>
           ))}
@@ -115,61 +116,65 @@ export default function ErrorsDemoPage() {
       {/* Current error display */}
       {currentError && (
         <div>
-          <h2 className="text-xl font-bold text-slate-900 mb-4">Текущая ошибка (ProblemDetail)</h2>
+          <h2 className="text-xl font-bold mb-4" style={{ color: 'var(--text)' }}>Текущая ошибка (ProblemDetail)</h2>
           <ProblemDetailAlert problemDetail={currentError} onClose={() => setCurrentError(null)} />
         </div>
       )}
 
       {/* Validation demo */}
       <div>
-        <h2 className="text-xl font-bold text-slate-900 mb-4">Демонстрация валидации</h2>
-        <div className="bg-white rounded-xl border border-slate-200 p-6">
+        <h2 className="text-xl font-bold mb-4" style={{ color: 'var(--text)' }}>Демонстрация валидации</h2>
+        <div className="rounded-xl p-6" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
+              <label className="block text-sm font-medium mb-1" style={{ color: 'var(--muted)' }}>Email</label>
               <input
                 type="text"
                 value={validationForm.email}
                 onChange={e => setValidationForm({ ...validationForm, email: e.target.value })}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
+                className="w-full px-3 py-2 rounded-lg outline-none"
+                style={{ background: 'var(--elev)', border: '1px solid var(--border)', color: 'var(--text)' }}
                 placeholder="test@example.com"
               />
               {validationErrors.find(e => e.field === 'email') && (
-                <p className="text-sm text-red-600 mt-1">{validationErrors.find(e => e.field === 'email')?.message}</p>
+                <p className="text-sm mt-1" style={{ color: '#FCA5A5' }}>{validationErrors.find(e => e.field === 'email')?.message}</p>
               )}
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Имя</label>
+              <label className="block text-sm font-medium mb-1" style={{ color: 'var(--muted)' }}>Имя</label>
               <input
                 type="text"
                 value={validationForm.name}
                 onChange={e => setValidationForm({ ...validationForm, name: e.target.value })}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
+                className="w-full px-3 py-2 rounded-lg outline-none"
+                style={{ background: 'var(--elev)', border: '1px solid var(--border)', color: 'var(--text)' }}
                 placeholder="Иван"
               />
               {validationErrors.find(e => e.field === 'name') && (
-                <p className="text-sm text-red-600 mt-1">{validationErrors.find(e => e.field === 'name')?.message}</p>
+                <p className="text-sm mt-1" style={{ color: '#FCA5A5' }}>{validationErrors.find(e => e.field === 'name')?.message}</p>
               )}
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Возраст</label>
+              <label className="block text-sm font-medium mb-1" style={{ color: 'var(--muted)' }}>Возраст</label>
               <input
                 type="number"
                 value={validationForm.age}
                 onChange={e => setValidationForm({ ...validationForm, age: e.target.value })}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
+                className="w-full px-3 py-2 rounded-lg outline-none"
+                style={{ background: 'var(--elev)', border: '1px solid var(--border)', color: 'var(--text)' }}
                 placeholder="25"
               />
               {validationErrors.find(e => e.field === 'age') && (
-                <p className="text-sm text-red-600 mt-1">{validationErrors.find(e => e.field === 'age')?.message}</p>
+                <p className="text-sm mt-1" style={{ color: '#FCA5A5' }}>{validationErrors.find(e => e.field === 'age')?.message}</p>
               )}
             </div>
 
             <button
               onClick={handleValidationTest}
-              className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
+              className="px-4 py-2 rounded-full transition-colors"
+              style={{ background: 'linear-gradient(90deg, var(--w1), var(--w2))', color: '#04121A' }}
             >
               Проверить валидацию
             </button>
@@ -179,68 +184,68 @@ export default function ErrorsDemoPage() {
 
       {/* Documentation */}
       <div>
-        <h2 className="text-xl font-bold text-slate-900 mb-4">Документация</h2>
-        <div className="bg-white rounded-xl border border-slate-200 p-6 space-y-4">
+        <h2 className="text-xl font-bold mb-4" style={{ color: 'var(--text)' }}>Документация</h2>
+        <div className="rounded-xl p-6 space-y-4" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
           <div>
-            <h3 className="font-semibold text-slate-900 mb-2">GlobalExceptionHandler</h3>
-            <p className="text-sm text-slate-600">
+            <h3 className="font-semibold mb-2" style={{ color: 'var(--text)' }}>GlobalExceptionHandler</h3>
+            <p className="text-sm" style={{ color: 'var(--muted)' }}>
               Централизованный обработчик ошибок, аналог @ControllerAdvice в Spring Boot.
               Перехватывает все ошибки приложения и маршрутизирует их к соответствующим обработчикам.
             </p>
           </div>
 
           <div>
-            <h3 className="font-semibold text-slate-900 mb-2">ProblemDetail (RFC 7807)</h3>
-            <p className="text-sm text-slate-600 mb-2">
+            <h3 className="font-semibold mb-2" style={{ color: 'var(--text)' }}>ProblemDetail (RFC 7807)</h3>
+            <p className="text-sm mb-2" style={{ color: 'var(--muted)' }}>
               Единый формат ошибок с полями:
             </p>
-            <ul className="list-disc list-inside text-sm text-slate-600 space-y-1">
-              <li><code className="bg-slate-100 px-1 rounded">type</code> — URI идентификатор типа проблемы</li>
-              <li><code className="bg-slate-100 px-1 rounded">title</code> — краткое описание</li>
-              <li><code className="bg-slate-100 px-1 rounded">status</code> — HTTP статус код</li>
-              <li><code className="bg-slate-100 px-1 rounded">detail</code> — подробное описание</li>
-              <li><code className="bg-slate-100 px-1 rounded">instance</code> — URI конкретного экземпляра</li>
+            <ul className="list-disc list-inside text-sm space-y-1" style={{ color: 'var(--muted)' }}>
+              <li><code className="px-1 rounded" style={{ background: 'var(--elev)' }}>type</code> — URI идентификатор типа проблемы</li>
+              <li><code className="px-1 rounded" style={{ background: 'var(--elev)' }}>title</code> — краткое описание</li>
+              <li><code className="px-1 rounded" style={{ background: 'var(--elev)' }}>status</code> — HTTP статус код</li>
+              <li><code className="px-1 rounded" style={{ background: 'var(--elev)' }}>detail</code> — подробное описание</li>
+              <li><code className="px-1 rounded" style={{ background: 'var(--elev)' }}>instance</code> — URI конкретного экземпляра</li>
             </ul>
           </div>
 
           <div>
-            <h3 className="font-semibold text-slate-900 mb-2">Классы ошибок</h3>
+            <h3 className="font-semibold mb-2" style={{ color: 'var(--text)' }}>Классы ошибок</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
-              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
-                <code className="font-mono text-amber-900">ValidationError</code>
-                <p className="text-xs text-amber-700 mt-1">400 — ошибки валидации полей</p>
+              <div className="rounded-lg p-3" style={{ background: 'rgba(245, 158, 11, 0.1)', border: '1px solid rgba(245, 158, 11, 0.3)' }}>
+                <code className="font-mono" style={{ color: '#F8C468' }}>ValidationError</code>
+                <p className="text-xs mt-1" style={{ color: '#F8C468' }}>400 — ошибки валидации полей</p>
               </div>
-              <div className="bg-orange-50 border border-orange-200 rounded-lg p-3">
-                <code className="font-mono text-orange-900">UnauthorizedError</code>
-                <p className="text-xs text-orange-700 mt-1">401 — требуется авторизация</p>
+              <div className="rounded-lg p-3" style={{ background: 'rgba(249, 115, 22, 0.1)', border: '1px solid rgba(249, 115, 22, 0.3)' }}>
+                <code className="font-mono" style={{ color: '#FDBA74' }}>UnauthorizedError</code>
+                <p className="text-xs mt-1" style={{ color: '#FDBA74' }}>401 — требуется авторизация</p>
               </div>
-              <div className="bg-red-50 border border-red-200 rounded-lg p-3">
-                <code className="font-mono text-red-900">ForbiddenError</code>
-                <p className="text-xs text-red-700 mt-1">403 — доступ запрещён</p>
+              <div className="rounded-lg p-3" style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)' }}>
+                <code className="font-mono" style={{ color: '#FCA5A5' }}>ForbiddenError</code>
+                <p className="text-xs mt-1" style={{ color: '#FCA5A5' }}>403 — доступ запрещён</p>
               </div>
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                <code className="font-mono text-blue-900">NotFoundError</code>
-                <p className="text-xs text-blue-700 mt-1">404 — ресурс не найден</p>
+              <div className="rounded-lg p-3" style={{ background: 'rgba(59, 130, 246, 0.1)', border: '1px solid rgba(59, 130, 246, 0.3)' }}>
+                <code className="font-mono" style={{ color: '#93C5FD' }}>NotFoundError</code>
+                <p className="text-xs mt-1" style={{ color: '#93C5FD' }}>404 — ресурс не найден</p>
               </div>
-              <div className="bg-purple-50 border border-purple-200 rounded-lg p-3">
-                <code className="font-mono text-purple-900">ConflictError</code>
-                <p className="text-xs text-purple-700 mt-1">409 — конфликт данных</p>
+              <div className="rounded-lg p-3" style={{ background: 'rgba(168, 85, 247, 0.1)', border: '1px solid rgba(168, 85, 247, 0.3)' }}>
+                <code className="font-mono" style={{ color: '#D8B4FE' }}>ConflictError</code>
+                <p className="text-xs mt-1" style={{ color: '#D8B4FE' }}>409 — конфликт данных</p>
               </div>
-              <div className="bg-red-50 border border-red-200 rounded-lg p-3">
-                <code className="font-mono text-red-900">InternalError</code>
-                <p className="text-xs text-red-700 mt-1">500 — внутренняя ошибка</p>
+              <div className="rounded-lg p-3" style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)' }}>
+                <code className="font-mono" style={{ color: '#FCA5A5' }}>InternalError</code>
+                <p className="text-xs mt-1" style={{ color: '#FCA5A5' }}>500 — внутренняя ошибка</p>
               </div>
             </div>
           </div>
 
           <div>
-            <h3 className="font-semibold text-slate-900 mb-2">Валидация</h3>
-            <p className="text-sm text-slate-600 mb-2">
+            <h3 className="font-semibold mb-2" style={{ color: 'var(--text)' }}>Валидация</h3>
+            <p className="text-sm mb-2" style={{ color: 'var(--muted)' }}>
               Утилиты валидации, аналог Jakarta Bean Validation:
             </p>
             <div className="flex flex-wrap gap-2">
               {['@NotNull', '@NotBlank', '@Email', '@Size', '@Positive', '@Min', '@Max', '@Pattern', '@FutureOrPresent'].map(annotation => (
-                <span key={annotation} className="px-2 py-1 bg-slate-100 text-slate-700 text-xs rounded font-mono">
+                <span key={annotation} className="px-2 py-1 text-xs rounded font-mono" style={{ background: 'var(--elev)', color: 'var(--muted)' }}>
                   {annotation}
                 </span>
               ))}

@@ -99,12 +99,14 @@ export default function TripDetailPage() {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center gap-4">
-        <button onClick={() => navigate('/trips')} className="p-2 hover:bg-slate-100 rounded-lg transition-colors">
-          <ArrowLeft size={20} className="text-slate-600" />
+        <button onClick={() => navigate('/trips')} className="p-2 rounded-lg transition-colors" style={{ color: 'var(--muted)' }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}>
+          <ArrowLeft size={20} />
         </button>
         <div className="flex-1">
-          <h1 className="text-2xl font-bold text-slate-900">{trip.name}</h1>
-          <p className="text-sm text-slate-500">
+          <h1 className="text-2xl font-bold" style={{ color: 'var(--text)' }}>{trip.name}</h1>
+          <p className="text-sm" style={{ color: 'var(--muted)' }}>
             {new Date(trip.startDate).toLocaleDateString('ru-RU')} — {new Date(trip.endDate).toLocaleDateString('ru-RU')} • {trip.defaultPeople} чел.
           </p>
         </div>
@@ -112,33 +114,35 @@ export default function TripDetailPage() {
 
       {/* Summary cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <div className="bg-white rounded-xl border border-slate-200 p-4">
-          <p className="text-xs text-slate-500 mb-1">Дней</p>
-          <p className="text-xl font-bold text-slate-900">{trip.days?.length || 0}</p>
+        <div className="rounded-xl p-4" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+          <p className="text-xs mb-1" style={{ color: 'var(--muted)' }}>Дней</p>
+          <p className="text-xl font-bold" style={{ color: 'var(--text)' }}>{trip.days?.length || 0}</p>
         </div>
-        <div className="bg-white rounded-xl border border-slate-200 p-4">
-          <p className="text-xs text-slate-500 mb-1">Приёмов пищи</p>
-          <p className="text-xl font-bold text-slate-900">{trip.days?.reduce((a, d) => a + (d.meals?.length || 0), 0) || 0}</p>
+        <div className="rounded-xl p-4" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+          <p className="text-xs mb-1" style={{ color: 'var(--muted)' }}>Приёмов пищи</p>
+          <p className="text-xl font-bold" style={{ color: 'var(--text)' }}>{trip.days?.reduce((a, d) => a + (d.meals?.length || 0), 0) || 0}</p>
         </div>
-        <div className="bg-white rounded-xl border border-slate-200 p-4">
-          <p className="text-xs text-slate-500 mb-1">Стоимость</p>
-          <p className="text-xl font-bold text-slate-900">{tripSummary.totalCost.toLocaleString('ru-RU')} ₽</p>
+        <div className="rounded-xl p-4" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+          <p className="text-xs mb-1" style={{ color: 'var(--muted)' }}>Стоимость</p>
+          <p className="text-xl font-bold" style={{ color: 'var(--text)' }}>{tripSummary.totalCost.toLocaleString('ru-RU')} ₽</p>
         </div>
-        <div className="bg-white rounded-xl border border-slate-200 p-4">
-          <p className="text-xs text-slate-500 mb-1">На человека</p>
-          <p className="text-xl font-bold text-slate-900">{tripSummary.costPerDefaultPerson.toLocaleString('ru-RU')} ₽</p>
+        <div className="rounded-xl p-4" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+          <p className="text-xs mb-1" style={{ color: 'var(--muted)' }}>На человека</p>
+          <p className="text-xl font-bold" style={{ color: 'var(--text)' }}>{tripSummary.costPerDefaultPerson.toLocaleString('ru-RU')} ₽</p>
         </div>
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 bg-slate-100 p-1 rounded-xl overflow-x-auto">
+      <div className="flex gap-1 p-1 rounded-xl overflow-x-auto" style={{ background: 'var(--surface)' }}>
         {tabs.map(tab => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
-              activeTab === tab.id ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-            }`}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium whitespace-nowrap transition-colors"
+            style={{
+              background: activeTab === tab.id ? 'var(--elev)' : 'transparent',
+              color: activeTab === tab.id ? 'var(--text)' : 'var(--muted)',
+            }}
           >
             {tab.icon}
             {tab.label}
@@ -155,36 +159,44 @@ export default function TripDetailPage() {
             const isExpanded = expandedDays.has(tripDay.id);
             
             return (
-              <div key={tripDay.id} className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+              <div key={tripDay.id} className="rounded-xl overflow-hidden" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
                 <div
-                  className="flex items-center justify-between p-4 cursor-pointer hover:bg-slate-50"
+                  className="flex items-center justify-between p-4 cursor-pointer transition-colors"
                   onClick={() => toggleDay(tripDay.id)}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.02)'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
                 >
                   <div className="flex items-center gap-3">
-                    {isExpanded ? <ChevronDown size={18} className="text-slate-400" /> : <ChevronRight size={18} className="text-slate-400" />}
+                    {isExpanded ? <ChevronDown size={18} style={{ color: 'var(--muted)' }} /> : <ChevronRight size={18} style={{ color: 'var(--muted)' }} />}
                     <div>
-                      <p className="font-semibold text-slate-900">
+                      <p className="font-semibold" style={{ color: 'var(--text)' }}>
                         {new Date(day.dayDate).toLocaleDateString('ru-RU', { weekday: 'short', day: 'numeric', month: 'long' })}
                       </p>
-                      <p className="text-xs text-slate-500">{day.meals.length} приёмов пищи • {day.effectivePeople} чел.</p>
+                      <p className="text-xs" style={{ color: 'var(--muted)' }}>{day.meals.length} приёмов пищи • {day.effectivePeople} чел.</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
                     {tripDay.peopleOverride && (
-                      <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded-full">
+                      <span className="px-2 py-0.5 text-xs rounded-full" style={{ background: 'rgba(56, 189, 248, 0.14)', color: '#9BD8F5' }}>
                         {tripDay.peopleOverride} чел.
                       </span>
                     )}
                     <button
                       onClick={(e) => { e.stopPropagation(); setEditingDay(tripDay.id); setDayPeopleOverride(tripDay.peopleOverride?.toString() || ''); }}
-                      className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded transition-colors"
+                      className="p-1.5 rounded transition-colors"
+                      style={{ color: 'var(--muted)' }}
+                      onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--w1)'; e.currentTarget.style.background = 'rgba(45, 212, 191, 0.1)'; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--muted)'; e.currentTarget.style.background = 'transparent'; }}
                       title="Изменить количество людей"
                     >
                       <Users size={16} />
                     </button>
                     <button
                       onClick={(e) => { e.stopPropagation(); setShowAddMeal({ dayId: tripDay.id }); setNewMeal({ mealType: 'LUNCH', recipeId: '', peopleOverride: '' }); }}
-                      className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded transition-colors"
+                      className="p-1.5 rounded transition-colors"
+                      style={{ color: 'var(--muted)' }}
+                      onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--w1)'; e.currentTarget.style.background = 'rgba(45, 212, 191, 0.1)'; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--muted)'; e.currentTarget.style.background = 'transparent'; }}
                       title="Добавить приём пищи"
                     >
                       <Plus size={16} />
@@ -194,46 +206,50 @@ export default function TripDetailPage() {
 
                 {/* Edit day people */}
                 {editingDay === tripDay.id && (
-                  <div className="px-4 pb-3 flex items-center gap-2 border-t border-slate-100 pt-3">
-                    <span className="text-sm text-slate-600">Людей на день:</span>
+                  <div className="px-4 pb-3 flex items-center gap-2 pt-3" style={{ borderTop: '1px solid var(--border)' }}>
+                    <span className="text-sm" style={{ color: 'var(--muted)' }}>Людей на день:</span>
                     <input
                       type="number"
                       min={1}
                       value={dayPeopleOverride}
                       onChange={e => setDayPeopleOverride(e.target.value)}
-                      className="w-20 px-2 py-1 border border-slate-300 rounded text-sm"
+                      className="w-20 px-2 py-1 rounded text-sm outline-none"
+                      style={{ background: 'var(--elev)', border: '1px solid var(--border)', color: 'var(--text)' }}
                       placeholder={trip.defaultPeople.toString()}
                     />
-                    <button onClick={() => handleUpdateDayPeople(tripDay.id)} className="px-3 py-1 bg-emerald-600 text-white text-sm rounded hover:bg-emerald-700">OK</button>
-                    <button onClick={() => setEditingDay(null)} className="px-3 py-1 text-slate-500 text-sm hover:text-slate-700">Отмена</button>
+                    <button onClick={() => handleUpdateDayPeople(tripDay.id)} className="px-3 py-1 text-sm rounded" style={{ background: 'linear-gradient(90deg, var(--w1), var(--w2))', color: '#04121A' }}>OK</button>
+                    <button onClick={() => setEditingDay(null)} className="px-3 py-1 text-sm" style={{ color: 'var(--muted)' }}>Отмена</button>
                   </div>
                 )}
 
                 {/* Meals */}
                 {isExpanded && (
-                  <div className="border-t border-slate-100 divide-y divide-slate-100">
+                  <div style={{ borderTop: '1px solid var(--border)' }}>
                     {day.meals.map((meal, mealIdx) => {
                       const tripMeal = tripDay.meals?.[mealIdx];
                       return (
-                      <div key={mealIdx} className="px-4 py-3 pl-12">
+                      <div key={mealIdx} className="px-4 py-3 pl-12" style={{ borderTop: '1px solid var(--border)' }}>
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
                             <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${mealTypeColors[meal.mealType]}`}>
                               {mealTypeLabels[meal.mealType]}
                             </span>
-                            <span className="font-medium text-slate-900">{meal.recipeName}</span>
-                            <span className="text-xs text-slate-400">({meal.servings} порц.)</span>
+                            <span className="font-medium" style={{ color: 'var(--text)' }}>{meal.recipeName}</span>
+                            <span className="text-xs" style={{ color: 'var(--muted)' }}>({meal.servings} порц.)</span>
                           </div>
                           <button
                             onClick={() => tripMeal && handleDeleteMeal(tripDay.id, tripMeal.id)}
-                            className="p-1 text-slate-400 hover:text-red-600 rounded transition-colors"
+                            className="p-1 rounded transition-colors"
+                            style={{ color: 'var(--muted)' }}
+                            onMouseEnter={(e) => { e.currentTarget.style.color = '#FCA5A5'; }}
+                            onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--muted)'; }}
                           >
                             <Trash2 size={14} />
                           </button>
                         </div>
                         <div className="flex flex-wrap gap-2 mt-2">
                           {meal.ingredients.map((ing, i) => (
-                            <span key={i} className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded">
+                            <span key={i} className="text-xs px-2 py-0.5 rounded" style={{ background: 'var(--elev)', color: 'var(--muted)' }}>
                               {ing.name}: {formatAmount(ing.amount, ing.unit)}
                             </span>
                           ))}
@@ -242,7 +258,7 @@ export default function TripDetailPage() {
                       );
                     })}
                     {day.meals.length === 0 && (
-                      <div className="px-4 py-6 text-center text-sm text-slate-400">
+                      <div className="px-4 py-6 text-center text-sm" style={{ color: 'var(--muted)' }}>
                         Нет приёмов пищи. Нажмите + чтобы добавить.
                       </div>
                     )}
@@ -255,33 +271,33 @@ export default function TripDetailPage() {
       )}
 
       {activeTab === 'shopping' && (
-        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-          <div className="p-4 border-b border-slate-200">
-            <h3 className="font-bold text-slate-900">Список закупок на весь поход</h3>
-            <p className="text-sm text-slate-500">Итого: {shoppingList.reduce((a, i) => a + (i.estimatedCost || 0), 0).toLocaleString('ru-RU')} ₽</p>
+        <div className="rounded-xl overflow-hidden" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+          <div className="p-4" style={{ borderBottom: '1px solid var(--border)' }}>
+            <h3 className="font-bold" style={{ color: 'var(--text)' }}>Список закупок на весь поход</h3>
+            <p className="text-sm" style={{ color: 'var(--muted)' }}>Итого: {shoppingList.reduce((a, i) => a + (i.estimatedCost || 0), 0).toLocaleString('ru-RU')} ₽</p>
             {tripSummary.hasMissingPrices && (
-              <p className="text-sm text-amber-600 mt-1">⚠️ Нет цен для: {tripSummary.missingIngredients.join(', ')}</p>
+              <p className="text-sm mt-1" style={{ color: 'var(--fire)' }}>⚠️ Нет цен для: {tripSummary.missingIngredients.join(', ')}</p>
             )}
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-slate-50">
+              <thead style={{ background: 'var(--elev)' }}>
                 <tr>
-                  <th className="text-left px-4 py-3 font-medium text-slate-600">Продукт</th>
-                  <th className="text-right px-4 py-3 font-medium text-slate-600">Количество</th>
-                  <th className="text-right px-4 py-3 font-medium text-slate-600">Стоимость</th>
+                  <th className="text-left px-4 py-3 font-medium" style={{ color: 'var(--muted)' }}>Продукт</th>
+                  <th className="text-right px-4 py-3 font-medium" style={{ color: 'var(--muted)' }}>Количество</th>
+                  <th className="text-right px-4 py-3 font-medium" style={{ color: 'var(--muted)' }}>Стоимость</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody style={{ borderTop: '1px solid var(--border)' }}>
                 {shoppingList.map(item => (
-                  <tr key={item.ingredientId}>
-                    <td className="px-4 py-3 text-slate-900">{item.ingredientName}</td>
-                    <td className="px-4 py-3 text-right text-slate-600">{formatAmount(item.totalAmount, item.unit)}</td>
+                  <tr key={item.ingredientId} style={{ borderTop: '1px solid var(--border)' }}>
+                    <td className="px-4 py-3" style={{ color: 'var(--text)' }}>{item.ingredientName}</td>
+                    <td className="px-4 py-3 text-right" style={{ color: 'var(--muted)' }}>{formatAmount(item.totalAmount, item.unit)}</td>
                     <td className="px-4 py-3 text-right">
                       {item.hasPrice ? (
-                        <span className="text-slate-900">{item.estimatedCost?.toLocaleString('ru-RU')} ₽</span>
+                        <span style={{ color: 'var(--text)' }}>{item.estimatedCost?.toLocaleString('ru-RU')} ₽</span>
                       ) : (
-                        <span className="text-amber-600 text-xs">нет цены</span>
+                        <span className="text-xs" style={{ color: 'var(--fire)' }}>нет цены</span>
                       )}
                     </td>
                   </tr>
@@ -295,27 +311,27 @@ export default function TripDetailPage() {
       {activeTab === 'dayShopping' && (
         <div className="space-y-3">
           {dayShopping.map(day => (
-            <div key={day.dayDate} className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-              <div className="p-4 border-b border-slate-100 flex items-center justify-between">
+            <div key={day.dayDate} className="rounded-xl overflow-hidden" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+              <div className="p-4 flex items-center justify-between" style={{ borderBottom: '1px solid var(--border)' }}>
                 <div>
-                  <p className="font-semibold text-slate-900">
+                  <p className="font-semibold" style={{ color: 'var(--text)' }}>
                     {new Date(day.dayDate).toLocaleDateString('ru-RU', { weekday: 'short', day: 'numeric', month: 'long' })}
                   </p>
-                  <p className="text-xs text-slate-500">{day.items.length} продуктов</p>
+                  <p className="text-xs" style={{ color: 'var(--muted)' }}>{day.items.length} продуктов</p>
                 </div>
                 <div className="text-right">
-                  <p className="font-bold text-slate-900">{day.dayCost.toLocaleString('ru-RU')} ₽</p>
-                  {day.hasMissingPrices && <p className="text-xs text-amber-600">есть без цены</p>}
+                  <p className="font-bold" style={{ color: 'var(--text)' }}>{day.dayCost.toLocaleString('ru-RU')} ₽</p>
+                  {day.hasMissingPrices && <p className="text-xs" style={{ color: 'var(--fire)' }}>есть без цены</p>}
                 </div>
               </div>
               <div className="px-4 py-2">
                 {day.items.map(item => (
                   <div key={item.ingredientId} className="flex items-center justify-between py-1.5 text-sm">
-                    <span className="text-slate-700">{item.ingredientName}</span>
+                    <span style={{ color: 'var(--text)' }}>{item.ingredientName}</span>
                     <div className="flex items-center gap-4">
-                      <span className="text-slate-500">{formatAmount(item.totalAmount, item.unit)}</span>
-                      <span className="text-slate-900 w-20 text-right">
-                        {item.hasPrice ? `${item.estimatedCost?.toLocaleString('ru-RU')} ₽` : <span className="text-amber-600 text-xs">—</span>}
+                      <span style={{ color: 'var(--muted)' }}>{formatAmount(item.totalAmount, item.unit)}</span>
+                      <span className="w-20 text-right" style={{ color: 'var(--text)' }}>
+                        {item.hasPrice ? `${item.estimatedCost?.toLocaleString('ru-RU')} ₽` : <span className="text-xs" style={{ color: 'var(--fire)' }}>—</span>}
                       </span>
                     </div>
                   </div>
@@ -329,50 +345,50 @@ export default function TripDetailPage() {
       {activeTab === 'person' && (
         <div className="space-y-4">
           {/* Summary */}
-          <div className="bg-white rounded-xl border border-slate-200 p-5">
-            <h3 className="font-bold text-slate-900 mb-3">Сводка</h3>
+          <div className="rounded-xl p-5" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+            <h3 className="font-bold mb-3" style={{ color: 'var(--text)' }}>Сводка</h3>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div>
-                <p className="text-xs text-slate-500">Человеко-приёмов</p>
-                <p className="text-lg font-bold text-slate-900">{tripSummary.totalPersonMeals}</p>
+                <p className="text-xs" style={{ color: 'var(--muted)' }}>Человеко-приёмов</p>
+                <p className="text-lg font-bold" style={{ color: 'var(--text)' }}>{tripSummary.totalPersonMeals}</p>
               </div>
               <div>
-                <p className="text-xs text-slate-500">На 1 чел. (общее)</p>
-                <p className="text-lg font-bold text-slate-900">{tripSummary.costPerDefaultPerson.toLocaleString('ru-RU')} ₽</p>
+                <p className="text-xs" style={{ color: 'var(--muted)' }}>На 1 чел. (общее)</p>
+                <p className="text-lg font-bold" style={{ color: 'var(--text)' }}>{tripSummary.costPerDefaultPerson.toLocaleString('ru-RU')} ₽</p>
               </div>
               <div>
-                <p className="text-xs text-slate-500">На 1 чел./приём</p>
-                <p className="text-lg font-bold text-slate-900">{tripSummary.costPerPersonMeal.toLocaleString('ru-RU', { maximumFractionDigits: 1 })} ₽</p>
+                <p className="text-xs" style={{ color: 'var(--muted)' }}>На 1 чел./приём</p>
+                <p className="text-lg font-bold" style={{ color: 'var(--text)' }}>{tripSummary.costPerPersonMeal.toLocaleString('ru-RU', { maximumFractionDigits: 1 })} ₽</p>
               </div>
               <div>
-                <p className="text-xs text-slate-500">Калории/приём</p>
-                <p className="text-lg font-bold text-slate-900">{tripSummary.caloriesPerPersonMeal ? `${Math.round(tripSummary.caloriesPerPersonMeal)} ккал` : '—'}</p>
+                <p className="text-xs" style={{ color: 'var(--muted)' }}>Калории/приём</p>
+                <p className="text-lg font-bold" style={{ color: 'var(--text)' }}>{tripSummary.caloriesPerPersonMeal ? `${Math.round(tripSummary.caloriesPerPersonMeal)} ккал` : '—'}</p>
               </div>
             </div>
           </div>
 
           {/* Per person products */}
-          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-            <div className="p-4 border-b border-slate-200">
-              <h3 className="font-bold text-slate-900">Продукты на человека</h3>
+          <div className="rounded-xl overflow-hidden" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+            <div className="p-4" style={{ borderBottom: '1px solid var(--border)' }}>
+              <h3 className="font-bold" style={{ color: 'var(--text)' }}>Продукты на человека</h3>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
-                <thead className="bg-slate-50">
+                <thead style={{ background: 'var(--elev)' }}>
                   <tr>
-                    <th className="text-left px-4 py-3 font-medium text-slate-600">Продукт</th>
-                    <th className="text-right px-4 py-3 font-medium text-slate-600">На чел. (общее)</th>
-                    <th className="text-right px-4 py-3 font-medium text-slate-600">На чел./приём</th>
-                    <th className="text-right px-4 py-3 font-medium text-slate-600">₽/чел.</th>
+                    <th className="text-left px-4 py-3 font-medium" style={{ color: 'var(--muted)' }}>Продукт</th>
+                    <th className="text-right px-4 py-3 font-medium" style={{ color: 'var(--muted)' }}>На чел. (общее)</th>
+                    <th className="text-right px-4 py-3 font-medium" style={{ color: 'var(--muted)' }}>На чел./приём</th>
+                    <th className="text-right px-4 py-3 font-medium" style={{ color: 'var(--muted)' }}>₽/чел.</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
+                <tbody style={{ borderTop: '1px solid var(--border)' }}>
                   {personSummary.map((item, i) => (
-                    <tr key={i}>
-                      <td className="px-4 py-2.5 text-slate-900">{item.ingredientName}</td>
-                      <td className="px-4 py-2.5 text-right text-slate-600">{formatAmount(item.amountPerDefaultPerson, item.unit)}</td>
-                      <td className="px-4 py-2.5 text-right text-slate-600">{formatAmount(item.amountPerPersonMeal, item.unit)}</td>
-                      <td className="px-4 py-2.5 text-right text-slate-900">
+                    <tr key={i} style={{ borderTop: '1px solid var(--border)' }}>
+                      <td className="px-4 py-2.5" style={{ color: 'var(--text)' }}>{item.ingredientName}</td>
+                      <td className="px-4 py-2.5 text-right" style={{ color: 'var(--muted)' }}>{formatAmount(item.amountPerDefaultPerson, item.unit)}</td>
+                      <td className="px-4 py-2.5 text-right" style={{ color: 'var(--muted)' }}>{formatAmount(item.amountPerPersonMeal, item.unit)}</td>
+                      <td className="px-4 py-2.5 text-right" style={{ color: 'var(--text)' }}>
                         {item.costPerDefaultPerson ? `${item.costPerDefaultPerson.toLocaleString('ru-RU', { maximumFractionDigits: 1 })} ₽` : '—'}
                       </td>
                     </tr>
@@ -387,15 +403,16 @@ export default function TripDetailPage() {
       {/* Add meal modal */}
       {showAddMeal && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
-            <h2 className="text-xl font-bold text-slate-900 mb-4">Добавить приём пищи</h2>
+          <div className="rounded-2xl shadow-xl w-full max-w-md p-6" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+            <h2 className="text-xl font-bold mb-4" style={{ color: 'var(--text)' }}>Добавить приём пищи</h2>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Тип приёма</label>
+                <label className="block text-sm font-medium mb-1" style={{ color: 'var(--muted)' }}>Тип приёма</label>
                 <select
                   value={newMeal.mealType}
                   onChange={e => setNewMeal({ ...newMeal, mealType: e.target.value as MealType })}
-                  className="w-full px-3 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
+                  className="w-full px-3 py-2.5 rounded-lg outline-none"
+                  style={{ background: 'var(--elev)', border: '1px solid var(--border)', color: 'var(--text)' }}
                 >
                   <option value="BREAKFAST">Завтрак</option>
                   <option value="LUNCH">Обед</option>
@@ -404,11 +421,12 @@ export default function TripDetailPage() {
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Блюдо</label>
+                <label className="block text-sm font-medium mb-1" style={{ color: 'var(--muted)' }}>Блюдо</label>
                 <select
                   value={newMeal.recipeId}
                   onChange={e => setNewMeal({ ...newMeal, recipeId: e.target.value })}
-                  className="w-full px-3 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
+                  className="w-full px-3 py-2.5 rounded-lg outline-none"
+                  style={{ background: 'var(--elev)', border: '1px solid var(--border)', color: 'var(--text)' }}
                 >
                   <option value="">Выберите блюдо...</option>
                   {state.recipes.map(r => (
@@ -417,22 +435,23 @@ export default function TripDetailPage() {
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Количество человек (опционально)</label>
+                <label className="block text-sm font-medium mb-1" style={{ color: 'var(--muted)' }}>Количество человек (опционально)</label>
                 <input
                   type="number"
                   min={1}
                   value={newMeal.peopleOverride}
                   onChange={e => setNewMeal({ ...newMeal, peopleOverride: e.target.value })}
-                  className="w-full px-3 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
+                  className="w-full px-3 py-2.5 rounded-lg outline-none"
+                  style={{ background: 'var(--elev)', border: '1px solid var(--border)', color: 'var(--text)' }}
                   placeholder={`По умолчанию: ${trip.defaultPeople}`}
                 />
               </div>
             </div>
             <div className="flex gap-3 mt-6">
-              <button onClick={() => setShowAddMeal(null)} className="flex-1 px-4 py-2.5 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50">
+              <button onClick={() => setShowAddMeal(null)} className="flex-1 px-4 py-2.5 rounded-full transition-colors" style={{ border: '1px solid var(--border)', color: 'var(--text)' }}>
                 Отмена
               </button>
-              <button onClick={handleAddMeal} className="flex-1 px-4 py-2.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700">
+              <button onClick={handleAddMeal} className="flex-1 px-4 py-2.5 rounded-full transition-colors" style={{ background: 'linear-gradient(90deg, var(--w1), var(--w2))', color: '#04121A' }}>
                 Добавить
               </button>
             </div>

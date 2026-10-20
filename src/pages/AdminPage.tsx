@@ -219,42 +219,42 @@ export default function AdminPage() {
           </div>
 
           {showIngForm && (
-            <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
+            <div className="rounded-xl p-4 space-y-3" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <input type="text" placeholder="Название" value={ingForm.name} onChange={e => setIngForm({ ...ingForm, name: e.target.value })}
-                  className="px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none" />
+                  className="px-3 py-2 rounded-lg text-sm outline-none" style={{ background: 'var(--elev)', border: '1px solid var(--border)', color: 'var(--text)' }} />
                 <select value={ingForm.unit} onChange={e => setIngForm({ ...ingForm, unit: e.target.value as UnitOfMeasure })}
-                  className="px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none">
+                  className="px-3 py-2 rounded-lg text-sm outline-none" style={{ background: 'var(--elev)', border: '1px solid var(--border)', color: 'var(--text)' }}>
                   <option value="KG">кг</option>
                   <option value="L">л</option>
                   <option value="PCS">шт</option>
                 </select>
                 <input type="text" placeholder="Категория" value={ingForm.category} onChange={e => setIngForm({ ...ingForm, category: e.target.value })}
-                  className="px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none" />
+                  className="px-3 py-2 rounded-lg text-sm outline-none" style={{ background: 'var(--elev)', border: '1px solid var(--border)', color: 'var(--text)' }} />
               </div>
               <div className="flex gap-2">
-                <button onClick={handleSaveIngredient} className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm hover:bg-emerald-700">Сохранить</button>
-                <button onClick={() => setShowIngForm(false)} className="px-4 py-2 text-slate-600 text-sm hover:text-slate-800">Отмена</button>
+                <button onClick={handleSaveIngredient} className="px-4 py-2 rounded-full text-sm" style={{ background: 'linear-gradient(90deg, var(--w1), var(--w2))', color: '#04121A' }}>Сохранить</button>
+                <button onClick={() => setShowIngForm(false)} className="px-4 py-2 text-sm" style={{ color: 'var(--muted)' }}>Отмена</button>
               </div>
             </div>
           )}
 
-          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+          <div className="rounded-xl overflow-hidden" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
             <table className="w-full text-sm">
-              <thead className="bg-slate-50">
+              <thead style={{ background: 'var(--elev)' }}>
                 <tr>
-                  <th className="text-left px-4 py-3 font-medium text-slate-600">Название</th>
-                  <th className="text-left px-4 py-3 font-medium text-slate-600">Единица</th>
-                  <th className="text-left px-4 py-3 font-medium text-slate-600">Категория</th>
-                  <th className="text-right px-4 py-3 font-medium text-slate-600">Действия</th>
+                  <th className="text-left px-4 py-3 font-medium" style={{ color: 'var(--muted)' }}>Название</th>
+                  <th className="text-left px-4 py-3 font-medium" style={{ color: 'var(--muted)' }}>Единица</th>
+                  <th className="text-left px-4 py-3 font-medium" style={{ color: 'var(--muted)' }}>Категория</th>
+                  <th className="text-right px-4 py-3 font-medium" style={{ color: 'var(--muted)' }}>Действия</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody style={{ borderTop: '1px solid var(--border)' }}>
                 {state.ingredients.map(ing => (
-                  <tr key={ing.id} className="hover:bg-slate-50">
-                    <td className="px-4 py-3 text-slate-900 font-medium">{ing.name}</td>
-                    <td className="px-4 py-3 text-slate-600">{unitLabels[ing.unit]}</td>
-                    <td className="px-4 py-3 text-slate-600">{ing.category}</td>
+                  <tr key={ing.id} style={{ borderTop: '1px solid var(--border)' }}>
+                    <td className="px-4 py-3 font-medium" style={{ color: 'var(--text)' }}>{ing.name}</td>
+                    <td className="px-4 py-3" style={{ color: 'var(--muted)' }}>{unitLabels[ing.unit]}</td>
+                    <td className="px-4 py-3" style={{ color: 'var(--muted)' }}>{ing.category}</td>
                     <td className="px-4 py-3 text-right">
                       <div className="flex items-center justify-end gap-1">
                         {isIngredientUsed(ing.id) && <span title="Используется в рецептах"><AlertTriangle size={14} className="text-amber-500" /></span>}
@@ -284,50 +284,50 @@ export default function AdminPage() {
           </div>
 
           {showPriceForm && (
-            <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
+            <div className="rounded-xl p-4 space-y-3" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
               <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
                 <select value={priceForm.ingredientId} onChange={e => setPriceForm({ ...priceForm, ingredientId: e.target.value })}
-                  className="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                  className="px-3 py-2 rounded-lg text-sm outline-none" style={{ background: 'var(--elev)', border: '1px solid var(--border)', color: 'var(--text)' }}>
                   <option value="">Компонент...</option>
                   {state.ingredients.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
                 </select>
                 <input type="number" placeholder="Цена" value={priceForm.pricePerUnit} onChange={e => setPriceForm({ ...priceForm, pricePerUnit: e.target.value })}
-                  className="px-3 py-2 border border-slate-300 rounded-lg text-sm" />
+                  className="px-3 py-2 rounded-lg text-sm outline-none" style={{ background: 'var(--elev)', border: '1px solid var(--border)', color: 'var(--text)' }} />
                 <input type="date" value={priceForm.effectiveFrom} onChange={e => setPriceForm({ ...priceForm, effectiveFrom: e.target.value })}
-                  className="px-3 py-2 border border-slate-300 rounded-lg text-sm" />
+                  className="px-3 py-2 rounded-lg text-sm outline-none" style={{ background: 'var(--elev)', border: '1px solid var(--border)', color: 'var(--text)' }} />
                 <select value={priceForm.currency} onChange={e => setPriceForm({ ...priceForm, currency: e.target.value })}
-                  className="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                  className="px-3 py-2 rounded-lg text-sm outline-none" style={{ background: 'var(--elev)', border: '1px solid var(--border)', color: 'var(--text)' }}>
                   <option value="RUB">₽ RUB</option>
                   <option value="USD">$ USD</option>
                   <option value="EUR">€ EUR</option>
                 </select>
               </div>
               <div className="flex gap-2">
-                <button onClick={handleSavePrice} className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm hover:bg-emerald-700">Сохранить</button>
-                <button onClick={() => setShowPriceForm(false)} className="px-4 py-2 text-slate-600 text-sm">Отмена</button>
+                <button onClick={handleSavePrice} className="px-4 py-2 rounded-full text-sm" style={{ background: 'linear-gradient(90deg, var(--w1), var(--w2))', color: '#04121A' }}>Сохранить</button>
+                <button onClick={() => setShowPriceForm(false)} className="px-4 py-2 text-sm" style={{ color: 'var(--muted)' }}>Отмена</button>
               </div>
             </div>
           )}
 
-          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+          <div className="rounded-xl overflow-hidden" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
             <table className="w-full text-sm">
-              <thead className="bg-slate-50">
+              <thead style={{ background: 'var(--elev)' }}>
                 <tr>
-                  <th className="text-left px-4 py-3 font-medium text-slate-600">Компонент</th>
-                  <th className="text-right px-4 py-3 font-medium text-slate-600">Цена за ед.</th>
-                  <th className="text-left px-4 py-3 font-medium text-slate-600">Валюта</th>
-                  <th className="text-left px-4 py-3 font-medium text-slate-600">Действует с</th>
+                  <th className="text-left px-4 py-3 font-medium" style={{ color: 'var(--muted)' }}>Компонент</th>
+                  <th className="text-right px-4 py-3 font-medium" style={{ color: 'var(--muted)' }}>Цена за ед.</th>
+                  <th className="text-left px-4 py-3 font-medium" style={{ color: 'var(--muted)' }}>Валюта</th>
+                  <th className="text-left px-4 py-3 font-medium" style={{ color: 'var(--muted)' }}>Действует с</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody style={{ borderTop: '1px solid var(--border)' }}>
                 {state.prices.map(price => {
                   const ing = state.ingredients.find(i => i.id === price.ingredientId);
                   return (
-                    <tr key={price.id} className="hover:bg-slate-50">
-                      <td className="px-4 py-3 text-slate-900">{ing?.name || '?'}</td>
-                      <td className="px-4 py-3 text-right text-slate-900 font-medium">{price.pricePerUnit} {price.currency}</td>
-                      <td className="px-4 py-3 text-slate-600">{price.currency}</td>
-                      <td className="px-4 py-3 text-slate-600">{new Date(price.effectiveFrom).toLocaleDateString('ru-RU')}</td>
+                    <tr key={price.id} style={{ borderTop: '1px solid var(--border)' }}>
+                      <td className="px-4 py-3" style={{ color: 'var(--text)' }}>{ing?.name || '?'}</td>
+                      <td className="px-4 py-3 text-right font-medium" style={{ color: 'var(--text)' }}>{price.pricePerUnit} {price.currency}</td>
+                      <td className="px-4 py-3" style={{ color: 'var(--muted)' }}>{price.currency}</td>
+                      <td className="px-4 py-3" style={{ color: 'var(--muted)' }}>{new Date(price.effectiveFrom).toLocaleDateString('ru-RU')}</td>
                     </tr>
                   );
                 })}
@@ -341,20 +341,20 @@ export default function AdminPage() {
       {tab === 'recipes' && (
         <div className="space-y-4">
           <div className="flex justify-between items-center">
-            <p className="text-sm text-slate-500">{state.recipes.length} рецептов</p>
+            <p className="text-sm" style={{ color: 'var(--muted)' }}>{state.recipes.length} рецептов</p>
             <button onClick={() => setShowRecForm(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 text-sm">
+              className="flex items-center gap-2 px-4 py-2 rounded-full text-sm" style={{ background: 'linear-gradient(90deg, var(--w1), var(--w2))', color: '#04121A' }}>
               <Plus size={16} /> Новый рецепт
             </button>
           </div>
 
           {showRecForm && (
-            <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
+            <div className="rounded-xl p-4 space-y-3" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <input type="text" placeholder="Название" value={recForm.name} onChange={e => setRecForm({ ...recForm, name: e.target.value })}
-                  className="px-3 py-2 border border-slate-300 rounded-lg text-sm" />
+                  className="px-3 py-2 rounded-lg text-sm outline-none" style={{ background: 'var(--elev)', border: '1px solid var(--border)', color: 'var(--text)' }} />
                 <select value={recForm.mealType} onChange={e => setRecForm({ ...recForm, mealType: e.target.value as MealType })}
-                  className="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                  className="px-3 py-2 rounded-lg text-sm outline-none" style={{ background: 'var(--elev)', border: '1px solid var(--border)', color: 'var(--text)' }}>
                   <option value="BREAKFAST">Завтрак</option>
                   <option value="LUNCH">Обед</option>
                   <option value="DINNER">Ужин</option>
@@ -363,52 +363,52 @@ export default function AdminPage() {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <input type="number" placeholder="Порций" value={recForm.baseServings} onChange={e => setRecForm({ ...recForm, baseServings: parseInt(e.target.value) || 1 })}
-                  className="px-3 py-2 border border-slate-300 rounded-lg text-sm" />
+                  className="px-3 py-2 rounded-lg text-sm outline-none" style={{ background: 'var(--elev)', border: '1px solid var(--border)', color: 'var(--text)' }} />
                 <input type="number" placeholder="Ккал/порция (опц.)" value={recForm.caloriesPerServing} onChange={e => setRecForm({ ...recForm, caloriesPerServing: e.target.value })}
-                  className="px-3 py-2 border border-slate-300 rounded-lg text-sm" />
+                  className="px-3 py-2 rounded-lg text-sm outline-none" style={{ background: 'var(--elev)', border: '1px solid var(--border)', color: 'var(--text)' }} />
               </div>
               <div>
-                <p className="text-sm font-medium text-slate-700 mb-2">Ингредиенты:</p>
+                <p className="text-sm font-medium mb-2" style={{ color: 'var(--muted)' }}>Ингредиенты:</p>
                 {recForm.ingredients.map((ri, idx) => (
                   <div key={idx} className="flex gap-2 mb-2">
                     <select value={ri.ingredientId} onChange={e => { const n = [...recForm.ingredients]; n[idx].ingredientId = e.target.value; setRecForm({ ...recForm, ingredients: n }); }}
-                      className="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                      className="flex-1 px-3 py-2 rounded-lg text-sm outline-none" style={{ background: 'var(--elev)', border: '1px solid var(--border)', color: 'var(--text)' }}>
                       <option value="">Компонент...</option>
                       {state.ingredients.map(i => <option key={i.id} value={i.id}>{i.name} ({unitLabels[i.unit]})</option>)}
                     </select>
                     <input type="number" step="0.001" placeholder="Кол-во" value={ri.amount} onChange={e => { const n = [...recForm.ingredients]; n[idx].amount = e.target.value; setRecForm({ ...recForm, ingredients: n }); }}
-                      className="w-24 px-3 py-2 border border-slate-300 rounded-lg text-sm" />
+                      className="w-24 px-3 py-2 rounded-lg text-sm outline-none" style={{ background: 'var(--elev)', border: '1px solid var(--border)', color: 'var(--text)' }} />
                     {recForm.ingredients.length > 1 && (
                       <button onClick={() => setRecForm({ ...recForm, ingredients: recForm.ingredients.filter((_, i) => i !== idx) })}
-                        className="p-2 text-red-500 hover:bg-red-50 rounded"><X size={16} /></button>
+                        className="p-2 rounded" style={{ color: '#FCA5A5' }}><X size={16} /></button>
                     )}
                   </div>
                 ))}
                 <button onClick={() => setRecForm({ ...recForm, ingredients: [...recForm.ingredients, { ingredientId: '', amount: '' }] })}
-                  className="text-sm text-emerald-600 hover:text-emerald-700">+ Добавить ингредиент</button>
+                  className="text-sm" style={{ color: 'var(--w1)' }}>+ Добавить ингредиент</button>
               </div>
               <div className="flex gap-2">
-                <button onClick={handleSaveRecipe} className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm hover:bg-emerald-700">Сохранить</button>
-                <button onClick={() => setShowRecForm(false)} className="px-4 py-2 text-slate-600 text-sm">Отмена</button>
+                <button onClick={handleSaveRecipe} className="px-4 py-2 rounded-full text-sm" style={{ background: 'linear-gradient(90deg, var(--w1), var(--w2))', color: '#04121A' }}>Сохранить</button>
+                <button onClick={() => setShowRecForm(false)} className="px-4 py-2 text-sm" style={{ color: 'var(--muted)' }}>Отмена</button>
               </div>
             </div>
           )}
 
           <div className="space-y-2">
             {state.recipes.map(recipe => (
-              <div key={recipe.id} className="bg-white rounded-xl border border-slate-200 p-4">
+              <div key={recipe.id} className="rounded-xl p-4" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
                 <div className="flex items-center justify-between">
                   <div>
                     <div className="flex items-center gap-2">
-                      <h3 className="font-semibold text-slate-900">{recipe.name}</h3>
-                      <span className="px-2 py-0.5 bg-slate-100 text-slate-600 text-xs rounded-full">{mealTypeLabels[recipe.mealType]}</span>
-                      <span className="px-2 py-0.5 bg-slate-100 text-slate-600 text-xs rounded-full">{recipe.source}</span>
+                      <h3 className="font-semibold" style={{ color: 'var(--text)' }}>{recipe.name}</h3>
+                      <span className="px-2 py-0.5 text-xs rounded-full" style={{ background: 'var(--elev)', color: 'var(--muted)' }}>{mealTypeLabels[recipe.mealType]}</span>
+                      <span className="px-2 py-0.5 text-xs rounded-full" style={{ background: 'var(--elev)', color: 'var(--muted)' }}>{recipe.source}</span>
                     </div>
-                    <p className="text-sm text-slate-500 mt-1">{recipe.baseServings} порций • {recipe.ingredients.length} ингр.</p>
+                    <p className="text-sm mt-1" style={{ color: 'var(--muted)' }}>{recipe.baseServings} порций • {recipe.ingredients.length} ингр.</p>
                   </div>
                   <div className="flex items-center gap-1">
                     {isRecipeUsed(recipe.id) && <span title="Используется в походах"><AlertTriangle size={14} className="text-amber-500" /></span>}
-                    <button onClick={() => handleDeleteRecipe(recipe.id)} className="p-1.5 text-slate-400 hover:text-red-600 rounded"><Trash2 size={14} /></button>
+                    <button onClick={() => handleDeleteRecipe(recipe.id)} className="p-1.5 rounded" style={{ color: 'var(--muted)' }}><Trash2 size={14} /></button>
                   </div>
                 </div>
               </div>
@@ -422,37 +422,44 @@ export default function AdminPage() {
         <div className="space-y-6">
           <div className="flex justify-between items-center">
             <div>
-              <p className="text-sm text-slate-500">Черновики рецептов из внешних источников</p>
+              <p className="text-sm" style={{ color: 'var(--muted)' }}>Черновики рецептов из внешних источников</p>
             </div>
           </div>
 
           {/* Staging recipes */}
           <div className="space-y-4">
             {state.stagingRecipes.map(staging => (
-              <div key={staging.id} className={`bg-white rounded-xl border p-5 ${
-                staging.status === 'PENDING' ? 'border-amber-200' : staging.status === 'APPROVED' ? 'border-emerald-200' : 'border-red-200'
-              }`}>
+              <div key={staging.id} className="rounded-xl p-5" style={{ 
+                background: 'var(--surface)', 
+                border: `1px solid ${
+                  staging.status === 'PENDING' ? 'rgba(245, 158, 11, 0.3)' : 
+                  staging.status === 'APPROVED' ? 'rgba(52, 211, 153, 0.3)' : 
+                  'rgba(239, 68, 68, 0.3)'
+                }` 
+              }}>
                 <div className="flex items-start justify-between mb-3">
                   <div>
                     <div className="flex items-center gap-2">
-                      <h3 className="font-bold text-slate-900">{staging.suggestedName || 'Без названия'}</h3>
-                      <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${
-                        staging.status === 'PENDING' ? 'bg-amber-100 text-amber-700' :
-                        staging.status === 'APPROVED' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'
-                      }`}>
+                      <h3 className="font-bold" style={{ color: 'var(--text)' }}>{staging.suggestedName || 'Без названия'}</h3>
+                      <span className="px-2 py-0.5 text-xs font-medium rounded-full" style={{
+                        background: staging.status === 'PENDING' ? 'rgba(245, 158, 11, 0.16)' :
+                          staging.status === 'APPROVED' ? 'rgba(52, 211, 153, 0.16)' : 'rgba(239, 68, 68, 0.16)',
+                        color: staging.status === 'PENDING' ? '#F8C468' :
+                          staging.status === 'APPROVED' ? '#34D399' : '#FCA5A5'
+                      }}>
                         {staging.status === 'PENDING' ? 'Ожидает' : staging.status === 'APPROVED' ? 'Одобрен' : 'Отклонён'}
                       </span>
                     </div>
-                    <p className="text-sm text-slate-500 mt-1">Источник: {staging.source} • {new Date(staging.createdAt).toLocaleDateString('ru-RU')}</p>
+                    <p className="text-sm mt-1" style={{ color: 'var(--muted)' }}>Источник: {staging.source} • {new Date(staging.createdAt).toLocaleDateString('ru-RU')}</p>
                   </div>
                   {staging.status === 'PENDING' && (
                     <div className="flex gap-2">
                       <button onClick={() => handleApproveStaging(staging.id)}
-                        className="flex items-center gap-1 px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-sm hover:bg-emerald-700">
+                        className="flex items-center gap-1 px-3 py-1.5 rounded-full text-sm" style={{ background: 'linear-gradient(90deg, var(--w1), var(--w2))', color: '#04121A' }}>
                         <Check size={14} /> Одобрить
                       </button>
                       <button onClick={() => handleRejectStaging(staging.id)}
-                        className="flex items-center gap-1 px-3 py-1.5 border border-red-300 text-red-600 rounded-lg text-sm hover:bg-red-50">
+                        className="flex items-center gap-1 px-3 py-1.5 rounded-full text-sm" style={{ border: '1px solid rgba(239, 68, 68, 0.3)', color: '#FCA5A5' }}>
                         <X size={14} /> Отклонить
                       </button>
                     </div>
@@ -460,13 +467,13 @@ export default function AdminPage() {
                 </div>
 
                 {staging.suggestedMealType && (
-                  <p className="text-sm text-slate-600 mb-2">Тип: {mealTypeLabels[staging.suggestedMealType]}</p>
+                  <p className="text-sm mb-2" style={{ color: 'var(--muted)' }}>Тип: {mealTypeLabels[staging.suggestedMealType]}</p>
                 )}
 
                 {/* Raw payload preview */}
                 <details className="mb-3">
-                  <summary className="text-xs text-slate-500 cursor-pointer hover:text-slate-700">Сырые данные (JSON)</summary>
-                  <pre className="mt-2 p-3 bg-slate-50 rounded-lg text-xs text-slate-600 overflow-x-auto">
+                  <summary className="text-xs cursor-pointer" style={{ color: 'var(--muted)' }}>Сырые данные (JSON)</summary>
+                  <pre className="mt-2 p-3 rounded-lg text-xs overflow-x-auto" style={{ background: 'var(--elev)', color: 'var(--muted)' }}>
                     {JSON.stringify(staging.rawPayload, null, 2)}
                   </pre>
                 </details>
@@ -474,17 +481,19 @@ export default function AdminPage() {
                 {/* Suggested ingredients */}
                 {staging.suggestedIngredients && (
                   <div>
-                    <p className="text-sm font-medium text-slate-700 mb-2">Предложенные ингредиенты:</p>
+                    <p className="text-sm font-medium mb-2" style={{ color: 'var(--muted)' }}>Предложенные ингредиенты:</p>
                     <div className="space-y-1">
                       {staging.suggestedIngredients.map((si, idx) => (
-                        <div key={idx} className={`flex items-center justify-between px-3 py-2 rounded-lg text-sm ${si.mappedIngredientId ? 'bg-emerald-50' : 'bg-amber-50'}`}>
-                          <span className="text-slate-700">{si.externalName}</span>
+                        <div key={idx} className="flex items-center justify-between px-3 py-2 rounded-lg text-sm" style={{
+                          background: si.mappedIngredientId ? 'rgba(52, 211, 153, 0.1)' : 'rgba(245, 158, 11, 0.1)'
+                        }}>
+                          <span style={{ color: 'var(--text)' }}>{si.externalName}</span>
                           <div className="flex items-center gap-2">
-                            <span className="text-slate-500">{si.amount} {unitLabels[si.unit]}</span>
+                            <span style={{ color: 'var(--muted)' }}>{si.amount} {unitLabels[si.unit]}</span>
                             {si.mappedIngredientId ? (
-                              <span className="text-emerald-600 text-xs">→ {state.ingredients.find(i => i.id === si.mappedIngredientId)?.name}</span>
+                              <span className="text-xs" style={{ color: 'var(--ok)' }}>→ {state.ingredients.find(i => i.id === si.mappedIngredientId)?.name}</span>
                             ) : (
-                              <span className="text-amber-600 text-xs">не сопоставлен</span>
+                              <span className="text-xs" style={{ color: 'var(--fire)' }}>не сопоставлен</span>
                             )}
                           </div>
                         </div>
@@ -494,15 +503,15 @@ export default function AdminPage() {
                 )}
 
                 {staging.rejectionReason && (
-                  <p className="text-sm text-red-600 mt-2">Причина: {staging.rejectionReason}</p>
+                  <p className="text-sm mt-2" style={{ color: '#FCA5A5' }}>Причина: {staging.rejectionReason}</p>
                 )}
               </div>
             ))}
 
             {state.stagingRecipes.length === 0 && (
-              <div className="text-center py-12 bg-white rounded-xl border border-slate-200">
-                <Download size={48} className="mx-auto text-slate-300 mb-4" />
-                <p className="text-slate-500">Нет черновиков для модерации</p>
+              <div className="text-center py-12 rounded-xl" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+                <Download size={48} className="mx-auto mb-4" style={{ color: 'var(--muted)' }} />
+                <p style={{ color: 'var(--muted)' }}>Нет черновиков для модерации</p>
               </div>
             )}
           </div>

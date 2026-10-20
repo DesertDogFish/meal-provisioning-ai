@@ -53,30 +53,31 @@ export class ErrorBoundary extends Component<Props, State> {
 
       // Default fallback UI
       return (
-        <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-lg p-8 max-w-md w-full">
-            <div className="flex items-center justify-center w-16 h-16 bg-red-100 rounded-full mx-auto mb-4">
-              <AlertTriangle size={32} className="text-red-600" />
+        <div className="min-h-screen flex items-center justify-center p-4" style={{ background: 'var(--bg)' }}>
+          <div className="rounded-2xl shadow-lg p-8 max-w-md w-full" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+            <div className="flex items-center justify-center w-16 h-16 rounded-full mx-auto mb-4" style={{ background: 'rgba(239, 68, 68, 0.1)' }}>
+              <AlertTriangle size={32} style={{ color: '#FCA5A5' }} />
             </div>
-            <h2 className="text-xl font-bold text-slate-900 text-center mb-2">
+            <h2 className="text-xl font-bold text-center mb-2" style={{ color: 'var(--text)' }}>
               Что-то пошло не так
             </h2>
-            <p className="text-slate-600 text-center mb-6">
+            <p className="text-center mb-6" style={{ color: 'var(--muted)' }}>
               {this.state.error.detail || this.state.error.title}
             </p>
             
             <details className="mb-6">
-              <summary className="text-sm text-slate-500 cursor-pointer hover:text-slate-700">
+              <summary className="text-sm cursor-pointer" style={{ color: 'var(--muted)' }}>
                 Технические детали
               </summary>
-              <div className="mt-2 p-3 bg-slate-50 rounded-lg text-xs text-slate-600 overflow-x-auto">
+              <div className="mt-2 p-3 rounded-lg text-xs overflow-x-auto" style={{ background: 'var(--elev)', color: 'var(--muted)' }}>
                 <pre>{JSON.stringify(this.state.error, null, 2)}</pre>
               </div>
             </details>
 
             <button
               onClick={this.reset}
-              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
+              className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-full transition-colors"
+              style={{ background: 'linear-gradient(90deg, var(--w1), var(--w2))', color: '#04121A' }}
             >
               <RefreshCw size={18} />
               Попробовать снова

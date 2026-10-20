@@ -97,7 +97,7 @@ export function ProblemDetailAlert({ problemDetail, onClose, compact = false }: 
             <summary className="text-xs opacity-75 cursor-pointer hover:opacity-100">
               Технические детали (RFC 7807)
             </summary>
-            <div className="mt-2 p-2 bg-white/50 rounded text-xs font-mono overflow-x-auto">
+            <div className="mt-2 p-2 rounded text-xs font-mono overflow-x-auto" style={{ background: 'rgba(0,0,0,0.2)' }}>
               <pre>{JSON.stringify(problemDetail, null, 2)}</pre>
             </div>
           </details>
