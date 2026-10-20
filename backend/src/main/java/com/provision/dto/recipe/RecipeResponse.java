@@ -12,6 +12,8 @@ public record RecipeResponse(
     Long id,
     String name,
     MealType mealType,
+    String category,
+    Integer cookMinutes,
     Integer baseServings,
     Integer caloriesPerServing,
     RecipeSource source,

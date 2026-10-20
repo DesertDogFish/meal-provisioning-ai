@@ -7,6 +7,7 @@ import java.time.LocalDateTime;
 
 public record IngredientResponse(
     Long id,
+    String code,
     String name,
     UnitOfMeasure unit,
     String category,

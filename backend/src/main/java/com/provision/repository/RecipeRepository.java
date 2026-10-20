@@ -13,6 +13,10 @@ import java.util.List;
 public interface RecipeRepository extends JpaRepository<Recipe, Long> {
     List<Recipe> findByMealType(MealType mealType);
     
+    List<Recipe> findByCategory(String category);
+    
+    List<Recipe> findByCookMinutes(Integer cookMinutes);
+    
     @Query("SELECT r FROM Recipe r ORDER BY r.name")
     List<Recipe> findAllOrderByName();
     
@@ -21,4 +25,31 @@ public interface RecipeRepository extends JpaRepository<Recipe, Long> {
     
     @Query("SELECT r FROM Recipe r LEFT JOIN FETCH r.ingredients ri LEFT JOIN FETCH ri.ingredient ORDER BY r.name")
     List<Recipe> findAllWithIngredients();
+    
+    @Query("SELECT DISTINCT r FROM Recipe r LEFT JOIN FETCH r.ingredients ri LEFT JOIN FETCH ri.ingredient " +
+           "WHERE LOWER(r.name) LIKE LOWER(CONCAT('%', :search, '%')) " +
+           "OR LOWER(ri.ingredient.name) LIKE LOWER(CONCAT('%', :search, '%'))")
+    List<Recipe> searchByNameOrIngredient(@Param("search") String search);
+    
+    @Query("SELECT DISTINCT r FROM Recipe r LEFT JOIN FETCH r.ingredients ri LEFT JOIN FETCH ri.ingredient " +
+           "WHERE (:mealType IS NULL OR r.mealType = :mealType) " +
+           "AND (:category IS NULL OR r.category = :category) " +
+           "AND (:cookMinutes IS NULL OR r.cookMinutes = :cookMinutes) " +
+           "AND (:search IS NULL OR LOWER(r.name) LIKE LOWER(CONCAT('%', :search, '%')) " +
+           "OR LOWER(ri.ingredient.name) LIKE LOWER(CONCAT('%', :search, '%'))) " +
+           "ORDER BY r.name")
+    List<Recipe> findWithFilters(
+            @Param("mealType") MealType mealType,
+            @Param("category") String category,
+            @Param("cookMinutes") Integer cookMinutes,
+            @Param("search") String search);
+    
+    @Query("SELECT COUNT(DISTINCT r) FROM Recipe r " +
+           "WHERE (:mealType IS NULL OR r.mealType = :mealType) " +
+           "AND (:category IS NULL OR r.category = :category) " +
+           "AND (:cookMinutes IS NULL OR r.cookMinutes = :cookMinutes)")
+    long countWithFilters(
+            @Param("mealType") MealType mealType,
+            @Param("category") String category,
+            @Param("cookMinutes") Integer cookMinutes);
 }

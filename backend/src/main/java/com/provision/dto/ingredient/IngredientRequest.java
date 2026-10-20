@@ -8,6 +8,9 @@ import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 
 public record IngredientRequest(
+    @Size(min = 1, max = 64)
+    String code,
+    
     @NotBlank @Size(min = 1, max = 255)
     String name,
     

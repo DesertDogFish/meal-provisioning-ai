@@ -45,6 +45,8 @@ export interface Recipe {
   id: string;
   name: string;
   mealType: MealType;
+  category?: string;
+  cookMinutes?: number;
   baseServings: number;
   caloriesPerServing?: number;
   source: RecipeSource;

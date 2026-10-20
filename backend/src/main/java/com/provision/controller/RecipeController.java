@@ -2,6 +2,7 @@ package com.provision.controller;
 
 import com.provision.dto.recipe.RecipeRequest;
 import com.provision.dto.recipe.RecipeResponse;
+import com.provision.entity.MealType;
 import com.provision.service.RecipeService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -19,8 +20,13 @@ public class RecipeController {
     private final RecipeService recipeService;
 
     @GetMapping("/recipes")
-    public List<RecipeResponse> getAllRecipes() {
-        return recipeService.getAllRecipes();
+    public List<RecipeResponse> getAllRecipes(
+            @RequestParam(required = false) MealType mealType,
+            @RequestParam(required = false) String category,
+            @RequestParam(required = false) Integer cookMinutes,
+            @RequestParam(required = false) String search
+    ) {
+        return recipeService.getRecipesWithFilters(mealType, category, cookMinutes, search);
     }
 
     @GetMapping("/recipes/{id}")

@@ -31,6 +31,18 @@ public class RecipeService {
     }
 
     @Transactional(readOnly = true)
+    public List<RecipeResponse> getRecipesWithFilters(
+            MealType mealType,
+            String category,
+            Integer cookMinutes,
+            String search
+    ) {
+        return recipeRepository.findWithFilters(mealType, category, cookMinutes, search).stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
     public RecipeResponse getRecipe(Long id) {
         Recipe recipe = recipeRepository.findByIdWithIngredients(id);
         if (recipe == null) {
@@ -44,6 +56,8 @@ public class RecipeService {
         Recipe recipe = Recipe.builder()
                 .name(request.name())
                 .mealType(request.mealType())
+                .category(request.category())
+                .cookMinutes(request.cookMinutes() != null ? request.cookMinutes() : 0)
                 .baseServings(request.baseServings())
                 .caloriesPerServing(request.caloriesPerServing())
                 .source(RecipeSource.MANUAL)
@@ -77,6 +91,8 @@ public class RecipeService {
 
         recipe.setName(request.name());
         recipe.setMealType(request.mealType());
+        recipe.setCategory(request.category());
+        recipe.setCookMinutes(request.cookMinutes() != null ? request.cookMinutes() : 0);
         recipe.setBaseServings(request.baseServings());
         recipe.setCaloriesPerServing(request.caloriesPerServing());
 
@@ -132,6 +148,8 @@ public class RecipeService {
                 recipe.getId(),
                 recipe.getName(),
                 recipe.getMealType(),
+                recipe.getCategory(),
+                recipe.getCookMinutes(),
                 recipe.getBaseServings(),
                 recipe.getCaloriesPerServing(),
                 recipe.getSource(),

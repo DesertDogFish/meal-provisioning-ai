@@ -26,6 +26,13 @@ public class Recipe {
     @Column(name = "meal_type", nullable = false, length = 20)
     private MealType mealType;
 
+    @Column(name = "category", length = 40)
+    private String category;
+
+    @Column(name = "cook_minutes", nullable = false)
+    @Builder.Default
+    private Integer cookMinutes = 0;
+
     @Column(name = "base_servings", nullable = false)
     private Integer baseServings;
 

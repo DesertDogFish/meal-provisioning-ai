@@ -18,6 +18,9 @@ public class Ingredient {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Column(unique = true, length = 64)
+    private String code;
+
     @Column(nullable = false, unique = true, length = 255)
     private String name;
 

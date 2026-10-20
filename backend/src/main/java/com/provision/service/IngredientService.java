@@ -67,7 +67,12 @@ public class IngredientService {
             throw new ConflictException("Ingredient with name already exists: " + request.name());
         }
 
+        if (request.code() != null && ingredientRepository.existsByCode(request.code())) {
+            throw new ConflictException("Ingredient with code already exists: " + request.code());
+        }
+
         Ingredient ingredient = Ingredient.builder()
+                .code(request.code())
                 .name(request.name())
                 .unit(request.unit())
                 .category(request.category())
@@ -132,6 +137,7 @@ public class IngredientService {
     private IngredientResponse toResponse(Ingredient ingredient) {
         return new IngredientResponse(
                 ingredient.getId(),
+                ingredient.getCode(),
                 ingredient.getName(),
                 ingredient.getUnit(),
                 ingredient.getCategory(),

@@ -13,6 +13,9 @@ public interface IngredientRepository extends JpaRepository<Ingredient, Long> {
     Optional<Ingredient> findByName(String name);
     boolean existsByName(String name);
     
+    Optional<Ingredient> findByCode(String code);
+    boolean existsByCode(String code);
+    
     @Query("SELECT i FROM Ingredient i WHERE i.category = :category ORDER BY i.name")
     List<Ingredient> findByCategory(String category);
     

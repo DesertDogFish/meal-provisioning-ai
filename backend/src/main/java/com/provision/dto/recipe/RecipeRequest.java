@@ -18,6 +18,12 @@ public record RecipeRequest(
     @NotNull
     MealType mealType,
     
+    @Size(min = 1, max = 40)
+    String category,
+    
+    @Min(0)
+    Integer cookMinutes,
+    
     @NotNull @Min(1)
     Integer baseServings,
     
