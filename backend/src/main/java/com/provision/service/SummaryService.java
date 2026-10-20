@@ -123,8 +123,8 @@ public class SummaryService {
             throw new IllegalArgumentException("Trip not found or access denied");
         }
 
-        // Агрегация по ингредиентам
-        Map<Long, ShoppingAggregation> aggregation = new LinkedHashMap<>();
+        // Агрегация по ингредиентам с учётом стоимости по дням
+        Map<Long, ShoppingAggregationWithCost> aggregation = new LinkedHashMap<>();
 
         for (TripDay day : trip.getDays()) {
             for (TripMeal meal : day.getMeals()) {
@@ -138,30 +138,35 @@ public class SummaryService {
                             mealPeople
                     );
 
+                    // Получаем цену на дату этого дня
+                    Optional<IngredientPrice> price = priceRepository
+                            .findEffectivePrice(ri.getIngredient().getId(), day.getDayDate());
+
+                    BigDecimal mealCost = null;
+                    if (price.isPresent()) {
+                        mealCost = mealAmount.multiply(price.get().getPricePerUnit())
+                                .setScale(2, RoundingMode.HALF_UP);
+                    }
+
                     aggregation.computeIfAbsent(ri.getIngredient().getId(), k -> 
-                            new ShoppingAggregation(ri.getIngredient()))
-                            .addAmount(mealAmount);
+                            new ShoppingAggregationWithCost(ri.getIngredient()))
+                            .addAmountAndCost(mealAmount, mealCost);
                 }
             }
         }
 
-        // Расчёт стоимости
+        // Формируем ответ
         List<ShoppingItemResponse> items = new ArrayList<>();
         BigDecimal totalCost = BigDecimal.ZERO;
         boolean hasMissingPrices = false;
         List<String> missingIngredients = new ArrayList<>();
 
-        for (ShoppingAggregation agg : aggregation.values()) {
+        for (ShoppingAggregationWithCost agg : aggregation.values()) {
             BigDecimal estimatedCost = null;
             boolean hasPrice = false;
 
-            // Используем последнюю цену для расчёта
-            Optional<IngredientPrice> price = priceRepository
-                    .findEffectivePrice(agg.ingredient().getId(), trip.getEndDate());
-
-            if (price.isPresent()) {
-                estimatedCost = agg.totalAmount().multiply(price.get().getPricePerUnit())
-                        .setScale(2, RoundingMode.HALF_UP);
+            if (agg.hasPrice()) {
+                estimatedCost = agg.totalCost();
                 hasPrice = true;
                 totalCost = totalCost.add(estimatedCost);
             } else {
@@ -341,6 +346,27 @@ public class SummaryService {
 
         void addAmount(BigDecimal amount) {
             totalAmount = totalAmount.add(amount);
+        }
+    }
+
+    /**
+     * Вспомогательный класс для агрегации с учётом стоимости по дням
+     */
+    private record ShoppingAggregationWithCost(Ingredient ingredient) {
+        private BigDecimal totalAmount = BigDecimal.ZERO;
+        private BigDecimal totalCost = BigDecimal.ZERO;
+        private boolean hasAnyPrice = false;
+
+        void addAmountAndCost(BigDecimal amount, BigDecimal cost) {
+            totalAmount = totalAmount.add(amount);
+            if (cost != null) {
+                totalCost = totalCost.add(cost);
+                hasAnyPrice = true;
+            }
+        }
+
+        boolean hasPrice() {
+            return hasAnyPrice;
         }
     }
 }
