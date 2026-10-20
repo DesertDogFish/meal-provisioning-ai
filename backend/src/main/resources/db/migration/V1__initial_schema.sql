@@ -73,7 +73,7 @@ CREATE INDEX idx_recipes_meal_type ON recipes(meal_type);
 CREATE TABLE recipe_ingredients (
     id BIGSERIAL PRIMARY KEY,
     recipe_id BIGINT NOT NULL REFERENCES recipes(id) ON DELETE CASCADE,
-    ingredient_id BIGINT NOT NULL REFERENCES ingredients(id),
+    ingredient_id BIGINT NOT NULL REFERENCES ingredients(id) ON DELETE RESTRICT,
     amount NUMERIC(10, 3) NOT NULL CHECK (amount > 0),
     UNIQUE(recipe_id, ingredient_id)
 );
@@ -116,7 +116,7 @@ CREATE TABLE trip_meals (
     id BIGSERIAL PRIMARY KEY,
     trip_day_id BIGINT NOT NULL REFERENCES trip_days(id) ON DELETE CASCADE,
     meal_type VARCHAR(20) NOT NULL CHECK (meal_type IN ('BREAKFAST', 'LUNCH', 'DINNER', 'SNACK')),
-    recipe_id BIGINT NOT NULL REFERENCES recipes(id),
+    recipe_id BIGINT NOT NULL REFERENCES recipes(id) ON DELETE RESTRICT,
     people_override INTEGER CHECK (people_override > 0),
     sort_order INTEGER NOT NULL DEFAULT 0
 );

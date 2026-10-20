@@ -1,18 +1,19 @@
 package com.provision.integration;
 
-import com.provision.ProvisionApplication;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.provision.dto.auth.LoginRequest;
 import com.provision.dto.auth.RegisterRequest;
 import com.provision.entity.UserRole;
+import com.provision.repository.UserRepository;
 import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.web.client.TestRestTemplate;
-import org.springframework.boot.test.web.server.LocalServerPort;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
+import org.springframework.http.MediaType;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -20,14 +21,18 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@SpringBootTest(
-        classes = ProvisionApplication.class,
-        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT
-)
+/**
+ * Integration tests for authentication endpoints
+ * AUTH-01 through AUTH-09
+ */
+@SpringBootTest
+@AutoConfigureMockMvc
 @Testcontainers
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
-@DisplayName("Integration Tests - Auth")
+@DisplayName("Authentication Integration Tests")
 class AuthIntegrationTest {
 
     @Container
@@ -41,98 +46,263 @@ class AuthIntegrationTest {
         registry.add("spring.datasource.url", postgres::getJdbcUrl);
         registry.add("spring.datasource.username", postgres::getUsername);
         registry.add("spring.datasource.password", postgres::getPassword);
-        registry.add("spring.jpa.hibernate.ddl-auto", () -> "validate");
-        registry.add("spring.flyway.enabled", () -> "true");
     }
 
-    @LocalServerPort
-    private int port;
+    @Autowired
+    private MockMvc mockMvc;
 
     @Autowired
-    private TestRestTemplate restTemplate;
+    private ObjectMapper objectMapper;
 
-    private String baseUrl() {
-        return "http://localhost:" + port + "/api/v1/auth";
+    @Autowired
+    private UserRepository userRepository;
+
+    private static final String TEST_EMAIL = "auth_test@example.com";
+    private static final String TEST_PASSWORD = "password123";
+
+    @BeforeEach
+    void setUp() {
+        userRepository.deleteAll();
     }
 
     @Test
     @Order(1)
-    @DisplayName("Should register new user")
-    void shouldRegisterUser() {
+    @DisplayName("AUTH-01: Register new user successfully")
+    void auth01_registerNewUser() throws Exception {
         RegisterRequest request = new RegisterRequest(
-                "test@example.com",
-                "password123",
+                TEST_EMAIL,
+                TEST_PASSWORD,
                 "John",
                 "Doe"
         );
 
-        ResponseEntity<Map> response = restTemplate.postForEntity(
-                baseUrl() + "/register",
-                request,
-                Map.class
-        );
+        MvcResult result = mockMvc.perform(post("/api/v1/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.email").value(TEST_EMAIL))
+                .andExpect(jsonPath("$.firstName").value("John"))
+                .andExpect(jsonPath("$.lastName").value("Doe"))
+                .andExpect(jsonPath("$.role").value("USER"))
+                .andReturn();
 
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
-        assertThat(response.getBody()).containsKey("email");
-        assertThat(response.getBody().get("email")).isEqualTo("test@example.com");
+        String response = result.getResponse().getContentAsString();
+        assertThat(response).contains("accessToken");
+        assertThat(response).contains("refreshToken");
     }
 
     @Test
     @Order(2)
-    @DisplayName("Should login user")
-    void shouldLoginUser() {
-        LoginRequest request = new LoginRequest(
-                "test@example.com",
-                "password123"
+    @DisplayName("AUTH-02: Login with valid credentials")
+    void auth02_loginSuccessfully() throws Exception {
+        // Register first
+        RegisterRequest registerRequest = new RegisterRequest(
+                TEST_EMAIL,
+                TEST_PASSWORD,
+                "John",
+                "Doe"
         );
+        mockMvc.perform(post("/api/v1/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(registerRequest)))
+                .andExpect(status().isCreated());
 
-        ResponseEntity<Map> response = restTemplate.postForEntity(
-                baseUrl() + "/login",
-                request,
-                Map.class
-        );
+        // Login
+        LoginRequest loginRequest = new LoginRequest(TEST_EMAIL, TEST_PASSWORD);
 
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(response.getBody()).containsKey("accessToken");
-        assertThat(response.getBody()).containsKey("refreshToken");
-        assertThat(response.getBody().get("tokenType")).isEqualTo("Bearer");
+        mockMvc.perform(post("/api/v1/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(loginRequest)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accessToken").exists())
+                .andExpect(jsonPath("$.refreshToken").exists())
+                .andExpect(jsonPath("$.tokenType").value("Bearer"));
     }
 
     @Test
     @Order(3)
-    @DisplayName("Should reject login with wrong password")
-    void shouldRejectWrongPassword() {
-        LoginRequest request = new LoginRequest(
-                "test@example.com",
-                "wrongpassword"
+    @DisplayName("AUTH-03: Login with wrong password returns 401")
+    void auth03_loginWithWrongPassword() throws Exception {
+        // Register first
+        RegisterRequest registerRequest = new RegisterRequest(
+                TEST_EMAIL,
+                TEST_PASSWORD,
+                "John",
+                "Doe"
         );
+        mockMvc.perform(post("/api/v1/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(registerRequest)))
+                .andExpect(status().isCreated());
 
-        ResponseEntity<Map> response = restTemplate.postForEntity(
-                baseUrl() + "/login",
-                request,
-                Map.class
-        );
+        // Login with wrong password
+        LoginRequest loginRequest = new LoginRequest(TEST_EMAIL, "wrongpassword");
 
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        mockMvc.perform(post("/api/v1/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(loginRequest)))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.status").value(401))
+                .andExpect(jsonPath("$.detail").value("Invalid email or password"));
     }
 
     @Test
     @Order(4)
-    @DisplayName("Should reject registration with existing email")
-    void shouldRejectDuplicateEmail() {
+    @DisplayName("AUTH-04: Register with existing email returns 409")
+    void auth04_registerWithExistingEmail() throws Exception {
         RegisterRequest request = new RegisterRequest(
-                "test@example.com",
-                "password123",
-                "Jane",
-                "Smith"
+                TEST_EMAIL,
+                TEST_PASSWORD,
+                "John",
+                "Doe"
         );
 
-        ResponseEntity<Map> response = restTemplate.postForEntity(
-                baseUrl() + "/register",
-                request,
-                Map.class
+        // First registration
+        mockMvc.perform(post("/api/v1/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isCreated());
+
+        // Second registration with same email
+        mockMvc.perform(post("/api/v1/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.status").value(409));
+    }
+
+    @Test
+    @Order(5)
+    @DisplayName("AUTH-05: Register with invalid data returns 400")
+    void auth05_registerWithInvalidData() throws Exception {
+        RegisterRequest request = new RegisterRequest(
+                "invalid-email",
+                "123",
+                "",
+                ""
         );
 
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        mockMvc.perform(post("/api/v1/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.errors").isArray());
+    }
+
+    @Test
+    @Order(6)
+    @DisplayName("AUTH-06: GET /users/me requires authentication")
+    void auth06_getCurrentUser() throws Exception {
+        // Without token
+        mockMvc.perform(get("/api/v1/auth/me"))
+                .andExpect(status().isUnauthorized());
+
+        // Register and login
+        RegisterRequest registerRequest = new RegisterRequest(
+                TEST_EMAIL,
+                TEST_PASSWORD,
+                "John",
+                "Doe"
+        );
+        mockMvc.perform(post("/api/v1/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(registerRequest)))
+                .andExpect(status().isCreated());
+
+        LoginRequest loginRequest = new LoginRequest(TEST_EMAIL, TEST_PASSWORD);
+        MvcResult loginResult = mockMvc.perform(post("/api/v1/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(loginRequest)))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        String response = loginResult.getResponse().getContentAsString();
+        Map<String, Object> tokens = objectMapper.readValue(response, Map.class);
+        String accessToken = (String) tokens.get("accessToken");
+
+        // With token
+        mockMvc.perform(get("/api/v1/auth/me")
+                        .header("Authorization", "Bearer " + accessToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.email").value(TEST_EMAIL))
+                .andExpect(jsonPath("$.firstName").value("John"))
+                .andExpect(jsonPath("$.lastName").value("Doe"));
+    }
+
+    @Test
+    @Order(7)
+    @DisplayName("AUTH-07: Refresh token returns new token pair")
+    void auth07_refreshToken() throws Exception {
+        // Register and login
+        RegisterRequest registerRequest = new RegisterRequest(
+                TEST_EMAIL,
+                TEST_PASSWORD,
+                "John",
+                "Doe"
+        );
+        mockMvc.perform(post("/api/v1/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(registerRequest)))
+                .andExpect(status().isCreated());
+
+        LoginRequest loginRequest = new LoginRequest(TEST_EMAIL, TEST_PASSWORD);
+        MvcResult loginResult = mockMvc.perform(post("/api/v1/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(loginRequest)))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        String response = loginResult.getResponse().getContentAsString();
+        Map<String, Object> tokens = objectMapper.readValue(response, Map.class);
+        String refreshToken = (String) tokens.get("refreshToken");
+
+        // Refresh
+        mockMvc.perform(post("/api/v1/auth/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"refreshToken\":\"" + refreshToken + "\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accessToken").exists())
+                .andExpect(jsonPath("$.refreshToken").exists());
+    }
+
+    @Test
+    @Order(8)
+    @DisplayName("AUTH-08: Logout invalidates refresh token")
+    void auth08_logout() throws Exception {
+        // Register and login
+        RegisterRequest registerRequest = new RegisterRequest(
+                TEST_EMAIL,
+                TEST_PASSWORD,
+                "John",
+                "Doe"
+        );
+        mockMvc.perform(post("/api/v1/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(registerRequest)))
+                .andExpect(status().isCreated());
+
+        LoginRequest loginRequest = new LoginRequest(TEST_EMAIL, TEST_PASSWORD);
+        MvcResult loginResult = mockMvc.perform(post("/api/v1/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(loginRequest)))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        String response = loginResult.getResponse().getContentAsString();
+        Map<String, Object> tokens = objectMapper.readValue(response, Map.class);
+        String refreshToken = (String) tokens.get("refreshToken");
+
+        // Logout
+        mockMvc.perform(post("/api/v1/auth/logout")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"refreshToken\":\"" + refreshToken + "\"}"))
+                .andExpect(status().isOk());
+
+        // Try to refresh with old token
+        mockMvc.perform(post("/api/v1/auth/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"refreshToken\":\"" + refreshToken + "\"}"))
+                .andExpect(status().isUnauthorized());
     }
 }

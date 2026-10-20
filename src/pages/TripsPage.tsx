@@ -54,12 +54,13 @@ export default function TripsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl md:text-3xl font-bold text-slate-900">Походы</h1>
-          <p className="text-slate-500 mt-1">Управление вашими походами и запасами</p>
+          <h1 className="text-2xl md:text-3xl font-bold" style={{ color: 'var(--text)' }}>Походы</h1>
+          <p className="mt-1" style={{ color: 'var(--muted)' }}>Управление вашими походами и запасами</p>
         </div>
         <button
           onClick={() => setShowCreate(true)}
-          className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors shadow-sm"
+          className="flex items-center gap-2 px-4 py-2.5 rounded-full transition-all"
+          style={{ background: 'linear-gradient(90deg, var(--w1), var(--w2))', color: '#04121A' }}
         >
           <Plus size={18} />
           <span className="hidden sm:inline">Новый поход</span>
@@ -69,13 +70,13 @@ export default function TripsPage() {
       {/* Create modal */}
       {showCreate && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
-            <h2 className="text-xl font-bold text-slate-900 mb-4">Новый поход</h2>
+          <div className="rounded-2xl shadow-xl w-full max-w-md p-6" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+            <h2 className="text-xl font-bold mb-4" style={{ color: 'var(--text)' }}>Новый поход</h2>
             
             {formErrors.length > 0 && (
               <div className="mb-4 space-y-1">
                 {formErrors.map((err, idx) => (
-                  <p key={idx} className="text-sm text-red-600">
+                  <p key={idx} className="text-sm" style={{ color: '#FCA5A5' }}>
                     <span className="font-medium">{err.field}:</span> {err.message}
                   </p>
                 ))}
@@ -84,59 +85,76 @@ export default function TripsPage() {
             
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Название</label>
+                <label className="block text-sm font-medium mb-1" style={{ color: 'var(--muted)' }}>Название</label>
                 <input
                   type="text"
                   value={newTrip.name}
                   onChange={e => { setNewTrip({ ...newTrip, name: e.target.value }); setFormErrors([]); }}
-                  className={`w-full px-3 py-2.5 border rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none ${
-                    formErrors.find(e => e.field === 'name') ? 'border-red-300 bg-red-50' : 'border-slate-300'
-                  }`}
+                  className="w-full px-3 py-2.5 rounded-lg outline-none"
+                  style={{ 
+                    background: 'var(--elev)', 
+                    border: formErrors.find(e => e.field === 'name') ? '1px solid #FCA5A5' : '1px solid var(--border)',
+                    color: 'var(--text)'
+                  }}
                   placeholder="Поход на Алтай"
                 />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Дата начала</label>
+                  <label className="block text-sm font-medium mb-1" style={{ color: 'var(--muted)' }}>Дата начала</label>
                   <input
                     type="date"
                     value={newTrip.startDate}
                     onChange={e => { setNewTrip({ ...newTrip, startDate: e.target.value }); setFormErrors([]); }}
-                    className={`w-full px-3 py-2.5 border rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none ${
-                      formErrors.find(e => e.field === 'startDate') ? 'border-red-300 bg-red-50' : 'border-slate-300'
-                    }`}
+                    className="w-full px-3 py-2.5 rounded-lg outline-none"
+                    style={{ 
+                      background: 'var(--elev)', 
+                      border: formErrors.find(e => e.field === 'startDate') ? '1px solid #FCA5A5' : '1px solid var(--border)',
+                      color: 'var(--text)'
+                    }}
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Дата окончания</label>
+                  <label className="block text-sm font-medium mb-1" style={{ color: 'var(--muted)' }}>Дата окончания</label>
                   <input
                     type="date"
                     value={newTrip.endDate}
                     onChange={e => { setNewTrip({ ...newTrip, endDate: e.target.value }); setFormErrors([]); }}
-                    className={`w-full px-3 py-2.5 border rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none ${
-                      formErrors.find(e => e.field === 'endDate') ? 'border-red-300 bg-red-50' : 'border-slate-300'
-                    }`}
+                    className="w-full px-3 py-2.5 rounded-lg outline-none"
+                    style={{ 
+                      background: 'var(--elev)', 
+                      border: formErrors.find(e => e.field === 'endDate') ? '1px solid #FCA5A5' : '1px solid var(--border)',
+                      color: 'var(--text)'
+                    }}
                   />
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Количество человек</label>
+                <label className="block text-sm font-medium mb-1" style={{ color: 'var(--muted)' }}>Количество человек</label>
                 <input
                   type="number"
                   min={1}
                   value={newTrip.defaultPeople}
                   onChange={e => { setNewTrip({ ...newTrip, defaultPeople: parseInt(e.target.value) || 1 }); setFormErrors([]); }}
-                  className={`w-full px-3 py-2.5 border rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none ${
-                    formErrors.find(e => e.field === 'defaultPeople') ? 'border-red-300 bg-red-50' : 'border-slate-300'
-                  }`}
+                  className="w-full px-3 py-2.5 rounded-lg outline-none"
+                  style={{ 
+                    background: 'var(--elev)', 
+                    border: formErrors.find(e => e.field === 'defaultPeople') ? '1px solid #FCA5A5' : '1px solid var(--border)',
+                    color: 'var(--text)'
+                  }}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Заметки</label>
+                <label className="block text-sm font-medium mb-1" style={{ color: 'var(--muted)' }}>Заметки</label>
                 <textarea
                   value={newTrip.notes}
                   onChange={e => setNewTrip({ ...newTrip, notes: e.target.value })}
-                  className="w-full px-3 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
+                  className="w-full px-3 py-2.5 rounded-lg outline-none"
+                  style={{ 
+                    background: 'var(--elev)', 
+                    border: '1px solid var(--border)',
+                    color: 'var(--text)'
+                  }}
                   rows={2}
                   placeholder="Особенности похода..."
                 />
@@ -145,13 +163,15 @@ export default function TripsPage() {
             <div className="flex gap-3 mt-6">
               <button
                 onClick={() => setShowCreate(false)}
-                className="flex-1 px-4 py-2.5 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors"
+                className="flex-1 px-4 py-2.5 rounded-full transition-colors"
+                style={{ border: '1px solid var(--border)', color: 'var(--text)' }}
               >
                 Отмена
               </button>
               <button
                 onClick={handleCreate}
-                className="flex-1 px-4 py-2.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
+                className="flex-1 px-4 py-2.5 rounded-full transition-colors"
+                style={{ background: 'linear-gradient(90deg, var(--w1), var(--w2))', color: '#04121A' }}
               >
                 Создать
               </button>
@@ -162,12 +182,12 @@ export default function TripsPage() {
 
       {/* Trips list */}
       {myTrips.length === 0 ? (
-        <div className="bg-white rounded-xl border border-slate-200 p-12 text-center">
-          <Mountain size={48} className="mx-auto text-slate-300 mb-4" />
-          <p className="text-slate-500 mb-4">У вас пока нет походов</p>
+        <div className="rounded-xl p-12 text-center" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+          <Mountain size={48} className="mx-auto mb-4" style={{ color: 'var(--muted)' }} />
+          <p className="mb-4" style={{ color: 'var(--muted)' }}>У вас пока нет походов</p>
           <button
             onClick={() => setShowCreate(true)}
-            className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
+            className="grad-btn"
           >
             Создать первый поход
           </button>
@@ -177,12 +197,13 @@ export default function TripsPage() {
           {myTrips.map(trip => (
             <div
               key={trip.id}
-              className="bg-white rounded-xl border border-slate-200 p-5 hover:shadow-md transition-shadow"
+              className="rounded-xl p-5 transition-all hover:scale-[1.01]"
+              style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
             >
               <div className="flex items-center justify-between">
                 <div className="flex-1 cursor-pointer" onClick={() => navigate(`/trips/${trip.id}`)}>
-                  <h3 className="font-bold text-slate-900 text-lg">{trip.name}</h3>
-                  <div className="flex flex-wrap items-center gap-4 mt-2 text-sm text-slate-500">
+                  <h3 className="font-bold text-lg" style={{ color: 'var(--text)' }}>{trip.name}</h3>
+                  <div className="flex flex-wrap items-center gap-4 mt-2 text-sm" style={{ color: 'var(--muted)' }}>
                     <span className="flex items-center gap-1">
                       <Calendar size={14} />
                       {new Date(trip.startDate).toLocaleDateString('ru-RU')} — {new Date(trip.endDate).toLocaleDateString('ru-RU')}
@@ -196,18 +217,36 @@ export default function TripsPage() {
                       {trip.days?.length || 0} дней
                     </span>
                   </div>
-                  {trip.notes && <p className="text-sm text-slate-400 mt-1">{trip.notes}</p>}
+                  {trip.notes && <p className="text-sm mt-1" style={{ color: 'var(--muted)' }}>{trip.notes}</p>}
                 </div>
                 <div className="flex items-center gap-2 ml-4">
                   <button
                     onClick={() => navigate(`/trips/${trip.id}`)}
-                    className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
+                    className="p-2 rounded-lg transition-colors"
+                    style={{ color: 'var(--muted)' }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.color = 'var(--w1)';
+                      e.currentTarget.style.background = 'rgba(45, 212, 191, 0.1)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.color = 'var(--muted)';
+                      e.currentTarget.style.background = 'transparent';
+                    }}
                   >
                     <Edit2 size={18} />
                   </button>
                   <button
                     onClick={() => handleDelete(trip.id)}
-                    className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                    className="p-2 rounded-lg transition-colors"
+                    style={{ color: 'var(--muted)' }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.color = '#FCA5A5';
+                      e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.color = 'var(--muted)';
+                      e.currentTarget.style.background = 'transparent';
+                    }}
                   >
                     <Trash2 size={18} />
                   </button>
