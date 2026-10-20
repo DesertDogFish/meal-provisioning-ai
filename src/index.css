@@ -121,13 +121,26 @@ h1, h2, h3, .logo-word {
   margin: 10px 0;
 }
 
-.stepper-wrap {
+/* Нативные спиннеры не существуют нигде в приложении */
+input[type=number] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+input[type=number]::-webkit-inner-spin-button,
+input[type=number]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* Тематический степпер Midnight Harbor */
+.nf {
   display: inline-flex;
   align-items: center;
   gap: 6px;
 }
 
-.stepper-btn {
+.nf-btn {
   width: 24px;
   height: 24px;
   border-radius: 50%;
@@ -137,24 +150,24 @@ h1, h2, h3, .logo-word {
   font: 800 13px/1 Manrope;
   cursor: pointer;
   user-select: none;
-  transition: 0.15s;
+  transition: border-color 0.15s, color 0.15s, box-shadow 0.15s;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
-.stepper-btn:hover {
+.nf-btn:hover {
   color: var(--text);
   border-color: rgba(255, 255, 255, 0.16);
 }
 
-.stepper-btn:active {
+.nf-btn:active {
+  color: var(--w1);
   border-color: var(--w1);
   box-shadow: 0 0 0 3px rgba(45, 212, 191, 0.18);
-  color: var(--w1);
 }
 
-.price-input {
+.nf-input {
   width: 86px;
   background: var(--elev);
   border: 1px solid var(--border);
@@ -163,25 +176,30 @@ h1, h2, h3, .logo-word {
   padding: 7px 9px;
   font: 700 12px Manrope;
   text-align: right;
-  -moz-appearance: textfield;
-  appearance: textfield;
+  font-variant-numeric: tabular-nums;
 }
 
-.price-input::-webkit-inner-spin-button,
-.price-input::-webkit-outer-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
-}
-
-.price-input:focus {
+.nf-input:focus {
   outline: none;
   border-color: var(--w1);
   box-shadow: 0 0 0 3px rgba(45, 212, 191, 0.18);
 }
 
-.price-input::placeholder {
+.nf-input::placeholder {
   color: var(--muted);
   font-weight: 600;
+}
+
+.nf-sm .nf-input {
+  width: 74px;
+}
+
+/* Перчаточная зона на мобиле */
+@media (pointer: coarse) {
+  .nf-btn {
+    width: 44px;
+    height: 44px;
+  }
 }
 
 .chip-delta {

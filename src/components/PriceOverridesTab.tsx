@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useApp } from '../store/AppContext';
-import { useToast } from '../components/ToastProvider';
+import { useToast } from './ToastProvider';
 import { Edit2, Trash2, Plus, Check, X, Download } from 'lucide-react';
 import { formatAmount } from '../utils/calculations';
+import { NumberField } from './NumberField';
 
 interface PriceOverride {
   ingredientId: string;
@@ -43,9 +44,6 @@ export default function PriceOverridesTab({ tripId }: Props) {
   const [shoppingItems, setShoppingItems] = useState<ShoppingItem[]>([]);
   const [dayShopping, setDayShopping] = useState<DayShopping[]>([]);
   const [activeTab, setActiveTab] = useState<TabType>('total');
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editPrice, setEditPrice] = useState('');
-  const [editComment, setEditComment] = useState('');
   const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [onlyDiff, setOnlyDiff] = useState(false);
@@ -98,38 +96,6 @@ export default function PriceOverridesTab({ tripId }: Props) {
     }
   };
 
-  const handleSaveOverride = async (ingredientId: string) => {
-    setLoading(true);
-    try {
-      const response = await fetch(`/api/v1/trips/${tripId}/price-overrides/${ingredientId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ingredientId: parseInt(ingredientId),
-          actualPrice: parseFloat(editPrice),
-          comment: editComment || null
-        })
-      });
-
-      if (response.ok) {
-        await loadOverrides();
-        await loadShoppingList();
-        await loadDayShopping();
-        setEditingId(null);
-        setEditPrice('');
-        setEditComment('');
-        showSuccess('Цена обновлена');
-      } else {
-        const error = await response.json();
-        showError(error.detail || 'Failed to update price');
-      }
-    } catch (error) {
-      showError('Network error');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleDeleteOverride = async (ingredientId: string) => {
     if (!confirm('Удалить оверрайд цены?')) return;
 
@@ -165,26 +131,6 @@ export default function PriceOverridesTab({ tripId }: Props) {
   const getDeltaChipClass = (delta: number): string => {
     if (Math.abs(delta) < 0.001) return 'dim';
     return delta > 0 ? 'fire' : 'ok';
-  };
-
-  // Адаптивный шаг для степпера
-  const getStep = (value?: number): number => {
-    const ref = value || 10;
-    const r = Math.max(ref, 0.01);
-    const e = Math.floor(Math.log10(r));
-    return Math.pow(10, e - 1);
-  };
-
-  const handleBump = (item: ShoppingItem, direction: number) => {
-    const currentValue = item.actualUnitPrice || item.plannedUnitPrice || 0;
-    const step = getStep(currentValue);
-    const newValue = Math.max(0, currentValue + direction * step);
-    
-    setShoppingItems(prev => prev.map(i => 
-      i.ingredientId === item.ingredientId 
-        ? { ...i, actualUnitPrice: Math.round(newValue * 100) / 100 }
-        : i
-    ) as ShoppingItem[]);
   };
 
   const totalPlanned = shoppingItems.reduce((sum, item) => sum + (item.plannedCost || 0), 0);
@@ -301,7 +247,6 @@ export default function PriceOverridesTab({ tripId }: Props) {
             <tbody>
               {filteredItems.map(item => {
                 const override = overrides.find(o => o.ingredientId === item.ingredientId);
-                const isEditing = editingId === item.ingredientId;
                 const delta = calculateDelta(item.plannedUnitPrice, item.actualUnitPrice);
                 const deltaChipClass = getDeltaChipClass(delta);
 
@@ -320,49 +265,19 @@ export default function PriceOverridesTab({ tripId }: Props) {
                       {item.plannedCost?.toLocaleString('ru-RU', { maximumFractionDigits: 2 }) || '—'}
                     </td>
                     <td className="px-2 py-3 text-right">
-                      {isEditing ? (
-                        <input
-                          type="number"
-                          step={getStep(item.actualUnitPrice || item.plannedUnitPrice)}
-                          value={editPrice}
-                          onChange={e => setEditPrice(e.target.value)}
-                          className="price-input"
-                          placeholder="= план"
-                          autoFocus
-                        />
-                      ) : (
-                        <div className="stepper-wrap">
-                          <button 
-                            className="stepper-btn"
-                            onClick={() => handleBump(item, -1)}
-                            title={`-${getStep(item.actualUnitPrice || item.plannedUnitPrice)}`}
-                          >
-                            −
-                          </button>
-                          <input
-                            type="number"
-                            step={getStep(item.actualUnitPrice || item.plannedUnitPrice)}
-                            value={item.actualUnitPrice || ''}
-                            onChange={e => {
-                              const newValue = e.target.value ? parseFloat(e.target.value) : null;
-                              setShoppingItems(prev => prev.map(i => 
-                                i.ingredientId === item.ingredientId 
-                                  ? { ...i, actualUnitPrice: newValue }
-                                  : i
-                              ));
-                            }}
-                            className="price-input"
-                            placeholder="= план"
-                          />
-                          <button 
-                            className="stepper-btn"
-                            onClick={() => handleBump(item, 1)}
-                            title={`+${getStep(item.actualUnitPrice || item.plannedUnitPrice)}`}
-                          >
-                            +
-                          </button>
-                        </div>
-                      )}
+                      <NumberField
+                        value={item.actualUnitPrice ?? null}
+                        stepRef={item.plannedUnitPrice}
+                        onCommit={v => {
+                          setShoppingItems(prev => prev.map(i => 
+                            i.ingredientId === item.ingredientId 
+                              ? { ...i, actualUnitPrice: v ?? undefined }
+                              : i
+                          ) as ShoppingItem[]);
+                        }}
+                        testId={`actual-input-${item.ingredientId}`}
+                        ariaLabel={`Фактическая цена: ${item.ingredientName}`}
+                      />
                     </td>
                     <td className="px-2 py-3 text-right" style={{ color: 'var(--w1)', fontWeight: 'bold', fontVariantNumeric: 'tabular-nums' }}>
                       {item.actualCost?.toLocaleString('ru-RU', { maximumFractionDigits: 2 }) || '—'}
@@ -509,35 +424,20 @@ export default function PriceOverridesTab({ tripId }: Props) {
                   <span style={{ color: 'var(--muted)', fontSize: '12px', fontVariantNumeric: 'tabular-nums' }}>
                     план {item.plannedUnitPrice?.toFixed(2) || '—'}
                   </span>
-                  <div className="stepper-wrap">
-                    <button 
-                      className="stepper-btn"
-                      onClick={() => handleBump(item, -1)}
-                    >
-                      −
-                    </button>
-                    <input
-                      type="number"
-                      step={getStep(item.actualUnitPrice || item.plannedUnitPrice)}
-                      value={item.actualUnitPrice || ''}
-                      onChange={e => {
-                        const newValue = e.target.value ? parseFloat(e.target.value) : null;
-                        setShoppingItems(prev => prev.map(i => 
-                          i.ingredientId === item.ingredientId 
-                            ? { ...i, actualUnitPrice: newValue }
-                            : i
-                        ));
-                      }}
-                      className="price-input"
-                      placeholder="= план"
-                    />
-                    <button 
-                      className="stepper-btn"
-                      onClick={() => handleBump(item, 1)}
-                    >
-                      +
-                    </button>
-                  </div>
+                  <NumberField
+                    size="sm"
+                    value={item.actualUnitPrice ?? null}
+                    stepRef={item.plannedUnitPrice}
+                    onCommit={v => {
+                      setShoppingItems(prev => prev.map(i => 
+                        i.ingredientId === item.ingredientId 
+                          ? { ...i, actualUnitPrice: v ?? undefined }
+                          : i
+                      ) as ShoppingItem[]);
+                    }}
+                    testId={`modal-input-${item.ingredientId}`}
+                    ariaLabel={`Фактическая цена: ${item.ingredientName}`}
+                  />
                 </div>
               ))}
             </div>
