@@ -49,7 +49,7 @@ export const mockPrices: IngredientPrice[] = [
 
 export const mockRecipes: Recipe[] = [
   {
-    id: 'rec1', name: 'Гречка с тушёнкой', mealType: 'LUNCH', baseServings: 4, caloriesPerServing: 450, source: 'MANUAL',
+    id: 'rec1', name: 'Гречка с тушёнкой', mealType: 'LUNCH', category: 'ВТОРОЕ', cookMinutes: 25, baseServings: 4, caloriesPerServing: 450, source: 'MANUAL',
     ingredients: [
       { ingredientId: 'ing1', amount: 0.4 },
       { ingredientId: 'ing6', amount: 1 },
@@ -60,7 +60,7 @@ export const mockRecipes: Recipe[] = [
     createdAt: '2024-01-01'
   },
   {
-    id: 'rec2', name: 'Овсяная каша', mealType: 'BREAKFAST', baseServings: 4, caloriesPerServing: 320, source: 'MANUAL',
+    id: 'rec2', name: 'Овсяная каша', mealType: 'BREAKFAST', category: 'КАШИ', cookMinutes: 10, baseServings: 4, caloriesPerServing: 320, source: 'MANUAL',
     ingredients: [
       { ingredientId: 'ing3', amount: 0.3 },
       { ingredientId: 'ing4', amount: 0.8 },
@@ -70,7 +70,7 @@ export const mockRecipes: Recipe[] = [
     createdAt: '2024-01-01'
   },
   {
-    id: 'rec3', name: 'Рис с рыбой', mealType: 'DINNER', baseServings: 4, caloriesPerServing: 380, source: 'MANUAL',
+    id: 'rec3', name: 'Рис с рыбой', mealType: 'DINNER', category: 'ВТОРОЕ', cookMinutes: 20, baseServings: 4, caloriesPerServing: 380, source: 'MANUAL',
     ingredients: [
       { ingredientId: 'ing2', amount: 0.3 },
       { ingredientId: 'ing18', amount: 1 },
@@ -81,7 +81,7 @@ export const mockRecipes: Recipe[] = [
     createdAt: '2024-01-01'
   },
   {
-    id: 'rec4', name: 'Чай с сахаром', mealType: 'BREAKFAST', baseServings: 4, caloriesPerServing: 50, source: 'MANUAL',
+    id: 'rec4', name: 'Чай с сахаром', mealType: 'BREAKFAST', category: 'НАПИТКИ', cookMinutes: 5, baseServings: 4, caloriesPerServing: 50, source: 'MANUAL',
     ingredients: [
       { ingredientId: 'ing10', amount: 4 },
       { ingredientId: 'ing11', amount: 0.04 },
@@ -90,7 +90,7 @@ export const mockRecipes: Recipe[] = [
     createdAt: '2024-01-01'
   },
   {
-    id: 'rec5', name: 'Бутерброды с сыром', mealType: 'SNACK', baseServings: 4, caloriesPerServing: 200, source: 'MANUAL',
+    id: 'rec5', name: 'Бутерброды с сыром', mealType: 'SNACK', category: 'БУТЕРБРОДЫ', cookMinutes: 0, baseServings: 4, caloriesPerServing: 200, source: 'MANUAL',
     ingredients: [
       { ingredientId: 'ing7', amount: 0.5 },
       { ingredientId: 'ing8', amount: 0.15 },
@@ -99,7 +99,7 @@ export const mockRecipes: Recipe[] = [
     createdAt: '2024-01-01'
   },
   {
-    id: 'rec6', name: 'Макароны по-флотски', mealType: 'DINNER', baseServings: 4, caloriesPerServing: 480, source: 'MANUAL',
+    id: 'rec6', name: 'Макароны по-флотски', mealType: 'DINNER', category: 'ВТОРОЕ', cookMinutes: 25, baseServings: 4, caloriesPerServing: 480, source: 'MANUAL',
     ingredients: [
       { ingredientId: 'ing13', amount: 0.4 },
       { ingredientId: 'ing6', amount: 1 },
@@ -110,7 +110,7 @@ export const mockRecipes: Recipe[] = [
     createdAt: '2024-01-01'
   },
   {
-    id: 'rec7', name: 'Каша с сухим молоком', mealType: 'BREAKFAST', baseServings: 4, caloriesPerServing: 350, source: 'MANUAL',
+    id: 'rec7', name: 'Каша с сухим молоком', mealType: 'BREAKFAST', category: 'КАШИ', cookMinutes: 15, baseServings: 4, caloriesPerServing: 350, source: 'MANUAL',
     ingredients: [
       { ingredientId: 'ing3', amount: 0.25 },
       { ingredientId: 'ing17', amount: 0.05 },
@@ -120,13 +120,59 @@ export const mockRecipes: Recipe[] = [
     createdAt: '2024-01-01'
   },
   {
-    id: 'rec8', name: 'Гречка с овощами', mealType: 'LUNCH', baseServings: 4, caloriesPerServing: 300, source: 'MANUAL',
+    id: 'rec8', name: 'Гречка с овощами', mealType: 'LUNCH', category: 'ВТОРОЕ', cookMinutes: 30, baseServings: 4, caloriesPerServing: 300, source: 'MANUAL',
     ingredients: [
       { ingredientId: 'ing1', amount: 0.4 },
       { ingredientId: 'ing14', amount: 0.15 },
       { ingredientId: 'ing15', amount: 0.15 },
       { ingredientId: 'ing5', amount: 0.03 },
       { ingredientId: 'ing12', amount: 0.01 },
+    ],
+    createdAt: '2024-01-01'
+  },
+  // Рецепты БЕЗ ОГНЯ (cookMinutes = 0)
+  {
+    id: 'rec9', name: 'Ореховый микс с изюмом', mealType: 'SNACK', category: 'ПЕРЕКУСЫ', cookMinutes: 0, baseServings: 1, caloriesPerServing: 520, source: 'MANUAL',
+    ingredients: [
+      { ingredientId: 'ing8', amount: 0.03 }, // Орехи
+      { ingredientId: 'ing16', amount: 0.03 }, // Сухофрукты (изюм)
+    ],
+    createdAt: '2024-01-01'
+  },
+  {
+    id: 'rec10', name: 'Шоколад с орехами', mealType: 'SNACK', category: 'ПЕРЕКУСЫ', cookMinutes: 0, baseServings: 1, caloriesPerServing: 560, source: 'MANUAL',
+    ingredients: [
+      { ingredientId: 'ing8', amount: 0.05 }, // Орехи
+    ],
+    createdAt: '2024-01-01'
+  },
+  {
+    id: 'rec11', name: 'Сыр с хлебцами', mealType: 'SNACK', category: 'ПЕРЕКУСЫ', cookMinutes: 0, baseServings: 1, caloriesPerServing: 400, source: 'MANUAL',
+    ingredients: [
+      { ingredientId: 'ing8', amount: 0.04 }, // Сыр
+      { ingredientId: 'ing7', amount: 2 }, // Хлебцы
+    ],
+    createdAt: '2024-01-01'
+  },
+  {
+    id: 'rec12', name: 'Козинаки', mealType: 'SNACK', category: 'ПЕРЕКУСЫ', cookMinutes: 0, baseServings: 1, caloriesPerServing: 530, source: 'MANUAL',
+    ingredients: [
+      { ingredientId: 'ing8', amount: 0.06 }, // Орехи
+    ],
+    createdAt: '2024-01-01'
+  },
+  {
+    id: 'rec13', name: 'Курага и чернослив', mealType: 'SNACK', category: 'ПЕРЕКУСЫ', cookMinutes: 0, baseServings: 1, caloriesPerServing: 340, source: 'MANUAL',
+    ingredients: [
+      { ingredientId: 'ing16', amount: 0.08 }, // Сухофрукты
+    ],
+    createdAt: '2024-01-01'
+  },
+  {
+    id: 'rec14', name: 'Сгущёнка с галетами', mealType: 'SNACK', category: 'ПЕРЕКУСЫ', cookMinutes: 0, baseServings: 1, caloriesPerServing: 420, source: 'MANUAL',
+    ingredients: [
+      { ingredientId: 'ing16', amount: 0.25 }, // Сгущёнка
+      { ingredientId: 'ing7', amount: 2 }, // Галеты
     ],
     createdAt: '2024-01-01'
   },
