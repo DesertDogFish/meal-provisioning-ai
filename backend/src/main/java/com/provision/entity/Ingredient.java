@@ -34,6 +34,13 @@ public class Ingredient {
     @Column(name = "calories_per_unit", precision = 10, scale = 2)
     private BigDecimal caloriesPerUnit;
 
+    @Column(name = "pack_size", precision = 14, scale = 3)
+    private BigDecimal packSize;
+
+    @Column(name = "round_to_packs", nullable = false)
+    @Builder.Default
+    private Boolean roundToPacks = false;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 

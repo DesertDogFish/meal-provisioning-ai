@@ -14,5 +14,12 @@ public record ShoppingItemResponse(
     BigDecimal plannedCost,
     BigDecimal actualCost,
     boolean overridden,
-    boolean hasPlannedPrice
+    boolean hasPlannedPrice,
+    // Поля для упаковок
+    BigDecimal packSize,
+    Integer packsToBuy,
+    BigDecimal buyAmount,
+    BigDecimal leftoverAmount,
+    // Поля для замен
+    String substitutedFrom
 ) {}

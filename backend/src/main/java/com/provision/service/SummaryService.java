@@ -24,6 +24,7 @@ public class SummaryService {
     private final IngredientPriceRepository priceRepository;
     private final RecipeRepository recipeRepository;
     private final PriceResolutionService priceResolutionService;
+    private final TripIngredientSubstitutionRepository substitutionRepository;
 
     public int calculateEffectivePeople(Trip trip, TripDay day, TripMeal meal) {
         if (meal != null && meal.getPeopleOverride() != null) {
