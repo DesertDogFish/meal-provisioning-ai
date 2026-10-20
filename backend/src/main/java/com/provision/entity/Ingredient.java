@@ -21,15 +21,19 @@ public class Ingredient {
     @Column(unique = true, length = 64)
     private String code;
 
-    @Column(nullable = false, unique = true, length = 255)
+    @Column(nullable = false, length = 255)
     private String name;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 10)
     private UnitOfMeasure unit;
 
-    @Column(nullable = false, length = 100)
-    private String category;
+    @Column(name = "name_norm", nullable = false, length = 255)
+    private String nameNorm;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "category_id", nullable = false)
+    private ProductCategory category;
 
     @Column(name = "calories_per_unit", precision = 10, scale = 2)
     private BigDecimal caloriesPerUnit;

@@ -12,6 +12,7 @@ import RecipesPage from './pages/RecipesPage';
 import AdminPage from './pages/AdminPage';
 import ErrorsDemoPage from './pages/ErrorsDemoPage';
 import IntegrationsPage from './pages/IntegrationsPage';
+import ProductsPage from './pages/ProductsPage';
 
 function App() {
   return (
@@ -44,6 +45,11 @@ function App() {
           <Route path="/admin" element={
             <ProtectedRoute adminOnly>
               <Layout><AdminPage /></Layout>
+            </ProtectedRoute>
+          } />
+          <Route path="/products" element={
+            <ProtectedRoute adminOnly>
+              <Layout><ProductsPage /></Layout>
             </ProtectedRoute>
           } />
           <Route path="/integrations" element={

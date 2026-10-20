@@ -21,6 +21,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     { to: '/errors-demo', label: 'Ошибки (демо)', icon: <Menu size={20} /> },
     ...(isAdmin ? [
       { to: '/admin', label: 'Админка', icon: <Menu size={20} /> },
+      { to: '/products', label: 'Продукты', icon: <Menu size={20} /> },
       { to: '/integrations', label: 'Интеграции', icon: <Menu size={20} /> }
     ] : []),
   ];

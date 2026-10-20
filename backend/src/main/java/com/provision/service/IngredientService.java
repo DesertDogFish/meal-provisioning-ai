@@ -7,6 +7,7 @@ import com.provision.entity.Recipe;
 import com.provision.exception.ConflictException;
 import com.provision.exception.NotFoundException;
 import com.provision.repository.IngredientRepository;
+import com.provision.repository.ProductCategoryRepository;
 import com.provision.repository.RecipeRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -26,6 +27,7 @@ public class IngredientService {
 
     private final IngredientRepository ingredientRepository;
     private final RecipeRepository recipeRepository;
+    private final ProductCategoryRepository categoryRepository;
 
     @Transactional(readOnly = true)
     public List<IngredientResponse> getAllIngredients() {
@@ -71,11 +73,21 @@ public class IngredientService {
             throw new ConflictException("Ingredient with code already exists: " + request.code());
         }
 
+        // Для deprecated API используем категорию "Прочее" по умолчанию
+        var defaultCategory = categoryRepository.findByName("Прочее")
+                .orElseThrow(() -> new NotFoundException("Default category not found"));
+        
+        String nameNorm = request.name().toLowerCase()
+                .replace('ё', 'е')
+                .replaceAll("\\s+", " ")
+                .trim();
+        
         Ingredient ingredient = Ingredient.builder()
                 .code(request.code())
                 .name(request.name())
+                .nameNorm(nameNorm)
                 .unit(request.unit())
-                .category(request.category())
+                .category(defaultCategory)
                 .caloriesPerUnit(request.caloriesPerUnit())
                 .build();
 
@@ -102,9 +114,15 @@ public class IngredientService {
             );
         }
 
+        String nameNorm = request.name().toLowerCase()
+                .replace('ё', 'е')
+                .replaceAll("\\s+", " ")
+                .trim();
+        
         ingredient.setName(request.name());
+        ingredient.setNameNorm(nameNorm);
         ingredient.setUnit(request.unit());
-        ingredient.setCategory(request.category());
+        // Категория не меняется в deprecated API
         ingredient.setCaloriesPerUnit(request.caloriesPerUnit());
 
         ingredient = ingredientRepository.save(ingredient);
@@ -140,7 +158,7 @@ public class IngredientService {
                 ingredient.getCode(),
                 ingredient.getName(),
                 ingredient.getUnit(),
-                ingredient.getCategory(),
+                ingredient.getCategory().getName(),
                 ingredient.getCaloriesPerUnit(),
                 ingredient.getCreatedAt()
         );
