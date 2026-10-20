@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useApp } from '../store/AppContext';
 import { useToast } from '../components/ToastProvider';
-import { Edit2, Trash2, Plus, Check, X } from 'lucide-react';
+import { Edit2, Trash2, Plus, Check, X, Download } from 'lucide-react';
 import { formatAmount } from '../utils/calculations';
 
 interface PriceOverride {
@@ -17,32 +17,45 @@ interface ShoppingItem {
   unit: string;
   totalAmount: number;
   plannedUnitPrice?: number;
-  actualUnitPrice?: number;
+  actualUnitPrice?: number | null;
   plannedCost?: number;
   actualCost?: number;
   overridden: boolean;
   hasPlannedPrice: boolean;
 }
 
+interface DayShopping {
+  dayDate: string;
+  plannedCost: number;
+  actualCost: number;
+}
+
 interface Props {
   tripId: string;
 }
+
+type TabType = 'total' | 'days' | 'person';
 
 export default function PriceOverridesTab({ tripId }: Props) {
   const { state } = useApp();
   const { showError, showSuccess } = useToast();
   const [overrides, setOverrides] = useState<PriceOverride[]>([]);
   const [shoppingItems, setShoppingItems] = useState<ShoppingItem[]>([]);
+  const [dayShopping, setDayShopping] = useState<DayShopping[]>([]);
+  const [activeTab, setActiveTab] = useState<TabType>('total');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editPrice, setEditPrice] = useState('');
   const [editComment, setEditComment] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showModal, setShowModal] = useState(false);
+  const [onlyDiff, setOnlyDiff] = useState(false);
 
   const trip = state.trips.find(t => t.id === tripId);
 
   useEffect(() => {
     loadOverrides();
     loadShoppingList();
+    loadDayShopping();
   }, [tripId]);
 
   const loadOverrides = async () => {
@@ -69,6 +82,22 @@ export default function PriceOverridesTab({ tripId }: Props) {
     }
   };
 
+  const loadDayShopping = async () => {
+    try {
+      const response = await fetch(`/api/v1/trips/${tripId}/summary/shopping/by-days`);
+      if (response.ok) {
+        const data = await response.json();
+        setDayShopping(data.map((d: any) => ({
+          dayDate: d.dayDate,
+          plannedCost: d.plannedCost || 0,
+          actualCost: d.actualCost || 0
+        })));
+      }
+    } catch (error) {
+      console.error('Failed to load day shopping:', error);
+    }
+  };
+
   const handleSaveOverride = async (ingredientId: string) => {
     setLoading(true);
     try {
@@ -85,6 +114,7 @@ export default function PriceOverridesTab({ tripId }: Props) {
       if (response.ok) {
         await loadOverrides();
         await loadShoppingList();
+        await loadDayShopping();
         setEditingId(null);
         setEditPrice('');
         setEditComment('');
@@ -111,6 +141,7 @@ export default function PriceOverridesTab({ tripId }: Props) {
       if (response.ok) {
         await loadOverrides();
         await loadShoppingList();
+        await loadDayShopping();
         showSuccess('Оверрайд удалён');
       } else {
         const error = await response.json();
@@ -121,170 +152,415 @@ export default function PriceOverridesTab({ tripId }: Props) {
     }
   };
 
-  const calculateDelta = (planned?: number, actual?: number): string => {
-    if (!planned || !actual) return '';
-    const delta = ((actual - planned) / planned) * 100;
-    return delta.toFixed(1);
+  const calculateDelta = (planned?: number | null, actual?: number | null): number => {
+    if (!planned || !actual || planned === 0) return 0;
+    return ((actual - planned) / planned) * 100;
+  };
+
+  const formatDelta = (delta: number): string => {
+    if (delta === 0) return '0%';
+    return `${delta > 0 ? '+' : ''}${delta.toFixed(1)}%`;
+  };
+
+  const getDeltaChipClass = (delta: number): string => {
+    if (Math.abs(delta) < 0.001) return 'dim';
+    return delta > 0 ? 'fire' : 'ok';
+  };
+
+  // Адаптивный шаг для степпера
+  const getStep = (value?: number): number => {
+    const ref = value || 10;
+    const r = Math.max(ref, 0.01);
+    const e = Math.floor(Math.log10(r));
+    return Math.pow(10, e - 1);
+  };
+
+  const handleBump = (item: ShoppingItem, direction: number) => {
+    const currentValue = item.actualUnitPrice || item.plannedUnitPrice || 0;
+    const step = getStep(currentValue);
+    const newValue = Math.max(0, currentValue + direction * step);
+    
+    setShoppingItems(prev => prev.map(i => 
+      i.ingredientId === item.ingredientId 
+        ? { ...i, actualUnitPrice: Math.round(newValue * 100) / 100 }
+        : i
+    ) as ShoppingItem[]);
   };
 
   const totalPlanned = shoppingItems.reduce((sum, item) => sum + (item.plannedCost || 0), 0);
   const totalActual = shoppingItems.reduce((sum, item) => sum + (item.actualCost || 0), 0);
-  const totalDelta = totalPlanned > 0 ? ((totalActual - totalPlanned) / totalPlanned) * 100 : 0;
+  const totalDelta = calculateDelta(totalPlanned, totalActual);
+
+  const filteredItems = onlyDiff 
+    ? shoppingItems.filter(item => item.overridden && item.actualUnitPrice !== item.plannedUnitPrice)
+    : shoppingItems;
+
+  const defaultPeople = trip?.defaultPeople || 1;
+  const totalPersonMeals = trip?.days?.reduce((acc, d) => 
+    acc + (d.meals?.reduce((mealAcc, m) => mealAcc + (m.peopleOverride || d.peopleOverride || trip.defaultPeople), 0) || 0)
+  , 0) || 1;
 
   return (
-    <div className="space-y-6">
-      {/* Sticky итог */}
-      <div className="sticky top-0 z-10 p-4 rounded-xl" style={{ 
-        background: 'rgba(26, 34, 51, 0.95)', 
-        backdropFilter: 'blur(10px)',
-        border: '1px solid var(--border)'
-      }}>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-6">
-            <div>
-              <p className="text-xs" style={{ color: 'var(--muted)' }}>План</p>
-              <p className="text-xl font-bold" style={{ color: 'var(--text)' }}>
-                {totalPlanned.toLocaleString('ru-RU')} ₽
-              </p>
+    <div className="space-y-4">
+      {/* Информационная заметка */}
+      <div className="note-box">
+        ℹ Факт действует на все дни похода и не меняет справочник. Пустое поле = «план». 
+        Шаг степпера адаптивный: сотни → ±10, тысячи → ±100, десятки → ±1.
+      </div>
+
+      {/* Панель действий */}
+      <div className="flex gap-3 items-center flex-wrap">
+        <button 
+          onClick={() => setShowModal(true)}
+          className="grad-btn"
+        >
+          Ввести чек
+        </button>
+        <button className="ghost-btn flex items-center gap-2">
+          <Download size={16} />
+          Экспорт PDF
+        </button>
+        <label className="flex items-center gap-2 cursor-pointer" style={{ color: 'var(--muted)', fontSize: '12px' }}>
+          <input 
+            type="checkbox" 
+            checked={onlyDiff}
+            onChange={e => setOnlyDiff(e.target.checked)}
+          />
+          только расхождения
+        </label>
+      </div>
+
+      {/* Табы */}
+      <div className="flex gap-2">
+        <button
+          onClick={() => setActiveTab('total')}
+          className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${
+            activeTab === 'total' 
+              ? 'text-white' 
+              : ''
+          }`}
+          style={{
+            background: activeTab === 'total' ? 'var(--elev)' : 'transparent',
+            border: activeTab === 'total' ? '1px solid transparent' : '1px solid var(--border)',
+            color: activeTab === 'total' ? 'var(--text)' : 'var(--muted)',
+            backgroundImage: activeTab === 'total' ? 'linear-gradient(var(--elev), var(--elev)) padding-box, linear-gradient(90deg, var(--w1), var(--w2)) border-box' : 'none'
+          }}
+        >
+          Закупка
+        </button>
+        <button
+          onClick={() => setActiveTab('days')}
+          className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${
+            activeTab === 'days' 
+              ? 'text-white' 
+              : ''
+          }`}
+          style={{
+            background: activeTab === 'days' ? 'var(--elev)' : 'transparent',
+            border: activeTab === 'days' ? '1px solid transparent' : '1px solid var(--border)',
+            color: activeTab === 'days' ? 'var(--text)' : 'var(--muted)',
+            backgroundImage: activeTab === 'days' ? 'linear-gradient(var(--elev), var(--elev)) padding-box, linear-gradient(90deg, var(--w1), var(--w2)) border-box' : 'none'
+          }}
+        >
+          По дням
+        </button>
+        <button
+          onClick={() => setActiveTab('person')}
+          className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${
+            activeTab === 'person' 
+              ? 'text-white' 
+              : ''
+          }`}
+          style={{
+            background: activeTab === 'person' ? 'var(--elev)' : 'transparent',
+            border: activeTab === 'person' ? '1px solid transparent' : '1px solid var(--border)',
+            color: activeTab === 'person' ? 'var(--text)' : 'var(--muted)',
+            backgroundImage: activeTab === 'person' ? 'linear-gradient(var(--elev), var(--elev)) padding-box, linear-gradient(90deg, var(--w1), var(--w2)) border-box' : 'none'
+          }}
+        >
+          На человека
+        </button>
+      </div>
+
+      {/* Вкладка: Закупка */}
+      {activeTab === 'total' && (
+        <div className="rounded-xl overflow-hidden" style={{ background: 'var(--surface)', border: '1px solid var(--border)', padding: '6px 10px 14px' }}>
+          <table className="w-full text-sm">
+            <thead>
+              <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                <th className="text-left px-2 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: '11px' }}>Продукт</th>
+                <th className="text-right px-2 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: '11px' }}>Кол-во</th>
+                <th className="text-right px-2 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: '11px' }}>План ₽/ед</th>
+                <th className="text-right px-2 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: '11px' }}>План ₽</th>
+                <th className="text-right px-2 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: '11px' }}>Факт ₽/ед</th>
+                <th className="text-right px-2 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: '11px' }}>Факт ₽</th>
+                <th className="text-right px-2 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: '11px' }}>Δ</th>
+                <th className="px-2 py-3"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredItems.map(item => {
+                const override = overrides.find(o => o.ingredientId === item.ingredientId);
+                const isEditing = editingId === item.ingredientId;
+                const delta = calculateDelta(item.plannedUnitPrice, item.actualUnitPrice);
+                const deltaChipClass = getDeltaChipClass(delta);
+
+                return (
+                  <tr key={item.ingredientId} style={{ borderBottom: '1px solid var(--border)' }}>
+                    <td className="px-2 py-3">
+                      <b style={{ color: 'var(--text)' }}>{item.ingredientName}</b>
+                    </td>
+                    <td className="px-2 py-3 text-right" style={{ color: 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}>
+                      {formatAmount(item.totalAmount, item.unit)}
+                    </td>
+                    <td className="px-2 py-3 text-right" style={{ color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>
+                      {item.hasPlannedPrice ? item.plannedUnitPrice?.toFixed(2) : '—'}
+                    </td>
+                    <td className="px-2 py-3 text-right" style={{ color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>
+                      {item.plannedCost?.toLocaleString('ru-RU', { maximumFractionDigits: 2 }) || '—'}
+                    </td>
+                    <td className="px-2 py-3 text-right">
+                      {isEditing ? (
+                        <input
+                          type="number"
+                          step={getStep(item.actualUnitPrice || item.plannedUnitPrice)}
+                          value={editPrice}
+                          onChange={e => setEditPrice(e.target.value)}
+                          className="price-input"
+                          placeholder="= план"
+                          autoFocus
+                        />
+                      ) : (
+                        <div className="stepper-wrap">
+                          <button 
+                            className="stepper-btn"
+                            onClick={() => handleBump(item, -1)}
+                            title={`-${getStep(item.actualUnitPrice || item.plannedUnitPrice)}`}
+                          >
+                            −
+                          </button>
+                          <input
+                            type="number"
+                            step={getStep(item.actualUnitPrice || item.plannedUnitPrice)}
+                            value={item.actualUnitPrice || ''}
+                            onChange={e => {
+                              const newValue = e.target.value ? parseFloat(e.target.value) : null;
+                              setShoppingItems(prev => prev.map(i => 
+                                i.ingredientId === item.ingredientId 
+                                  ? { ...i, actualUnitPrice: newValue }
+                                  : i
+                              ));
+                            }}
+                            className="price-input"
+                            placeholder="= план"
+                          />
+                          <button 
+                            className="stepper-btn"
+                            onClick={() => handleBump(item, 1)}
+                            title={`+${getStep(item.actualUnitPrice || item.plannedUnitPrice)}`}
+                          >
+                            +
+                          </button>
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-2 py-3 text-right" style={{ color: 'var(--w1)', fontWeight: 'bold', fontVariantNumeric: 'tabular-nums' }}>
+                      {item.actualCost?.toLocaleString('ru-RU', { maximumFractionDigits: 2 }) || '—'}
+                    </td>
+                    <td className="px-2 py-3 text-right">
+                      <span className={`chip-delta ${deltaChipClass}`}>
+                        {formatDelta(delta)}
+                      </span>
+                    </td>
+                    <td className="px-2 py-3 text-right">
+                      {item.overridden && (
+                        <button
+                          onClick={() => handleDeleteOverride(item.ingredientId)}
+                          className="reset-btn"
+                          title="Сбросить к плану"
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+
+          {/* Sticky итог */}
+          <div className="sticky-totals">
+            <span style={{ color: 'var(--text)' }}>
+              Итого план: <b style={{ fontVariantNumeric: 'tabular-nums' }}>{totalPlanned.toLocaleString('ru-RU', { maximumFractionDigits: 2 })} ₽</b>
+            </span>
+            <span style={{ color: 'var(--text)' }}>
+              Итого факт: <b style={{ fontVariantNumeric: 'tabular-nums', color: 'var(--w1)' }}>{totalActual.toLocaleString('ru-RU', { maximumFractionDigits: 2 })} ₽</b>
+            </span>
+            <span className={`chip-delta ${getDeltaChipClass(totalDelta)}`}>
+              {formatDelta(totalDelta)}
+            </span>
+            <span style={{ color: 'var(--muted)', fontSize: '12px' }}>
+              расхождение: {(totalActual - totalPlanned).toLocaleString('ru-RU', { maximumFractionDigits: 2 })} ₽
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Вкладка: По дням */}
+      {activeTab === 'days' && (
+        <div className="rounded-xl overflow-hidden" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+          <table className="w-full text-sm">
+            <thead>
+              <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                <th className="text-left px-4 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: '11px' }}>День</th>
+                <th className="text-right px-4 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: '11px' }}>План ₽</th>
+                <th className="text-right px-4 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: '11px' }}>Факт ₽</th>
+                <th className="text-right px-4 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: '11px' }}>Δ</th>
+              </tr>
+            </thead>
+            <tbody>
+              {dayShopping.map(day => {
+                const delta = calculateDelta(day.plannedCost, day.actualCost);
+                return (
+                  <tr key={day.dayDate} style={{ borderBottom: '1px solid var(--border)' }}>
+                    <td className="px-4 py-3">
+                      <b style={{ color: 'var(--text)' }}>
+                        {new Date(day.dayDate).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })}
+                      </b>
+                    </td>
+                    <td className="px-4 py-3 text-right" style={{ color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>
+                      {day.plannedCost.toLocaleString('ru-RU', { maximumFractionDigits: 2 })}
+                    </td>
+                    <td className="px-4 py-3 text-right" style={{ color: 'var(--w1)', fontVariantNumeric: 'tabular-nums' }}>
+                      {day.actualCost.toLocaleString('ru-RU', { maximumFractionDigits: 2 })}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <span className={`chip-delta ${getDeltaChipClass(delta)}`}>
+                        {formatDelta(delta)}
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Вкладка: На человека */}
+      {activeTab === 'person' && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="rounded-xl p-4" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+            <b style={{ color: 'var(--text)' }}>На одного человека</b>
+            <p style={{ color: 'var(--muted)', fontSize: '12px', marginTop: '4px' }}>
+              делим на defaultPeople = {defaultPeople}
+            </p>
+            <div className="flex justify-between py-2 mt-2" style={{ borderTop: '1px solid var(--border)' }}>
+              <span style={{ color: 'var(--muted)' }}>План</span>
+              <b style={{ color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>
+                {(totalPlanned / defaultPeople).toLocaleString('ru-RU', { maximumFractionDigits: 2 })} ₽
+              </b>
             </div>
-            <div>
-              <p className="text-xs" style={{ color: 'var(--muted)' }}>Факт</p>
-              <p className="text-xl font-bold" style={{ color: 'var(--text)' }}>
-                {totalActual.toLocaleString('ru-RU')} ₽
-              </p>
+            <div className="flex justify-between py-2" style={{ borderTop: '1px solid var(--border)' }}>
+              <span style={{ color: 'var(--muted)' }}>Факт</span>
+              <b style={{ color: 'var(--w1)', fontVariantNumeric: 'tabular-nums' }}>
+                {(totalActual / defaultPeople).toLocaleString('ru-RU', { maximumFractionDigits: 2 })} ₽
+              </b>
             </div>
-            <div>
-              <p className="text-xs" style={{ color: 'var(--muted)' }}>Дельта</p>
-              <p className={`text-xl font-bold ${totalDelta < 0 ? 'text-green-400' : totalDelta > 0 ? 'text-amber-400' : ''}`}
-                 style={{ color: totalDelta === 0 ? 'var(--muted)' : undefined }}>
-                {totalDelta > 0 ? '+' : ''}{totalDelta.toFixed(1)}%
-              </p>
+          </div>
+
+          <div className="rounded-xl p-4" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+            <b style={{ color: 'var(--text)' }}>На один человеко-приём</b>
+            <p style={{ color: 'var(--muted)', fontSize: '12px', marginTop: '4px' }}>
+              делим на {totalPersonMeals} приёмов
+            </p>
+            <div className="flex justify-between py-2 mt-2" style={{ borderTop: '1px solid var(--border)' }}>
+              <span style={{ color: 'var(--muted)' }}>План</span>
+              <b style={{ color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>
+                {(totalPlanned / totalPersonMeals).toLocaleString('ru-RU', { maximumFractionDigits: 2 })} ₽
+              </b>
+            </div>
+            <div className="flex justify-between py-2" style={{ borderTop: '1px solid var(--border)' }}>
+              <span style={{ color: 'var(--muted)' }}>Факт</span>
+              <b style={{ color: 'var(--w1)', fontVariantNumeric: 'tabular-nums' }}>
+                {(totalActual / totalPersonMeals).toLocaleString('ru-RU', { maximumFractionDigits: 2 })} ₽
+              </b>
             </div>
           </div>
         </div>
-      </div>
+      )}
 
-      {/* Таблица */}
-      <div className="rounded-xl overflow-hidden" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
-        <table className="w-full text-sm">
-          <thead style={{ background: 'var(--elev)' }}>
-            <tr>
-              <th className="text-left px-4 py-3 font-medium" style={{ color: 'var(--muted)' }}>Продукт</th>
-              <th className="text-right px-4 py-3 font-medium" style={{ color: 'var(--muted)' }}>Кол-во</th>
-              <th className="text-right px-4 py-3 font-medium" style={{ color: 'var(--muted)' }}>План ₽/ед</th>
-              <th className="text-right px-4 py-3 font-medium" style={{ color: 'var(--muted)' }}>План ₽</th>
-              <th className="text-right px-4 py-3 font-medium" style={{ color: 'var(--muted)' }}>Факт ₽/ед</th>
-              <th className="text-right px-4 py-3 font-medium" style={{ color: 'var(--muted)' }}>Факт ₽</th>
-              <th className="text-right px-4 py-3 font-medium" style={{ color: 'var(--muted)' }}>Δ</th>
-              <th className="text-right px-4 py-3 font-medium" style={{ color: 'var(--muted)' }}>Действия</th>
-            </tr>
-          </thead>
-          <tbody>
-            {shoppingItems.map(item => {
-              const override = overrides.find(o => o.ingredientId === item.ingredientId);
-              const isEditing = editingId === item.ingredientId;
-              const delta = calculateDelta(item.plannedUnitPrice, item.actualUnitPrice);
-              const deltaNum = parseFloat(delta);
-
-              return (
-                <tr key={item.ingredientId} style={{ borderTop: '1px solid var(--border)' }}>
-                  <td className="px-4 py-3" style={{ color: 'var(--text)' }}>
+      {/* Модалка "Ввести чек" */}
+      {showModal && (
+        <div className="modal-overlay" onClick={() => setShowModal(false)}>
+          <div className="modal-sheet" onClick={e => e.stopPropagation()}>
+            <b style={{ fontFamily: 'Unbounded', fontSize: '15px', color: 'var(--text)' }}>Ввести чек</b>
+            <p style={{ color: 'var(--muted)', fontSize: '12px', margin: '6px 0 14px' }}>
+              Фактические цены за единицу. Пусто = «= план».
+            </p>
+            <div className="flex flex-col gap-3">
+              {shoppingItems.map(item => (
+                <div key={item.ingredientId} className="flex gap-3 items-center">
+                  <span style={{ flex: 1, fontSize: '13px', color: 'var(--text)' }}>
                     {item.ingredientName}
-                  </td>
-                  <td className="px-4 py-3 text-right" style={{ color: 'var(--muted)' }}>
-                    {formatAmount(item.totalAmount, item.unit)}
-                  </td>
-                  <td className="px-4 py-3 text-right" style={{ color: 'var(--muted)' }}>
-                    {item.hasPlannedPrice ? item.plannedUnitPrice?.toFixed(2) : '—'}
-                  </td>
-                  <td className="px-4 py-3 text-right" style={{ color: 'var(--muted)' }}>
-                    {item.plannedCost?.toLocaleString('ru-RU') || '—'}
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    {isEditing ? (
-                      <input
-                        type="number"
-                        step="0.01"
-                        value={editPrice}
-                        onChange={e => setEditPrice(e.target.value)}
-                        className="w-20 px-2 py-1 rounded text-right text-sm"
-                        style={{ background: 'var(--elev)', border: '1px solid var(--border)', color: 'var(--text)' }}
-                        autoFocus
-                      />
-                    ) : (
-                      <span style={{ color: 'var(--text)' }}>
-                        {item.actualUnitPrice?.toFixed(2) || '—'}
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-right" style={{ color: 'var(--text)' }}>
-                    {item.actualCost?.toLocaleString('ru-RU') || '—'}
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    {delta && (
-                      <span className={`px-2 py-0.5 text-xs rounded-full ${
-                        deltaNum < 0 ? 'bg-green-500/20 text-green-400' : 
-                        deltaNum > 0 ? 'bg-amber-500/20 text-amber-400' : 
-                        'bg-slate-500/20'
-                      }`} style={{ color: deltaNum === 0 ? 'var(--muted)' : undefined }}>
-                        {deltaNum > 0 ? '+' : ''}{delta}%
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    {isEditing ? (
-                      <div className="flex items-center justify-end gap-1">
-                        <button
-                          onClick={() => handleSaveOverride(item.ingredientId)}
-                          disabled={loading}
-                          className="p-1 rounded hover:bg-emerald-500/20"
-                          style={{ color: 'var(--ok)' }}
-                        >
-                          <Check size={16} />
-                        </button>
-                        <button
-                          onClick={() => {
-                            setEditingId(null);
-                            setEditPrice('');
-                            setEditComment('');
-                          }}
-                          className="p-1 rounded hover:bg-red-500/20"
-                          style={{ color: 'var(--fire)' }}
-                        >
-                          <X size={16} />
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="flex items-center justify-end gap-1">
-                        <button
-                          onClick={() => {
-                            setEditingId(item.ingredientId);
-                            setEditPrice(item.actualUnitPrice?.toString() || '');
-                            setEditComment(override?.comment || '');
-                          }}
-                          className="p-1 rounded hover:bg-emerald-500/20"
-                          style={{ color: 'var(--w1)' }}
-                        >
-                          <Edit2 size={16} />
-                        </button>
-                        {override && (
-                          <button
-                            onClick={() => handleDeleteOverride(item.ingredientId)}
-                            className="p-1 rounded hover:bg-red-500/20"
-                            style={{ color: 'var(--fire)' }}
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        )}
-                      </div>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+                    <span style={{ color: 'var(--muted)' }}> · {formatAmount(item.totalAmount, item.unit)}</span>
+                  </span>
+                  <span style={{ color: 'var(--muted)', fontSize: '12px', fontVariantNumeric: 'tabular-nums' }}>
+                    план {item.plannedUnitPrice?.toFixed(2) || '—'}
+                  </span>
+                  <div className="stepper-wrap">
+                    <button 
+                      className="stepper-btn"
+                      onClick={() => handleBump(item, -1)}
+                    >
+                      −
+                    </button>
+                    <input
+                      type="number"
+                      step={getStep(item.actualUnitPrice || item.plannedUnitPrice)}
+                      value={item.actualUnitPrice || ''}
+                      onChange={e => {
+                        const newValue = e.target.value ? parseFloat(e.target.value) : null;
+                        setShoppingItems(prev => prev.map(i => 
+                          i.ingredientId === item.ingredientId 
+                            ? { ...i, actualUnitPrice: newValue }
+                            : i
+                        ));
+                      }}
+                      className="price-input"
+                      placeholder="= план"
+                    />
+                    <button 
+                      className="stepper-btn"
+                      onClick={() => handleBump(item, 1)}
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="flex gap-3 mt-5">
+              <button 
+                onClick={() => {
+                  setShowModal(false);
+                  showSuccess('Чек сохранён');
+                }}
+                className="grad-btn flex-1"
+              >
+                Сохранить чек
+              </button>
+              <button 
+                onClick={() => setShowModal(false)}
+                className="ghost-btn flex-1"
+              >
+                Отмена
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
