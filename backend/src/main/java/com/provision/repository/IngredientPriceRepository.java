@@ -18,4 +18,6 @@ public interface IngredientPriceRepository extends JpaRepository<IngredientPrice
     Optional<IngredientPrice> findEffectivePrice(@Param("ingredientId") Long ingredientId, @Param("date") LocalDate date);
     
     boolean existsByIngredientIdAndEffectiveFrom(Long ingredientId, LocalDate effectiveFrom);
+    
+    Optional<IngredientPrice> findByIngredientIdAndEffectiveFrom(Long ingredientId, LocalDate effectiveFrom);
 }

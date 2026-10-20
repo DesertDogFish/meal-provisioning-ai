@@ -30,6 +30,13 @@ public class IngredientMapping {
     @JoinColumn(name = "internal_ingredient_id", nullable = false)
     private Ingredient internalIngredient;
 
+    @Column(name = "external_code", length = 64)
+    private String externalCode;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "external_product_id")
+    private ExternalProduct externalProduct;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 

@@ -11,6 +11,7 @@ import TripDetailPage from './pages/TripDetailPage';
 import RecipesPage from './pages/RecipesPage';
 import AdminPage from './pages/AdminPage';
 import ErrorsDemoPage from './pages/ErrorsDemoPage';
+import IntegrationsPage from './pages/IntegrationsPage';
 
 function App() {
   return (
@@ -40,18 +41,22 @@ function App() {
                   <Layout><RecipesPage /></Layout>
                 </ProtectedRoute>
               } />
-              <Route path="/admin" element={
-                <ProtectedRoute adminOnly>
-                  <Layout><AdminPage /></Layout>
-                </ProtectedRoute>
-              } />
-              <Route path="/errors-demo" element={
-                <ProtectedRoute>
-                  <Layout><ErrorsDemoPage /></Layout>
-                </ProtectedRoute>
-              } />
-              <Route path="*" element={<Navigate to="/login" replace />} />
-            </Routes>
+          <Route path="/admin" element={
+            <ProtectedRoute adminOnly>
+              <Layout><AdminPage /></Layout>
+            </ProtectedRoute>
+          } />
+          <Route path="/integrations" element={
+            <ProtectedRoute adminOnly>
+              <Layout><IntegrationsPage /></Layout>
+            </ProtectedRoute>
+          } />
+          <Route path="/errors-demo" element={
+            <ProtectedRoute>
+              <Layout><ErrorsDemoPage /></Layout>
+            </ProtectedRoute>
+          } />
+          <Route path="*" element={<Navigate to="/login" replace />} />            </Routes>
           </BrowserRouter>
         </ToastProvider>
       </AppProvider>

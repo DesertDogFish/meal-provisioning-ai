@@ -19,7 +19,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     { to: '/trips', label: 'Походы', icon: <Mountain size={20} /> },
     { to: '/recipes', label: 'Каталог блюд', icon: <Ship size={20} /> },
     { to: '/errors-demo', label: 'Ошибки (демо)', icon: <Menu size={20} /> },
-    ...(isAdmin ? [{ to: '/admin', label: 'Админка', icon: <Menu size={20} /> }] : []),
+    ...(isAdmin ? [
+      { to: '/admin', label: 'Админка', icon: <Menu size={20} /> },
+      { to: '/integrations', label: 'Интеграции', icon: <Menu size={20} /> }
+    ] : []),
   ];
 
   return (

@@ -11,6 +11,7 @@ import java.util.Optional;
 @Repository
 public interface IngredientMappingRepository extends JpaRepository<IngredientMapping, Long> {
     Optional<IngredientMapping> findByExternalNameAndSource(String externalName, RecipeSource source);
+    Optional<IngredientMapping> findByInternalIngredientIdAndSource(Long internalIngredientId, RecipeSource source);
     List<IngredientMapping> findBySource(RecipeSource source);
     boolean existsByExternalNameAndSource(String externalName, RecipeSource source);
 }

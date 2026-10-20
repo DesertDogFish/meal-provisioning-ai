@@ -34,6 +34,10 @@ public class IngredientPrice {
     @Column(name = "effective_from", nullable = false)
     private LocalDate effectiveFrom;
 
+    @Column(length = 20)
+    @Builder.Default
+    private String source = "MANUAL";
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
