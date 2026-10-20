@@ -14,7 +14,9 @@ public record PersonSummaryResponse(
         UnitOfMeasure unit,
         BigDecimal amountPerDefaultPerson,
         BigDecimal amountPerPersonMeal,
-        BigDecimal costPerDefaultPerson,
-        BigDecimal costPerPersonMeal
+        BigDecimal plannedCostPerDefaultPerson,
+        BigDecimal actualCostPerDefaultPerson,
+        BigDecimal plannedCostPerPersonMeal,
+        BigDecimal actualCostPerPersonMeal
     ) {}
 }

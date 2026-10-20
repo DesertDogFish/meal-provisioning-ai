@@ -5,7 +5,10 @@ import java.util.List;
 
 public record ShoppingListResponse(
     List<ShoppingItemResponse> items,
-    BigDecimal totalCost,
+    BigDecimal totalPlannedCost,
+    BigDecimal totalActualCost,
+    BigDecimal deltaPercent,
+    Integer overriddenCount,
     boolean hasMissingPrices,
     List<String> missingIngredients
 ) {}

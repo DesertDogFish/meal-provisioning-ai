@@ -7,7 +7,6 @@ import com.provision.entity.*;
 import com.provision.exception.NotFoundException;
 import com.provision.integration.*;
 import com.provision.repository.*;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -16,12 +15,12 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class IntegrationService {
 
@@ -32,6 +31,27 @@ public class IntegrationService {
     private final IngredientPriceRepository priceRepository;
     private final IngredientRepository ingredientRepository;
     private final SyncLogRepository syncLogRepository;
+
+    public IntegrationService(
+            List<PriceProvider> providerList,
+            IntegrationRepository integrationRepository,
+            ExternalProductRepository externalProductRepository,
+            IngredientMappingRepository mappingRepository,
+            IngredientPriceRepository priceRepository,
+            IngredientRepository ingredientRepository,
+            SyncLogRepository syncLogRepository) {
+        this.providers = new HashMap<>();
+        for (PriceProvider provider : providerList) {
+            this.providers.put(provider.code(), provider);
+        }
+        this.integrationRepository = integrationRepository;
+        this.externalProductRepository = externalProductRepository;
+        this.mappingRepository = mappingRepository;
+        this.priceRepository = priceRepository;
+        this.ingredientRepository = ingredientRepository;
+        this.syncLogRepository = syncLogRepository;
+        log.info("Loaded {} price providers: {}", providers.size(), providers.keySet());
+    }
 
     @Transactional(readOnly = true)
     public List<IntegrationDto> getAllIntegrations() {

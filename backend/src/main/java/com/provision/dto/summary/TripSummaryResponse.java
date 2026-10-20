@@ -4,11 +4,16 @@ import java.math.BigDecimal;
 import java.util.List;
 
 public record TripSummaryResponse(
-    BigDecimal totalCost,
+    BigDecimal totalPlannedCost,
+    BigDecimal totalActualCost,
+    BigDecimal deltaPercent,
+    Integer overriddenCount,
     boolean hasMissingPrices,
     List<String> missingIngredients,
     Integer totalPersonMeals,
-    BigDecimal costPerDefaultPerson,
-    BigDecimal costPerPersonMeal,
+    BigDecimal plannedCostPerDefaultPerson,
+    BigDecimal actualCostPerDefaultPerson,
+    BigDecimal plannedCostPerPersonMeal,
+    BigDecimal actualCostPerPersonMeal,
     BigDecimal caloriesPerPersonMeal
 ) {}

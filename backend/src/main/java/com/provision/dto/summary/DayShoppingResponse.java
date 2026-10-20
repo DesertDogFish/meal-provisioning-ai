@@ -6,6 +6,7 @@ import java.util.List;
 public record DayShoppingResponse(
     String dayDate,
     List<ShoppingItemResponse> items,
-    BigDecimal dayCost,
+    BigDecimal plannedCost,
+    BigDecimal actualCost,
     boolean hasMissingPrices
 ) {}

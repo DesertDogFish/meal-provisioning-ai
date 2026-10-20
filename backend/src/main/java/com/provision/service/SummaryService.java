@@ -9,10 +9,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.MathContext;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.*;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -23,11 +23,8 @@ public class SummaryService {
     private final TripRepository tripRepository;
     private final IngredientPriceRepository priceRepository;
     private final RecipeRepository recipeRepository;
+    private final PriceResolutionService priceResolutionService;
 
-    /**
-     * Расчёт эффективного количества людей для приёма пищи
-     * mealPeople = meal.peopleOverride ?? day.peopleOverride ?? trip.defaultPeople
-     */
     public int calculateEffectivePeople(Trip trip, TripDay day, TripMeal meal) {
         if (meal != null && meal.getPeopleOverride() != null) {
             return meal.getPeopleOverride();
@@ -38,34 +35,20 @@ public class SummaryService {
         return trip.getDefaultPeople();
     }
 
-    /**
-     * Расчёт количества ингредиента на одного человека
-     * perPersonAmount = ingredient.amount / recipe.baseServings
-     */
     public BigDecimal calculateAmountPerPerson(BigDecimal amount, int baseServings) {
         return amount.divide(BigDecimal.valueOf(baseServings), 6, RoundingMode.HALF_UP);
     }
 
-    /**
-     * Расчёт количества ингредиента на приём пищи
-     * mealAmount = perPersonAmount * people
-     */
     public BigDecimal calculateAmountForMeal(BigDecimal amount, int baseServings, int people) {
         return calculateAmountPerPerson(amount, baseServings)
                 .multiply(BigDecimal.valueOf(people))
                 .setScale(3, RoundingMode.HALF_UP);
     }
 
-    /**
-     * Поиск цены на дату (последняя цена, где effectiveFrom <= date)
-     */
     public Optional<IngredientPrice> findPriceForDate(Long ingredientId, LocalDate date) {
         return priceRepository.findEffectivePrice(ingredientId, date);
     }
 
-    /**
-     * Меню по дням
-     */
     public List<MenuByDayResponse> getMenuByDays(Long tripId, Long userId) {
         Trip trip = tripRepository.findByIdWithDaysAndMeals(tripId, userId);
         if (trip == null) {
@@ -114,17 +97,14 @@ public class SummaryService {
                 .toList();
     }
 
-    /**
-     * Закупка на весь поход
-     */
     public ShoppingListResponse getShoppingList(Long tripId, Long userId) {
         Trip trip = tripRepository.findByIdWithDaysAndMeals(tripId, userId);
         if (trip == null) {
             throw new IllegalArgumentException("Trip not found or access denied");
         }
 
-        // Агрегация по ингредиентам с учётом стоимости по дням
-        Map<Long, ShoppingAggregationWithCost> aggregation = new LinkedHashMap<>();
+        Map<Long, BigDecimal> overrides = priceResolutionService.getAllOverrides(tripId);
+        Map<Long, ShoppingAggregation> aggregation = new LinkedHashMap<>();
 
         for (TripDay day : trip.getDays()) {
             for (TripMeal meal : day.getMeals()) {
@@ -138,68 +118,93 @@ public class SummaryService {
                             mealPeople
                     );
 
-                    // Получаем цену на дату этого дня
-                    Optional<IngredientPrice> price = priceRepository
-                            .findEffectivePrice(ri.getIngredient().getId(), day.getDayDate());
-
-                    BigDecimal mealCost = null;
-                    if (price.isPresent()) {
-                        mealCost = mealAmount.multiply(price.get().getPricePerUnit())
-                                .setScale(2, RoundingMode.HALF_UP);
-                    }
-
                     aggregation.computeIfAbsent(ri.getIngredient().getId(), k -> 
-                            new ShoppingAggregationWithCost(ri.getIngredient()))
-                            .addAmountAndCost(mealAmount, mealCost);
+                            new ShoppingAggregation(ri.getIngredient()))
+                            .addAmount(mealAmount);
                 }
             }
         }
 
-        // Формируем ответ
         List<ShoppingItemResponse> items = new ArrayList<>();
-        BigDecimal totalCost = BigDecimal.ZERO;
+        BigDecimal totalPlannedCost = BigDecimal.ZERO;
+        BigDecimal totalActualCost = BigDecimal.ZERO;
         boolean hasMissingPrices = false;
         List<String> missingIngredients = new ArrayList<>();
+        int overriddenCount = 0;
 
-        for (ShoppingAggregationWithCost agg : aggregation.values()) {
-            BigDecimal estimatedCost = null;
-            boolean hasPrice = false;
+        for (ShoppingAggregation agg : aggregation.values()) {
+            Long ingredientId = agg.ingredient().getId();
+            BigDecimal overridePrice = overrides.get(ingredientId);
+            
+            // Получаем плановую цену на дату окончания похода (для общей сводки)
+            Optional<IngredientPrice> plannedPriceOpt = priceRepository
+                    .findEffectivePrice(ingredientId, trip.getEndDate());
+            
+            BigDecimal plannedUnitPrice = plannedPriceOpt.map(IngredientPrice::getPricePerUnit).orElse(null);
+            BigDecimal actualUnitPrice = overridePrice != null ? overridePrice : plannedUnitPrice;
+            
+            BigDecimal plannedCost = null;
+            BigDecimal actualCost = null;
+            boolean hasPlannedPrice = plannedUnitPrice != null;
+            boolean overridden = overridePrice != null;
 
-            if (agg.hasPrice()) {
-                estimatedCost = agg.totalCost();
-                hasPrice = true;
-                totalCost = totalCost.add(estimatedCost);
-            } else {
+            if (hasPlannedPrice) {
+                plannedCost = agg.totalAmount().multiply(plannedUnitPrice).setScale(2, RoundingMode.HALF_UP);
+                totalPlannedCost = totalPlannedCost.add(plannedCost);
+            } else if (overridePrice == null) {
                 hasMissingPrices = true;
                 missingIngredients.add(agg.ingredient().getName());
             }
 
+            if (actualUnitPrice != null) {
+                actualCost = agg.totalAmount().multiply(actualUnitPrice).setScale(2, RoundingMode.HALF_UP);
+                totalActualCost = totalActualCost.add(actualCost);
+            }
+
+            if (overridden) {
+                overriddenCount++;
+            }
+
             items.add(new ShoppingItemResponse(
-                    agg.ingredient().getId(),
+                    ingredientId,
                     agg.ingredient().getName(),
                     agg.ingredient().getUnit(),
                     agg.totalAmount(),
-                    estimatedCost,
-                    hasPrice
+                    plannedUnitPrice,
+                    actualUnitPrice,
+                    plannedCost,
+                    actualCost,
+                    overridden,
+                    hasPlannedPrice
             ));
         }
 
-        return new ShoppingListResponse(items, totalCost, hasMissingPrices, missingIngredients);
+        BigDecimal deltaPercent = calculateDeltaPercent(totalPlannedCost, totalActualCost);
+
+        return new ShoppingListResponse(
+                items,
+                totalPlannedCost,
+                totalActualCost,
+                deltaPercent,
+                overriddenCount,
+                hasMissingPrices,
+                missingIngredients
+        );
     }
 
-    /**
-     * Закупка по дням
-     */
     public List<DayShoppingResponse> getShoppingByDays(Long tripId, Long userId) {
         Trip trip = tripRepository.findByIdWithDaysAndMeals(tripId, userId);
         if (trip == null) {
             throw new IllegalArgumentException("Trip not found or access denied");
         }
 
+        Map<Long, BigDecimal> overrides = priceResolutionService.getAllOverrides(tripId);
+
         return trip.getDays().stream()
                 .map(day -> {
                     Map<Long, ShoppingAggregation> dayAggregation = new LinkedHashMap<>();
-                    BigDecimal dayCost = BigDecimal.ZERO;
+                    BigDecimal dayPlannedCost = BigDecimal.ZERO;
+                    BigDecimal dayActualCost = BigDecimal.ZERO;
                     boolean hasMissingPrices = false;
 
                     for (TripMeal meal : day.getMeals()) {
@@ -221,44 +226,57 @@ public class SummaryService {
 
                     List<ShoppingItemResponse> items = new ArrayList<>();
                     for (ShoppingAggregation agg : dayAggregation.values()) {
-                        BigDecimal estimatedCost = null;
-                        boolean hasPrice = false;
+                        Long ingredientId = agg.ingredient().getId();
+                        BigDecimal overridePrice = overrides.get(ingredientId);
+                        
+                        Optional<IngredientPrice> plannedPriceOpt = priceRepository
+                                .findEffectivePrice(ingredientId, day.getDayDate());
+                        
+                        BigDecimal plannedUnitPrice = plannedPriceOpt.map(IngredientPrice::getPricePerUnit).orElse(null);
+                        BigDecimal actualUnitPrice = overridePrice != null ? overridePrice : plannedUnitPrice;
+                        
+                        BigDecimal plannedCost = null;
+                        BigDecimal actualCost = null;
+                        boolean hasPlannedPrice = plannedUnitPrice != null;
+                        boolean overridden = overridePrice != null;
 
-                        Optional<IngredientPrice> price = priceRepository
-                                .findEffectivePrice(agg.ingredient().getId(), day.getDayDate());
-
-                        if (price.isPresent()) {
-                            estimatedCost = agg.totalAmount().multiply(price.get().getPricePerUnit())
-                                    .setScale(2, RoundingMode.HALF_UP);
-                            hasPrice = true;
-                            dayCost = dayCost.add(estimatedCost);
-                        } else {
+                        if (hasPlannedPrice) {
+                            plannedCost = agg.totalAmount().multiply(plannedUnitPrice).setScale(2, RoundingMode.HALF_UP);
+                            dayPlannedCost = dayPlannedCost.add(plannedCost);
+                        } else if (overridePrice == null) {
                             hasMissingPrices = true;
                         }
 
+                        if (actualUnitPrice != null) {
+                            actualCost = agg.totalAmount().multiply(actualUnitPrice).setScale(2, RoundingMode.HALF_UP);
+                            dayActualCost = dayActualCost.add(actualCost);
+                        }
+
                         items.add(new ShoppingItemResponse(
-                                agg.ingredient().getId(),
+                                ingredientId,
                                 agg.ingredient().getName(),
                                 agg.ingredient().getUnit(),
                                 agg.totalAmount(),
-                                estimatedCost,
-                                hasPrice
+                                plannedUnitPrice,
+                                actualUnitPrice,
+                                plannedCost,
+                                actualCost,
+                                overridden,
+                                hasPlannedPrice
                         ));
                     }
 
                     return new DayShoppingResponse(
                             day.getDayDate().toString(),
                             items,
-                            dayCost,
+                            dayPlannedCost,
+                            dayActualCost,
                             hasMissingPrices
                     );
                 })
                 .toList();
     }
 
-    /**
-     * Сводка на человека
-     */
     public PersonSummaryResponse getPersonSummary(Long tripId, Long userId) {
         Trip trip = tripRepository.findByIdWithDaysAndMeals(tripId, userId);
         if (trip == null) {
@@ -267,7 +285,6 @@ public class SummaryService {
 
         ShoppingListResponse shoppingList = getShoppingList(tripId, userId);
         
-        // Расчёт totalPersonMeals
         int totalPersonMeals = 0;
         BigDecimal totalCalories = BigDecimal.ZERO;
         
@@ -285,7 +302,6 @@ public class SummaryService {
             }
         }
 
-        // Расчёт на человека
         List<PersonSummaryResponse.PersonIngredientResponse> ingredients = shoppingList.items().stream()
                 .map(item -> {
                     BigDecimal amountPerDefaultPerson = item.totalAmount()
@@ -295,12 +311,20 @@ public class SummaryService {
                             ? item.totalAmount().divide(BigDecimal.valueOf(totalPersonMeals), 3, RoundingMode.HALF_UP)
                             : BigDecimal.ZERO;
                     
-                    BigDecimal costPerDefaultPerson = item.estimatedCost() != null
-                            ? item.estimatedCost().divide(BigDecimal.valueOf(trip.getDefaultPeople()), 2, RoundingMode.HALF_UP)
+                    BigDecimal plannedCostPerDefaultPerson = item.plannedCost() != null
+                            ? item.plannedCost().divide(BigDecimal.valueOf(trip.getDefaultPeople()), 2, RoundingMode.HALF_UP)
                             : null;
                     
-                    BigDecimal costPerPersonMeal = item.estimatedCost() != null && totalPersonMeals > 0
-                            ? item.estimatedCost().divide(BigDecimal.valueOf(totalPersonMeals), 2, RoundingMode.HALF_UP)
+                    BigDecimal actualCostPerDefaultPerson = item.actualCost() != null
+                            ? item.actualCost().divide(BigDecimal.valueOf(trip.getDefaultPeople()), 2, RoundingMode.HALF_UP)
+                            : null;
+                    
+                    BigDecimal plannedCostPerPersonMeal = item.plannedCost() != null && totalPersonMeals > 0
+                            ? item.plannedCost().divide(BigDecimal.valueOf(totalPersonMeals), 2, RoundingMode.HALF_UP)
+                            : null;
+                    
+                    BigDecimal actualCostPerPersonMeal = item.actualCost() != null && totalPersonMeals > 0
+                            ? item.actualCost().divide(BigDecimal.valueOf(totalPersonMeals), 2, RoundingMode.HALF_UP)
                             : null;
                     
                     return new PersonSummaryResponse.PersonIngredientResponse(
@@ -308,17 +332,26 @@ public class SummaryService {
                             item.unit(),
                             amountPerDefaultPerson,
                             amountPerPersonMeal,
-                            costPerDefaultPerson,
-                            costPerPersonMeal
+                            plannedCostPerDefaultPerson,
+                            actualCostPerDefaultPerson,
+                            plannedCostPerPersonMeal,
+                            actualCostPerPersonMeal
                     );
                 })
                 .toList();
 
-        BigDecimal costPerDefaultPerson = shoppingList.totalCost()
+        BigDecimal plannedCostPerDefaultPerson = shoppingList.totalPlannedCost()
                 .divide(BigDecimal.valueOf(trip.getDefaultPeople()), 2, RoundingMode.HALF_UP);
         
-        BigDecimal costPerPersonMeal = totalPersonMeals > 0
-                ? shoppingList.totalCost().divide(BigDecimal.valueOf(totalPersonMeals), 2, RoundingMode.HALF_UP)
+        BigDecimal actualCostPerDefaultPerson = shoppingList.totalActualCost()
+                .divide(BigDecimal.valueOf(trip.getDefaultPeople()), 2, RoundingMode.HALF_UP);
+        
+        BigDecimal plannedCostPerPersonMeal = totalPersonMeals > 0
+                ? shoppingList.totalPlannedCost().divide(BigDecimal.valueOf(totalPersonMeals), 2, RoundingMode.HALF_UP)
+                : BigDecimal.ZERO;
+        
+        BigDecimal actualCostPerPersonMeal = totalPersonMeals > 0
+                ? shoppingList.totalActualCost().divide(BigDecimal.valueOf(totalPersonMeals), 2, RoundingMode.HALF_UP)
                 : BigDecimal.ZERO;
         
         BigDecimal caloriesPerPersonMeal = totalPersonMeals > 0
@@ -326,47 +359,38 @@ public class SummaryService {
                 : null;
 
         TripSummaryResponse tripSummary = new TripSummaryResponse(
-                shoppingList.totalCost(),
+                shoppingList.totalPlannedCost(),
+                shoppingList.totalActualCost(),
+                shoppingList.deltaPercent(),
+                shoppingList.overriddenCount(),
                 shoppingList.hasMissingPrices(),
                 shoppingList.missingIngredients(),
                 totalPersonMeals,
-                costPerDefaultPerson,
-                costPerPersonMeal,
+                plannedCostPerDefaultPerson,
+                actualCostPerDefaultPerson,
+                plannedCostPerPersonMeal,
+                actualCostPerPersonMeal,
                 caloriesPerPersonMeal
         );
 
         return new PersonSummaryResponse(ingredients, tripSummary);
     }
 
-    /**
-     * Вспомогательный класс для агрегации
-     */
+    private BigDecimal calculateDeltaPercent(BigDecimal planned, BigDecimal actual) {
+        if (planned.compareTo(BigDecimal.ZERO) == 0) {
+            return BigDecimal.ZERO;
+        }
+        return actual.subtract(planned)
+                .divide(planned, 4, RoundingMode.HALF_UP)
+                .multiply(BigDecimal.valueOf(100))
+                .setScale(2, RoundingMode.HALF_UP);
+    }
+
     private record ShoppingAggregation(Ingredient ingredient) {
         private BigDecimal totalAmount = BigDecimal.ZERO;
 
         void addAmount(BigDecimal amount) {
             totalAmount = totalAmount.add(amount);
-        }
-    }
-
-    /**
-     * Вспомогательный класс для агрегации с учётом стоимости по дням
-     */
-    private record ShoppingAggregationWithCost(Ingredient ingredient) {
-        private BigDecimal totalAmount = BigDecimal.ZERO;
-        private BigDecimal totalCost = BigDecimal.ZERO;
-        private boolean hasAnyPrice = false;
-
-        void addAmountAndCost(BigDecimal amount, BigDecimal cost) {
-            totalAmount = totalAmount.add(amount);
-            if (cost != null) {
-                totalCost = totalCost.add(cost);
-                hasAnyPrice = true;
-            }
-        }
-
-        boolean hasPrice() {
-            return hasAnyPrice;
         }
     }
 }

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useApp } from '../store/AppContext';
 import { Wifi, WifiOff, RefreshCw, Search, Link, Unlink, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
+import { useToast } from '../components/ToastProvider';
 
 interface Integration {
   id: number;
@@ -35,6 +36,7 @@ interface ExternalProduct {
 
 export default function IntegrationsPage() {
   const { state } = useApp();
+  const { showError, showSuccess } = useToast();
   const [integrations, setIntegrations] = useState<Integration[]>([]);
   const [syncLogs, setSyncLogs] = useState<SyncLog[]>([]);
   const [loading, setLoading] = useState(false);
@@ -42,6 +44,15 @@ export default function IntegrationsPage() {
   const [searchResults, setSearchResults] = useState<ExternalProduct[]>([]);
   const [selectedIngredient, setSelectedIngredient] = useState<number | null>(null);
   const [syncing, setSyncing] = useState(false);
+
+  // Получаем токен из контекста
+  const getAuthHeaders = () => {
+    const token = state.isAuthenticated ? 'mock-token' : null; // В реальном приложении токен хранится в state
+    return {
+      'Authorization': token ? `Bearer ${token}` : '',
+      'Content-Type': 'application/json'
+    };
+  };
 
   useEffect(() => {
     loadIntegrations();
@@ -51,21 +62,25 @@ export default function IntegrationsPage() {
   const loadIntegrations = async () => {
     try {
       const response = await fetch('/api/v1/admin/integrations', {
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('accessToken')}` }
+        headers: getAuthHeaders()
       });
       if (response.ok) {
         const data = await response.json();
         setIntegrations(data);
+      } else {
+        const error = await response.json().catch(() => ({ detail: 'Failed to load integrations' }));
+        showError(error.detail || 'Failed to load integrations');
       }
     } catch (error) {
       console.error('Failed to load integrations:', error);
+      showError('Network error while loading integrations');
     }
   };
 
   const loadSyncLogs = async () => {
     try {
       const response = await fetch('/api/v1/admin/integrations/sync-logs', {
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('accessToken')}` }
+        headers: getAuthHeaders()
       });
       if (response.ok) {
         const data = await response.json();
@@ -81,16 +96,18 @@ export default function IntegrationsPage() {
     try {
       const response = await fetch(`/api/v1/admin/integrations/${provider}/connect`, {
         method: 'POST',
-        headers: { 
-          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
-          'Content-Type': 'application/json'
-        }
+        headers: getAuthHeaders()
       });
       if (response.ok) {
         await loadIntegrations();
+        showSuccess(`Successfully connected to ${provider}`);
+      } else {
+        const error = await response.json().catch(() => ({ detail: 'Failed to connect' }));
+        showError(error.detail || 'Failed to connect');
       }
     } catch (error) {
       console.error('Failed to connect:', error);
+      showError('Network error while connecting');
     } finally {
       setLoading(false);
     }
@@ -101,16 +118,18 @@ export default function IntegrationsPage() {
     try {
       const response = await fetch(`/api/v1/admin/integrations/${provider}/disconnect`, {
         method: 'POST',
-        headers: { 
-          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
-          'Content-Type': 'application/json'
-        }
+        headers: getAuthHeaders()
       });
       if (response.ok) {
         await loadIntegrations();
+        showSuccess(`Successfully disconnected from ${provider}`);
+      } else {
+        const error = await response.json().catch(() => ({ detail: 'Failed to disconnect' }));
+        showError(error.detail || 'Failed to disconnect');
       }
     } catch (error) {
       console.error('Failed to disconnect:', error);
+      showError('Network error while disconnecting');
     } finally {
       setLoading(false);
     }
@@ -121,17 +140,20 @@ export default function IntegrationsPage() {
     try {
       const response = await fetch(`/api/v1/admin/integrations/${provider}/sync/prices`, {
         method: 'POST',
-        headers: { 
-          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
-          'Content-Type': 'application/json'
-        }
+        headers: getAuthHeaders()
       });
       if (response.ok) {
+        const log = await response.json();
         await loadIntegrations();
         await loadSyncLogs();
+        showSuccess(`Sync completed: ${log.createdCount} created, ${log.updatedCount} updated, ${log.errorCount} errors`);
+      } else {
+        const error = await response.json().catch(() => ({ detail: 'Failed to sync prices' }));
+        showError(error.detail || 'Failed to sync prices');
       }
     } catch (error) {
       console.error('Failed to sync prices:', error);
+      showError('Network error while syncing prices');
     } finally {
       setSyncing(false);
     }
@@ -143,16 +165,21 @@ export default function IntegrationsPage() {
     try {
       const response = await fetch(
         `/api/v1/admin/integrations/OFF/products/search?query=${encodeURIComponent(searchQuery)}&limit=20`,
-        {
-          headers: { 'Authorization': `Bearer ${localStorage.getItem('accessToken')}` }
-        }
+        { headers: getAuthHeaders() }
       );
       if (response.ok) {
         const data = await response.json();
         setSearchResults(data);
+        if (data.length === 0) {
+          showError('No products found');
+        }
+      } else {
+        const error = await response.json().catch(() => ({ detail: 'Failed to search products' }));
+        showError(error.detail || 'Failed to search products');
       }
     } catch (error) {
       console.error('Failed to search products:', error);
+      showError('Network error while searching products');
     }
   };
 
@@ -162,10 +189,7 @@ export default function IntegrationsPage() {
     try {
       const response = await fetch(`/api/v1/admin/integrations/ingredients/${selectedIngredient}/mapping`, {
         method: 'POST',
-        headers: { 
-          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
-          'Content-Type': 'application/json'
-        },
+        headers: getAuthHeaders(),
         body: JSON.stringify({
           provider: 'OFF',
           externalCode: product.code,
@@ -178,9 +202,14 @@ export default function IntegrationsPage() {
         setSearchResults([]);
         setSearchQuery('');
         setSelectedIngredient(null);
+        showSuccess('Product mapping created successfully');
+      } else {
+        const error = await response.json().catch(() => ({ detail: 'Failed to create mapping' }));
+        showError(error.detail || 'Failed to create mapping');
       }
     } catch (error) {
       console.error('Failed to create mapping:', error);
+      showError('Network error while creating mapping');
     }
   };
 

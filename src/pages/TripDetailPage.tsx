@@ -4,6 +4,7 @@ import { useApp } from '../store/AppContext';
 import { calculateMenuByDays, calculateShoppingList, calculateDayShopping, calculatePersonSummary, formatAmount, getEffectivePeople } from '../utils/calculations';
 import { ArrowLeft, Plus, Trash2, Users, Utensils, ShoppingCart, BookOpen, TrendingUp, Calendar, ChevronDown, ChevronRight } from 'lucide-react';
 import { MealType } from '../types';
+import PriceOverridesTab from '../components/PriceOverridesTab';
 
 const mealTypeLabels: Record<MealType, string> = {
   BREAKFAST: 'Завтрак',
@@ -19,7 +20,7 @@ const mealTypeColors: Record<MealType, string> = {
   SNACK: 'bg-purple-100 text-purple-700',
 };
 
-type TabType = 'menu' | 'shopping' | 'dayShopping' | 'person';
+type TabType = 'menu' | 'shopping' | 'dayShopping' | 'person' | 'overrides';
 
 export default function TripDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -93,6 +94,7 @@ export default function TripDetailPage() {
     { id: 'shopping' as TabType, label: 'Закупка на поход', icon: <ShoppingCart size={16} /> },
     { id: 'dayShopping' as TabType, label: 'Закупка по дням', icon: <Calendar size={16} /> },
     { id: 'person' as TabType, label: 'На человека', icon: <Users size={16} /> },
+    { id: 'overrides' as TabType, label: 'Закупка и чеки', icon: <TrendingUp size={16} /> },
   ];
 
   return (
@@ -398,6 +400,10 @@ export default function TripDetailPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {activeTab === 'overrides' && (
+        <PriceOverridesTab tripId={trip.id} />
       )}
 
       {/* Add meal modal */}

@@ -9,6 +9,10 @@ public record ShoppingItemResponse(
     String ingredientName,
     UnitOfMeasure unit,
     BigDecimal totalAmount,
-    BigDecimal estimatedCost,
-    boolean hasPrice
+    BigDecimal plannedUnitPrice,
+    BigDecimal actualUnitPrice,
+    BigDecimal plannedCost,
+    BigDecimal actualCost,
+    boolean overridden,
+    boolean hasPlannedPrice
 ) {}
