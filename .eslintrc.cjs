@@ -14,16 +14,11 @@ module.exports = {
       files: ['src/**/*.{ts,tsx}'],
       excludedFiles: [
         'src/api/**/*',
-        // Временно — до завершения миграции Батча 3:
-        'src/App.tsx',
-        'src/store/AppContext.tsx',
+        // Временно — для файлов, которые ещё используют mockData:
         'src/data/mockData.ts',
-        'src/components/PriceOverridesTab.tsx',
-        'src/components/SubstitutionModal.tsx',
         'src/components/ToastProvider.tsx',
         'src/components/ErrorBoundary.tsx',
         'src/pages/ErrorsDemoPage.tsx',
-        'src/pages/RecipesPage.tsx',
         'src/pages/SyncLogsPage.tsx',
       ],
       rules: {

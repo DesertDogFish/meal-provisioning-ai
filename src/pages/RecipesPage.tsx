@@ -1,8 +1,20 @@
-import { useState, useMemo } from 'react';
-import { useApp } from '../store/AppContext';
+import { useState, useMemo, useEffect } from 'react';
 import { Search, Utensils, X } from 'lucide-react';
 import { MealType } from '../types';
 import { formatAmount } from '../utils/calculations';
+import { api } from '../api/client';
+
+interface Recipe {
+  id: string;
+  name: string;
+  mealType: MealType;
+  category?: string;
+  cookMinutes?: number;
+  baseServings: number;
+  caloriesPerServing?: number;
+  source?: string;
+  ingredients: any[];
+}
 
 const mealTypeLabels: Record<MealType, string> = {
   BREAKFAST: 'Завтрак',
@@ -12,7 +24,9 @@ const mealTypeLabels: Record<MealType, string> = {
 };
 
 export default function RecipesPage() {
-  const { state } = useApp();
+  const [recipes, setRecipes] = useState<Recipe[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [filterMealType, setFilterMealType] = useState<MealType | ''>('');
   const [filterCategory, setFilterCategory] = useState('');
@@ -20,15 +34,33 @@ export default function RecipesPage() {
   const [selectedRecipe, setSelectedRecipe] = useState<string | null>(null);
   const [visibleCount, setVisibleCount] = useState(24);
 
+  useEffect(() => {
+    loadRecipes();
+  }, []);
+
+  const loadRecipes = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const data = await api.get<Recipe[]>('/recipes');
+      setRecipes(data);
+    } catch (err) {
+      console.error('Failed to load recipes:', err);
+      setError('Не удалось загрузить рецепты');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Получить уникальные категории
   const categories = useMemo(() => {
-    const cats = new Set(state.recipes.map(r => r.category).filter(Boolean));
+    const cats = new Set(recipes.map(r => r.category).filter(Boolean));
     return Array.from(cats).sort();
-  }, [state.recipes]);
+  }, [recipes]);
 
   // Фильтрация
   const filtered = useMemo(() => {
-    return state.recipes.filter(r => {
+    return recipes.filter(r => {
       // Поиск по названию или ингредиентам
       if (search) {
         const searchLower = search.toLowerCase();
@@ -50,18 +82,18 @@ export default function RecipesPage() {
       
       return true;
     });
-  }, [state.recipes, search, filterMealType, filterCategory, noFireOnly]);
+  }, [recipes, search, filterMealType, filterCategory, noFireOnly]);
 
   // Подсчёт для чипов
   const counts = useMemo(() => {
-    const all = state.recipes.length;
-    const breakfast = state.recipes.filter(r => r.mealType === 'BREAKFAST').length;
-    const lunch = state.recipes.filter(r => r.mealType === 'LUNCH').length;
-    const dinner = state.recipes.filter(r => r.mealType === 'DINNER').length;
-    const snack = state.recipes.filter(r => r.mealType === 'SNACK').length;
-    const noFire = state.recipes.filter(r => r.cookMinutes === 0).length;
+    const all = recipes.length;
+    const breakfast = recipes.filter(r => r.mealType === 'BREAKFAST').length;
+    const lunch = recipes.filter(r => r.mealType === 'LUNCH').length;
+    const dinner = recipes.filter(r => r.mealType === 'DINNER').length;
+    const snack = recipes.filter(r => r.mealType === 'SNACK').length;
+    const noFire = recipes.filter(r => r.cookMinutes === 0).length;
     return { all, breakfast, lunch, dinner, snack, noFire };
-  }, [state.recipes]);
+  }, [recipes]);
 
   const resetFilters = () => {
     setSearch('');
@@ -70,13 +102,36 @@ export default function RecipesPage() {
     setNoFireOnly(false);
   };
 
-  const selected = state.recipes.find(r => r.id === selectedRecipe);
+  const selected = recipes.find(r => r.id === selectedRecipe);
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl md:text-3xl font-bold" style={{ color: 'var(--text)' }}>Каталог блюд</h1>
+          <p className="mt-1" style={{ color: 'var(--muted)' }}>Загрузка...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl md:text-3xl font-bold" style={{ color: 'var(--text)' }}>Каталог блюд</h1>
+          <p className="mt-1" style={{ color: 'var(--fire)' }}>{error}</p>
+          <button onClick={loadRecipes} className="ghost-btn mt-4">Повторить</button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl md:text-3xl font-bold" style={{ color: 'var(--text)' }}>
-          Каталог блюд · {state.recipes.length} позиций
+          Каталог блюд · {recipes.length} позиций
         </h1>
         <p className="mt-1" style={{ color: 'var(--muted)' }}>
           Завтрак {counts.breakfast} · Обед {counts.lunch} · Ужин {counts.dinner} · Перекус {counts.snack} | без огня {counts.noFire}
