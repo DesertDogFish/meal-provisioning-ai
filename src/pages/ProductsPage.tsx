@@ -206,6 +206,12 @@ export default function ProductsPage() {
       return;
     }
 
+    // CR-1: валидация pieceWeightG для PCS/PACK при наличии ккал
+    if ((formUnit === 'PCS' || formUnit === 'PACK') && formCalories && !formPieceWeightG) {
+      showError('Для шт/уп с калорийностью обязателен вес 1 шт/уп в граммах');
+      return;
+    }
+
     if (editingProduct) {
       // Обновление
       dispatch({
@@ -217,7 +223,8 @@ export default function ProductsPage() {
           category: formCategory,
           packSize: formPackSize || undefined,
           roundToPacks: formRoundToPacks,
-          kcalPer100g: formCalories || undefined
+          kcalPer100g: formCalories || undefined,
+          pieceWeightG: formPieceWeightG || undefined
         }
       });
       showSuccess('Продукт обновлён');
@@ -233,6 +240,7 @@ export default function ProductsPage() {
           packSize: formPackSize || undefined,
           roundToPacks: formRoundToPacks,
           kcalPer100g: formCalories || undefined,
+          pieceWeightG: formPieceWeightG || undefined,
           createdAt: new Date().toISOString()
         }
       });
@@ -263,6 +271,7 @@ export default function ProductsPage() {
     setFormPackSize(product.packSize ?? null);
     setFormRoundToPacks(product.roundToPacks ?? false);
     setFormCalories(product.kcalPer100g ?? null);
+    setFormPieceWeightG(product.pieceWeightG ?? null);
     setShowModal(true);
   };
 
@@ -274,6 +283,7 @@ export default function ProductsPage() {
     setFormPackSize(null);
     setFormRoundToPacks(false);
     setFormCalories(null);
+    setFormPieceWeightG(null);
     setDuplicateWarning(null);
   };
 
@@ -613,12 +623,15 @@ export default function ProductsPage() {
                     Вес 1 {formUnit === 'PCS' ? 'шт' : 'уп'}, г * (обязательно для шт и уп)
                   </label>
                   <NumberField
-                    value={formPackSize}
-                    stepRef={formPackSize ?? 100}
+                    value={formPieceWeightG}
+                    stepRef={formPieceWeightG ?? 100}
                     maxDecimals={0}
-                    onCommit={v => setFormPackSize(v)}
-                    placeholder="например, 325 для тушёнки"
+                    onCommit={v => setFormPieceWeightG(v)}
+                    placeholder={formUnit === 'PCS' ? "например, 325 для тушёнки" : "например, 600 для блока лапши"}
                   />
+                  <p className="text-xs mt-1" style={{ color: 'var(--fire)' }}>
+                    ⚠ Обязательно для шт/уп с калорийностью
+                  </p>
                 </div>
               )}
             </div>

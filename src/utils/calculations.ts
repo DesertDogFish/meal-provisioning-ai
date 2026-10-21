@@ -1,4 +1,5 @@
-import { Trip, TripDay, TripMeal, IngredientPrice, ShoppingItem, DayShopping, MenuDay, PersonSummary, TripSummary } from '../types';
+import { Trip, TripDay, TripMeal, IngredientPrice, ShoppingItem, DayShopping, MenuDay, PersonSummary, TripSummary, UnitOfMeasure } from '../types';
+import { calculateKcal } from './calc';
 
 export function getEffectivePeople(trip: Trip, day: TripDay, meal?: TripMeal): number {
   if (meal?.peopleOverride) return meal.peopleOverride;
@@ -26,7 +27,13 @@ export function formatAmount(amount: number, unit: string): string {
     if (amount < 1) return `${Math.round(amount * 1000)} мл`;
     return `${amount.toFixed(2)} л`;
   }
-  return `${Math.round(amount)} шт`;
+  if (unit === 'PCS') {
+    return `${Math.round(amount)} шт`;
+  }
+  if (unit === 'PACK') {
+    return `${Math.round(amount)} уп`;
+  }
+  return `${Math.round(amount)} ${unit}`;
 }
 
 export function calculateMenuByDays(trip: Trip, recipes: Map<string, any>): MenuDay[] {
@@ -159,8 +166,34 @@ export function calculatePersonSummary(trip: Trip, recipes: Map<string, any>, pr
         const people = getEffectivePeople(trip, day, meal);
         totalPersonMeals += people;
         const recipe = recipes.get(meal.recipeId);
-        if (recipe?.caloriesPerServing) {
-          totalCalories += recipe.caloriesPerServing * people;
+        
+        // CR-1: расчёт ккал из продуктов по формуле ядра
+        if (recipe?.ingredients) {
+          let mealCalories = 0;
+          let hasAllKcal = true;
+          
+          for (const ri of recipe.ingredients) {
+            const ing = ri.ingredient;
+            if (!ing) continue;
+            
+            const amountPerMeal = calculateAmountPerPerson(ri.amount, recipe.baseServings, people);
+            const kcal = calculateKcal(
+              amountPerMeal,
+              ing.unit as UnitOfMeasure,
+              ing.kcalPer100g,
+              ing.pieceWeightG
+            );
+            
+            if (kcal === null) {
+              hasAllKcal = false;
+              break;
+            }
+            mealCalories += kcal;
+          }
+          
+          if (hasAllKcal) {
+            totalCalories += mealCalories;
+          }
         }
       }
     }
