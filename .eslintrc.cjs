@@ -14,24 +14,17 @@ module.exports = {
       files: ['src/**/*.{ts,tsx}'],
       excludedFiles: [
         'src/api/**/*',
-        // Временно — до завершения миграции Батчей 2-3:
+        // Временно — до завершения миграции Батча 3:
         'src/App.tsx',
         'src/store/AppContext.tsx',
         'src/data/mockData.ts',
-        'src/components/BindingWizard.tsx',
         'src/components/PriceOverridesTab.tsx',
         'src/components/SubstitutionModal.tsx',
         'src/components/ToastProvider.tsx',
         'src/components/ErrorBoundary.tsx',
-        'src/pages/AdminPage.tsx',
-        'src/pages/DashboardPage.tsx',
         'src/pages/ErrorsDemoPage.tsx',
-        'src/pages/IntegrationsPage.tsx',
-        'src/pages/ProductsPage.tsx',
         'src/pages/RecipesPage.tsx',
         'src/pages/SyncLogsPage.tsx',
-        'src/pages/TripDetailPage.tsx',
-        'src/pages/TripsPage.tsx',
       ],
       rules: {
         'no-restricted-imports': ['error', {
