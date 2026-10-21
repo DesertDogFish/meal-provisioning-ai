@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useToast } from './ToastProvider';
 import { NumberField } from './NumberField';
+import { api } from '../api/client';
 
 interface Candidate {
   code: string;
@@ -63,13 +64,8 @@ export function BindingWizard({ onClose }: Props) {
 
   const loadUnboundIngredients = async () => {
     try {
-      const response = await fetch('/api/v1/admin/ingredients?bound=false&sort=moneyWeight', {
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('accessToken')}` }
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setQueue(data.items || []);
-      }
+      const data = await api.get<any>('/admin/ingredients?bound=false&sort=moneyWeight');
+      setQueue(data.items || []);
     } catch (error) {
       console.error('Failed to load unbound ingredients:', error);
     }
@@ -77,14 +73,10 @@ export function BindingWizard({ onClose }: Props) {
 
   const loadSuggestions = async (ingredientId: string) => {
     try {
-      const response = await fetch(
-        `/api/v1/admin/integrations/off/suggest?ingredientId=${ingredientId}&limit=3`,
-        { headers: { 'Authorization': `Bearer ${localStorage.getItem('accessToken')}` } }
+      const data = await api.get<Candidate[]>(
+        `/admin/integrations/off/suggest?ingredientId=${ingredientId}&limit=3`
       );
-      if (response.ok) {
-        const data = await response.json();
-        setSuggestions(data);
-      }
+      setSuggestions(data);
     } catch (error) {
       console.error('Failed to load suggestions:', error);
     }
@@ -94,29 +86,16 @@ export function BindingWizard({ onClose }: Props) {
     if (!cur) return;
     setLoading(true);
     try {
-      const response = await fetch(`/api/v1/admin/ingredients/${cur.id}/binding`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
-        },
-        body: JSON.stringify({
-          externalCode,
-          packSize,
-          packUnit,
-          roundToPacks: round && packSize != null
-        })
+      await api.put(`/admin/ingredients/${cur.id}/binding`, {
+        externalCode,
+        packSize,
+        packUnit,
+        roundToPacks: round && packSize != null
       });
-
-      if (response.ok) {
-        showSuccess('Привязка создана');
-        next();
-      } else {
-        const error = await response.json();
-        showError(error.detail || 'Failed to bind');
-      }
-    } catch (error) {
-      showError('Network error');
+      showSuccess('Привязка создана');
+      next();
+    } catch (error: any) {
+      showError(error.detail || 'Failed to bind');
     } finally {
       setLoading(false);
     }

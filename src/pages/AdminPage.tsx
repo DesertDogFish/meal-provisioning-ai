@@ -1,20 +1,60 @@
-import { useState } from 'react';
-import { useApp, generateId } from '../store/AppContext';
+import { useState, useEffect } from 'react';
 import { DollarSign, BookOpen, Download, Plus, Trash2, Check, X, AlertTriangle } from 'lucide-react';
 import { UnitOfMeasure, MealType } from '../types';
 import { ConflictError, ValidationError } from '../utils/errors';
 import { validateRecipe } from '../utils/validation';
 import { useToast } from '../components/ToastProvider';
+import { api } from '../api/client';
 
 type AdminTab = 'prices' | 'recipes' | 'import';
+
+interface Ingredient {
+  id: string;
+  name: string;
+  unit: UnitOfMeasure;
+}
+
+interface Recipe {
+  id: string;
+  name: string;
+  mealType: MealType;
+  baseServings: number;
+  caloriesPerServing?: number;
+  source: string;
+  ingredients: Array<{ ingredientId: string; amount: number }>;
+}
+
+interface Price {
+  id: string;
+  ingredientId: string;
+  pricePerUnit: number;
+  currency: string;
+  effectiveFrom: string;
+}
+
+interface StagingRecipe {
+  id: string;
+  suggestedName: string;
+  source: string;
+  status: string;
+  suggestedMealType?: MealType;
+  suggestedIngredients?: Array<{ mappedIngredientId?: string; amount: number }>;
+}
 
 const unitLabels: Record<UnitOfMeasure, string> = { KG: 'кг', L: 'л', PCS: 'шт', PACK: 'уп' };
 const mealTypeLabels: Record<MealType, string> = { BREAKFAST: 'Завтрак', LUNCH: 'Обед', DINNER: 'Ужин', SNACK: 'Перекус' };
 
 export default function AdminPage() {
-  const { state, dispatch } = useApp();
   const { showError, showSuccess } = useToast();
   const [tab, setTab] = useState<AdminTab>('prices');
+  
+  // Data
+  const [ingredients, setIngredients] = useState<Ingredient[]>([]);
+  const [recipes, setRecipes] = useState<Recipe[]>([]);
+  const [prices, setPrices] = useState<Price[]>([]);
+  const [stagingRecipes, setStagingRecipes] = useState<StagingRecipe[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   
   // Price form
   const [showPriceForm, setShowPriceForm] = useState(false);
@@ -30,19 +70,67 @@ export default function AdminPage() {
     { id: 'import' as AdminTab, label: 'Импорт', icon: <Download size={16} /> },
   ];
 
-  const isRecipeUsed = (recId: string) => state.trips.some(t => t.days?.some(d => d.meals?.some(m => m.recipeId === recId)));
+  // Загрузка данных
+  useEffect(() => {
+    loadData();
+  }, []);
 
-  const handleSavePrice = () => {
-    if (!priceForm.ingredientId || !priceForm.pricePerUnit || !priceForm.effectiveFrom) return;
-    dispatch({
-      type: 'ADD_PRICE',
-      payload: { id: generateId(), ingredientId: priceForm.ingredientId, pricePerUnit: parseFloat(priceForm.pricePerUnit), currency: priceForm.currency, effectiveFrom: priceForm.effectiveFrom }
-    });
-    setShowPriceForm(false);
-    setPriceForm({ ingredientId: '', pricePerUnit: '', currency: 'RUB', effectiveFrom: '' });
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const [ingredientsData, recipesData, pricesData, stagingData] = await Promise.all([
+        api.get<any>('/admin/products'),
+        api.get<Recipe[]>('/recipes'),
+        api.get<Price[]>('/admin/prices'),
+        api.get<StagingRecipe[]>('/admin/staging')
+      ]);
+      
+      setIngredients(ingredientsData.content || ingredientsData);
+      setRecipes(recipesData);
+      setPrices(pricesData);
+      setStagingRecipes(stagingData);
+    } catch (err) {
+      console.error('Failed to load data:', err);
+      setError('Не удалось загрузить данные');
+      showError('Ошибка загрузки данных');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleSaveRecipe = () => {
+  const isRecipeUsed = async (recId: string): Promise<boolean> => {
+    try {
+      const trips = await api.get<any[]>('/trips');
+      return trips.some(t => t.days?.some((d: any) => d.meals?.some((m: any) => m.recipeId === recId)));
+    } catch (err) {
+      console.error('Failed to check recipe usage:', err);
+      return false;
+    }
+  };
+
+  const handleSavePrice = async () => {
+    if (!priceForm.ingredientId || !priceForm.pricePerUnit || !priceForm.effectiveFrom) return;
+    
+    try {
+      await api.post('/admin/prices', {
+        ingredientId: priceForm.ingredientId,
+        pricePerUnit: parseFloat(priceForm.pricePerUnit),
+        currency: priceForm.currency,
+        effectiveFrom: priceForm.effectiveFrom
+      });
+      
+      setShowPriceForm(false);
+      setPriceForm({ ingredientId: '', pricePerUnit: '', currency: 'RUB', effectiveFrom: '' });
+      showSuccess('Цена добавлена');
+      await loadData();
+    } catch (err: any) {
+      showError(err.detail || 'Ошибка сохранения цены');
+    }
+  };
+
+  const handleSaveRecipe = async () => {
     // Validate recipe data
     const errors = validateRecipe({
       name: recForm.name,
@@ -58,74 +146,102 @@ export default function AdminPage() {
 
     const recipeIngredients = recForm.ingredients
       .filter(i => i.ingredientId && i.amount)
-      .map(i => ({ ingredientId: i.ingredientId, amount: parseFloat(i.amount), ingredient: state.ingredients.find(ing => ing.id === i.ingredientId) }));
+      .map(i => ({ ingredientId: i.ingredientId, amount: parseFloat(i.amount) }));
     
-    dispatch({
-      type: 'ADD_RECIPE',
-      payload: {
-        id: generateId(),
+    try {
+      await api.post('/admin/recipes', {
         name: recForm.name,
         mealType: recForm.mealType,
         baseServings: recForm.baseServings,
         caloriesPerServing: recForm.caloriesPerServing ? parseInt(recForm.caloriesPerServing) : undefined,
-        source: 'MANUAL',
-        ingredients: recipeIngredients as any,
-        createdAt: new Date().toISOString(),
-      }
-    });
-    setShowRecForm(false);
-    setRecForm({ name: '', mealType: 'LUNCH', baseServings: 4, caloriesPerServing: '', ingredients: [{ ingredientId: '', amount: '' }] });
-    showSuccess('Рецепт добавлен');
+        ingredients: recipeIngredients
+      });
+      
+      setShowRecForm(false);
+      setRecForm({ name: '', mealType: 'LUNCH', baseServings: 4, caloriesPerServing: '', ingredients: [{ ingredientId: '', amount: '' }] });
+      showSuccess('Рецепт добавлен');
+      await loadData();
+    } catch (err: any) {
+      showError(err.detail || 'Ошибка сохранения рецепта');
+    }
   };
 
-  const handleDeleteRecipe = (id: string) => {
-    if (isRecipeUsed(id)) {
-      const trips = state.trips.filter(t => t.days?.some(d => d.meals?.some(m => m.recipeId === id)));
+  const handleDeleteRecipe = async (id: string) => {
+    const used = await isRecipeUsed(id);
+    if (used) {
+      const recipe = recipes.find(r => r.id === id);
       const conflictError = new ConflictError(
-        `Рецепт "${state.recipes.find(r => r.id === id)?.name}" используется в походах и не может быть удалён`,
-        trips.map(t => ({ resourceType: 'trip', resourceId: t.id, resourceName: t.name }))
+        `Рецепт "${recipe?.name}" используется в походах и не может быть удалён`
       );
       showError(conflictError.toProblemDetail());
       return;
     }
-    dispatch({ type: 'DELETE_RECIPE', payload: id });
-    showSuccess('Рецепт удалён');
-  };
-
-  const handleApproveStaging = (stagingId: string) => {
-    const staging = state.stagingRecipes.find(s => s.id === stagingId);
-    if (!staging) return;
-    const recipeIngredients = (staging.suggestedIngredients || [])
-      .filter(si => si.mappedIngredientId)
-      .map(si => ({
-        ingredientId: si.mappedIngredientId!,
-        amount: si.amount,
-        ingredient: state.ingredients.find(i => i.id === si.mappedIngredientId)
-      }));
     
-    dispatch({
-      type: 'APPROVE_STAGING',
-      payload: {
-        stagingId,
-        recipe: {
-          id: generateId(),
-          name: staging.suggestedName || 'Imported recipe',
-          mealType: staging.suggestedMealType || 'DINNER',
-          baseServings: 4,
-          source: staging.source,
-          ingredients: recipeIngredients as any,
-          createdAt: new Date().toISOString(),
-        }
-      }
-    });
-  };
-
-  const handleRejectStaging = (stagingId: string) => {
-    const reason = prompt('Причина отклонения:');
-    if (reason !== null) {
-      dispatch({ type: 'REJECT_STAGING', payload: { stagingId, reason } });
+    try {
+      await api.del(`/admin/recipes/${id}`);
+      showSuccess('Рецепт удалён');
+      await loadData();
+    } catch (err: any) {
+      showError(err.detail || 'Ошибка удаления рецепта');
     }
   };
+
+  const handleApproveStaging = async (stagingId: string) => {
+    const staging = stagingRecipes.find(s => s.id === stagingId);
+    if (!staging) return;
+    
+    try {
+      await api.post(`/admin/staging/${stagingId}/approve`, {
+        name: staging.suggestedName || 'Imported recipe',
+        mealType: staging.suggestedMealType || 'DINNER',
+        baseServings: 4,
+        ingredients: (staging.suggestedIngredients || [])
+          .filter(si => si.mappedIngredientId)
+          .map(si => ({ ingredientId: si.mappedIngredientId!, amount: si.amount }))
+      });
+      
+      showSuccess('Рецепт одобрен');
+      await loadData();
+    } catch (err: any) {
+      showError(err.detail || 'Ошибка одобрения рецепта');
+    }
+  };
+
+  const handleRejectStaging = async (stagingId: string) => {
+    const reason = prompt('Причина отклонения:');
+    if (reason !== null) {
+      try {
+        await api.post(`/admin/staging/${stagingId}/reject`, { reason });
+        showSuccess('Рецепт отклонён');
+        await loadData();
+      } catch (err: any) {
+        showError(err.detail || 'Ошибка отклонения рецепта');
+      }
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl md:text-3xl font-bold" style={{ color: 'var(--text)' }}>Администрирование</h1>
+          <p className="mt-1" style={{ color: 'var(--muted)' }}>Загрузка...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl md:text-3xl font-bold" style={{ color: 'var(--text)' }}>Администрирование</h1>
+          <p className="mt-1" style={{ color: 'var(--fire)' }}>{error}</p>
+          <button onClick={loadData} className="ghost-btn mt-4">Повторить</button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -156,7 +272,7 @@ export default function AdminPage() {
       {tab === 'prices' && (
         <div className="space-y-4">
           <div className="flex justify-between items-center">
-            <p className="text-sm" style={{ color: 'var(--muted)' }}>{state.prices.length} цен</p>
+            <p className="text-sm" style={{ color: 'var(--muted)' }}>{prices.length} цен</p>
             <button onClick={() => setShowPriceForm(true)}
               className="flex items-center gap-2 px-4 py-2 rounded-full text-sm" style={{ background: 'linear-gradient(90deg, var(--w1), var(--w2))', color: '#04121A' }}>
               <Plus size={16} /> Добавить цену
@@ -169,7 +285,7 @@ export default function AdminPage() {
                 <select value={priceForm.ingredientId} onChange={e => setPriceForm({ ...priceForm, ingredientId: e.target.value })}
                   className="px-3 py-2 rounded-lg text-sm outline-none" style={{ background: 'var(--elev)', border: '1px solid var(--border)', color: 'var(--text)' }}>
                   <option value="">Компонент...</option>
-                  {state.ingredients.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
+                  {ingredients.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
                 </select>
                 <input type="number" placeholder="Цена" value={priceForm.pricePerUnit} onChange={e => setPriceForm({ ...priceForm, pricePerUnit: e.target.value })}
                   className="px-3 py-2 rounded-lg text-sm outline-none" style={{ background: 'var(--elev)', border: '1px solid var(--border)', color: 'var(--text)' }} />
@@ -200,8 +316,8 @@ export default function AdminPage() {
                 </tr>
               </thead>
               <tbody style={{ borderTop: '1px solid var(--border)' }}>
-                {state.prices.map(price => {
-                  const ing = state.ingredients.find(i => i.id === price.ingredientId);
+                {prices.map(price => {
+                  const ing = ingredients.find(i => i.id === price.ingredientId);
                   return (
                     <tr key={price.id} style={{ borderTop: '1px solid var(--border)' }}>
                       <td className="px-4 py-3" style={{ color: 'var(--text)' }}>{ing?.name || '?'}</td>
@@ -221,7 +337,7 @@ export default function AdminPage() {
       {tab === 'recipes' && (
         <div className="space-y-4">
           <div className="flex justify-between items-center">
-            <p className="text-sm" style={{ color: 'var(--muted)' }}>{state.recipes.length} рецептов</p>
+            <p className="text-sm" style={{ color: 'var(--muted)' }}>{recipes.length} рецептов</p>
             <button onClick={() => setShowRecForm(true)}
               className="flex items-center gap-2 px-4 py-2 rounded-full text-sm" style={{ background: 'linear-gradient(90deg, var(--w1), var(--w2))', color: '#04121A' }}>
               <Plus size={16} /> Новый рецепт
@@ -254,7 +370,7 @@ export default function AdminPage() {
                     <select value={ri.ingredientId} onChange={e => { const n = [...recForm.ingredients]; n[idx].ingredientId = e.target.value; setRecForm({ ...recForm, ingredients: n }); }}
                       className="flex-1 px-3 py-2 rounded-lg text-sm outline-none" style={{ background: 'var(--elev)', border: '1px solid var(--border)', color: 'var(--text)' }}>
                       <option value="">Компонент...</option>
-                      {state.ingredients.map(i => <option key={i.id} value={i.id}>{i.name} ({unitLabels[i.unit]})</option>)}
+                      {ingredients.map(i => <option key={i.id} value={i.id}>{i.name} ({unitLabels[i.unit]})</option>)}
                     </select>
                     <input type="number" step="0.001" placeholder="Кол-во" value={ri.amount} onChange={e => { const n = [...recForm.ingredients]; n[idx].amount = e.target.value; setRecForm({ ...recForm, ingredients: n }); }}
                       className="w-24 px-3 py-2 rounded-lg text-sm outline-none" style={{ background: 'var(--elev)', border: '1px solid var(--border)', color: 'var(--text)' }} />
@@ -275,7 +391,7 @@ export default function AdminPage() {
           )}
 
           <div className="space-y-2">
-            {state.recipes.map(recipe => (
+            {recipes.map(recipe => (
               <div key={recipe.id} className="rounded-xl p-4" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
                 <div className="flex items-center justify-between">
                   <div>
@@ -287,7 +403,6 @@ export default function AdminPage() {
                     <p className="text-sm mt-1" style={{ color: 'var(--muted)' }}>{recipe.baseServings} порций • {recipe.ingredients.length} ингр.</p>
                   </div>
                   <div className="flex items-center gap-1">
-                    {isRecipeUsed(recipe.id) && <span title="Используется в походах"><AlertTriangle size={14} className="text-amber-500" /></span>}
                     <button onClick={() => handleDeleteRecipe(recipe.id)} className="p-1.5 rounded" style={{ color: 'var(--muted)' }}><Trash2 size={14} /></button>
                   </div>
                 </div>
@@ -308,7 +423,7 @@ export default function AdminPage() {
 
           {/* Staging recipes */}
           <div className="space-y-4">
-            {state.stagingRecipes.map(staging => (
+            {stagingRecipes.map(staging => (
               <div key={staging.id} className="rounded-xl p-5" style={{ 
                 background: 'var(--surface)', 
                 border: `1px solid ${
@@ -330,7 +445,7 @@ export default function AdminPage() {
                         {staging.status === 'PENDING' ? 'Ожидает' : staging.status === 'APPROVED' ? 'Одобрен' : 'Отклонён'}
                       </span>
                     </div>
-                    <p className="text-sm mt-1" style={{ color: 'var(--muted)' }}>Источник: {staging.source} • {new Date(staging.createdAt).toLocaleDateString('ru-RU')}</p>
+                    <p className="text-sm mt-1" style={{ color: 'var(--muted)' }}>Источник: {staging.source}</p>
                   </div>
                   {staging.status === 'PENDING' && (
                     <div className="flex gap-2">
@@ -349,46 +464,10 @@ export default function AdminPage() {
                 {staging.suggestedMealType && (
                   <p className="text-sm mb-2" style={{ color: 'var(--muted)' }}>Тип: {mealTypeLabels[staging.suggestedMealType]}</p>
                 )}
-
-                {/* Raw payload preview */}
-                <details className="mb-3">
-                  <summary className="text-xs cursor-pointer" style={{ color: 'var(--muted)' }}>Сырые данные (JSON)</summary>
-                  <pre className="mt-2 p-3 rounded-lg text-xs overflow-x-auto" style={{ background: 'var(--elev)', color: 'var(--muted)' }}>
-                    {JSON.stringify(staging.rawPayload, null, 2)}
-                  </pre>
-                </details>
-
-                {/* Suggested ingredients */}
-                {staging.suggestedIngredients && (
-                  <div>
-                    <p className="text-sm font-medium mb-2" style={{ color: 'var(--muted)' }}>Предложенные ингредиенты:</p>
-                    <div className="space-y-1">
-                      {staging.suggestedIngredients.map((si, idx) => (
-                        <div key={idx} className="flex items-center justify-between px-3 py-2 rounded-lg text-sm" style={{
-                          background: si.mappedIngredientId ? 'rgba(52, 211, 153, 0.1)' : 'rgba(245, 158, 11, 0.1)'
-                        }}>
-                          <span style={{ color: 'var(--text)' }}>{si.externalName}</span>
-                          <div className="flex items-center gap-2">
-                            <span style={{ color: 'var(--muted)' }}>{si.amount} {unitLabels[si.unit]}</span>
-                            {si.mappedIngredientId ? (
-                              <span className="text-xs" style={{ color: 'var(--ok)' }}>→ {state.ingredients.find(i => i.id === si.mappedIngredientId)?.name}</span>
-                            ) : (
-                              <span className="text-xs" style={{ color: 'var(--fire)' }}>не сопоставлен</span>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {staging.rejectionReason && (
-                  <p className="text-sm mt-2" style={{ color: '#FCA5A5' }}>Причина: {staging.rejectionReason}</p>
-                )}
               </div>
             ))}
 
-            {state.stagingRecipes.length === 0 && (
+            {stagingRecipes.length === 0 && (
               <div className="text-center py-12 rounded-xl" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
                 <Download size={48} className="mx-auto mb-4" style={{ color: 'var(--muted)' }} />
                 <p style={{ color: 'var(--muted)' }}>Нет черновиков для модерации</p>

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { useApp } from '../store/AppContext';
 import { Wifi, WifiOff, RefreshCw, Search, Link, Unlink, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
 import { useToast } from '../components/ToastProvider';
+import { api } from '../api/client';
 
 interface Integration {
   id: number;
@@ -34,80 +34,65 @@ interface ExternalProduct {
   imageUrl: string | null;
 }
 
+interface Ingredient {
+  id: string;
+  name: string;
+}
+
 export default function IntegrationsPage() {
-  const { state } = useApp();
   const { showError, showSuccess } = useToast();
   const [integrations, setIntegrations] = useState<Integration[]>([]);
   const [syncLogs, setSyncLogs] = useState<SyncLog[]>([]);
+  const [ingredients, setIngredients] = useState<Ingredient[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<ExternalProduct[]>([]);
-  const [selectedIngredient, setSelectedIngredient] = useState<number | null>(null);
+  const [selectedIngredient, setSelectedIngredient] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
-
-  // Получаем токен из контекста
-  const getAuthHeaders = () => {
-    const token = state.isAuthenticated ? 'mock-token' : null; // В реальном приложении токен хранится в state
-    return {
-      'Authorization': token ? `Bearer ${token}` : '',
-      'Content-Type': 'application/json'
-    };
-  };
 
   useEffect(() => {
     loadIntegrations();
     loadSyncLogs();
+    loadIngredients();
   }, []);
 
   const loadIntegrations = async () => {
     try {
-      const response = await fetch('/api/v1/admin/integrations', {
-        headers: getAuthHeaders()
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setIntegrations(data);
-      } else {
-        const error = await response.json().catch(() => ({ detail: 'Failed to load integrations' }));
-        showError(error.detail || 'Failed to load integrations');
-      }
+      const data = await api.get<Integration[]>('/admin/integrations');
+      setIntegrations(data);
     } catch (error) {
       console.error('Failed to load integrations:', error);
-      showError('Network error while loading integrations');
+      showError('Failed to load integrations');
     }
   };
 
   const loadSyncLogs = async () => {
     try {
-      const response = await fetch('/api/v1/admin/integrations/sync-logs', {
-        headers: getAuthHeaders()
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setSyncLogs(data);
-      }
+      const data = await api.get<SyncLog[]>('/admin/integrations/sync-logs');
+      setSyncLogs(data);
     } catch (error) {
       console.error('Failed to load sync logs:', error);
+    }
+  };
+
+  const loadIngredients = async () => {
+    try {
+      const data = await api.get<any>('/admin/products');
+      setIngredients(data.content || data);
+    } catch (error) {
+      console.error('Failed to load ingredients:', error);
     }
   };
 
   const handleConnect = async (provider: string) => {
     setLoading(true);
     try {
-      const response = await fetch(`/api/v1/admin/integrations/${provider}/connect`, {
-        method: 'POST',
-        headers: getAuthHeaders()
-      });
-      if (response.ok) {
-        await loadIntegrations();
-        showSuccess(`Successfully connected to ${provider}`);
-      } else {
-        const error = await response.json().catch(() => ({ detail: 'Failed to connect' }));
-        showError(error.detail || 'Failed to connect');
-      }
-    } catch (error) {
+      await api.post(`/admin/integrations/${provider}/connect`);
+      await loadIntegrations();
+      showSuccess(`Successfully connected to ${provider}`);
+    } catch (error: any) {
       console.error('Failed to connect:', error);
-      showError('Network error while connecting');
+      showError(error.detail || 'Failed to connect');
     } finally {
       setLoading(false);
     }
@@ -116,20 +101,12 @@ export default function IntegrationsPage() {
   const handleDisconnect = async (provider: string) => {
     setLoading(true);
     try {
-      const response = await fetch(`/api/v1/admin/integrations/${provider}/disconnect`, {
-        method: 'POST',
-        headers: getAuthHeaders()
-      });
-      if (response.ok) {
-        await loadIntegrations();
-        showSuccess(`Successfully disconnected from ${provider}`);
-      } else {
-        const error = await response.json().catch(() => ({ detail: 'Failed to disconnect' }));
-        showError(error.detail || 'Failed to disconnect');
-      }
-    } catch (error) {
+      await api.post(`/admin/integrations/${provider}/disconnect`);
+      await loadIntegrations();
+      showSuccess(`Successfully disconnected from ${provider}`);
+    } catch (error: any) {
       console.error('Failed to disconnect:', error);
-      showError('Network error while disconnecting');
+      showError(error.detail || 'Failed to disconnect');
     } finally {
       setLoading(false);
     }
@@ -138,22 +115,13 @@ export default function IntegrationsPage() {
   const handleSyncPrices = async (provider: string) => {
     setSyncing(true);
     try {
-      const response = await fetch(`/api/v1/admin/integrations/${provider}/sync/prices`, {
-        method: 'POST',
-        headers: getAuthHeaders()
-      });
-      if (response.ok) {
-        const log = await response.json();
-        await loadIntegrations();
-        await loadSyncLogs();
-        showSuccess(`Sync completed: ${log.createdCount} created, ${log.updatedCount} updated, ${log.errorCount} errors`);
-      } else {
-        const error = await response.json().catch(() => ({ detail: 'Failed to sync prices' }));
-        showError(error.detail || 'Failed to sync prices');
-      }
-    } catch (error) {
+      const log = await api.post<any>(`/admin/integrations/${provider}/sync/prices`);
+      await loadIntegrations();
+      await loadSyncLogs();
+      showSuccess(`Sync completed: ${log.createdCount} created, ${log.updatedCount} updated, ${log.errorCount} errors`);
+    } catch (error: any) {
       console.error('Failed to sync prices:', error);
-      showError('Network error while syncing prices');
+      showError(error.detail || 'Failed to sync prices');
     } finally {
       setSyncing(false);
     }
@@ -163,23 +131,16 @@ export default function IntegrationsPage() {
     if (!searchQuery.trim() || !selectedIngredient) return;
     
     try {
-      const response = await fetch(
-        `/api/v1/admin/integrations/OFF/products/search?query=${encodeURIComponent(searchQuery)}&limit=20`,
-        { headers: getAuthHeaders() }
+      const data = await api.get<ExternalProduct[]>(
+        `/admin/integrations/OFF/products/search?query=${encodeURIComponent(searchQuery)}&limit=20`
       );
-      if (response.ok) {
-        const data = await response.json();
-        setSearchResults(data);
-        if (data.length === 0) {
-          showError('No products found');
-        }
-      } else {
-        const error = await response.json().catch(() => ({ detail: 'Failed to search products' }));
-        showError(error.detail || 'Failed to search products');
+      setSearchResults(data);
+      if (data.length === 0) {
+        showError('No products found');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to search products:', error);
-      showError('Network error while searching products');
+      showError(error.detail || 'Failed to search products');
     }
   };
 
@@ -187,29 +148,20 @@ export default function IntegrationsPage() {
     if (!selectedIngredient) return;
     
     try {
-      const response = await fetch(`/api/v1/admin/integrations/ingredients/${selectedIngredient}/mapping`, {
-        method: 'POST',
-        headers: getAuthHeaders(),
-        body: JSON.stringify({
-          provider: 'OFF',
-          externalCode: product.code,
-          packAmount: product.packAmount,
-          packUnit: product.packUnit
-        })
+      await api.post(`/admin/integrations/ingredients/${selectedIngredient}/mapping`, {
+        provider: 'OFF',
+        externalCode: product.code,
+        packAmount: product.packAmount,
+        packUnit: product.packUnit
       });
       
-      if (response.ok) {
-        setSearchResults([]);
-        setSearchQuery('');
-        setSelectedIngredient(null);
-        showSuccess('Product mapping created successfully');
-      } else {
-        const error = await response.json().catch(() => ({ detail: 'Failed to create mapping' }));
-        showError(error.detail || 'Failed to create mapping');
-      }
-    } catch (error) {
+      setSearchResults([]);
+      setSearchQuery('');
+      setSelectedIngredient(null);
+      showSuccess('Product mapping created successfully');
+    } catch (error: any) {
       console.error('Failed to create mapping:', error);
-      showError('Network error while creating mapping');
+      showError(error.detail || 'Failed to create mapping');
     }
   };
 
@@ -346,12 +298,12 @@ export default function IntegrationsPage() {
               </label>
               <select
                 value={selectedIngredient || ''}
-                onChange={e => setSelectedIngredient(e.target.value ? parseInt(e.target.value) : null)}
+                onChange={e => setSelectedIngredient(e.target.value || null)}
                 className="w-full px-3 py-2 rounded-lg outline-none"
                 style={{ background: 'var(--elev)', border: '1px solid var(--border)', color: 'var(--text)' }}
               >
                 <option value="">Выберите ингредиент...</option>
-                {state.ingredients.map(ing => (
+                {ingredients.map(ing => (
                   <option key={ing.id} value={ing.id}>{ing.name}</option>
                 ))}
               </select>
