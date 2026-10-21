@@ -55,12 +55,12 @@ jobs:
       - run: npm ci
       
       - name: Contract vs MOCK
-        run: npx vitest run contract --reporter=verbose
+        run: npm run test:contract
         env:
           CONTRACT_TARGET: mock
       
       - name: Contract vs REAL
-        run: npx vitest run contract --reporter=verbose
+        run: npm run test:contract
         env:
           CONTRACT_TARGET: real
           VITE_API_URL: http://localhost:8080
