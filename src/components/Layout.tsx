@@ -3,12 +3,14 @@ import { useApp } from '../store/AppContext';
 import { Compass, LogOut, Menu, Mountain, Ship } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { api } from '../api/client';
+import { ApiModeModal } from './ApiModeModal';
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const { state, dispatch } = useApp();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [apiMode, setApiMode] = useState<'mock' | 'real'>('mock');
+  const [showModeModal, setShowModeModal] = useState(false);
   const isAdmin = state.currentUser?.role === 'ADMIN';
 
   useEffect(() => {
@@ -127,12 +129,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             fontWeight: 600,
             boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
           }}
-          onClick={() => {
-            const newMode = apiMode === 'mock' ? 'real' : 'mock';
-            api.setMode(newMode);
-            setApiMode(newMode);
-          }}
-          title="Клик для переключения режима"
+          onClick={() => setShowModeModal(true)}
+          title="Клик для настройки режима"
         >
           <div 
             className="w-2 h-2 rounded-full"
@@ -145,6 +143,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             {apiMode === 'mock' ? 'демо-режим' : 'бэкенд'}
           </span>
         </div>
+
+        {showModeModal && <ApiModeModal onClose={() => setShowModeModal(false)} />}
         
         <main className="flex-1 p-4 md:p-6 lg:p-8 overflow-auto">
           {children}

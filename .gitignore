@@ -42,5 +42,15 @@ docker-compose.override.yml
 *.tmp
 *.bak
 *.cache
+
+# Coverage
+coverage/
+.nyc_output/
+
+# Misc
+*.log
+*.pid
+*.seed
+*.pid.lock
 .next/
 build/
