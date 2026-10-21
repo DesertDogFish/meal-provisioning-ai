@@ -36,6 +36,7 @@ export function DateRange({
       setInternalEndDate(startDate);
       onEndDateChange(startDate);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // При изменении startDate

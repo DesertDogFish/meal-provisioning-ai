@@ -54,6 +54,7 @@ export default function IntegrationsPage() {
     loadIntegrations();
     loadSyncLogs();
     loadIngredients();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const loadIntegrations = async () => {

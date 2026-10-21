@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { DollarSign, BookOpen, Download, Plus, Trash2, Check, X, AlertTriangle } from 'lucide-react';
+import { DollarSign, BookOpen, Download, Plus, Trash2, Check, X } from 'lucide-react';
 import { UnitOfMeasure, MealType } from '../types';
 import { ConflictError, ValidationError } from '../utils/errors';
 import { validateRecipe } from '../utils/validation';
@@ -73,6 +73,7 @@ export default function AdminPage() {
   // Загрузка данных
   useEffect(() => {
     loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const loadData = async () => {

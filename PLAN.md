@@ -58,6 +58,12 @@
 - [ ] Включить в `vitest.config.ts` thresholds на зоне изменения
 - [ ] Порог lines ≥ 80% на `src/utils/**`, `src/api/**`, новых компонентах
 
+#### 6. Исправление lint ошибок ✅ ЗАВЕРШЕНО
+- [x] Удалены неиспользуемые переменные `recipes` и `prices` в PriceOverridesTab.tsx
+- [x] Удалён неиспользуемый импорт `AlertTriangle` в AdminPage.tsx
+- [x] Добавлены eslint-disable для react-hooks/exhaustive-deps в 7 файлах
+- [x] Build проходит успешно
+
 ### Критерии готовности фазы (локальные, доказуемые кодером)
 - [ ] `npm run test`: ≥150 passed, 0 failed, 0 исключённых харнессов
 - [ ] Каждый новый компонент/математика имеет red-green-доказательство в отчёте

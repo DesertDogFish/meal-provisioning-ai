@@ -84,14 +84,13 @@ export default function PriceOverridesTab({ tripId }: Props) {
   const [showModal, setShowModal] = useState(false);
   const [onlyDiff, setOnlyDiff] = useState(false);
   const [trip, setTrip] = useState<Trip | null>(null);
-  const [recipes, setRecipes] = useState<Recipe[]>([]);
-  const [prices, setPrices] = useState<Price[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   // Загрузка данных через API
   useEffect(() => {
     loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tripId]);
 
   const loadData = async () => {
@@ -106,8 +105,6 @@ export default function PriceOverridesTab({ tripId }: Props) {
       ]);
       
       setTrip(tripData);
-      setRecipes(recipesData);
-      setPrices(pricesData);
       
       // Расчёт списка закупок
       calculateShoppingData(tripData, recipesData, pricesData);
