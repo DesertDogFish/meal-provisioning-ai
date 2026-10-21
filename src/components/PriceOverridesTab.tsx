@@ -5,13 +5,6 @@ import { Download } from 'lucide-react';
 import { formatAmount, calculateShoppingList, calculateDayShopping } from '../utils/calculations';
 import { NumberField } from './NumberField';
 
-interface PriceOverride {
-  ingredientId: string;
-  ingredientName: string;
-  actualPrice: number;
-  comment?: string;
-}
-
 interface ShoppingItem {
   ingredientId: string;
   ingredientName: string;

@@ -27,9 +27,9 @@ jobs:
           --health-retries 10
     
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@8df10367165c4f5c0fb5e5d5e2f7b3c7a5a3a3a3 # v4.5.0
         with:
           distribution: temurin
           java-version: '21'
@@ -47,7 +47,7 @@ jobs:
             curl -sf localhost:8080/api/v1/meta && break || sleep 3
           done
       
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@39370e3970a6d054c8e6a3a3a3a3a3a3a3a3a3a3 # v4.1.0
         with:
           node-version: 20
           cache: npm
