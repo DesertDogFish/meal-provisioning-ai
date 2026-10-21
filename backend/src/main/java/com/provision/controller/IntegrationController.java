@@ -7,11 +7,14 @@ import com.provision.integration.ExternalProductDto;
 import com.provision.service.IntegrationService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/v1/admin/integrations")
@@ -61,8 +64,13 @@ public class IntegrationController {
     }
 
     @PostMapping("/{provider}/sync/prices")
-    public SyncLogDto syncPrices(@PathVariable String provider) {
-        return integrationService.syncPrices(provider);
+    public ResponseEntity<Map<String, Long>> syncPrices(
+            @PathVariable String provider,
+            @AuthenticationPrincipal com.provision.entity.User user
+    ) {
+        var syncLog = integrationService.syncPrices(provider, user.getId());
+        return ResponseEntity.status(HttpStatus.ACCEPTED)
+                .body(Map.of("logId", syncLog.getId()));
     }
 
     @GetMapping("/sync-logs")

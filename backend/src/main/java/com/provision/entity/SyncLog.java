@@ -29,6 +29,14 @@ public class SyncLog {
     @Column(nullable = false, length = 20)
     private String status;
 
+    @Column(name = "triggered_by", nullable = false, length = 20)
+    @Builder.Default
+    private String triggeredBy = "MANUAL";
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "triggered_user")
+    private User triggeredUser;
+
     @Column(name = "started_at", nullable = false)
     private LocalDateTime startedAt;
 

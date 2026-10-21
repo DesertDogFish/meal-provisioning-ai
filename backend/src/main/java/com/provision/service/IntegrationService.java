@@ -31,6 +31,7 @@ public class IntegrationService {
     private final IngredientPriceRepository priceRepository;
     private final IngredientRepository ingredientRepository;
     private final SyncLogRepository syncLogRepository;
+    private final UserRepository userRepository;
 
     public IntegrationService(
             List<PriceProvider> providerList,
@@ -39,7 +40,8 @@ public class IntegrationService {
             IngredientMappingRepository mappingRepository,
             IngredientPriceRepository priceRepository,
             IngredientRepository ingredientRepository,
-            SyncLogRepository syncLogRepository) {
+            SyncLogRepository syncLogRepository,
+            UserRepository userRepository) {
         this.providers = new HashMap<>();
         for (PriceProvider provider : providerList) {
             this.providers.put(provider.code(), provider);
@@ -50,6 +52,7 @@ public class IntegrationService {
         this.priceRepository = priceRepository;
         this.ingredientRepository = ingredientRepository;
         this.syncLogRepository = syncLogRepository;
+        this.userRepository = userRepository;
         log.info("Loaded {} price providers: {}", providers.size(), providers.keySet());
     }
 
@@ -163,19 +166,31 @@ public class IntegrationService {
     }
 
     @Transactional
-    public SyncLogDto syncPrices(String providerCode) {
+    public SyncLog syncPrices(String providerCode, Long userId) {
         Integration integration = integrationRepository.findByProvider(providerCode)
                 .orElseThrow(() -> new NotFoundException("Integration not found: " + providerCode));
 
         if (!"CONNECTED".equals(integration.getStatus())) {
-            throw new IllegalStateException("Provider is not connected");
+            throw new com.provision.exception.ConflictException("INTEGRATION_DISCONNECTED: Provider is not connected");
         }
+
+        // Проверка на параллельный запуск
+        Optional<SyncLog> runningSync = syncLogRepository.findRunningByProvider(providerCode);
+        if (runningSync.isPresent()) {
+            throw new com.provision.exception.ConflictException("SYNC_ALREADY_RUNNING: Sync is already running for provider " + providerCode);
+        }
+
+        // Получение пользователя
+        com.provision.entity.User user = userRepository.findById(userId)
+                .orElseThrow(() -> new NotFoundException("User not found"));
 
         // Создаём лог синхронизации
         SyncLog syncLog = SyncLog.builder()
                 .provider(providerCode)
                 .type("PRICES")
                 .status("RUNNING")
+                .triggeredBy("MANUAL")
+                .triggeredUser(user)
                 .startedAt(LocalDateTime.now())
                 .createdCount(0)
                 .updatedCount(0)
@@ -283,7 +298,7 @@ public class IntegrationService {
             throw e;
         }
 
-        return toSyncLogDto(syncLog);
+        return syncLog;
     }
 
     @Transactional(readOnly = true)

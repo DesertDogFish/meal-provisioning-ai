@@ -13,6 +13,7 @@ import AdminPage from './pages/AdminPage';
 import ErrorsDemoPage from './pages/ErrorsDemoPage';
 import IntegrationsPage from './pages/IntegrationsPage';
 import ProductsPage from './pages/ProductsPage';
+import SyncLogsPage from './pages/SyncLogsPage';
 
 function App() {
   return (
@@ -55,6 +56,11 @@ function App() {
           <Route path="/integrations" element={
             <ProtectedRoute adminOnly>
               <Layout><IntegrationsPage /></Layout>
+            </ProtectedRoute>
+          } />
+          <Route path="/sync-logs" element={
+            <ProtectedRoute adminOnly>
+              <Layout><SyncLogsPage /></Layout>
             </ProtectedRoute>
           } />
           <Route path="/errors-demo" element={
