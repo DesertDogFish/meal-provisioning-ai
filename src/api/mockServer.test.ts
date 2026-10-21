@@ -2,7 +2,7 @@
 // Проверяют что mock-сервер и бэкенд дают одинаковые результаты
 
 import { mockServer } from '../api/mockServer';
-import { calculateKcal, calculateRecipeKcal } from '../utils/calc';
+import { calculateKcal } from '../utils/calc';
 
 let passed = 0;
 let failed = 0;

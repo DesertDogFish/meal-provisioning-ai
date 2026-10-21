@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useReducer, ReactNode } from 'react';
-import { User, Ingredient, IngredientPrice, Recipe, Trip, StagingRecipe, IngredientMapping, MealType, UnitOfMeasure, RecipeSource, ProductCategory } from '../types';
-import { mockUsers, mockIngredients, mockPrices, mockRecipes, mockTrips, mockStagingRecipes, mockMappings, mockProductCategories } from '../data/mockData';
+import { User, Ingredient, IngredientPrice, Recipe, Trip, StagingRecipe, IngredientMapping, MealType, ProductCategory } from '../types';
+import { mockIngredients, mockPrices, mockRecipes, mockTrips, mockStagingRecipes, mockMappings, mockProductCategories } from '../data/mockData';
 
 interface AppState {
   currentUser: User | null;

@@ -1,10 +1,9 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { useApp } from '../store/AppContext';
 import { useToast } from '../components/ToastProvider';
 import { Plus, Edit2, Trash2, Search, X } from 'lucide-react';
 import { NumberField } from '../components/NumberField';
-import { Ingredient, UnitOfMeasure, ProductCategory } from '../types';
-import { api } from '../api/client';
+import { Ingredient, UnitOfMeasure } from '../types';
 
 interface Product extends Ingredient {
   categoryName: string;

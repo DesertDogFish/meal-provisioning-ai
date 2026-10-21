@@ -313,13 +313,17 @@ public class SummaryService {
             }
         }
 
+        // Создаём final копии для использования в лямбде
+        final int finalTotalPersonMeals = totalPersonMeals;
+        final BigDecimal finalTotalCalories = totalCalories;
+
         List<PersonSummaryResponse.PersonIngredientResponse> ingredients = shoppingList.items().stream()
                 .map(item -> {
                     BigDecimal amountPerDefaultPerson = item.totalAmount()
                             .divide(BigDecimal.valueOf(trip.getDefaultPeople()), 3, RoundingMode.HALF_UP);
                     
-                    BigDecimal amountPerPersonMeal = totalPersonMeals > 0
-                            ? item.totalAmount().divide(BigDecimal.valueOf(totalPersonMeals), 3, RoundingMode.HALF_UP)
+                    BigDecimal amountPerPersonMeal = finalTotalPersonMeals > 0
+                            ? item.totalAmount().divide(BigDecimal.valueOf(finalTotalPersonMeals), 3, RoundingMode.HALF_UP)
                             : BigDecimal.ZERO;
                     
                     BigDecimal plannedCostPerDefaultPerson = item.plannedCost() != null
@@ -330,12 +334,12 @@ public class SummaryService {
                             ? item.actualCost().divide(BigDecimal.valueOf(trip.getDefaultPeople()), 2, RoundingMode.HALF_UP)
                             : null;
                     
-                    BigDecimal plannedCostPerPersonMeal = item.plannedCost() != null && totalPersonMeals > 0
-                            ? item.plannedCost().divide(BigDecimal.valueOf(totalPersonMeals), 2, RoundingMode.HALF_UP)
+                    BigDecimal plannedCostPerPersonMeal = item.plannedCost() != null && finalTotalPersonMeals > 0
+                            ? item.plannedCost().divide(BigDecimal.valueOf(finalTotalPersonMeals), 2, RoundingMode.HALF_UP)
                             : null;
                     
-                    BigDecimal actualCostPerPersonMeal = item.actualCost() != null && totalPersonMeals > 0
-                            ? item.actualCost().divide(BigDecimal.valueOf(totalPersonMeals), 2, RoundingMode.HALF_UP)
+                    BigDecimal actualCostPerPersonMeal = item.actualCost() != null && finalTotalPersonMeals > 0
+                            ? item.actualCost().divide(BigDecimal.valueOf(finalTotalPersonMeals), 2, RoundingMode.HALF_UP)
                             : null;
                     
                     return new PersonSummaryResponse.PersonIngredientResponse(
@@ -357,16 +361,16 @@ public class SummaryService {
         BigDecimal actualCostPerDefaultPerson = shoppingList.totalActualCost()
                 .divide(BigDecimal.valueOf(trip.getDefaultPeople()), 2, RoundingMode.HALF_UP);
         
-        BigDecimal plannedCostPerPersonMeal = totalPersonMeals > 0
-                ? shoppingList.totalPlannedCost().divide(BigDecimal.valueOf(totalPersonMeals), 2, RoundingMode.HALF_UP)
+        BigDecimal plannedCostPerPersonMeal = finalTotalPersonMeals > 0
+                ? shoppingList.totalPlannedCost().divide(BigDecimal.valueOf(finalTotalPersonMeals), 2, RoundingMode.HALF_UP)
                 : BigDecimal.ZERO;
         
-        BigDecimal actualCostPerPersonMeal = totalPersonMeals > 0
-                ? shoppingList.totalActualCost().divide(BigDecimal.valueOf(totalPersonMeals), 2, RoundingMode.HALF_UP)
+        BigDecimal actualCostPerPersonMeal = finalTotalPersonMeals > 0
+                ? shoppingList.totalActualCost().divide(BigDecimal.valueOf(finalTotalPersonMeals), 2, RoundingMode.HALF_UP)
                 : BigDecimal.ZERO;
         
-        BigDecimal caloriesPerPersonMeal = totalPersonMeals > 0
-                ? totalCalories.divide(BigDecimal.valueOf(totalPersonMeals), 0, RoundingMode.HALF_UP)
+        BigDecimal caloriesPerPersonMeal = finalTotalPersonMeals > 0
+                ? finalTotalCalories.divide(BigDecimal.valueOf(finalTotalPersonMeals), 0, RoundingMode.HALF_UP)
                 : null;
 
         TripSummaryResponse tripSummary = new TripSummaryResponse(
@@ -376,7 +380,7 @@ public class SummaryService {
                 shoppingList.overriddenCount(),
                 shoppingList.hasMissingPrices(),
                 shoppingList.missingIngredients(),
-                totalPersonMeals,
+                finalTotalPersonMeals,
                 plannedCostPerDefaultPerson,
                 actualCostPerDefaultPerson,
                 plannedCostPerPersonMeal,

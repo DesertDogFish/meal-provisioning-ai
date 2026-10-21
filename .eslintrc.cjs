@@ -83,6 +83,30 @@ module.exports = {
       rules: {
         'no-restricted-imports': 'off'
       }
+    },
+    {
+      files: [
+        'src/**/*.{ts,tsx}'
+      ],
+      excludedFiles: [
+        'src/api/**/*',
+        'src/App.tsx',
+        'src/store/AppContext.tsx',
+        'src/pages/ProductsPage.tsx',
+        'src/pages/RecipesPage.tsx',
+        'src/pages/SyncLogsPage.tsx',
+        'src/pages/TripDetailPage.tsx',
+        'src/pages/TripsPage.tsx'
+      ],
+      rules: {
+        'no-restricted-imports': ['error', {
+          patterns: [
+            { group: ['**/AppContext'], message: 'Запрещено вне src/api/' },
+            { group: ['**/mockData'], message: 'Запрещено вне src/api/' },
+            { group: ['**/mockSeed'], message: 'Запрещено вне src/api/' }
+          ]
+        }]
+      }
     }
   ]
 };

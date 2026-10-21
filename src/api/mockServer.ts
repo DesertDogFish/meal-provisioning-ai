@@ -83,7 +83,7 @@ export const mockServer = {
   },
 
   // Категории
-  handleCategories(method: string, path: string): any {
+  handleCategories(method: string, _path: string): any {
     if (method === 'GET') {
       return categories.sort((a, b) => a.sortOrder - b.sortOrder);
     }
@@ -243,7 +243,7 @@ export const mockServer = {
   },
 
   // Походы
-  handleTrips(method: string, path: string, body?: any): any {
+  handleTrips(method: string, _path: string, _body?: any): any {
     if (method === 'GET') {
       return trips;
     }

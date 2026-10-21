@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useApp } from '../store/AppContext';
-import { Search, Filter, Utensils, Plus, X } from 'lucide-react';
+import { Search, Utensils, X } from 'lucide-react';
 import { MealType } from '../types';
 import { formatAmount } from '../utils/calculations';
 
