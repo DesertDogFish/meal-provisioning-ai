@@ -1,13 +1,13 @@
 import { useState } from 'react';
 import { useApp, generateId } from '../store/AppContext';
-import { Package, DollarSign, BookOpen, Download, Plus, Trash2, Edit2, Check, X, AlertTriangle } from 'lucide-react';
+import { DollarSign, BookOpen, Download, Plus, Trash2, Edit2, Check, X, AlertTriangle } from 'lucide-react';
 import { UnitOfMeasure, MealType, RecipeSource } from '../types';
 import { formatAmount } from '../utils/calculations';
 import { ConflictError, ValidationError, NotFoundError } from '../utils/errors';
-import { validateIngredient, validateRecipe } from '../utils/validation';
+import { validateRecipe } from '../utils/validation';
 import { useToast } from '../components/ToastProvider';
 
-type AdminTab = 'ingredients' | 'prices' | 'recipes' | 'import';
+type AdminTab = 'prices' | 'recipes' | 'import';
 
 const unitLabels: Record<UnitOfMeasure, string> = { KG: 'кг', L: 'л', PCS: 'шт' };
 const mealTypeLabels: Record<MealType, string> = { BREAKFAST: 'Завтрак', LUNCH: 'Обед', DINNER: 'Ужин', SNACK: 'Перекус' };
@@ -15,12 +15,7 @@ const mealTypeLabels: Record<MealType, string> = { BREAKFAST: 'Завтрак', 
 export default function AdminPage() {
   const { state, dispatch } = useApp();
   const { showError, showSuccess } = useToast();
-  const [tab, setTab] = useState<AdminTab>('ingredients');
-  
-  // Ingredient form
-  const [showIngForm, setShowIngForm] = useState(false);
-  const [editingIng, setEditingIng] = useState<string | null>(null);
-  const [ingForm, setIngForm] = useState({ name: '', unit: 'KG' as UnitOfMeasure, category: '' });
+  const [tab, setTab] = useState<AdminTab>('prices');
   
   // Price form
   const [showPriceForm, setShowPriceForm] = useState(false);
@@ -30,64 +25,13 @@ export default function AdminPage() {
   const [showRecForm, setShowRecForm] = useState(false);
   const [recForm, setRecForm] = useState({ name: '', mealType: 'LUNCH' as MealType, baseServings: 4, caloriesPerServing: '', ingredients: [{ ingredientId: '', amount: '' }] as { ingredientId: string; amount: string }[] });
   
-  // Mapping form
-  const [showMapForm, setShowMapForm] = useState(false);
-  const [mapForm, setMapForm] = useState({ externalName: '', source: 'API' as RecipeSource, internalIngredientId: '' });
-
   const tabs = [
-    { id: 'ingredients' as AdminTab, label: 'Компоненты', icon: <Package size={16} /> },
     { id: 'prices' as AdminTab, label: 'Цены', icon: <DollarSign size={16} /> },
     { id: 'recipes' as AdminTab, label: 'Рецепты', icon: <BookOpen size={16} /> },
     { id: 'import' as AdminTab, label: 'Импорт', icon: <Download size={16} /> },
   ];
 
-  const isIngredientUsed = (ingId: string) => state.recipes.some(r => r.ingredients.some(ri => ri.ingredientId === ingId));
-  const getIngredientRecipes = (ingId: string) => state.recipes.filter(r => r.ingredients.some(ri => ri.ingredientId === ingId));
   const isRecipeUsed = (recId: string) => state.trips.some(t => t.days?.some(d => d.meals?.some(m => m.recipeId === recId)));
-
-  const handleSaveIngredient = () => {
-    // Validate ingredient data
-    const errors = validateIngredient({ name: ingForm.name, unit: ingForm.unit, category: ingForm.category });
-    if (errors.length > 0) {
-      const validationError = new ValidationError(errors, 'Некорректные данные компонента');
-      showError(validationError.toProblemDetail());
-      return;
-    }
-
-    if (editingIng) {
-      if (isIngredientUsed(editingIng)) {
-        const recipes = getIngredientRecipes(editingIng);
-        const conflictError = new ConflictError(
-          'Компонент используется в рецептах и не может быть изменён',
-          recipes.map(r => ({ resourceType: 'recipe', resourceId: r.id, resourceName: r.name }))
-        );
-        showError(conflictError.toProblemDetail());
-        return;
-      }
-      dispatch({ type: 'UPDATE_INGREDIENT', payload: { id: editingIng, name: ingForm.name, unit: ingForm.unit, category: ingForm.category, createdAt: state.ingredients.find(i => i.id === editingIng)?.createdAt || '' } });
-      showSuccess('Компонент обновлён');
-    } else {
-      dispatch({ type: 'ADD_INGREDIENT', payload: { id: generateId(), name: ingForm.name, unit: ingForm.unit, category: ingForm.category, createdAt: new Date().toISOString() } });
-      showSuccess('Компонент добавлен');
-    }
-    setShowIngForm(false);
-    setEditingIng(null);
-    setIngForm({ name: '', unit: 'KG', category: '' });
-  };
-
-  const handleDeleteIngredient = (id: string) => {
-    if (isIngredientUsed(id)) {
-      const recipes = getIngredientRecipes(id);
-      const conflictError = new ConflictError(
-        `Компонент "${state.ingredients.find(i => i.id === id)?.name}" используется в рецептах и не может быть удалён`,
-        recipes.map(r => ({ resourceType: 'recipe', resourceId: r.id, resourceName: r.name }))
-      );
-      showError(conflictError.toProblemDetail());
-      return;
-    }
-    dispatch({ type: 'DELETE_INGREDIENT', payload: id });
-    showSuccess('Компонент удалён');
-  };
 
   const handleSavePrice = () => {
     if (!priceForm.ingredientId || !priceForm.pricePerUnit || !priceForm.effectiveFrom) return;
@@ -187,19 +131,21 @@ export default function AdminPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl md:text-3xl font-bold text-slate-900">Администрирование</h1>
-        <p className="text-slate-500 mt-1">Управление компонентами, ценами и рецептами</p>
+        <h1 className="text-2xl md:text-3xl font-bold" style={{ color: 'var(--text)' }}>Администрирование</h1>
+        <p className="mt-1" style={{ color: 'var(--muted)' }}>Управление ценами, рецептами и импортом</p>
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 bg-slate-100 p-1 rounded-xl overflow-x-auto">
+      <div className="flex gap-1 p-1 rounded-xl overflow-x-auto" style={{ background: 'var(--surface)' }}>
         {tabs.map(t => (
           <button
             key={t.id}
             onClick={() => setTab(t.id)}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
-              tab === t.id ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-            }`}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium whitespace-nowrap transition-colors"
+            style={{
+              background: tab === t.id ? 'var(--elev)' : 'transparent',
+              color: tab === t.id ? 'var(--text)' : 'var(--muted)',
+            }}
           >
             {t.icon}
             {t.label}
@@ -207,78 +153,13 @@ export default function AdminPage() {
         ))}
       </div>
 
-      {/* Ingredients tab */}
-      {tab === 'ingredients' && (
-        <div className="space-y-4">
-          <div className="flex justify-between items-center">
-            <p className="text-sm text-slate-500">{state.ingredients.length} компонентов</p>
-            <button onClick={() => { setShowIngForm(true); setEditingIng(null); setIngForm({ name: '', unit: 'KG', category: '' }); }}
-              className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 text-sm">
-              <Plus size={16} /> Добавить
-            </button>
-          </div>
-
-          {showIngForm && (
-            <div className="rounded-xl p-4 space-y-3" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <input type="text" placeholder="Название" value={ingForm.name} onChange={e => setIngForm({ ...ingForm, name: e.target.value })}
-                  className="px-3 py-2 rounded-lg text-sm outline-none" style={{ background: 'var(--elev)', border: '1px solid var(--border)', color: 'var(--text)' }} />
-                <select value={ingForm.unit} onChange={e => setIngForm({ ...ingForm, unit: e.target.value as UnitOfMeasure })}
-                  className="px-3 py-2 rounded-lg text-sm outline-none" style={{ background: 'var(--elev)', border: '1px solid var(--border)', color: 'var(--text)' }}>
-                  <option value="KG">кг</option>
-                  <option value="L">л</option>
-                  <option value="PCS">шт</option>
-                </select>
-                <input type="text" placeholder="Категория" value={ingForm.category} onChange={e => setIngForm({ ...ingForm, category: e.target.value })}
-                  className="px-3 py-2 rounded-lg text-sm outline-none" style={{ background: 'var(--elev)', border: '1px solid var(--border)', color: 'var(--text)' }} />
-              </div>
-              <div className="flex gap-2">
-                <button onClick={handleSaveIngredient} className="px-4 py-2 rounded-full text-sm" style={{ background: 'linear-gradient(90deg, var(--w1), var(--w2))', color: '#04121A' }}>Сохранить</button>
-                <button onClick={() => setShowIngForm(false)} className="px-4 py-2 text-sm" style={{ color: 'var(--muted)' }}>Отмена</button>
-              </div>
-            </div>
-          )}
-
-          <div className="rounded-xl overflow-hidden" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
-            <table className="w-full text-sm">
-              <thead style={{ background: 'var(--elev)' }}>
-                <tr>
-                  <th className="text-left px-4 py-3 font-medium" style={{ color: 'var(--muted)' }}>Название</th>
-                  <th className="text-left px-4 py-3 font-medium" style={{ color: 'var(--muted)' }}>Единица</th>
-                  <th className="text-left px-4 py-3 font-medium" style={{ color: 'var(--muted)' }}>Категория</th>
-                  <th className="text-right px-4 py-3 font-medium" style={{ color: 'var(--muted)' }}>Действия</th>
-                </tr>
-              </thead>
-              <tbody style={{ borderTop: '1px solid var(--border)' }}>
-                {state.ingredients.map(ing => (
-                  <tr key={ing.id} style={{ borderTop: '1px solid var(--border)' }}>
-                    <td className="px-4 py-3 font-medium" style={{ color: 'var(--text)' }}>{ing.name}</td>
-                    <td className="px-4 py-3" style={{ color: 'var(--muted)' }}>{unitLabels[ing.unit]}</td>
-                    <td className="px-4 py-3" style={{ color: 'var(--muted)' }}>{ing.category}</td>
-                    <td className="px-4 py-3 text-right">
-                      <div className="flex items-center justify-end gap-1">
-                        {isIngredientUsed(ing.id) && <span title="Используется в рецептах"><AlertTriangle size={14} className="text-amber-500" /></span>}
-                        <button onClick={() => { setEditingIng(ing.id); setIngForm({ name: ing.name, unit: ing.unit, category: ing.category }); setShowIngForm(true); }}
-                          className="p-1.5 text-slate-400 hover:text-emerald-600 rounded"><Edit2 size={14} /></button>
-                        <button onClick={() => handleDeleteIngredient(ing.id)}
-                          className="p-1.5 text-slate-400 hover:text-red-600 rounded"><Trash2 size={14} /></button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
       {/* Prices tab */}
       {tab === 'prices' && (
         <div className="space-y-4">
           <div className="flex justify-between items-center">
-            <p className="text-sm text-slate-500">{state.prices.length} цен</p>
+            <p className="text-sm" style={{ color: 'var(--muted)' }}>{state.prices.length} цен</p>
             <button onClick={() => setShowPriceForm(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 text-sm">
+              className="flex items-center gap-2 px-4 py-2 rounded-full text-sm" style={{ background: 'linear-gradient(90deg, var(--w1), var(--w2))', color: '#04121A' }}>
               <Plus size={16} /> Добавить цену
             </button>
           </div>

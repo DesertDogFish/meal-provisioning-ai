@@ -20,7 +20,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     { to: '/recipes', label: 'Каталог блюд', icon: <Ship size={20} /> },
     { to: '/errors-demo', label: 'Ошибки (демо)', icon: <Menu size={20} /> },
     ...(isAdmin ? [
-      { to: '/admin', label: 'Админка', icon: <Menu size={20} /> },
       { to: '/products', label: 'Продукты', icon: <Menu size={20} /> },
       { to: '/integrations', label: 'Интеграции', icon: <Menu size={20} /> },
       { to: '/sync-logs', label: 'Журнал синков', icon: <Menu size={20} /> }

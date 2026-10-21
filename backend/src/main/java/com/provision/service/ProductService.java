@@ -177,7 +177,7 @@ public class ProductService {
                         p.getPricePerUnit(),
                         p.getCurrency(),
                         p.getEffectiveFrom(),
-                        "MANUAL" // В реальности нужно определять источник
+                        p.getSource() != null ? p.getSource() : "MANUAL"
                 )
         ).orElse(null);
 
@@ -188,10 +188,15 @@ public class ProductService {
         // Определяем статус привязки
         String bindingStatus = ingredient.getCode() != null ? "BOUND" : "UNBOUND";
 
+        // Проверяем, что категория не null
+        if (ingredient.getCategory() == null) {
+            log.warn("Ingredient {} has null category, using 'Прочее'", ingredient.getId());
+        }
+
         return new ProductResponse(
                 ingredient.getId(),
                 ingredient.getName(),
-                toCategoryDto(ingredient.getCategory()),
+                ingredient.getCategory() != null ? toCategoryDto(ingredient.getCategory()) : null,
                 ingredient.getUnit(),
                 ingredient.getPackSize(),
                 ingredient.getRoundToPacks(),

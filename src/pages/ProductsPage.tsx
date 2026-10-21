@@ -103,9 +103,15 @@ export default function ProductsPage() {
       if (response.ok) {
         const data = await response.json();
         setProducts(data.content || []);
+      } else {
+        const error = await response.json().catch(() => ({ detail: 'Failed to load products' }));
+        showError(error.detail || `Ошибка загрузки: ${response.status}`);
+        setProducts([]);
       }
     } catch (error) {
       console.error('Failed to load products:', error);
+      showError('Ошибка сети при загрузке продуктов');
+      setProducts([]);
     } finally {
       setLoading(false);
     }
