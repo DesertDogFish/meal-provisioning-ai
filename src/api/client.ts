@@ -1,72 +1,156 @@
 /**
  * CR-5: Единая точка входа в данные
- * Два адаптера: mock (по умолчанию в превью) и real (для продакшена)
+ * Два адаптера: mock (in-memory + localStorage) и real (fetch + VITE_API_URL)
+ * Выбор режима: localStorage → VITE_API_MODE → auto-пинг GET /api/v1/meta
  */
 
-export interface ApiResponse<T> {
-  data: T;
-  status: number;
-  error?: string;
-}
+import type { UnitOfMeasure } from '../types';
 
 export interface ApiError {
   status: number;
-  message: string;
+  type?: string;
+  title: string;
   detail?: string;
+  instance?: string;
+  errors?: Array<{ field: string; message: string; rejectedValue?: unknown }>;
+  usedIn?: Array<{ resourceType: string; resourceId: number; resourceName: string }>;
 }
 
+export class ApiClientError extends Error {
+  constructor(public readonly error: ApiError) {
+    super(error.detail || error.title);
+    this.name = 'ApiClientError';
+  }
+}
+
+export type ApiMode = 'mock' | 'real';
+
+const SEED_VERSION = '1.0.0';
+const LS_MODE_KEY = 'apiMode';
+const LS_SEED_KEY = 'seedVersion';
+
 class ApiClient {
+  private mode: ApiMode = 'mock';
   private baseUrl: string;
-  private mode: 'mock' | 'real';
+  private modeResolved = false;
+  private resolvePromise: Promise<void> | null = null;
 
   constructor() {
-    // CR-5.1: авто-детект режима
-    const storedMode = localStorage.getItem('apiMode');
-    const envMode = (import.meta as any).env?.VITE_API_MODE;
+    const env = (import.meta as any).env || {};
+    this.baseUrl = env.VITE_API_URL || 'http://localhost:8080/api/v1';
+    
+    const storedMode = localStorage.getItem(LS_MODE_KEY) as ApiMode | null;
+    const envMode = env.VITE_API_MODE as ApiMode | undefined;
     
     if (storedMode === 'mock' || storedMode === 'real') {
       this.mode = storedMode;
+      this.modeResolved = true;
     } else if (envMode === 'mock' || envMode === 'real') {
       this.mode = envMode;
+      this.modeResolved = true;
     } else {
-      this.mode = 'mock'; // По умолчанию mock в превью
+      this.mode = 'mock'; // default
     }
     
-    this.baseUrl = (import.meta as any).env?.VITE_API_URL || 'http://localhost:8080/api/v1';
+    // Проверка seedVersion
+    const storedSeed = localStorage.getItem(LS_SEED_KEY);
+    if (storedSeed !== SEED_VERSION) {
+      localStorage.setItem(LS_SEED_KEY, SEED_VERSION);
+      // При смене версии сида можно очистить данные
+    }
   }
 
-  getMode(): 'mock' | 'real' {
+  getMode(): ApiMode {
     return this.mode;
   }
 
-  setMode(mode: 'mock' | 'real') {
+  isResolved(): boolean {
+    return this.modeResolved;
+  }
+
+  async resolveMode(): Promise<ApiMode> {
+    if (this.modeResolved) return this.mode;
+    if (this.resolvePromise) return this.resolvePromise.then(() => this.mode);
+    
+    this.resolvePromise = (async () => {
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 700);
+        
+        const response = await fetch(`${this.baseUrl}/meta`, {
+          signal: controller.signal,
+          method: 'GET'
+        });
+        clearTimeout(timeout);
+        
+        if (response.ok) {
+          this.mode = 'real';
+        }
+      } catch {
+        this.mode = 'mock';
+      } finally {
+        this.modeResolved = true;
+        localStorage.setItem(LS_MODE_KEY, this.mode);
+      }
+    })();
+    
+    await this.resolvePromise;
+    return this.mode;
+  }
+
+  setMode(mode: ApiMode) {
     this.mode = mode;
-    localStorage.setItem('apiMode', mode);
+    this.modeResolved = true;
+    localStorage.setItem(LS_MODE_KEY, mode);
+  }
+
+  resetSeedData() {
+    localStorage.removeItem(LS_SEED_KEY);
+    localStorage.removeItem('mockData');
+    localStorage.setItem(LS_SEED_KEY, SEED_VERSION);
+  }
+
+  private getToken(): string | null {
+    return localStorage.getItem('accessToken');
   }
 
   private async request<T>(
     method: string,
     path: string,
-    body?: any,
-    options?: { failMode?: string }
+    body?: unknown,
+    options?: { failMode?: string; params?: Record<string, string> }
   ): Promise<T> {
-    // Имитация задержки 200-400 мс для mock
+    // Авто-резолв режима если ещё не определён
+    if (!this.modeResolved) {
+      await this.resolveMode();
+    }
+
+    let fullPath = path;
+    if (options?.params) {
+      const params = new URLSearchParams(options.params);
+      fullPath += (path.includes('?') ? '&' : '?') + params.toString();
+    }
+
     if (this.mode === 'mock') {
+      // Имитация задержки 200-400 мс
       await new Promise(resolve => setTimeout(resolve, 200 + Math.random() * 200));
       
       // Режим ошибок для тестирования
-      if (options?.failMode && path.includes(options.failMode)) {
-        throw { status: 500, message: 'Mock server error', detail: 'Simulated failure' };
+      if (options?.failMode && fullPath.includes(options.failMode)) {
+        throw new ApiClientError({
+          status: 500,
+          title: 'Mock Server Error',
+          detail: `Simulated failure for route: ${options.failMode}`
+        });
       }
       
-      // Импортируем mock server динамически
       const { mockServer } = await import('./mockServer');
-      return mockServer.handleRequest(method, path, body);
+      return mockServer.handleRequest<T>(method, fullPath, body);
     }
 
     // Real API
-    const url = `${this.baseUrl}${path}`;
-    const token = localStorage.getItem('accessToken');
+    const url = `${this.baseUrl}${fullPath}`;
+    const token = this.getToken();
     
     const response = await fetch(url, {
       method,
@@ -78,8 +162,17 @@ class ApiClient {
     });
 
     if (!response.ok) {
-      const error = await response.json().catch(() => ({ detail: 'Unknown error' }));
-      throw { status: response.status, message: error.title || 'Error', detail: error.detail };
+      let errorData: ApiError;
+      try {
+        errorData = await response.json();
+      } catch {
+        errorData = {
+          status: response.status,
+          title: 'Unknown Error',
+          detail: response.statusText
+        };
+      }
+      throw new ApiClientError(errorData);
     }
 
     if (response.status === 204) {
@@ -89,15 +182,15 @@ class ApiClient {
     return response.json();
   }
 
-  async get<T>(path: string, options?: { failMode?: string }): Promise<T> {
+  async get<T>(path: string, options?: { failMode?: string; params?: Record<string, string> }): Promise<T> {
     return this.request<T>('GET', path, undefined, options);
   }
 
-  async post<T>(path: string, body?: any, options?: { failMode?: string }): Promise<T> {
+  async post<T>(path: string, body?: unknown, options?: { failMode?: string }): Promise<T> {
     return this.request<T>('POST', path, body, options);
   }
 
-  async put<T>(path: string, body?: any, options?: { failMode?: string }): Promise<T> {
+  async put<T>(path: string, body?: unknown, options?: { failMode?: string }): Promise<T> {
     return this.request<T>('PUT', path, body, options);
   }
 
@@ -107,3 +200,32 @@ class ApiClient {
 }
 
 export const api = new ApiClient();
+
+// Утилиты для контракта
+export const UNIT_LABELS: Record<UnitOfMeasure, string> = {
+  KG: 'кг',
+  L: 'л',
+  PCS: 'шт',
+  PACK: 'уп'
+};
+
+export function humanize(amount: number, unit: UnitOfMeasure): string {
+  if (amount == null || isNaN(amount)) return '—';
+  switch (unit) {
+    case 'KG':
+      return amount < 1 ? `${Math.round(amount * 1000)} г` : `${amount.toFixed(2)} кг`;
+    case 'L':
+      return amount < 1 ? `${Math.round(amount * 1000)} мл` : `${amount.toFixed(2)} л`;
+    case 'PCS':
+      return `${Math.round(amount)} шт`;
+    case 'PACK':
+      return `${Math.round(amount)} уп`;
+    default:
+      return `${amount}`;
+  }
+}
+
+export function formatMoney(value: number | null | undefined, currency = 'RUB'): string {
+  if (value == null) return '—';
+  return `${value.toLocaleString('ru-RU', { maximumFractionDigits: 2 })} ${currency === 'RUB' ? '₽' : currency}`;
+}

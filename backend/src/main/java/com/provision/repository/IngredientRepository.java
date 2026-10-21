@@ -18,6 +18,8 @@ public interface IngredientRepository extends JpaRepository<Ingredient, Long>, J
     
     boolean existsByNameNormAndUnit(String nameNorm, UnitOfMeasure unit);
     
+    boolean existsByName(String name);
+    
     @Query("SELECT i FROM Ingredient i WHERE i.nameNorm = :nameNorm")
     List<Ingredient> findByNameNorm(@Param("nameNorm") String nameNorm);
     

@@ -1,7 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useApp } from '../store/AppContext';
 import { useToast } from './ToastProvider';
-import { X, ChevronRight, SkipForward } from 'lucide-react';
 import { NumberField } from './NumberField';
 
 interface Candidate {
@@ -27,7 +25,6 @@ interface Props {
 }
 
 export function BindingWizard({ onClose }: Props) {
-  const { state } = useApp();
   const { showSuccess, showError } = useToast();
   const [queue, setQueue] = useState<UnboundItem[]>([]);
   const [idx, setIdx] = useState(0);

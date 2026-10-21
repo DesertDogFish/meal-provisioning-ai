@@ -3,16 +3,50 @@
  * Эмулирует API бэкенда с in-memory базой данных
  */
 
-import { mockIngredients, mockPrices, mockRecipes, mockTrips, mockProductCategories } from '../data/mockData';
-import { Ingredient, Recipe, Trip, ProductCategory, IngredientPrice } from '../types';
+import { mockIngredients, mockRecipes, mockTrips, mockProductCategories } from '../data/mockData';
+import { Ingredient, Recipe, Trip, ProductCategory } from '../types';
 import { calculateRecipeKcal } from '../utils/calc';
 
 // In-memory хранилище
-let products: Ingredient[] = [...mockIngredients];
-let categories: ProductCategory[] = [...mockProductCategories];
-let prices: IngredientPrice[] = [...mockPrices];
-let recipes: Recipe[] = [...mockRecipes];
-let trips: Trip[] = [...mockTrips];
+const products: Ingredient[] = [...mockIngredients];
+const categories: ProductCategory[] = [...mockProductCategories];
+const recipes: Recipe[] = [...mockRecipes];
+const trips: Trip[] = [...mockTrips];
+
+// Price overrides хранилище (tripId -> ingredientId -> override)
+const priceOverrides: Record<string, Record<string, { actualPrice: number; comment?: string }>> = {};
+
+// Auth хранилище
+interface MockUser {
+  id: string;
+  email: string;
+  password: string;
+  firstName: string;
+  lastName: string;
+  role: 'USER' | 'ADMIN';
+  createdAt: string;
+}
+
+const users: MockUser[] = [
+  {
+    id: '1',
+    email: 'admin@provision.app',
+    password: 'password123',
+    firstName: 'Admin',
+    lastName: 'User',
+    role: 'ADMIN',
+    createdAt: '2024-01-01'
+  },
+  {
+    id: '2',
+    email: 'user@provision.app',
+    password: 'password123',
+    firstName: 'John',
+    lastName: 'Doe',
+    role: 'USER',
+    createdAt: '2024-01-15'
+  }
+];
 
 // Утилиты
 const normalize = (s: string) => s.toLowerCase().replace(/ё/g, 'е').replace(/\s+/g, ' ').trim();
@@ -28,6 +62,9 @@ const UNIT_LABELS: Record<string, string> = {
 export const mockServer = {
   handleRequest<T>(method: string, path: string, body?: any): T {
     // Маршрутизация
+    if (path.startsWith('/auth/')) {
+      return this.handleAuth(method, path, body) as T;
+    }
     if (path.startsWith('/product-categories')) {
       return this.handleCategories(method, path) as T;
     }
@@ -48,7 +85,7 @@ export const mockServer = {
   },
 
   // Категории
-  handleCategories(method: string, path: string): any {
+  handleCategories(method: string, _path: string): any {
     if (method === 'GET') {
       return categories.sort((a, b) => a.sortOrder - b.sortOrder);
     }
@@ -171,7 +208,7 @@ export const mockServer = {
   },
 
   // Рецепты
-  handleRecipes(method: string, path: string, body?: any): any {
+  handleRecipes(method: string, _path: string, _body?: any): any {
     if (method === 'GET') {
       return recipes.map(r => {
         const ingredients = r.ingredients.map(ri => {
@@ -209,10 +246,309 @@ export const mockServer = {
 
   // Походы
   handleTrips(method: string, path: string, body?: any): any {
-    if (method === 'GET') {
+    const parts = path.split('/').filter(Boolean);
+    
+    // GET /trips
+    if (parts.length === 1 && method === 'GET') {
       return trips;
+    }
+    
+    // GET /trips/:id
+    if (parts.length === 2 && method === 'GET') {
+      const tripId = parts[1];
+      const trip = trips.find(t => t.id === tripId);
+      if (!trip) {
+        throw { status: 404, message: 'Not found', detail: `Trip ${tripId} not found` };
+      }
+      return trip;
+    }
+    
+    // GET /trips/:id/summary/shopping
+    if (parts.length === 4 && parts[2] === 'summary' && parts[3] === 'shopping' && method === 'GET') {
+      const tripId = parts[1];
+      const trip = trips.find(t => t.id === tripId);
+      if (!trip) {
+        throw { status: 404, message: 'Not found', detail: `Trip ${tripId} not found` };
+      }
+      
+      // Простая реализация: возвращаем фиктивные данные
+      // В реальности нужно считать из trip.days и recipes
+      const items = [
+        {
+          ingredientId: '1',
+          ingredientName: 'Гречка',
+          unit: 'KG',
+          totalAmount: 1.8,
+          plannedUnitPrice: 200,
+          actualUnitPrice: priceOverrides[tripId]?.['1']?.actualPrice || 200,
+          plannedCost: 360,
+          actualCost: (priceOverrides[tripId]?.['1']?.actualPrice || 200) * 1.8,
+          overridden: !!priceOverrides[tripId]?.['1'],
+          hasPlannedPrice: true
+        },
+        {
+          ingredientId: '2',
+          ingredientName: 'Тушёнка говяжья',
+          unit: 'PCS',
+          totalAmount: 9,
+          plannedUnitPrice: 210,
+          actualUnitPrice: priceOverrides[tripId]?.['2']?.actualPrice || 210,
+          plannedCost: 1890,
+          actualCost: (priceOverrides[tripId]?.['2']?.actualPrice || 210) * 9,
+          overridden: !!priceOverrides[tripId]?.['2'],
+          hasPlannedPrice: true
+        },
+        {
+          ingredientId: '3',
+          ingredientName: 'Соль',
+          unit: 'KG',
+          totalAmount: 0.045,
+          plannedUnitPrice: null,
+          actualUnitPrice: priceOverrides[tripId]?.['3']?.actualPrice || null,
+          plannedCost: null,
+          actualCost: priceOverrides[tripId]?.['3']?.actualPrice ? priceOverrides[tripId]['3'].actualPrice * 0.045 : null,
+          overridden: !!priceOverrides[tripId]?.['3'],
+          hasPlannedPrice: false
+        },
+        {
+          ingredientId: '4',
+          ingredientName: 'Овсяные хлопья',
+          unit: 'KG',
+          totalAmount: 0.32,
+          plannedUnitPrice: 150,
+          actualUnitPrice: priceOverrides[tripId]?.['4']?.actualPrice || 150,
+          plannedCost: 48,
+          actualCost: (priceOverrides[tripId]?.['4']?.actualPrice || 150) * 0.32,
+          overridden: !!priceOverrides[tripId]?.['4'],
+          hasPlannedPrice: true
+        },
+        {
+          ingredientId: '5',
+          ingredientName: 'Вода',
+          unit: 'L',
+          totalAmount: 1.0,
+          plannedUnitPrice: 45,
+          actualUnitPrice: priceOverrides[tripId]?.['5']?.actualPrice || 45,
+          plannedCost: 45,
+          actualCost: (priceOverrides[tripId]?.['5']?.actualPrice || 45) * 1.0,
+          overridden: !!priceOverrides[tripId]?.['5'],
+          hasPlannedPrice: true
+        }
+      ];
+      
+      const totalPlannedCost = items.reduce((sum, i) => sum + (i.plannedCost || 0), 0);
+      const totalActualCost = items.reduce((sum, i) => sum + (i.actualCost || 0), 0);
+      const deltaPercent = totalPlannedCost > 0 ? ((totalActualCost - totalPlannedCost) / totalPlannedCost) * 100 : null;
+      
+      return {
+        items,
+        totalPlannedCost,
+        totalActualCost,
+        deltaPercent,
+        overriddenCount: items.filter(i => i.overridden).length,
+        hasMissingPrices: items.some(i => !i.hasPlannedPrice),
+        missingIngredients: items.filter(i => !i.hasPlannedPrice).map(i => i.ingredientName)
+      };
+    }
+    
+    // GET /trips/:id/summary/person
+    if (parts.length === 4 && parts[2] === 'summary' && parts[3] === 'person' && method === 'GET') {
+      const tripId = parts[1];
+      const trip = trips.find(t => t.id === tripId);
+      if (!trip) {
+        throw { status: 404, message: 'Not found', detail: `Trip ${tripId} not found` };
+      }
+      
+      // Простая реализация: возвращаем фиктивные данные
+      const totalPersonMeals = 13; // Из FIX-1
+      const defaultPeople = trip.defaultPeople || 4;
+      
+      // Получаем shopping data для расчёта
+      const shoppingData = this.handleTrips('GET', `/trips/${tripId}/summary/shopping`, null);
+      
+      return {
+        ingredients: shoppingData.items.map((i: any) => ({
+          ingredientName: i.ingredientName,
+          unit: i.unit,
+          amountPerDefaultPerson: i.totalAmount / defaultPeople,
+          amountPerPersonMeal: i.totalAmount / totalPersonMeals,
+          plannedCostPerDefaultPerson: i.plannedCost ? i.plannedCost / defaultPeople : null,
+          actualCostPerDefaultPerson: i.actualCost ? i.actualCost / defaultPeople : null,
+          plannedCostPerPersonMeal: i.plannedCost ? i.plannedCost / totalPersonMeals : null,
+          actualCostPerPersonMeal: i.actualCost ? i.actualCost / totalPersonMeals : null
+        })),
+        tripSummary: {
+          totalPlannedCost: shoppingData.totalPlannedCost,
+          totalActualCost: shoppingData.totalActualCost,
+          deltaPercent: shoppingData.deltaPercent,
+          overriddenCount: shoppingData.overriddenCount,
+          hasMissingPrices: shoppingData.hasMissingPrices,
+          missingIngredients: shoppingData.missingIngredients,
+          totalPersonMeals,
+          plannedCostPerDefaultPerson: shoppingData.totalPlannedCost / defaultPeople,
+          actualCostPerDefaultPerson: shoppingData.totalActualCost / defaultPeople,
+          plannedCostPerPersonMeal: shoppingData.totalPlannedCost / totalPersonMeals,
+          actualCostPerPersonMeal: shoppingData.totalActualCost / totalPersonMeals,
+          caloriesPerPersonMeal: null // Не считаем в mock
+        }
+      };
+    }
+    
+    // PUT /trips/:id/price-overrides (bulk)
+    if (parts.length === 3 && parts[2] === 'price-overrides' && method === 'PUT') {
+      const tripId = parts[1];
+      const trip = trips.find(t => t.id === tripId);
+      if (!trip) {
+        throw { status: 404, message: 'Not found', detail: `Trip ${tripId} not found` };
+      }
+      
+      if (!Array.isArray(body)) {
+        throw { status: 400, message: 'Bad request', detail: 'Expected array of overrides' };
+      }
+      
+      if (!priceOverrides[tripId]) {
+        priceOverrides[tripId] = {};
+      }
+      
+      body.forEach((override: any) => {
+        if (override.actualPrice === null) {
+          delete priceOverrides[tripId][override.ingredientId];
+        } else {
+          priceOverrides[tripId][override.ingredientId] = {
+            actualPrice: override.actualPrice,
+            comment: override.comment
+          };
+        }
+      });
+      
+      return { status: 'ok' };
+    }
+    
+    // PUT /trips/:id/price-overrides/:ingredientId
+    if (parts.length === 4 && parts[2] === 'price-overrides' && method === 'PUT') {
+      const tripId = parts[1];
+      const ingredientId = parts[3];
+      const trip = trips.find(t => t.id === tripId);
+      if (!trip) {
+        throw { status: 404, message: 'Not found', detail: `Trip ${tripId} not found` };
+      }
+      
+      if (!priceOverrides[tripId]) {
+        priceOverrides[tripId] = {};
+      }
+      
+      if (body.actualPrice === null) {
+        delete priceOverrides[tripId][ingredientId];
+      } else {
+        priceOverrides[tripId][ingredientId] = {
+          actualPrice: body.actualPrice,
+          comment: body.comment
+        };
+      }
+      
+      return {
+        ingredientId,
+        actualPrice: body.actualPrice,
+        comment: body.comment
+      };
+    }
+    
+    // DELETE /trips/:id/price-overrides/:ingredientId
+    if (parts.length === 4 && parts[2] === 'price-overrides' && method === 'DELETE') {
+      const tripId = parts[1];
+      const ingredientId = parts[3];
+      const trip = trips.find(t => t.id === tripId);
+      if (!trip) {
+        throw { status: 404, message: 'Not found', detail: `Trip ${tripId} not found` };
+      }
+      
+      if (priceOverrides[tripId]) {
+        delete priceOverrides[tripId][ingredientId];
+      }
+      
+      return null;
+    }
+    
+    // GET /trips/:id/price-overrides
+    if (parts.length === 3 && parts[2] === 'price-overrides' && method === 'GET') {
+      const tripId = parts[1];
+      const trip = trips.find(t => t.id === tripId);
+      if (!trip) {
+        throw { status: 404, message: 'Not found', detail: `Trip ${tripId} not found` };
+      }
+      
+      const overrides = priceOverrides[tripId] || {};
+      return Object.entries(overrides).map(([ingredientId, data]) => ({
+        ingredientId,
+        ...data
+      }));
     }
 
     throw { status: 405, message: 'Method not allowed' };
+  },
+
+  // Авторизация
+  handleAuth(method: string, path: string, body?: any): any {
+    if (path === '/auth/register' && method === 'POST') {
+      const { email, password, firstName, lastName } = body;
+      
+      // Проверка существования пользователя
+      if (users.find(u => u.email === email)) {
+        throw { status: 409, message: 'Conflict', detail: 'Email already registered' };
+      }
+      
+      // Создание нового пользователя
+      const newUser: MockUser = {
+        id: String(users.length + 1),
+        email,
+        password,
+        firstName,
+        lastName,
+        role: 'USER',
+        createdAt: new Date().toISOString()
+      };
+      users.push(newUser);
+      
+      // Возвращаем токены
+      return {
+        accessToken: `mock-access-token-${newUser.id}`,
+        refreshToken: `mock-refresh-token-${newUser.id}`,
+        tokenType: 'Bearer'
+      };
+    }
+    
+    if (path === '/auth/login' && method === 'POST') {
+      const { email, password } = body;
+      const user = users.find(u => u.email === email && u.password === password);
+      
+      if (!user) {
+        throw { status: 401, message: 'Unauthorized', detail: 'Invalid email or password' };
+      }
+      
+      return {
+        accessToken: `mock-access-token-${user.id}`,
+        refreshToken: `mock-refresh-token-${user.id}`,
+        tokenType: 'Bearer'
+      };
+    }
+    
+    if (path === '/auth/me' && method === 'GET') {
+      // В реальном приложении здесь будет проверка токена
+      // Для мока возвращаем первого пользователя
+      const user = users[0];
+      return {
+        id: user.id,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        role: user.role
+      };
+    }
+    
+    if (path === '/auth/logout' && method === 'POST') {
+      return null;
+    }
+    
+    throw { status: 404, message: 'Not found', detail: `Auth route ${path} not implemented` };
   }
 };

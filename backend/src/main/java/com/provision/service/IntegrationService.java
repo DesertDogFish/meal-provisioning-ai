@@ -232,7 +232,7 @@ public class IntegrationService {
                                 externalPrice.price(),
                                 product.getPackAmount(),
                                 product.getPackUnit(),
-                                mapping.getInternalIngredient().getUnit()
+                                mapping.getInternalIngredient().getUnit().name()
                         );
 
                         if (unitPrice == null || unitPrice.compareTo(BigDecimal.ZERO) <= 0) {

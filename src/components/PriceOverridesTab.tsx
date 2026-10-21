@@ -1,16 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useApp } from '../store/AppContext';
 import { useToast } from './ToastProvider';
-import { Edit2, Trash2, Plus, Check, X, Download } from 'lucide-react';
-import { formatAmount } from '../utils/calculations';
+import { Download } from 'lucide-react';
+import { formatAmount, calculateShoppingList, calculateDayShopping } from '../utils/calculations';
 import { NumberField } from './NumberField';
-
-interface PriceOverride {
-  ingredientId: string;
-  ingredientName: string;
-  actualPrice: number;
-  comment?: string;
-}
 
 interface ShoppingItem {
   ingredientId: string;
@@ -40,83 +33,126 @@ type TabType = 'total' | 'days' | 'person';
 export default function PriceOverridesTab({ tripId }: Props) {
   const { state } = useApp();
   const { showError, showSuccess } = useToast();
-  const [overrides, setOverrides] = useState<PriceOverride[]>([]);
   const [shoppingItems, setShoppingItems] = useState<ShoppingItem[]>([]);
   const [dayShopping, setDayShopping] = useState<DayShopping[]>([]);
   const [activeTab, setActiveTab] = useState<TabType>('total');
-  const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [onlyDiff, setOnlyDiff] = useState(false);
 
   const trip = state.trips.find(t => t.id === tripId);
 
+  // Загрузка данных из моковых данных
   useEffect(() => {
-    loadOverrides();
-    loadShoppingList();
-    loadDayShopping();
-  }, [tripId]);
-
-  const loadOverrides = async () => {
-    try {
-      const response = await fetch(`/api/v1/trips/${tripId}/price-overrides`);
-      if (response.ok) {
-        const data = await response.json();
-        setOverrides(data);
-      }
-    } catch (error) {
-      console.error('Failed to load overrides:', error);
+    if (!trip) {
+      console.warn('PriceOverridesTab: trip not found for id', tripId);
+      return;
     }
-  };
 
-  const loadShoppingList = async () => {
-    try {
-      const response = await fetch(`/api/v1/trips/${tripId}/summary/shopping`);
-      if (response.ok) {
-        const data = await response.json();
-        setShoppingItems(data.items);
+    console.log('=== PriceOverridesTab: loading data ===');
+    console.log('Trip:', trip.name);
+    console.log('  - trip.days:', trip.days?.length || 0);
+    console.log('  - trip.days[0]?.meals:', trip.days?.[0]?.meals?.length || 0);
+    console.log('  - state.recipes:', state.recipes.length);
+    console.log('  - state.prices:', state.prices.length);
+    console.log('  - state.ingredients:', state.ingredients.length);
+
+    // Расчёт списка закупок
+    const recipesMap = new Map(state.recipes.map(r => [r.id, r]));
+    
+    // Проверяем, что рецепты имеют ингредиенты
+    if (state.recipes.length > 0) {
+      const firstRecipe = state.recipes[0];
+      console.log('  - first recipe:', firstRecipe.name);
+      console.log('    - ingredients count:', firstRecipe.ingredients?.length || 0);
+      if (firstRecipe.ingredients && firstRecipe.ingredients.length > 0) {
+        const firstIng = firstRecipe.ingredients[0];
+        console.log('    - first ingredient:', {
+          ingredientId: firstIng.ingredientId,
+          amount: firstIng.amount,
+          hasIngredientData: !!firstIng.ingredient,
+          ingredientName: firstIng.ingredient?.name,
+          ingredientUnit: firstIng.ingredient?.unit
+        });
       }
-    } catch (error) {
-      console.error('Failed to load shopping list:', error);
     }
-  };
-
-  const loadDayShopping = async () => {
-    try {
-      const response = await fetch(`/api/v1/trips/${tripId}/summary/shopping/by-days`);
-      if (response.ok) {
-        const data = await response.json();
-        setDayShopping(data.map((d: any) => ({
-          dayDate: d.dayDate,
-          plannedCost: d.plannedCost || 0,
-          actualCost: d.actualCost || 0
-        })));
+    
+    // Проверяем, что в recipesMap есть все рецепты
+    console.log('  - recipesMap size:', recipesMap.size);
+    if (trip.days && trip.days.length > 0 && trip.days[0].meals && trip.days[0].meals.length > 0) {
+      const firstMealRecipeId = trip.days[0].meals[0].recipeId;
+      console.log('  - first meal recipeId:', firstMealRecipeId);
+      console.log('  - recipe found in map:', recipesMap.has(firstMealRecipeId));
+      const recipeFromMap = recipesMap.get(firstMealRecipeId);
+      if (recipeFromMap) {
+        console.log('    - recipe name:', recipeFromMap.name);
+        console.log('    - recipe ingredients:', recipeFromMap.ingredients?.length || 0);
       }
-    } catch (error) {
-      console.error('Failed to load day shopping:', error);
     }
-  };
-
-  const handleDeleteOverride = async (ingredientId: string) => {
-    if (!confirm('Удалить оверрайд цены?')) return;
-
+    
+    // Проверяем, что в походе есть приёмы пищи
+    if (trip.days && trip.days.length > 0) {
+      const firstDay = trip.days[0];
+      console.log('  - first day:', firstDay.dayDate);
+      console.log('    - meals count:', firstDay.meals?.length || 0);
+      if (firstDay.meals && firstDay.meals.length > 0) {
+        const firstMeal = firstDay.meals[0];
+        console.log('    - first meal:', {
+          mealType: firstMeal.mealType,
+          recipeId: firstMeal.recipeId,
+          hasRecipe: !!firstMeal.recipe,
+          recipeName: firstMeal.recipe?.name
+        });
+      }
+    }
+    
     try {
-      const response = await fetch(`/api/v1/trips/${tripId}/price-overrides/${ingredientId}`, {
-        method: 'DELETE'
+      const shopping = calculateShoppingList(trip, recipesMap, state.prices);
+      
+      console.log('  - shopping items calculated:', shopping.length);
+      if (shopping.length > 0) {
+        console.log('  - first shopping item:', shopping[0]);
+      }
+
+      // Преобразование в формат ShoppingItem
+      const items: ShoppingItem[] = shopping.map(item => {
+        const unitPrice = item.estimatedCost && item.totalAmount > 0 
+          ? item.estimatedCost / item.totalAmount 
+          : undefined;
+        
+        return {
+          ingredientId: item.ingredientId,
+          ingredientName: item.ingredientName || 'Unknown',
+          unit: item.unit || 'PCS',
+          totalAmount: item.totalAmount,
+          plannedUnitPrice: unitPrice,
+          actualUnitPrice: unitPrice,
+          plannedCost: item.estimatedCost,
+          actualCost: item.estimatedCost,
+          overridden: false,
+          hasPlannedPrice: item.hasPrice
+        };
       });
+      
+      console.log('  - converted items:', items.length);
+      setShoppingItems(items);
 
-      if (response.ok) {
-        await loadOverrides();
-        await loadShoppingList();
-        await loadDayShopping();
-        showSuccess('Оверрайд удалён');
-      } else {
-        const error = await response.json();
-        showError(error.detail || 'Failed to delete override');
-      }
+      // Расчёт закупок по дням
+      const dayShoppingData = calculateDayShopping(trip, recipesMap, state.prices);
+      console.log('  - day shopping calculated:', dayShoppingData.length);
+      
+      setDayShopping(dayShoppingData.map(d => ({
+        dayDate: d.dayDate,
+        plannedCost: d.dayCost,
+        actualCost: d.dayCost
+      })));
     } catch (error) {
-      showError('Network error');
+      console.error('Error calculating shopping list:', error);
+      showError('Ошибка расчёта закупок: ' + (error as Error).message);
     }
-  };
+  }, [tripId, trip, state.recipes, state.prices, showError]);
+
+  // В mock-режиме оверрайды не поддерживаются
+  // В реальном приложении здесь будет API вызов
 
   const calculateDelta = (planned?: number | null, actual?: number | null): number => {
     if (!planned || !actual || planned === 0) return 0;
@@ -246,7 +282,6 @@ export default function PriceOverridesTab({ tripId }: Props) {
             </thead>
             <tbody>
               {filteredItems.map(item => {
-                const override = overrides.find(o => o.ingredientId === item.ingredientId);
                 const delta = calculateDelta(item.plannedUnitPrice, item.actualUnitPrice);
                 const deltaChipClass = getDeltaChipClass(delta);
 
@@ -288,15 +323,7 @@ export default function PriceOverridesTab({ tripId }: Props) {
                       </span>
                     </td>
                     <td className="px-2 py-3 text-right">
-                      {item.overridden && (
-                        <button
-                          onClick={() => handleDeleteOverride(item.ingredientId)}
-                          className="reset-btn"
-                          title="Сбросить к плану"
-                        >
-                          ✕
-                        </button>
-                      )}
+                      {/* В mock-режиме оверрайды не поддерживаются */}
                     </td>
                   </tr>
                 );

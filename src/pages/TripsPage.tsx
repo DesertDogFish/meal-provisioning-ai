@@ -4,7 +4,6 @@ import { useApp, generateId } from '../store/AppContext';
 import { Plus, Mountain, Calendar, Users, Trash2, Edit2 } from 'lucide-react';
 import { validateTrip } from '../utils/validation';
 import { ValidationError } from '../utils/errors';
-import { ProblemDetailAlert } from '../components/ProblemDetailAlert';
 import { useToast } from '../components/ToastProvider';
 import { DateRange } from '../components/DateRange';
 

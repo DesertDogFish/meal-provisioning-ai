@@ -1,4 +1,4 @@
-import { ProblemDetail, ValidationErrorDetail, ConflictErrorDetail, ErrorCode, HttpStatus, FieldError, UsedInResource } from '../types/errors';
+import { ProblemDetail, ValidationErrorDetail, ConflictErrorDetail, HttpStatus, FieldError, UsedInResource } from '../types/errors';
 
 /**
  * Base error class for application errors

@@ -1,7 +1,5 @@
 import { useState } from 'react';
-import { useApp } from '../store/AppContext';
 import { useToast } from './ToastProvider';
-import { X } from 'lucide-react';
 import { NumberField } from './NumberField';
 
 interface Ingredient {
@@ -26,14 +24,12 @@ interface Props {
 }
 
 export function SubstitutionModal({ tripId, recipeId, recipeName, ingredients, onClose }: Props) {
-  const { state } = useApp();
   const { showSuccess, showError } = useToast();
   const [fromId, setFromId] = useState<string | null>(null);
   const [q, setQ] = useState('');
   const [ratio, setRatio] = useState<number | null>(1);
   const [similar, setSimilar] = useState<Ingredient[]>([]);
   const [searchResults, setSearchResults] = useState<Ingredient[]>([]);
-  const [loading, setLoading] = useState(false);
 
   const loadSimilar = async (ingredientId: string) => {
     try {
@@ -80,7 +76,6 @@ export function SubstitutionModal({ tripId, recipeId, recipeName, ingredients, o
 
   const handleSubstitute = async (toIngredientId: string) => {
     if (!fromId) return;
-    setLoading(true);
     try {
       const response = await fetch(`/api/v1/trips/${tripId}/substitutions`, {
         method: 'POST',
@@ -106,8 +101,6 @@ export function SubstitutionModal({ tripId, recipeId, recipeName, ingredients, o
       }
     } catch (error) {
       showError('Network error');
-    } finally {
-      setLoading(false);
     }
   };
 

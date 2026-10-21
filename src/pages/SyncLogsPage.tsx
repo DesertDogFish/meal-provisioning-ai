@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
-import { useApp } from '../store/AppContext';
 import { useToast } from '../components/ToastProvider';
-import { RefreshCw, X, AlertCircle, CheckCircle, Clock, TrendingUp } from 'lucide-react';
+import { RefreshCw, X, AlertCircle } from 'lucide-react';
 
 interface SyncLog {
   id: number;
@@ -48,7 +47,6 @@ interface Kpi {
 }
 
 export default function SyncLogsPage() {
-  const { state } = useApp();
   const { showError, showSuccess } = useToast();
   const [syncLogs, setSyncLogs] = useState<SyncLog[]>([]);
   const [kpi, setKpi] = useState<Kpi | null>(null);

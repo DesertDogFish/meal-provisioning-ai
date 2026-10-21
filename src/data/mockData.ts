@@ -35,7 +35,7 @@ export const mockIngredients: Ingredient[] = [
   { id: 'ing9', name: 'Колбаса варёная', unit: 'KG', category: 'Мясо', kcalPer100g: 260, createdAt: '2024-01-01' },
   { id: 'ing10', name: 'Чай', unit: 'PCS', category: 'Напитки', kcalPer100g: 0, pieceWeightG: 2, createdAt: '2024-01-01' },
   { id: 'ing11', name: 'Сахар', unit: 'KG', category: 'Бакалея', kcalPer100g: 400, createdAt: '2024-01-01' },
-  { id: 'ing12', name: 'Соль', unit: 'KG', category: 'Бакалея', createdAt: '2024-01-01' },
+  { id: 'ing12', name: 'Соль', unit: 'KG', category: 'Бакалея', kcalPer100g: 0, createdAt: '2024-01-01' },
   { id: 'ing13', name: 'Макароны', unit: 'KG', category: 'Крупы', kcalPer100g: 350, createdAt: '2024-01-01' },
   { id: 'ing14', name: 'Лук', unit: 'KG', category: 'Овощи', kcalPer100g: 40, createdAt: '2024-01-01' },
   { id: 'ing15', name: 'Морковь', unit: 'KG', category: 'Овощи', kcalPer100g: 35, createdAt: '2024-01-01' },

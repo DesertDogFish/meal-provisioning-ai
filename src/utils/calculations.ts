@@ -75,6 +75,12 @@ export function calculateShoppingList(trip: Trip, recipes: Map<string, any>, pri
         
         if (existing) {
           existing.totalAmount += amountPerMeal;
+          // Обновляем стоимость, если есть цена на эту дату
+          const price = findPriceForDate(prices.filter(p => p.ingredientId === ri.ingredientId), day.dayDate);
+          if (price) {
+            existing.estimatedCost = (existing.estimatedCost || 0) + amountPerMeal * price.pricePerUnit;
+            existing.hasPrice = true;
+          }
         } else {
           const price = findPriceForDate(prices.filter(p => p.ingredientId === ri.ingredientId), day.dayDate);
           items.set(ri.ingredientId, {
@@ -85,15 +91,6 @@ export function calculateShoppingList(trip: Trip, recipes: Map<string, any>, pri
             estimatedCost: price ? amountPerMeal * price.pricePerUnit : undefined,
             hasPrice: !!price
           });
-        }
-        
-        if (!existing) {
-          const item = items.get(ri.ingredientId)!;
-          const price = findPriceForDate(prices.filter(p => p.ingredientId === ri.ingredientId), day.dayDate);
-          if (price) {
-            item.estimatedCost = item.totalAmount * price.pricePerUnit;
-            item.hasPrice = true;
-          }
         }
       }
     }

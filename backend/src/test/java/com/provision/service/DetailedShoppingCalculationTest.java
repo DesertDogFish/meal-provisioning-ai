@@ -43,7 +43,7 @@ class DetailedShoppingCalculationTest {
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
-        summaryService = new SummaryService(tripRepository, priceRepository, recipeRepository);
+        summaryService = new SummaryService(tripRepository, priceRepository, recipeRepository, null, null);
 
         // === КОМПОНЕНТЫ ===
         ingGrechka = Ingredient.builder().id(1L).name("Гречка").unit(UnitOfMeasure.KG).build();

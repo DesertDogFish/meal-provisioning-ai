@@ -1,23 +1,51 @@
 import { NavLink, useNavigate } from 'react-router-dom';
-import { useApp } from '../store/AppContext';
 import { Compass, LogOut, Menu, Mountain, Ship } from 'lucide-react';
 import { useState, useEffect } from 'react';
+import ApiModeBadge from './ApiModeBadge';
 import { api } from '../api/client';
 
+interface User {
+  id: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  role: 'USER' | 'ADMIN';
+}
+
 export default function Layout({ children }: { children: React.ReactNode }) {
-  const { state, dispatch } = useApp();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [apiMode, setApiMode] = useState<'mock' | 'real'>('mock');
-  const isAdmin = state.currentUser?.role === 'ADMIN';
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
 
   useEffect(() => {
-    setApiMode(api.getMode());
+    loadUser();
   }, []);
 
-  const handleLogout = () => {
-    dispatch({ type: 'LOGOUT' });
-    navigate('/login');
+  const loadUser = async () => {
+    try {
+      const user = await api.get<User>('/auth/me');
+      setCurrentUser(user);
+    } catch (error) {
+      console.error('Failed to load user:', error);
+    }
+  };
+
+  const isAdmin = currentUser?.role === 'ADMIN';
+
+  const handleLogout = async () => {
+    try {
+      const refreshToken = localStorage.getItem('refreshToken');
+      if (refreshToken) {
+        await api.post('/auth/logout', { refreshToken });
+      }
+    } catch (error) {
+      console.error('Logout error:', error);
+    } finally {
+      localStorage.removeItem('accessToken');
+      localStorage.removeItem('refreshToken');
+      setCurrentUser(null);
+      navigate('/login');
+    }
   };
 
   const navItems = [
@@ -77,11 +105,11 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         <div className="absolute bottom-0 left-0 right-0 p-4" style={{ borderTop: '1px solid var(--border)' }}>
           <div className="flex items-center gap-3 px-4 py-2 mb-2">
             <div className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold" style={{ background: 'var(--elev)', color: 'var(--text)' }}>
-              {state.currentUser?.firstName?.[0]}{state.currentUser?.lastName?.[0]}
+              {currentUser?.firstName?.[0]}{currentUser?.lastName?.[0]}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium truncate" style={{ color: 'var(--text)' }}>{state.currentUser?.firstName} {state.currentUser?.lastName}</p>
-              <p className="text-xs truncate" style={{ color: 'var(--muted)' }}>{state.currentUser?.email}</p>
+              <p className="text-sm font-medium truncate" style={{ color: 'var(--text)' }}>{currentUser?.firstName} {currentUser?.lastName}</p>
+              <p className="text-xs truncate" style={{ color: 'var(--muted)' }}>{currentUser?.email}</p>
             </div>
           </div>
           <button
@@ -117,34 +145,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           <h1 className="text-lg font-bold" style={{ fontFamily: 'Unbounded', color: 'var(--text)' }}>Провиант</h1>
         </header>
         
-        {/* CR-5.1: Бейдж режима API */}
-        <div 
-          className="fixed top-4 right-4 z-50 flex items-center gap-2 px-3 py-1.5 rounded-full cursor-pointer transition-all hover:scale-105"
-          style={{ 
-            background: 'var(--surface)', 
-            border: '1px solid var(--border)',
-            fontSize: '11px',
-            fontWeight: 600,
-            boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
-          }}
-          onClick={() => {
-            const newMode = apiMode === 'mock' ? 'real' : 'mock';
-            api.setMode(newMode);
-            setApiMode(newMode);
-          }}
-          title="Клик для переключения режима"
-        >
-          <div 
-            className="w-2 h-2 rounded-full"
-            style={{ 
-              background: apiMode === 'mock' ? 'var(--fire)' : '#22C55E',
-              boxShadow: apiMode === 'mock' ? '0 0 8px var(--fire)' : '0 0 8px #22C55E'
-            }}
-          />
-          <span style={{ color: 'var(--muted)' }}>
-            {apiMode === 'mock' ? 'демо-режим' : 'бэкенд'}
-          </span>
-        </div>
+        {/* Бейдж режима API */}
+        <ApiModeBadge />
         
         <main className="flex-1 p-4 md:p-6 lg:p-8 overflow-auto">
           {children}

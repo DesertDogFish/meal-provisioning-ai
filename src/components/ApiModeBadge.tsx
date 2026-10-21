@@ -1,0 +1,251 @@
+import { useState, useEffect } from 'react';
+import { api } from '../api/client';
+import { startWatchdog, stopWatchdog, onWatchdogChange } from '../api/watchdog';
+import { X, RefreshCw, AlertCircle, Wifi, WifiOff } from 'lucide-react';
+import { useToast } from './ToastProvider';
+
+export default function ApiModeBadge() {
+  const { showSuccess, showError } = useToast();
+  const [mode, setMode] = useState<'real' | 'mock'>(api.getMode());
+  const [showModal, setShowModal] = useState(false);
+  const [apiAvailable, setApiAvailable] = useState(false);
+  const [lastLatency, setLastLatency] = useState<number | null>(null);
+  const [lastError, setLastError] = useState<string | null>(null);
+  const [checking, setChecking] = useState(false);
+
+  useEffect(() => {
+    // Запуск watchdog
+    startWatchdog();
+    
+    // Подписка на изменения
+    const unsubscribe = onWatchdogChange((available, latency, error) => {
+      setApiAvailable(available);
+      setLastLatency(latency);
+      setLastError(error);
+      
+      // Если API стал недоступен в режиме real - показываем предупреждение
+      if (!available && mode === 'real') {
+        showError('API недоступен, переключение на демо-данные');
+      }
+    });
+    
+    return () => {
+      stopWatchdog();
+      unsubscribe();
+    };
+  }, [mode, showError]);
+
+  const handleModeChange = (newMode: 'real' | 'mock') => {
+    api.setMode(newMode);
+    setMode(newMode);
+    showSuccess(`Режим переключён на: ${newMode === 'real' ? 'Бэкенд' : 'Демо-данные'}`);
+  };
+
+  const handleCheckConnection = async () => {
+    setChecking(true);
+    try {
+      const startTime = Date.now();
+      await api.get('/meta');
+      const latency = Date.now() - startTime;
+      setApiAvailable(true);
+      setLastLatency(latency);
+      setLastError(null);
+      showSuccess(`API доступен (${latency}ms)`);
+    } catch (error) {
+      setApiAvailable(false);
+      setLastError(error instanceof Error ? error.message : 'Unknown error');
+      showError('API недоступен');
+    } finally {
+      setChecking(false);
+    }
+  };
+
+  const handleResetData = () => {
+    if (confirm('Сбросить все демо-данные?')) {
+      api.resetSeedData();
+      showSuccess('Демо-данные сброшены');
+      window.location.reload();
+    }
+  };
+
+  const getBadgeColor = () => {
+    if (mode === 'real' && apiAvailable) return '#22C55E'; // зелёный
+    if (mode === 'real' && !apiAvailable) return '#EF4444'; // красный
+    return '#F59E0B'; // янтарный для mock
+  };
+
+  const getBadgeText = () => {
+    if (mode === 'real' && apiAvailable) return 'бэкенд: подключён';
+    if (mode === 'real' && !apiAvailable) return 'бэкенд: ошибка';
+    return 'демо-режим';
+  };
+
+  return (
+    <>
+      {/* Бейдж */}
+      <div
+        className="fixed top-4 right-4 z-50 flex items-center gap-2 px-3 py-1.5 rounded-full cursor-pointer transition-all hover:scale-105"
+        style={{
+          background: 'var(--surface)',
+          border: `2px solid ${getBadgeColor()}`,
+          fontSize: '11px',
+          fontWeight: 600,
+          boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
+        }}
+        onClick={() => setShowModal(true)}
+        title="Клик для настройки режима"
+      >
+        <div
+          className="w-2 h-2 rounded-full"
+          style={{
+            background: getBadgeColor(),
+            boxShadow: `0 0 8px ${getBadgeColor()}`
+          }}
+        />
+        <span style={{ color: 'var(--muted)' }}>
+          {getBadgeText()}
+        </span>
+      </div>
+
+      {/* Модалка */}
+      {showModal && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+          style={{ background: 'rgba(0, 0, 0, 0.7)', backdropFilter: 'blur(6px)' }}
+          onClick={() => setShowModal(false)}
+        >
+          <div
+            className="rounded-2xl shadow-2xl w-full max-w-md p-6"
+            style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold" style={{ color: 'var(--text)' }}>Режим данных</h2>
+              <button
+                onClick={() => setShowModal(false)}
+                className="p-2 rounded-lg transition-colors"
+                style={{ color: 'var(--muted)' }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Текущий статус */}
+            <div className="mb-4 p-3 rounded-lg" style={{ background: 'var(--elev)' }}>
+              <div className="flex items-center gap-2 mb-2">
+                {apiAvailable ? (
+                  <Wifi size={16} style={{ color: '#22C55E' }} />
+                ) : (
+                  <WifiOff size={16} style={{ color: '#EF4444' }} />
+                )}
+                <span style={{ color: 'var(--text)', fontSize: '13px' }}>
+                  API: {apiAvailable ? 'доступен' : 'недоступен'}
+                </span>
+                {lastLatency && (
+                  <span style={{ color: 'var(--muted)', fontSize: '12px' }}>
+                    ({lastLatency}ms)
+                  </span>
+                )}
+              </div>
+              {lastError && (
+                <p style={{ color: '#FCA5A5', fontSize: '12px' }}>
+                  Ошибка: {lastError}
+                </p>
+              )}
+            </div>
+
+            {/* Переключатель режимов */}
+            <div className="space-y-3 mb-6">
+              <div
+                className="rounded-xl p-4 cursor-pointer transition-all"
+                style={{
+                  background: mode === 'real' ? 'rgba(52, 211, 153, 0.1)' : 'var(--elev)',
+                  border: mode === 'real' ? '2px solid var(--ok)' : '1px solid var(--border)'
+                }}
+                onClick={() => handleModeChange('real')}
+              >
+                <div className="flex items-center gap-3">
+                  <div
+                    className="w-3 h-3 rounded-full"
+                    style={{ background: '#22C55E', boxShadow: '0 0 8px #22C55E' }}
+                  />
+                  <div className="flex-1">
+                    <p className="font-bold" style={{ color: 'var(--text)' }}>Бэкенд</p>
+                    <p className="text-xs" style={{ color: 'var(--muted)' }}>
+                      HTTP запросы к Spring Boot API
+                    </p>
+                  </div>
+                  {mode === 'real' && (
+                    <span className="text-xs font-bold" style={{ color: 'var(--ok)' }}>АКТИВЕН</span>
+                  )}
+                </div>
+              </div>
+
+              <div
+                className="rounded-xl p-4 cursor-pointer transition-all"
+                style={{
+                  background: mode === 'mock' ? 'rgba(245, 158, 11, 0.1)' : 'var(--elev)',
+                  border: mode === 'mock' ? '2px solid var(--fire)' : '1px solid var(--border)'
+                }}
+                onClick={() => handleModeChange('mock')}
+              >
+                <div className="flex items-center gap-3">
+                  <div
+                    className="w-3 h-3 rounded-full"
+                    style={{ background: 'var(--fire)', boxShadow: '0 0 8px var(--fire)' }}
+                  />
+                  <div className="flex-1">
+                    <p className="font-bold" style={{ color: 'var(--text)' }}>Демо-данные</p>
+                    <p className="text-xs" style={{ color: 'var(--muted)' }}>
+                      Локальные данные в localStorage
+                    </p>
+                  </div>
+                  {mode === 'mock' && (
+                    <span className="text-xs font-bold" style={{ color: 'var(--fire)' }}>АКТИВЕН</span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Кнопки действий */}
+            <div className="space-y-2">
+              <button
+                onClick={handleCheckConnection}
+                disabled={checking}
+                className="w-full px-4 py-2.5 rounded-full font-semibold transition-all flex items-center justify-center gap-2"
+                style={{
+                  background: 'linear-gradient(90deg, var(--w1), var(--w2))',
+                  color: '#04121A',
+                  opacity: checking ? 0.6 : 1
+                }}
+              >
+                {checking ? (
+                  <>
+                    <RefreshCw size={16} className="animate-spin" />
+                    Проверка...
+                  </>
+                ) : (
+                  'Проверить соединение'
+                )}
+              </button>
+
+              {mode === 'mock' && (
+                <button
+                  onClick={handleResetData}
+                  className="w-full px-4 py-2.5 rounded-full font-semibold transition-all flex items-center justify-center gap-2"
+                  style={{
+                    border: '1px solid var(--fire)',
+                    color: 'var(--fire)'
+                  }}
+                >
+                  <AlertCircle size={16} />
+                  Сбросить демо-данные
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}

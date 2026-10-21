@@ -30,6 +30,8 @@ class PriceOverrideTest {
     private RecipeRepository recipeRepository;
     @Mock
     private TripPriceOverrideRepository overrideRepository;
+    @Mock
+    private TripIngredientSubstitutionRepository substitutionRepository;
 
     private PriceResolutionService priceResolutionService;
     private SummaryService summaryService;
@@ -45,7 +47,7 @@ class PriceOverrideTest {
         MockitoAnnotations.openMocks(this);
         
         priceResolutionService = new PriceResolutionService(priceRepository, overrideRepository);
-        summaryService = new SummaryService(tripRepository, priceRepository, recipeRepository, priceResolutionService);
+        summaryService = new SummaryService(tripRepository, priceRepository, recipeRepository, priceResolutionService, substitutionRepository);
 
         // Создаём компоненты
         grechka = Ingredient.builder().id(1L).name("Гречка").unit(UnitOfMeasure.KG).build();

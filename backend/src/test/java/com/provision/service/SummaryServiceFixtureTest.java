@@ -28,7 +28,7 @@ class SummaryServiceFixtureTest {
 
     @BeforeEach
     void setUp() {
-        summaryService = new SummaryService(null, null, null);
+        summaryService = new SummaryService(null, null, null, null, null);
 
         // Create ingredients (FIX-1)
         ingredientI1 = Ingredient.builder().id(1L).name("Гречка").unit(UnitOfMeasure.KG).build();

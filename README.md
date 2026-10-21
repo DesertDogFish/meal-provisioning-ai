@@ -1,326 +1,347 @@
 # Provision - Система планирования питания для походов
 
-Полнофункциональное веб-приложение для планирования питания в походах и яхтенных путешествиях с расчётом закупок, стоимости и сводок.
+Полнофункциональное веб-приложение для планирования питания в походах и яхтенных путешествиях с расчётом закупок, стоимости, калорийности и интеграцией с внешними источниками цен.
 
-## 🎯 MVP Сценарии
+## 🚀 Быстрый старт (одна кнопка)
 
-### ✅ Сценарий 1: Регистрация и вход
-1. Перейдите на http://localhost:5173
-2. Нажмите "Нет аккаунта? Зарегистрироваться"
-3. Заполните форму:
-   - Email: test@example.com
-   - Пароль: password123
-   - Имя: Иван
-   - Фамилия: Петров
-4. Нажмите "Зарегистрироваться"
-5. Вы автоматически войдёте в систему
-6. Нажмите на аватар в сайдбаре → "Профиль" для просмотра данных
+### PowerShell (Windows)
 
-**Демо-аккаунты:**
-- Админ: admin@provision.app / password123
-- Пользователь: user@provision.app / password123
+```powershell
+.\dev.ps1 -Action start
+```
 
-### ✅ Сценарий 2: Админ создаёт справочник
-1. Войдите как админ (admin@provision.app)
-2. Перейдите в "Админка"
-3. Вкладка "Компоненты":
-   - Нажмите "Добавить"
-   - Создайте компоненты:
-     - Гречка, кг, Крупы
-     - Тушёнка, шт, Консервы
-     - Вода, л, Жидкости
-4. Вкладка "Цены":
-   - Нажмите "Добавить цену"
-   - Добавьте цены:
-     - Гречка: 120 RUB
-     - Тушёнка: 180 RUB
-     - Вода: 30 RUB
-5. Вкладка "Рецепты":
-   - Нажмите "Новый рецепт"
-   - Создайте рецепт "Гречка с тушёнкой":
-     - Тип: Обед
-     - Порций: 4
-     - Ккал: 450
-     - Ингредиенты:
-       - Гречка: 0.4 кг
-       - Тушёнка: 1 шт
-       - Вода: 0.8 л
-
-### ✅ Сценарий 3: Пользователь создаёт поход
-1. Войдите как пользователь (user@provision.app)
-2. Перейдите в "Походы"
-3. Нажмите "Новый поход"
-4. Заполните:
-   - Название: Поход на Карельский перешеек
-   - Дата начала: 2024-07-15
-   - Дата окончания: 2024-07-17 (3 дня)
-   - Количество человек: 4
-   - Заметки: Озеро, рыбалка, палатки
-5. Нажмите "Создать"
-6. Система автоматически создаст 3 дня
-7. Нажмите на поход для открытия деталей
-8. Для каждого дня нажмите "+" для добавления приёма пищи:
-   - День 1: Завтрак (Овсяная каша), Обед (Гречка с тушёнкой), Ужин (Рис с рыбой)
-   - День 2: Завтрак, Обед, Ужин
-   - День 3: Завтрак, Обед
-9. Измените количество людей:
-   - На уровне дня: нажмите иконку людей → введите 3
-   - На уровне приёма пищи: при добавлении укажите "Количество человек"
-
-### ✅ Сценарий 4: Сводки
-1. Откройте поход из сценария 3
-2. Вкладка "Меню по дням":
-   - Видите расписание приёмов пищи
-   - Для каждого блюда показано количество продуктов
-   - Раскрытые дни показывают ингредиенты с граммовками
-3. Вкладка "Закупка на поход":
-   - Видите суммарный список продуктов
-   - Общее количество каждого ингредиента
-   - Стоимость (если цены есть)
-   - Предупреждение о недостающих ценах
-4. Вкладка "Закупка по дням":
-   - Видите продукты на каждый день
-   - Стоимость дня
-   - Отсутствующие цены
-5. Вкладка "На человека":
-   - Сводка по походу:
-     - Человеко-приёмов пищи
-     - Стоимость на 1 человека (общее)
-     - Стоимость на 1 чел./приём
-     - Калории на приём
-   - Таблица продуктов на человека
-
-## 🚀 Запуск проекта
-
-### Бэкенд (Java 21 + Spring Boot)
+### Bash (Linux/Mac)
 
 ```bash
-cd backend
+# 1. Скопировать .env
+cp .env.example .env
 
-# Запуск через Docker Compose (рекомендуется)
+# 2. Запустить Docker Compose
 docker-compose up -d
 
-# Или локально (требуется PostgreSQL 15+)
-# 1. Создайте базу данных provision
-# 2. Настройте application.yml
-# 3. Запустите:
-mvn spring-boot:run
+# 3. Открыть браузер
+# Frontend: http://localhost:3000
+# Backend API: http://localhost:8080
+# Swagger UI: http://localhost:8080/swagger-ui.html
 ```
 
-**Доступ:**
-- API: http://localhost:8080
-- Swagger UI: http://localhost:8080/swagger-ui.html
-- PostgreSQL: localhost:5432 (provision/provision123)
+## 📋 Возможности
 
-### Фронтенд (React + TypeScript)
+### Основные функции
 
-```bash
-# В корне проекта
-npm install
-npm run dev
-```
+- ✅ **Планирование походов** - создание походов с датами и количеством людей
+- ✅ **Каталог продуктов** - 60+ продуктов с категориями, единицами, калорийностью
+- ✅ **Каталог рецептов** - 61 блюдо с расчётом калорийности из продуктов
+- ✅ **Расчёт закупок** - автоматический расчёт количества продуктов
+- ✅ **Цены и стоимость** - исторические цены, расчёт стоимости похода
+- ✅ **Оверрайды цен** - план/факт с дельтой и процентом отклонения
+- ✅ **Замены компонентов** - локальные замены в рецептах для похода
+- ✅ **Расчёт упаковок** - округление до упаковок, учёт остатков
+- ✅ **Интеграция OFF** - синхронизация цен с Open Food Facts
+- ✅ **Журнал синков** - логирование всех синхронизаций с деталями
 
-**Доступ:**
-- Приложение: http://localhost:5173
+### CR-1..CR-5
 
-## 📚 API Endpoints
-
-### Аутентификация
-- `POST /api/v1/auth/register` - Регистрация
-- `POST /api/v1/auth/login` - Вход (получение JWT)
-- `POST /api/v1/auth/refresh` - Обновление токена
-- `POST /api/v1/auth/logout` - Выход
-- `GET /api/v1/auth/me` - Текущий пользователь
-
-### Походы (USER)
-- `GET /api/v1/trips` - Список походов
-- `GET /api/v1/trips/{id}` - Детали похода
-- `POST /api/v1/trips` - Создать поход
-- `PUT /api/v1/trips/{id}` - Обновить поход
-- `DELETE /api/v1/trips/{id}` - Удалить поход
-- `PUT /api/v1/trips/{tripId}/days/{dayId}` - Обновить день
-- `POST /api/v1/trips/{tripId}/days/{dayId}/meals` - Добавить приём пищи
-- `PUT /api/v1/trips/{tripId}/days/{dayId}/meals/{mealId}` - Обновить приём пищи
-- `DELETE /api/v1/trips/{tripId}/days/{dayId}/meals/{mealId}` - Удалить приём пищи
-
-### Сводки (USER)
-- `GET /api/v1/trips/{tripId}/summary/menu` - Меню по дням
-- `GET /api/v1/trips/{tripId}/summary/shopping` - Закупка на поход
-- `GET /api/v1/trips/{tripId}/summary/shopping/by-days` - Закупка по дням
-- `GET /api/v1/trips/{tripId}/summary/person` - Сводка на человека
-
-### Рецепты (USER - чтение, ADMIN - CRUD)
-- `GET /api/v1/recipes` - Список рецептов
-- `GET /api/v1/recipes/{id}` - Детали рецепта
-- `POST /api/v1/admin/recipes` - Создать рецепт (ADMIN)
-- `PUT /api/v1/admin/recipes/{id}` - Обновить рецепт (ADMIN)
-- `DELETE /api/v1/admin/recipes/{id}` - Удалить рецепт (ADMIN)
-
-### Админка (ADMIN)
-- `GET /api/v1/admin/ingredients` - Список компонентов
-- `GET /api/v1/admin/ingredients/paginated` - Список с пагинацией
-- `POST /api/v1/admin/ingredients` - Создать компонент
-- `PUT /api/v1/admin/ingredients/{id}` - Обновить компонент
-- `DELETE /api/v1/admin/ingredients/{id}` - Удалить компонент
-- `GET /api/v1/admin/ingredient-prices/ingredient/{id}` - Цены компонента
-- `POST /api/v1/admin/ingredient-prices` - Добавить цену
-- `GET /api/v1/admin/staging` - Список черновиков рецептов
-- `POST /api/v1/admin/staging` - Создать черновик
-- `POST /api/v1/admin/staging/{id}/approve` - Одобрить черновик
-- `POST /api/v1/admin/staging/{id}/reject` - Отклонить черновик
-
-## 🎨 Дизайн-концепт "Midnight Harbor"
-
-### Цветовая палитра
-- **bg**: #0B0F17 - тёмный фон
-- **surface**: #121826 - карточки
-- **elev**: #1A2233 - элементы
-- **w1**: #2DD4BF - вода (teal)
-- **w2**: #38BDF8 - вода (blue)
-- **fire**: #F59E0B - огонь (amber)
-- **ok**: #34D399 - успех (green)
-
-### Шрифты
-- **Unbounded** - заголовки (500, 700)
-- **Manrope** - основной текст (400, 600, 800)
-
-### Особенности
-- Glass эффект (backdrop-filter: blur)
-- Gradient кнопки
-- Spark charts для статистики
-- Ring progress indicators
-- Pill badges
-- Hover эффекты с scale и shadow
+- ✅ **CR-1:** Калорийность всегда на 100 г/мл с формулой ядра
+- ✅ **CR-2:** Единицы KG/L/PCS/PACK с русскими лейблами (кг/л/шт/уп)
+- ✅ **CR-3:** Зависимые дейт-пикеры с авто-подтягиванием
+- ✅ **CR-4:** Видимая иконка календаря на тёмном фоне
+- ✅ **CR-5:** API клиент с mock-адаптером и бейджем режима
 
 ## 🛠 Технологический стек
 
-### Бэкенд
-- Java 21
-- Spring Boot 3.2.5
-- Spring Data JPA
-- Spring Security (JWT)
-- PostgreSQL 15
-- Flyway (миграции)
-- MapStruct
-- springdoc-openapi (Swagger)
-- Testcontainers (тесты)
-- JUnit 5 + AssertJ + Mockito
+### Backend
+- **Java 21** + **Spring Boot 3.2.5**
+- **PostgreSQL 15** + **Flyway** (миграции V1-V11)
+- **Spring Security** + **JWT** (access + refresh tokens)
+- **Spring Data JPA** + **Hibernate**
+- **MapStruct** (маппинг DTO)
+- **springdoc-openapi** (Swagger UI)
+- **JUnit 5** + **AssertJ** + **Mockito** + **Testcontainers**
 
-### Фронтенд
-- React 18
-- TypeScript
-- Vite
-- Tailwind CSS
-- React Router
-- Lucide React (иконки)
-- date-fns
+### Frontend
+- **React 18** + **TypeScript**
+- **Vite** (сборка)
+- **Tailwind CSS** (стилизация)
+- **React Router** (маршрутизация)
+- **Lucide React** (иконки)
+- **date-fns** (работа с датами)
 
-## ✅ Требования к качеству кода
+### Инфраструктура
+- **Docker** + **Docker Compose**
+- **Nginx** (frontend)
+- **Maven** (backend build)
 
-### Java 21 Features
-✅ Record для всех DTO
-✅ Switch expressions
-✅ Var локально
-✅ Текстовые блоки
+## 📊 Структура проекта
 
-### Spring Best Practices
-✅ Конструкторная инъекция (@RequiredArgsConstructor)
-✅ @Transactional на сервисах
-✅ @Transactional(readOnly = true) для чтения
-✅ @RestControllerAdvice для ошибок
-✅ @ConfigurationProperties (JwtProperties)
-✅ @PreAuthorize для ролей
+```
+provision/
+├── backend/                    # Spring Boot приложение
+│   ├── src/main/java/         # Java код
+│   ├── src/main/resources/    # Конфигурация + миграции
+│   ├── src/test/java/         # Тесты (9 файлов)
+│   ├── Dockerfile
+│   └── pom.xml
+├── src/                        # React приложение
+│   ├── api/                   # API клиент + mock
+│   ├── components/            # UI компоненты
+│   ├── pages/                 # Страницы
+│   ├── store/                 # State management
+│   ├── types/                 # TypeScript типы
+│   └── utils/                 # Утилиты + тесты
+├── docker-compose.yml          # Оркестрация
+├── Dockerfile.frontend         # Frontend build
+├── nginx.conf                  # Nginx конфигурация
+├── .env.example                # Переменные окружения
+├── dev.ps1                     # PowerShell скрипт
+├── README.md                   # Этот файл
+└── STATUS.md                   # Статус реализации
+```
 
-### БД
-✅ Все изменения через Flyway
-✅ NUMERIC для денег и количеств
-✅ LocalDate для дат
-✅ Внешние ключи
-✅ Индексы
+## 🗄 База данных
 
-### API
-✅ Версия в URL: /api/v1/...
-✅ Пагинация (PageResponse)
-✅ Сортировка по разрешённым полям
-✅ ISO-8601 даты
-✅ ProblemDetail (RFC 7807)
+### Миграции (V1-V11)
 
-### Безопасность
-✅ BCrypt для паролей
-✅ JWT из переменной окружения
-✅ Refresh token в БД (SHA-256)
-✅ Проверка владельца похода
-✅ ROLE-based access control
+- **V1:** Initial schema (users, ingredients, recipes, trips)
+- **V2:** Catalog extensions (code, category, cook_minutes)
+- **V3:** Seed catalog (60 компонентов, 61 рецепт)
+- **V4:** Recipe ingredients
+- **V5:** Integrations (OFF sync)
+- **V6:** Trip price overrides
+- **V7:** Packs and substitutions
+- **V8:** Product categories and identity
+- **V10:** Sync trigger
+- **V11:** kcal_per_100g and PACK unit
+
+### Таблицы
+
+- `users` - пользователи (USER/ADMIN)
+- `refresh_tokens` - JWT refresh tokens
+- `product_categories` - справочник категорий
+- `ingredients` - продукты (с kcal_per_100g, piece_weight_g)
+- `ingredient_prices` - исторические цены
+- `recipes` - рецепты
+- `recipe_ingredients` - состав рецептов
+- `trips` - походы
+- `trip_days` - дни похода
+- `trip_meals` - приёмы пищи
+- `trip_price_overrides` - оверрайды цен (план/факт)
+- `trip_ingredient_substitutions` - замены компонентов
+- `integrations` - настройки интеграций
+- `external_products` - кэш внешних продуктов
+- `sync_logs` - журнал синхронизаций
+- `staging_recipes` - черновики рецептов
+- `ingredient_mappings` - маппинг внешних ингредиентов
 
 ## 🧪 Тесты
 
+### Backend (9 файлов)
+
 ```bash
 cd backend
-
-# Все тесты
 mvn test
-
-# Только интеграционные тесты
-mvn test -Dtest=*IntegrationTest
-
-# Только юнит-тесты
-mvn test -Dtest=*Test
 ```
 
-### Покрытие тестами
-✅ Юнит-тесты SummaryService (расчёты)
-✅ Интеграционные тесты аутентификации
-✅ Интеграционные тесты безопасности
-✅ Интеграционные тесты конфликтов (409)
+**Unit-тесты:**
+- `SummaryServiceTest` - базовые расчёты
+- `SummaryServiceFixtureTest` - FIX-1
+- `DetailedShoppingCalculationTest` - детальная математика
+- `PriceOverrideTest` - ADJ-01..05
+- `ShoppingListCostAggregationBugTest` - баг агрегации
 
-## 📖 Документация
+**Integration-тесты:**
+- `AuthIntegrationTest` - AUTH-01..08
+- `SecurityIntegrationTest` - SEC-01..06
+- `ConflictIntegrationTest` - ING-05, ING-06, REC-07
+- `CatalogIntegrationTest` - CAT-01..07
 
-- [MVP_IMPLEMENTATION.md](./MVP_IMPLEMENTATION.md) - Описание реализованных MVP сценариев
-- [BACKEND_IMPLEMENTATION.md](./BACKEND_IMPLEMENTATION.md) - Детали реализации бэкенда
-- [ERROR_HANDLING.md](./ERROR_HANDLING.md) - Система обработки ошибок
-- [backend/README.md](./backend/README.md) - Документация API
+### Frontend (2 файла)
+
+```bash
+npm test
+```
+
+**Unit-тесты:**
+- `calc.test.ts` - KCAL-01..06, UNIT-01..03, humanize
+- `mockServer.test.ts` - MOCK-01..03
+
+## 📖 API Документация
+
+После запуска бэкенда откройте Swagger UI:
+
+```
+http://localhost:8080/swagger-ui.html
+```
+
+### Основные endpoints
+
+**Аутентификация:**
+- `POST /api/v1/auth/register` - регистрация
+- `POST /api/v1/auth/login` - вход
+- `POST /api/v1/auth/refresh` - обновление токена
+- `GET /api/v1/auth/me` - текущий пользователь
+
+**Продукты:**
+- `GET /api/v1/product-categories` - список категорий
+- `GET /api/v1/admin/products` - список продуктов (фильтры, сортировка, пагинация)
+- `POST /api/v1/admin/products` - создание продукта
+- `PUT /api/v1/admin/products/{id}` - обновление
+- `DELETE /api/v1/admin/products/{id}` - удаление
+- `GET /api/v1/admin/products/check-name` - проверка дубля
+
+**Рецепты:**
+- `GET /api/v1/recipes` - список рецептов (фильтры)
+- `GET /api/v1/recipes/{id}` - детали рецепта
+- `POST /api/v1/admin/recipes` - создание (ADMIN)
+- `PUT /api/v1/admin/recipes/{id}` - обновление (ADMIN)
+- `DELETE /api/v1/admin/recipes/{id}` - удаление (ADMIN)
+
+**Походы:**
+- `GET /api/v1/trips` - список походов
+- `POST /api/v1/trips` - создание похода
+- `GET /api/v1/trips/{id}` - детали похода
+- `PUT /api/v1/trips/{id}` - обновление
+- `DELETE /api/v1/trips/{id}` - удаление
+
+**Сводки:**
+- `GET /api/v1/trips/{id}/summary/menu` - меню по дням
+- `GET /api/v1/trips/{id}/summary/shopping` - закупка на поход
+- `GET /api/v1/trips/{id}/summary/shopping/by-days` - закупка по дням
+- `GET /api/v1/trips/{id}/summary/person` - сводка на человека
+
+**Оверрайды цен:**
+- `GET /api/v1/trips/{id}/price-overrides` - список оверрайдов
+- `PUT /api/v1/trips/{id}/price-overrides/{ingredientId}` - создание/обновление
+- `DELETE /api/v1/trips/{id}/price-overrides/{ingredientId}` - удаление
+
+**Интеграции:**
+- `GET /api/v1/admin/integrations` - список интеграций
+- `POST /api/v1/admin/integrations/{provider}/connect` - подключение
+- `POST /api/v1/admin/integrations/{provider}/sync/prices` - синхронизация цен
+
+**Журнал синков:**
+- `GET /api/v1/admin/sync-logs` - список запусков
+- `GET /api/v1/admin/sync-logs/{id}` - детали запуска
+- `GET /api/v1/admin/sync-logs/kpi` - KPI за период
+
+**Meta:**
+- `GET /api/v1/meta` - health check (без авторизации)
 
 ## 🔐 Безопасность
 
-- Все пароли хешируются BCrypt
-- JWT access token (1 час)
-- Refresh token в БД (SHA-256 hash, 7 дней)
-- Проверка владельца похода перед любыми действиями
-- ROLE-based access control (USER, ADMIN)
-- Stateless session
-- Валидация всех входных данных
+- ✅ JWT access token (1 час)
+- ✅ Refresh token в БД (SHA-256 hash, 7 дней)
+- ✅ BCrypt для паролей
+- ✅ ROLE-based access control (USER/ADMIN)
+- ✅ Проверка владельца похода
+- ✅ Валидация всех входных данных
+- ✅ CORS настроен
+- ✅ Секреты только через env/.env
 
-## 📊 Бизнес-логика
+## 🎨 Дизайн
 
-### Расчёты
+Дизайн-концепт **Midnight Harbor**:
+- Тёмная тема (#0B0F17 фон)
+- Градиентные кнопки (teal → blue)
+- Glass-эффекты (backdrop-filter: blur)
+- Адаптивный дизайн (mobile-first)
+- NumberField с адаптивным шагом
+- DateRange с зависимыми пикерами
+- Бейдж режима (демо/бэкенд)
+
+## 📝 Режимы работы
+
+### Демо-режим (по умолчанию)
+
+- Работает без бэкенда
+- Данные в localStorage
+- Мок-сервер эмулирует API
+- Задержка 200-400 мс
+- Режим ошибок `?fail=<route>`
+
+### Бэкенд-режим
+
+- HTTP запросы к Spring Boot
+- Реальная база данных PostgreSQL
+- JWT авторизация
+- Flyway миграции
+- Swagger UI
+
+**Переключение:** клик на бейдж в правом верхнем углу
+
+## 🐛 Troubleshooting
+
+### Docker не запускается
+
+```bash
+# Проверить Docker
+docker --version
+
+# Перезапустить Docker Desktop
+# Windows: правый клик на иконке → Restart
+# Mac: меню Docker → Restart
+
+# Очистить и пересобрать
+docker-compose down -v
+docker-compose up -d --build
 ```
-mealPeople = meal.peopleOverride ?? day.peopleOverride ?? trip.defaultPeople
-perPersonAmount = ingredient.amount / recipe.baseServings
-mealAmount = perPersonAmount * mealPeople
-cost = amount * price (последняя цена, где effectiveFrom <= дата)
+
+### Backend не подключается к БД
+
+```bash
+# Проверить PostgreSQL
+docker-compose ps postgres
+
+# Проверить логи
+docker-compose logs postgres
+
+# Пересоздать контейнер
+docker-compose rm -f postgres
+docker-compose up -d postgres
 ```
 
-### Конфликты
-- Компонент нельзя удалить/изменить, если используется в рецептах (409)
-- Рецепт нельзя удалить, если используется в походах (409)
-- Возвращается список ресурсов, где используется (usedIn)
+### Frontend не видит backend
 
-## 🎯 Готовность к продакшену
+```bash
+# Проверить .env
+cat .env | grep VITE_API_URL
 
-✅ Все MVP сценарии работают
-✅ Все требования к качеству кода выполнены
-✅ Дизайн-концепт применён
-✅ Тесты написаны и проходят
-✅ Документация создана
-✅ Docker Compose настроен
-✅ Swagger UI доступен
-✅ Миграции применяются
-✅ Безопасность обеспечена
+# Должно быть:
+# VITE_API_URL=http://localhost:8080/api/v1
 
-## 📝 Лицензия
+# Пересобрать frontend
+docker-compose restart frontend
+```
+
+### Миграции не применяются
+
+```bash
+# Проверить статус миграций
+docker-compose exec postgres psql -U provision -d provision -c "SELECT * FROM flyway_schema_history;"
+
+# Очистить и пересоздать БД
+docker-compose down -v
+docker-compose up -d
+```
+
+## 📚 Документация
+
+- `STATUS.md` - статус реализации + бэклог v2
+- `CR1_CR5_IMPLEMENTATION.md` - детали CR-1..CR-5
+- `FINAL_COMPLETE_SUMMARY.md` - полная сводка
+- `backend/README.md` - backend документация
+
+## 🤝 Вклад
+
+Проект создан в образовательных целях. Все предложения и улучшения приветствуются!
+
+## 📄 Лицензия
 
 MIT
 
-## 👥 Авторы
+---
 
-Разработано с использованием лучших практик Java 21, Spring Boot 3.x и современного React.
+**Автор:** AI Assistant  
+**Дата:** 2026-03-18  
+**Версия:** 1.0  
+**Статус:** ✅ ГОТОВ К ИСПОЛЬЗОВАНИЮ

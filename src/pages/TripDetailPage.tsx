@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useApp } from '../store/AppContext';
-import { calculateMenuByDays, calculateShoppingList, calculateDayShopping, calculatePersonSummary, formatAmount, getEffectivePeople } from '../utils/calculations';
-import { ArrowLeft, Plus, Trash2, Users, Utensils, ShoppingCart, BookOpen, TrendingUp, Calendar, ChevronDown, ChevronRight } from 'lucide-react';
+import { calculateMenuByDays, calculateShoppingList, calculateDayShopping, calculatePersonSummary, formatAmount } from '../utils/calculations';
+import { ArrowLeft, Plus, Trash2, Users, ShoppingCart, BookOpen, TrendingUp, Calendar, ChevronDown, ChevronRight } from 'lucide-react';
 import { MealType } from '../types';
 import PriceOverridesTab from '../components/PriceOverridesTab';
 
@@ -44,7 +44,6 @@ export default function TripDetailPage() {
   }
 
   const recipesMap = new Map(state.recipes.map(r => [r.id, r]));
-  const approvedRecipes = state.recipes.filter(r => r.source === 'MANUAL' || r.source === 'API' || r.source === 'AI');
 
   const toggleDay = (dayId: string) => {
     const next = new Set(expandedDays);
