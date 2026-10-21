@@ -1,41 +1,24 @@
-import { useState, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { useApp } from '../store/AppContext';
 import { useToast } from '../components/ToastProvider';
-import { Plus, Edit2, Trash2, Link, DollarSign, Search, X } from 'lucide-react';
+import { Plus, Edit2, Trash2, Search, X } from 'lucide-react';
 import { NumberField } from '../components/NumberField';
+import { Ingredient, UnitOfMeasure, ProductCategory } from '../types';
 
-interface ProductCategory {
-  id: string;
-  name: string;
-  slug: string;
-  sortOrder: number;
-}
-
-interface Product {
-  id: string;
-  name: string;
-  category: ProductCategory;
-  unit: string;
-  packSize?: number;
-  roundToPacks: boolean;
-  caloriesPerUnit?: number;
+interface Product extends Ingredient {
+  categoryName: string;
   currentPrice?: {
     value: number;
     currency: string;
-    effectiveFrom: string;
     source: string;
   };
   usageRecipes: number;
   bindingStatus: string;
-  updatedAt: string;
 }
 
 export default function ProductsPage() {
-  const { state } = useApp();
+  const { state, dispatch } = useApp();
   const { showError, showSuccess } = useToast();
-  const [products, setProducts] = useState<Product[]>([]);
-  const [categories, setCategories] = useState<ProductCategory[]>([]);
-  const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   
@@ -48,111 +31,168 @@ export default function ProductsPage() {
   const [usageStatus, setUsageStatus] = useState('');
   
   // Sorting
-  const [sortKey, setSortKey] = useState('name');
+  const [sortKey, setSortKey] = useState<'name' | 'category' | 'unit' | 'price' | 'usage'>('name');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   
   // Form
   const [formName, setFormName] = useState('');
   const [formCategory, setFormCategory] = useState('');
-  const [formUnit, setFormUnit] = useState<'KG' | 'L' | 'PCS'>('KG');
+  const [formUnit, setFormUnit] = useState<UnitOfMeasure>('KG');
   const [formPackSize, setFormPackSize] = useState<number | null>(null);
   const [formRoundToPacks, setFormRoundToPacks] = useState(false);
   const [formCalories, setFormCalories] = useState<number | null>(null);
   const [duplicateWarning, setDuplicateWarning] = useState<{ type: 'hard' | 'soft'; message: string } | null>(null);
 
-  useEffect(() => {
-    loadCategories();
-    loadProducts();
-  }, []);
+  // Преобразование ингредиентов в продукты
+  const products = useMemo((): Product[] => {
+    return state.ingredients.map(ing => {
+      // Найти текущую цену
+      const prices = state.prices
+        .filter(p => p.ingredientId === ing.id)
+        .sort((a, b) => new Date(b.effectiveFrom).getTime() - new Date(a.effectiveFrom).getTime());
+      const currentPrice = prices[0] ? {
+        value: prices[0].pricePerUnit,
+        currency: prices[0].currency,
+        source: 'MANUAL'
+      } : undefined;
 
-  useEffect(() => {
-    loadProducts();
-  }, [query, selectedCategories, selectedUnit, priceStatus, bindingStatus, usageStatus, sortKey, sortDir]);
+      // Подсчитать использование в рецептах
+      const usageRecipes = state.recipes.filter(r => 
+        r.ingredients.some(ri => ri.ingredientId === ing.id)
+      ).length;
 
-  const loadCategories = async () => {
-    try {
-      const response = await fetch('/api/v1/product-categories');
-      if (response.ok) {
-        const data = await response.json();
-        setCategories(data);
-      }
-    } catch (error) {
-      console.error('Failed to load categories:', error);
+      // Статус привязки
+      const bindingStatus = ing.code ? 'BOUND' : 'UNBOUND';
+
+      // Название категории
+      const category = state.categories.find(c => c.name === ing.category);
+      const categoryName = category?.name || ing.category || 'Прочее';
+
+      return {
+        ...ing,
+        categoryName,
+        currentPrice,
+        usageRecipes,
+        bindingStatus
+      };
+    });
+  }, [state.ingredients, state.prices, state.recipes, state.categories]);
+
+  // Фильтрация и сортировка
+  const filteredProducts = useMemo(() => {
+    let result = [...products];
+
+    // Поиск
+    if (query) {
+      const q = query.toLowerCase();
+      result = result.filter(p => 
+        p.name.toLowerCase().includes(q) ||
+        (p.code && p.code.toLowerCase().includes(q))
+      );
     }
-  };
 
-  const loadProducts = async () => {
-    setLoading(true);
-    try {
-      const params = new URLSearchParams();
-      if (query) params.append('query', query);
-      selectedCategories.forEach(c => params.append('categoryId', c));
-      if (selectedUnit) params.append('unit', selectedUnit);
-      if (priceStatus) params.append('priceStatus', priceStatus);
-      if (bindingStatus) params.append('bindingStatus', bindingStatus);
-      if (usageStatus) params.append('usageStatus', usageStatus);
-      params.append('sort', sortKey);
-      params.append('direction', sortDir);
-      params.append('page', '0');
-      params.append('size', '100');
-
-      const response = await fetch(`/api/v1/admin/products?${params}`, {
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('accessToken')}` }
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        setProducts(data.content || []);
-      } else {
-        const error = await response.json().catch(() => ({ detail: 'Failed to load products' }));
-        showError(error.detail || `Ошибка загрузки: ${response.status}`);
-        setProducts([]);
-      }
-    } catch (error) {
-      console.error('Failed to load products:', error);
-      showError('Ошибка сети при загрузке продуктов');
-      setProducts([]);
-    } finally {
-      setLoading(false);
+    // Фильтр по категории
+    if (selectedCategories.length > 0) {
+      result = result.filter(p => selectedCategories.includes(p.categoryName));
     }
-  };
 
-  const checkDuplicate = async (name: string, unit: string) => {
+    // Фильтр по единице
+    if (selectedUnit) {
+      result = result.filter(p => p.unit === selectedUnit);
+    }
+
+    // Фильтр по цене
+    if (priceStatus === 'HAS_PRICE') {
+      result = result.filter(p => p.currentPrice);
+    } else if (priceStatus === 'NO_PRICE') {
+      result = result.filter(p => !p.currentPrice);
+    }
+
+    // Фильтр по привязке
+    if (bindingStatus === 'BOUND') {
+      result = result.filter(p => p.bindingStatus === 'BOUND');
+    } else if (bindingStatus === 'UNBOUND') {
+      result = result.filter(p => p.bindingStatus === 'UNBOUND');
+    }
+
+    // Фильтр по использованию
+    if (usageStatus === 'USED') {
+      result = result.filter(p => p.usageRecipes > 0);
+    } else if (usageStatus === 'UNUSED') {
+      result = result.filter(p => p.usageRecipes === 0);
+    }
+
+    // Сортировка
+    result.sort((a, b) => {
+      let aVal: any, bVal: any;
+      switch (sortKey) {
+        case 'name':
+          aVal = a.name;
+          bVal = b.name;
+          break;
+        case 'category':
+          aVal = a.categoryName;
+          bVal = b.categoryName;
+          break;
+        case 'unit':
+          aVal = a.unit;
+          bVal = b.unit;
+          break;
+        case 'price':
+          aVal = a.currentPrice?.value || 0;
+          bVal = b.currentPrice?.value || 0;
+          break;
+        case 'usage':
+          aVal = a.usageRecipes;
+          bVal = b.usageRecipes;
+          break;
+      }
+      if (aVal < bVal) return sortDir === 'asc' ? -1 : 1;
+      if (aVal > bVal) return sortDir === 'asc' ? 1 : -1;
+      return 0;
+    });
+
+    return result;
+  }, [products, query, selectedCategories, selectedUnit, priceStatus, bindingStatus, usageStatus, sortKey, sortDir]);
+
+  // Проверка дубликата
+  const checkDuplicate = (name: string, unit: UnitOfMeasure) => {
     if (!name) {
       setDuplicateWarning(null);
       return;
     }
 
-    try {
-      const response = await fetch(
-        `/api/v1/admin/products/check-name?name=${encodeURIComponent(name)}&unit=${unit}`,
-        { headers: { 'Authorization': `Bearer ${localStorage.getItem('accessToken')}` } }
-      );
-      
-      if (response.ok) {
-        const data = await response.json();
-        if (data.duplicate) {
-          if (data.sameUnit) {
-            setDuplicateWarning({
-              type: 'hard',
-              message: `Жёсткий дубль: продукт «${data.existingName}» в ${unit} уже существует.`
-            });
-          } else {
-            setDuplicateWarning({
-              type: 'soft',
-              message: `Есть «${data.existingName}» в другой единице. Создаёте отдельный продукт в ${unit}?`
-            });
-          }
-        } else {
-          setDuplicateWarning(null);
-        }
+    const normalize = (s: string) => s.toLowerCase().replace(/ё/g, 'е').replace(/\s+/g, ' ').trim();
+    const normalizedName = normalize(name);
+
+    const existing = products.find(p => 
+      normalize(p.name) === normalizedName && p.unit === unit
+    );
+
+    if (existing) {
+      if (editingProduct && existing.id === editingProduct.id) {
+        setDuplicateWarning(null);
+        return;
       }
-    } catch (error) {
-      console.error('Failed to check duplicate:', error);
+      setDuplicateWarning({
+        type: 'hard',
+        message: `Жёсткий дубль: продукт «${existing.name}» в ${unit} уже существует.`
+      });
+      return;
+    }
+
+    const softDuplicate = products.find(p => normalize(p.name) === normalizedName && p.unit !== unit);
+    if (softDuplicate) {
+      setDuplicateWarning({
+        type: 'soft',
+        message: `Есть «${softDuplicate.name}» в ${softDuplicate.unit}. Создаёте отдельный продукт в ${unit}?`
+      });
+    } else {
+      setDuplicateWarning(null);
     }
   };
 
-  const handleSave = async () => {
+  const handleSave = () => {
     if (!formName || !formCategory) {
       showError('Заполните обязательные поля');
       return;
@@ -163,44 +203,44 @@ export default function ProductsPage() {
       return;
     }
 
-    try {
-      const url = editingProduct 
-        ? `/api/v1/admin/products/${editingProduct.id}`
-        : '/api/v1/admin/products';
-      
-      const method = editingProduct ? 'PUT' : 'POST';
-      
-      const response = await fetch(url, {
-        method,
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
-        },
-        body: JSON.stringify({
+    if (editingProduct) {
+      // Обновление
+      dispatch({
+        type: 'UPDATE_INGREDIENT',
+        payload: {
+          ...editingProduct,
           name: formName,
-          categoryId: parseInt(formCategory),
           unit: formUnit,
-          packSize: formPackSize,
+          category: formCategory,
+          packSize: formPackSize || undefined,
           roundToPacks: formRoundToPacks,
-          caloriesPerUnit: formCalories
-        })
+          caloriesPerUnit: formCalories || undefined
+        }
       });
-
-      if (response.ok) {
-        showSuccess(editingProduct ? 'Продукт обновлён' : 'Продукт создан');
-        setShowModal(false);
-        resetForm();
-        loadProducts();
-      } else {
-        const error = await response.json();
-        showError(error.detail || 'Ошибка сохранения');
-      }
-    } catch (error) {
-      showError('Ошибка сети');
+      showSuccess('Продукт обновлён');
+    } else {
+      // Создание
+      dispatch({
+        type: 'ADD_INGREDIENT',
+        payload: {
+          id: `ing_${Date.now()}`,
+          name: formName,
+          unit: formUnit,
+          category: formCategory,
+          packSize: formPackSize || undefined,
+          roundToPacks: formRoundToPacks,
+          caloriesPerUnit: formCalories || undefined,
+          createdAt: new Date().toISOString()
+        }
+      });
+      showSuccess('Продукт создан');
     }
+
+    setShowModal(false);
+    resetForm();
   };
 
-  const handleDelete = async (product: Product) => {
+  const handleDelete = (product: Product) => {
     if (product.usageRecipes > 0) {
       showError(`Продукт используется в ${product.usageRecipes} рецептах и не может быть удалён`);
       return;
@@ -208,31 +248,17 @@ export default function ProductsPage() {
 
     if (!confirm(`Удалить продукт "${product.name}"?`)) return;
 
-    try {
-      const response = await fetch(`/api/v1/admin/products/${product.id}`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('accessToken')}` }
-      });
-
-      if (response.ok) {
-        showSuccess('Продукт удалён');
-        loadProducts();
-      } else {
-        const error = await response.json();
-        showError(error.detail || 'Ошибка удаления');
-      }
-    } catch (error) {
-      showError('Ошибка сети');
-    }
+    dispatch({ type: 'DELETE_INGREDIENT', payload: product.id });
+    showSuccess('Продукт удалён');
   };
 
   const openEditModal = (product: Product) => {
     setEditingProduct(product);
     setFormName(product.name);
-    setFormCategory(product.category.id);
-    setFormUnit(product.unit as 'KG' | 'L' | 'PCS');
+    setFormCategory(product.categoryName);
+    setFormUnit(product.unit);
     setFormPackSize(product.packSize ?? null);
-    setFormRoundToPacks(product.roundToPacks);
+    setFormRoundToPacks(product.roundToPacks ?? false);
     setFormCalories(product.caloriesPerUnit ?? null);
     setShowModal(true);
   };
@@ -257,7 +283,7 @@ export default function ProductsPage() {
     setUsageStatus('');
   };
 
-  const handleSort = (key: string) => {
+  const handleSort = (key: typeof sortKey) => {
     if (sortKey === key) {
       setSortDir(sortDir === 'asc' ? 'desc' : 'asc');
     } else {
@@ -266,7 +292,7 @@ export default function ProductsPage() {
     }
   };
 
-  const formatPrice = (price?: { value: number; currency: string; effectiveFrom: string; source: string }) => {
+  const formatPrice = (price?: { value: number; currency: string; source: string }) => {
     if (!price) return <span className="chip-delta fire">нет цены</span>;
     return (
       <span style={{ color: 'var(--text)' }}>
@@ -278,6 +304,12 @@ export default function ProductsPage() {
     );
   };
 
+  // Уникальные категории для фильтра
+  const uniqueCategories = useMemo(() => {
+    const cats = new Set(products.map(p => p.categoryName));
+    return Array.from(cats).sort();
+  }, [products]);
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -285,7 +317,7 @@ export default function ProductsPage() {
         <div>
           <h1 className="text-2xl md:text-3xl font-bold" style={{ color: 'var(--text)' }}>Продукты</h1>
           <p className="mt-1" style={{ color: 'var(--muted)' }}>
-            {products.length} продуктов · {categories.length} категорий
+            {products.length} продуктов · {state.categories.length} категорий
           </p>
         </div>
         <button
@@ -355,9 +387,7 @@ export default function ProductsPage() {
 
       {/* Table */}
       <div className="rounded-xl overflow-hidden" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
-        {loading ? (
-          <div className="p-12 text-center" style={{ color: 'var(--muted)' }}>Загрузка...</div>
-        ) : products.length === 0 ? (
+        {filteredProducts.length === 0 ? (
           <div className="p-12 text-center">
             <p style={{ color: 'var(--muted)' }}>Ничего не найдено</p>
             <button onClick={resetFilters} className="ghost-btn mt-4">Сбросить фильтры</button>
@@ -400,7 +430,7 @@ export default function ProductsPage() {
               </tr>
             </thead>
             <tbody>
-              {products.map(product => (
+              {filteredProducts.map(product => (
                 <tr key={product.id} style={{ borderTop: '1px solid var(--border)' }}>
                   <td className="px-4 py-3">
                     <b style={{ color: 'var(--text)' }}>{product.name}</b>
@@ -412,7 +442,7 @@ export default function ProductsPage() {
                   </td>
                   <td className="px-4 py-3">
                     <span className="chip-delta" style={{ background: 'rgba(56, 189, 248, 0.14)', color: '#9BD8F5' }}>
-                      {product.category.name}
+                      {product.categoryName}
                     </span>
                   </td>
                   <td className="px-4 py-3" style={{ color: 'var(--muted)' }}>{product.unit}</td>
@@ -434,20 +464,6 @@ export default function ProductsPage() {
                         title="Правка"
                       >
                         <Edit2 size={14} />
-                      </button>
-                      <button
-                        className="p-1.5 rounded transition-colors"
-                        style={{ color: 'var(--muted)' }}
-                        title="Цена"
-                      >
-                        <DollarSign size={14} />
-                      </button>
-                      <button
-                        className="p-1.5 rounded transition-colors"
-                        style={{ color: 'var(--muted)' }}
-                        title="Привязка OFF"
-                      >
-                        <Link size={14} />
                       </button>
                       <button
                         onClick={() => handleDelete(product)}
@@ -512,8 +528,8 @@ export default function ProductsPage() {
                   style={{ background: 'var(--elev)', border: '1px solid var(--border)', color: 'var(--text)' }}
                 >
                   <option value="">Выберите категорию...</option>
-                  {categories.map(cat => (
-                    <option key={cat.id} value={cat.id}>{cat.name}</option>
+                  {state.categories.map(cat => (
+                    <option key={cat.id} value={cat.name}>{cat.name}</option>
                   ))}
                 </select>
               </div>

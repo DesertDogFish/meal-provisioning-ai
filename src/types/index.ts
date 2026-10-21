@@ -18,11 +18,22 @@ export interface AuthTokens {
   refreshToken: string;
 }
 
+export interface ProductCategory {
+  id: string;
+  name: string;
+  slug: string;
+  sortOrder: number;
+}
+
 export interface Ingredient {
   id: string;
   name: string;
   unit: UnitOfMeasure;
   category: string;
+  categoryId?: string;
+  code?: string;
+  packSize?: number;
+  roundToPacks?: boolean;
   caloriesPerUnit?: number;
   createdAt: string;
 }

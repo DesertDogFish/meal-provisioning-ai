@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useReducer, ReactNode } from 'react';
-import { User, Ingredient, IngredientPrice, Recipe, Trip, StagingRecipe, IngredientMapping, MealType, UnitOfMeasure, RecipeSource } from '../types';
-import { mockUsers, mockIngredients, mockPrices, mockRecipes, mockTrips, mockStagingRecipes, mockMappings } from '../data/mockData';
+import { User, Ingredient, IngredientPrice, Recipe, Trip, StagingRecipe, IngredientMapping, MealType, UnitOfMeasure, RecipeSource, ProductCategory } from '../types';
+import { mockUsers, mockIngredients, mockPrices, mockRecipes, mockTrips, mockStagingRecipes, mockMappings, mockProductCategories } from '../data/mockData';
 
 interface AppState {
   currentUser: User | null;
@@ -11,6 +11,7 @@ interface AppState {
   trips: Trip[];
   stagingRecipes: StagingRecipe[];
   mappings: IngredientMapping[];
+  categories: ProductCategory[];
 }
 
 type Action =
@@ -206,6 +207,7 @@ const initialState: AppState = {
       }))
     }))
   })))) as Trip[],
+  categories: mockProductCategories,
   stagingRecipes: mockStagingRecipes,
   mappings: mockMappings,
 };
