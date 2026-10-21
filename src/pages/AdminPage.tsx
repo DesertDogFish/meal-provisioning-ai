@@ -1,9 +1,8 @@
 import { useState } from 'react';
 import { useApp, generateId } from '../store/AppContext';
-import { DollarSign, BookOpen, Download, Plus, Trash2, Edit2, Check, X, AlertTriangle } from 'lucide-react';
-import { UnitOfMeasure, MealType, RecipeSource } from '../types';
-import { formatAmount } from '../utils/calculations';
-import { ConflictError, ValidationError, NotFoundError } from '../utils/errors';
+import { DollarSign, BookOpen, Download, Plus, Trash2, Check, X, AlertTriangle } from 'lucide-react';
+import { UnitOfMeasure, MealType } from '../types';
+import { ConflictError, ValidationError } from '../utils/errors';
 import { validateRecipe } from '../utils/validation';
 import { useToast } from '../components/ToastProvider';
 

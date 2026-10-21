@@ -206,7 +206,7 @@ export const mockServer = {
   },
 
   // Рецепты
-  handleRecipes(method: string, path: string, body?: any): any {
+  handleRecipes(method: string, _path: string, _body?: any): any {
     if (method === 'GET') {
       return recipes.map(r => {
         const ingredients = r.ingredients.map(ri => {

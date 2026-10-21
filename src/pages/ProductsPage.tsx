@@ -316,12 +316,6 @@ export default function ProductsPage() {
     );
   };
 
-  // Уникальные категории для фильтра
-  const uniqueCategories = useMemo(() => {
-    const cats = new Set(products.map(p => p.categoryName));
-    return Array.from(cats).sort();
-  }, [products]);
-
   return (
     <div className="space-y-6">
       {/* Header */}
