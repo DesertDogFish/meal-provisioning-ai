@@ -1,0 +1,70 @@
+name: Contract parity (mock vs real)
+
+on:
+  schedule:
+    - cron: '0 3 * * *'  # Каждый день в 3:00 UTC
+  workflow_dispatch:
+
+jobs:
+  contract:
+    name: Contract Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: provision_test
+          POSTGRES_USER: provision
+          POSTGRES_PASSWORD: provision123
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U provision -d provision_test"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      
+      - name: Start backend
+        working-directory: backend
+        env:
+          SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/provision_test
+          SPRING_DATASOURCE_USERNAME: provision
+          SPRING_DATASOURCE_PASSWORD: provision123
+        run: |
+          nohup mvn -B -ntp spring-boot:run > /tmp/backend.log 2>&1 &
+          for i in $(seq 1 60); do
+            curl -sf localhost:8080/api/v1/meta && break || sleep 3
+          done
+      
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      
+      - run: npm ci
+      
+      - name: Contract vs MOCK
+        run: npx vitest run contract --reporter=verbose
+        env:
+          CONTRACT_TARGET: mock
+      
+      - name: Contract vs REAL
+        run: npx vitest run contract --reporter=verbose
+        env:
+          CONTRACT_TARGET: real
+          VITE_API_URL: http://localhost:8080
+      
+      - name: Backend log on failure
+        if: failure()
+        run: tail -n 80 /tmp/backend.log

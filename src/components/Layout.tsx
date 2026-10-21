@@ -1,21 +1,14 @@
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useApp } from '../store/AppContext';
 import { Compass, LogOut, Menu, Mountain, Ship } from 'lucide-react';
-import { useState, useEffect } from 'react';
-import { api } from '../api/client';
-import { ApiModeModal } from './ApiModeModal';
+import { useState } from 'react';
+import ApiModeBadge from './ApiModeBadge';
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const { state, dispatch } = useApp();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [apiMode, setApiMode] = useState<'mock' | 'real'>('mock');
-  const [showModeModal, setShowModeModal] = useState(false);
   const isAdmin = state.currentUser?.role === 'ADMIN';
-
-  useEffect(() => {
-    setApiMode(api.getMode());
-  }, []);
 
   const handleLogout = () => {
     dispatch({ type: 'LOGOUT' });
@@ -119,32 +112,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           <h1 className="text-lg font-bold" style={{ fontFamily: 'Unbounded', color: 'var(--text)' }}>Провиант</h1>
         </header>
         
-        {/* CR-5.1: Бейдж режима API */}
-        <div 
-          className="fixed top-4 right-4 z-50 flex items-center gap-2 px-3 py-1.5 rounded-full cursor-pointer transition-all hover:scale-105"
-          style={{ 
-            background: 'var(--surface)', 
-            border: '1px solid var(--border)',
-            fontSize: '11px',
-            fontWeight: 600,
-            boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
-          }}
-          onClick={() => setShowModeModal(true)}
-          title="Клик для настройки режима"
-        >
-          <div 
-            className="w-2 h-2 rounded-full"
-            style={{ 
-              background: apiMode === 'mock' ? 'var(--fire)' : '#22C55E',
-              boxShadow: apiMode === 'mock' ? '0 0 8px var(--fire)' : '0 0 8px #22C55E'
-            }}
-          />
-          <span style={{ color: 'var(--muted)' }}>
-            {apiMode === 'mock' ? 'демо-режим' : 'бэкенд'}
-          </span>
-        </div>
-
-        {showModeModal && <ApiModeModal onClose={() => setShowModeModal(false)} />}
+        {/* Бейдж режима API */}
+        <ApiModeBadge />
         
         <main className="flex-1 p-4 md:p-6 lg:p-8 overflow-auto">
           {children}

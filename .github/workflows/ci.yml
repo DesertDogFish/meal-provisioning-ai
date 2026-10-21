@@ -1,0 +1,76 @@
+name: CI
+
+on:
+  push:
+    branches: [main, 'provision-**']
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      
+      - name: Backend tests
+        working-directory: backend
+        run: mvn -B -ntp test
+      
+      - name: Upload surefire reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-surefire
+          path: backend/target/surefire-reports/
+
+  frontend:
+    name: Frontend Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      
+      - run: npm ci
+      
+      - run: npm run build
+      
+      - run: npx vitest run --reporter=verbose
+      
+      - name: Upload vitest reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-vitest
+          path: coverage/
+
+  docker:
+    name: Docker Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - run: docker compose config -q
+      
+      - run: docker build -t provision-backend:ci ./backend
+      
+      - run: docker build -t provision-frontend:ci -f Dockerfile.frontend .
