@@ -10,7 +10,6 @@ import { calculateRecipeKcal } from '../utils/calc';
 // In-memory хранилище
 let products: Ingredient[] = [...mockIngredients];
 let categories: ProductCategory[] = [...mockProductCategories];
-let prices: IngredientPrice[] = [...mockPrices];
 let recipes: Recipe[] = [...mockRecipes];
 let trips: Trip[] = [...mockTrips];
 

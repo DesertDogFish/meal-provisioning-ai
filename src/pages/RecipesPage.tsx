@@ -11,13 +11,6 @@ const mealTypeLabels: Record<MealType, string> = {
   SNACK: 'Перекус',
 };
 
-const mealTypeColors: Record<MealType, string> = {
-  BREAKFAST: 'bg-amber-100 text-amber-700 border-amber-200',
-  LUNCH: 'bg-emerald-100 text-emerald-700 border-emerald-200',
-  DINNER: 'bg-blue-100 text-blue-700 border-blue-200',
-  SNACK: 'bg-purple-100 text-purple-700 border-purple-200',
-};
-
 export default function RecipesPage() {
   const { state } = useApp();
   const [search, setSearch] = useState('');

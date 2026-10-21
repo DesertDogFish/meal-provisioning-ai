@@ -60,7 +60,7 @@ function reducer(state: AppState, action: Action): AppState {
       return { ...state, currentUser: null, isAuthenticated: false };
     case 'ADD_TRIP': {
       const dates = generateDates(action.payload.startDate, action.payload.endDate);
-      const days = dates.map((date, i) => ({
+      const days = dates.map((date, _i) => ({
         id: generateId(),
         tripId: action.payload.id,
         dayDate: date,

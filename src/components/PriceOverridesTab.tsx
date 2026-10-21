@@ -44,7 +44,6 @@ export default function PriceOverridesTab({ tripId }: Props) {
   const [shoppingItems, setShoppingItems] = useState<ShoppingItem[]>([]);
   const [dayShopping, setDayShopping] = useState<DayShopping[]>([]);
   const [activeTab, setActiveTab] = useState<TabType>('total');
-  const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [onlyDiff, setOnlyDiff] = useState(false);
 
@@ -295,7 +294,6 @@ export default function PriceOverridesTab({ tripId }: Props) {
             </thead>
             <tbody>
               {filteredItems.map(item => {
-                const override = overrides.find(o => o.ingredientId === item.ingredientId);
                 const delta = calculateDelta(item.plannedUnitPrice, item.actualUnitPrice);
                 const deltaChipClass = getDeltaChipClass(delta);
 
