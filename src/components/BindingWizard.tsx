@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useApp } from '../store/AppContext';
 import { useToast } from './ToastProvider';
-import { X, ChevronRight, SkipForward } from 'lucide-react';
 import { NumberField } from './NumberField';
 
 interface Candidate {

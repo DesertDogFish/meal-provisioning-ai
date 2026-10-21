@@ -124,10 +124,12 @@ class ConflictIntegrationTest {
     void ing05_cannotDeleteUsedIngredient() throws Exception {
         // Create ingredient
         IngredientRequest ingredientRequest = new IngredientRequest(
+                null,  // code
                 "Гречка",
                 UnitOfMeasure.KG,
                 "Крупы",
-                null
+                null,  // kcalPer100g
+                null   // pieceWeightG
         );
         MvcResult ingredientResult = mockMvc.perform(post("/api/v1/admin/ingredients")
                         .header("Authorization", "Bearer " + adminToken)
@@ -144,6 +146,8 @@ class ConflictIntegrationTest {
         RecipeRequest recipeRequest = new RecipeRequest(
                 "Гречка с тушенкой",
                 MealType.LUNCH,
+                null,  // category
+                null,  // cookMinutes
                 4,
                 450,
                 List.of(new RecipeRequest.RecipeIngredientItem(ingredientId, new BigDecimal("0.8")))
@@ -168,10 +172,12 @@ class ConflictIntegrationTest {
     void ing06_cannotUpdateUsedIngredient() throws Exception {
         // Create ingredient
         IngredientRequest ingredientRequest = new IngredientRequest(
+                null,  // code
                 "Гречка",
                 UnitOfMeasure.KG,
                 "Крупы",
-                null
+                null,  // kcalPer100g
+                null   // pieceWeightG
         );
         MvcResult ingredientResult = mockMvc.perform(post("/api/v1/admin/ingredients")
                         .header("Authorization", "Bearer " + adminToken)
@@ -188,6 +194,8 @@ class ConflictIntegrationTest {
         RecipeRequest recipeRequest = new RecipeRequest(
                 "Гречка с тушенкой",
                 MealType.LUNCH,
+                null,  // category
+                null,  // cookMinutes
                 4,
                 450,
                 List.of(new RecipeRequest.RecipeIngredientItem(ingredientId, new BigDecimal("0.8")))
@@ -200,10 +208,12 @@ class ConflictIntegrationTest {
 
         // Try to update ingredient - should fail with 409
         IngredientRequest updateRequest = new IngredientRequest(
+                null,  // code
                 "Гречка обновленная",
                 UnitOfMeasure.KG,
                 "Крупы",
-                null
+                null,  // kcalPer100g
+                null   // pieceWeightG
         );
         mockMvc.perform(put("/api/v1/admin/ingredients/" + ingredientId)
                         .header("Authorization", "Bearer " + adminToken)
@@ -219,10 +229,12 @@ class ConflictIntegrationTest {
     void rec07_cannotDeleteUsedRecipe() throws Exception {
         // Create ingredient
         IngredientRequest ingredientRequest = new IngredientRequest(
+                null,  // code
                 "Гречка",
                 UnitOfMeasure.KG,
                 "Крупы",
-                null
+                null,  // kcalPer100g
+                null   // pieceWeightG
         );
         MvcResult ingredientResult = mockMvc.perform(post("/api/v1/admin/ingredients")
                         .header("Authorization", "Bearer " + adminToken)
@@ -239,6 +251,8 @@ class ConflictIntegrationTest {
         RecipeRequest recipeRequest = new RecipeRequest(
                 "Гречка с тушенкой",
                 MealType.LUNCH,
+                null,  // category
+                null,  // cookMinutes
                 4,
                 450,
                 List.of(new RecipeRequest.RecipeIngredientItem(ingredientId, new BigDecimal("0.8")))

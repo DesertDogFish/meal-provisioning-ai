@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, ReactNode, useCallback } from 'react';
 import { ProblemDetail } from '../types/errors';
-import { getErrorMessage, getErrorColor, ErrorColor } from '../utils/errorHandler';
+import { getErrorMessage } from '../utils/errorHandler';
 import { X, AlertCircle, CheckCircle, Info } from 'lucide-react';
 
 type ToastType = 'error' | 'success' | 'info';

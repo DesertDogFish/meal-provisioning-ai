@@ -17,7 +17,7 @@ class SummaryServiceTest {
     @BeforeEach
     void setUp() {
         // Создаём сервис без моков для простых unit-тестов
-        summaryService = new SummaryService(null, null, null);
+        summaryService = new SummaryService(null, null, null, null, null);
     }
 
     @Test

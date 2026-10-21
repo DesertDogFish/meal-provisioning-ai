@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useApp } from '../store/AppContext';
 import { useToast } from './ToastProvider';
-import { Edit2, Trash2, Plus, Check, X, Download } from 'lucide-react';
+import { Download } from 'lucide-react';
 import { formatAmount, calculateShoppingList, calculateDayShopping } from '../utils/calculations';
 import { NumberField } from './NumberField';
 

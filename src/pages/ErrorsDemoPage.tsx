@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import { ProblemDetail } from '../types/errors';
-import { ValidationError, UnauthorizedError, ForbiddenError, NotFoundError, ConflictError, InternalError, InvalidOperationError } from '../utils/errors';
+import { ValidationError, UnauthorizedError, ForbiddenError, NotFoundError, ConflictError, InternalError } from '../utils/errors';
 import { validate, notBlank, email, positive, size } from '../utils/validation';
 import { ProblemDetailAlert } from '../components/ProblemDetailAlert';
 import { useToast } from '../components/ToastProvider';
-import { AlertTriangle, Shield, Search, XCircle, Server, Ban, CheckCircle } from 'lucide-react';
+import { AlertTriangle, Shield, Search, XCircle, Server, Ban } from 'lucide-react';
 
 export default function ErrorsDemoPage() {
   const { showError, showSuccess } = useToast();

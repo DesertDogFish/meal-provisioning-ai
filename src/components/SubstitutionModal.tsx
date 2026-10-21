@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { useApp } from '../store/AppContext';
 import { useToast } from './ToastProvider';
-import { X } from 'lucide-react';
 import { NumberField } from './NumberField';
 
 interface Ingredient {

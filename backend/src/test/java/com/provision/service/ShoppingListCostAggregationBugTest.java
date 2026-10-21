@@ -34,7 +34,7 @@ class ShoppingListCostAggregationBugTest {
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
-        summaryService = new SummaryService(tripRepository, priceRepository, recipeRepository);
+        summaryService = new SummaryService(tripRepository, priceRepository, recipeRepository, null, null);
     }
 
     @Test
@@ -412,17 +412,18 @@ class ShoppingListCostAggregationBugTest {
 
         System.out.println("Результат:");
         System.out.println("  Всего элементов: " + result.items().size());
-        System.out.println("  Общая стоимость: " + result.totalCost() + " ₽");
+        System.out.println("  Общая плановая стоимость: " + result.totalPlannedCost() + " ₽");
+        System.out.println("  Общая фактическая стоимость: " + result.totalActualCost() + " ₽");
         System.out.println("  Есть пропущенные цены: " + result.hasMissingPrices() + "\n");
 
         // Проверяем, что стоимость корректно суммируется
         assertThat(result.items()).hasSize(1);
         assertThat(result.items().get(0).totalAmount()).isEqualByComparingTo(new BigDecimal("0.800")); // 0.4 + 0.4
-        assertThat(result.items().get(0).estimatedCost()).isEqualByComparingTo(new BigDecimal("108.00")); // 48 + 60
-        assertThat(result.totalCost()).isEqualByComparingTo(new BigDecimal("108.00"));
+        assertThat(result.items().get(0).actualCost()).isEqualByComparingTo(new BigDecimal("108.00")); // 48 + 60
+        assertThat(result.totalActualCost()).isEqualByComparingTo(new BigDecimal("108.00"));
 
         System.out.println("✓ Текущая реализация корректно суммирует стоимости по дням!");
         System.out.println("✓ Ожидаемая стоимость: 108.00 ₽ (48 + 60)");
-        System.out.println("✓ Фактическая стоимость: " + result.totalCost() + " ₽\n");
+        System.out.println("✓ Фактическая стоимость: " + result.totalActualCost() + " ₽\n");
     }
 }
