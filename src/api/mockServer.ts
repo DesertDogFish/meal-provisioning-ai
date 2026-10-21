@@ -3,8 +3,8 @@
  * Эмулирует API бэкенда с in-memory базой данных
  */
 
-import { mockIngredients, mockPrices, mockRecipes, mockTrips, mockProductCategories } from '../data/mockData';
-import { Ingredient, Recipe, Trip, ProductCategory, IngredientPrice } from '../types';
+import { mockIngredients, mockRecipes, mockTrips, mockProductCategories } from '../data/mockData';
+import { Ingredient, Recipe, Trip, ProductCategory } from '../types';
 import { calculateRecipeKcal } from '../utils/calc';
 
 // In-memory хранилище

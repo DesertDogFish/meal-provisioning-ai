@@ -30,11 +30,19 @@ class ShoppingListCostAggregationBugTest {
     private IngredientPriceRepository priceRepository;
     @Mock
     private RecipeRepository recipeRepository;
+    @Mock
+    private PriceResolutionService priceResolutionService;
+    @Mock
+    private TripIngredientSubstitutionRepository substitutionRepository;
 
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
-        summaryService = new SummaryService(tripRepository, priceRepository, recipeRepository, null, null);
+        when(priceResolutionService.getAllOverrides(org.mockito.ArgumentMatchers.anyLong()))
+            .thenReturn(Collections.emptyMap());
+        when(substitutionRepository.findByTripId(org.mockito.ArgumentMatchers.anyLong()))
+            .thenReturn(Collections.emptyList());
+        summaryService = new SummaryService(tripRepository, priceRepository, recipeRepository, priceResolutionService, substitutionRepository);
     }
 
     @Test

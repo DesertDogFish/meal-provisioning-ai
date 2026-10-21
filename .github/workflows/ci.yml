@@ -77,3 +77,26 @@ jobs:
       - run: docker build -t provision-backend:ci ./backend
       
       - run: docker build -t provision-frontend:ci -f Dockerfile.frontend .
+
+  security:
+    name: Security Scans
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Semgrep
+        run: |
+          pip install semgrep
+          semgrep scan --config auto --error
+      
+      - name: Dependency Review
+        uses: actions/dependency-review-action@v4
+      
+      - name: Trivy FS scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: fs
+          ignore-unfixed: true
+          severity: CRITICAL,HIGH

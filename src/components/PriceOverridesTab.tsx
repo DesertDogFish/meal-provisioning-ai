@@ -40,7 +40,6 @@ type TabType = 'total' | 'days' | 'person';
 export default function PriceOverridesTab({ tripId }: Props) {
   const { state } = useApp();
   const { showError, showSuccess } = useToast();
-  const [overrides, setOverrides] = useState<PriceOverride[]>([]);
   const [shoppingItems, setShoppingItems] = useState<ShoppingItem[]>([]);
   const [dayShopping, setDayShopping] = useState<DayShopping[]>([]);
   const [activeTab, setActiveTab] = useState<TabType>('total');
@@ -63,10 +62,6 @@ export default function PriceOverridesTab({ tripId }: Props) {
     console.log('  - state.recipes:', state.recipes.length);
     console.log('  - state.prices:', state.prices.length);
     console.log('  - state.ingredients:', state.ingredients.length);
-
-    // Загрузка оверрайдов (в реальном приложении из API)
-    // Пока используем пустой массив для демонстрации
-    setOverrides([]);
 
     // Расчёт списка закупок
     const recipesMap = new Map(state.recipes.map(r => [r.id, r]));
