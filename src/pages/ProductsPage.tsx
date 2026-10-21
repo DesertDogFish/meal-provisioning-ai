@@ -1,9 +1,10 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useApp } from '../store/AppContext';
 import { useToast } from '../components/ToastProvider';
 import { Plus, Edit2, Trash2, Search, X } from 'lucide-react';
 import { NumberField } from '../components/NumberField';
 import { Ingredient, UnitOfMeasure, ProductCategory } from '../types';
+import { api } from '../api/client';
 
 interface Product extends Ingredient {
   categoryName: string;
@@ -42,6 +43,7 @@ export default function ProductsPage() {
   const [formPackSize, setFormPackSize] = useState<number | null>(null);
   const [formRoundToPacks, setFormRoundToPacks] = useState(false);
   const [formCalories, setFormCalories] = useState<number | null>(null);
+  const [formPieceWeightG, setFormPieceWeightG] = useState<number | null>(null);
   const [duplicateWarning, setDuplicateWarning] = useState<{ type: 'hard' | 'soft'; message: string } | null>(null);
 
   // Преобразование ингредиентов в продукты
