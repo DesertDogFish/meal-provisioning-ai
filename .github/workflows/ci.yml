@@ -57,6 +57,17 @@ jobs:
       - name: Frontend tests
         run: npm run test
       
+      - name: Check MD files (non-blocking)
+        continue-on-error: true  # TODO: через неделю перевести в blocking (exit 1)
+        run: |
+          count=$(git ls-files '*.md' | grep -v '^backend/README.md$' | wc -l)
+          if [ "$count" -ne 4 ]; then
+            echo "::warning::Expected 4 MD files (README.md, ARCHITECTURE.md, PLAN.md, AGENTS.md), found $count"
+            git ls-files '*.md'
+          else
+            echo "✅ MD files check passed: 4 files"
+          fi
+      
       - name: Upload vitest reports
         if: failure()
         uses: actions/upload-artifact@v4
