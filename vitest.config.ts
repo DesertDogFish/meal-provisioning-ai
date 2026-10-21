@@ -11,8 +11,6 @@ export default defineConfig({
     exclude: [
       'node_modules/**',
       'dist/**',
-      'src/api/mockServer.test.ts',
-      'src/utils/calc.test.ts',
     ],
     coverage: {
       provider: 'v8',

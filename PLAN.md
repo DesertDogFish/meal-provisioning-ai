@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-**Миграция Батча 3: Ядро похода + Удаление AppContext**
+**Тестирование — закрыть дыры регрессий (P0, параллельно миграции)**
 
 Предыдущие фазы:
 - ✅ Фаза 1: Core Features (CRUD продуктов, рецептов, походов)
@@ -13,60 +13,105 @@
 - ✅ Фаза 6: Batch 1 Migration (LoginPage, ProtectedRoute, Layout, DashboardPage)
 - ✅ Фаза 7: CI Fixes (Mockito, lint, SHA, prefer-const, Trivy, happy-dom)
 - ✅ Фаза 8: Batch 2 Migration (ProductsPage, AdminPage, IntegrationsPage, BindingWizard)
-- 🔄 Фаза 9: Batch 3 Migration - В ПРОЦЕССЕ (TripsPage ✅, TripDetailPage ✅, осталось 3 компонента)
+- ✅ Фаза 9: Batch 3 Migration - ЗАВЕРШЕНО (все 13 компонентов мигрированы, AppContext удалён)
+- 🔄 Фаза 10: Тестирование — закрыть дыры регрессий (P0)
 
-**Текущая фаза:** Batch 3 Migration (3 компонента осталось) + Удаление AppContext
+**Симптом:** сломался спаренный дейт-пикер (CR-3) — регрессия прошла молча, потому что нет component-слоя. Диагноз: исполняемых тестов ~11, полезные харнессы исключены из прогона, интеграционные бэкенд-тесты @Disabled. Кодек-реальность: кодер не видит GitHub Actions, поэтому все гейты ниже — ЛОКАЛЬНЫЕ команды; финальный ран смотрю я.
+
+**Механизм контроля вместо «надзора за матрицей»:** Red-green (R1): кодер доказывает локально, что тест ловит поломку, — падение на старом коде до фикса. Это единственное, что он может верифицировать сам, и этого достаточно, чтобы регрессия класса «дейт-пикер» стала физической невозможной.
 
 ## Next Step
 
-**Задача 2: Завершение Батча 3 + Удаление AppContext**
+**Фаза 10: Тестирование — закрыть дыры регрессий (P0)**
 
-###已完成 (Done):
-- ✅ `src/pages/TripsPage.tsx` — мигрирован на API клиент
-- ✅ `src/pages/TripDetailPage.tsx` — мигрирован на API клиент
+### P0 — этот спринт (локально проверяемо кодером)
 
-### Осталось мигрировать (3 компонента):
-1. `src/components/PriceOverridesTab.tsx` — убрать AppContext, использовать API клиент
-   - Сложность: высокая (494 строки, сложная логика расчётов)
-   - Зависимости: calculateShoppingList, calculateDayShopping из utils/calculations
-   - API endpoints: `/trips/{id}/price-overrides`, `/trips/{id}/summary/shopping`
+#### 1. Вернуть calc.test.ts / mockServer.test.ts в прогон vitest ✅ ЗАВЕРШЕНО
+- [x] Переписать самописные `assert`/`console.log` на `it()`/`expect()`
+- [x] Убрать файлы из `exclude` в `vitest.config.ts`
+- [x] Локальный гейт: `npm run test` → эти файлы дают `passed>0`, `failed=0`, без "No test suite found"
+- [x] Build проходит успешно
 
-2. `src/components/SubstitutionModal.tsx` — убрать AppContext, использовать API клиент
-   - Сложность: средняя (200+ строк)
-   - API endpoints: `/trips/{id}/substitutions`, `/ingredients/similar/{id}`
+#### 2. Component-тесты по R2 (каждый red-green)
+- [x] `DateRange` (CR-3) — спаренные даты, min/max, автоподтягивание ✅ ТЕСТЫ СОЗДАНЫ
+- [x] `NumberField` — адаптивный шаг, клавиатурная навигация, валидация ✅ ТЕСТЫ СОЗДАНЫ
+- [ ] `ApiModeBadge` — переключение режимов, очистка кеша
+- [ ] `ProductTable` — сортировка, фильтр, empty state, дубликаты
+- [ ] `TripForm` — даты + humanize единиц
+- [ ] Гейт: `npm run test` зелёный, coverage на этих файлах ≥80%
 
-3. `src/pages/RecipesPage.tsx` — убрать AppContext, использовать API клиент
-   - Сложность: средняя (300+ строк)
-   - API endpoints: `/recipes`, `/recipes/{id}`
+#### 3. MODE-сьют 01..08 (режимы/watchdog/фолбэк/персист)
+- [ ] MODE-01: AUTO, API доступен → бейдж зелёный, запросы в сеть
+- [ ] MODE-02: AUTO, API недоступен → бейдж янтарный, баннер, данные из сида
+- [ ] MODE-03: FORCE_API, API недоступен → error-состояние, ретрай
+- [ ] MODE-04: FORCE_MOCK, API доступен → ноль запросов к API
+- [ ] MODE-05: Смена режима → кеш очищен, refetch
+- [ ] MODE-06: Watchdog → фолбэк+баннер, восстановление
+- [ ] MODE-07: Сканер импортов → нет AppContext/mockData вне src/api
+- [ ] MODE-08: Перезагрузка → режим сохраняется
 
-### После миграции всех компонентов:
-- Удалить `src/store/AppContext.tsx`
-- Удалить папку `src/store/` (если пуста)
-- Убрать файлы из `excludedFiles` в `.eslintrc.cjs`
-- Глобальный поиск не должен находить AppContext
+#### 4. Страж R4 (grep @Disabled/it.skip без TODO)
+- [ ] Прогонять локально перед пушем: `grep -rnE "@Disabled|it\.skip|test\.skip|@Ignore" src backend/src`
+- [ ] Каждая находка без `// TODO PLAN.md: ...` = красный, чинить
 
-### Критерий готовности:
-- В этих 3 файлах нет импортов AppContext или mockData
-- `npm run lint` и `npm run build` зелёные
-- AppContext полностью удалён из проекта
-- MODE-07 правило снова строгое для всего проекта
+#### 5. Coverage-гейт R5
+- [ ] Включить в `vitest.config.ts` thresholds на зоне изменения
+- [ ] Порог lines ≥ 80% на `src/utils/**`, `src/api/**`, новых компонентах
+
+### Критерии готовности фазы (локальные, доказуемые кодером)
+- [ ] `npm run test`: ≥150 passed, 0 failed, 0 исключённых харнессов
+- [ ] Каждый новый компонент/математика имеет red-green-доказательство в отчёте
+- [ ] grep-страж R4 зелёный (нет @Disabled/it.skip без TODO)
+- [ ] coverage на зоне изменения ≥80% (вывод `vitest --coverage`)
+- [ ] Матрица R2 и правила R1–R7 перенесены в AGENTS.md
+- [ ] Отчёт кодера = хеш + выводы локальных команд (НЕ ссылка на run)
+
+### Что НЕ делать
+- ❌ Не требовать от кодера «ссылку на зелёный run» — он её не видит
+- ❌ Не писать отчёты в новых MD — статус в PLAN.md, правила в AGENTS.md
+- ❌ Не гнаться за 100% покрытием legacy — гейт точечный (R5)
+- ❌ Не включать e2e/visual раньше component-слоя — сначала дешёвый слой
+- ❌ Не чинить баг без падающего теста (R1 обязателен)
 
 ## Backlog
 
-### Задача 2: Миграция Батча 3 + Удаление AppContext
+### P1 — следующий спринт
 
-Файлы:
-- `src/pages/TripsPage.tsx`
-- `src/pages/TripDetailPage.tsx`
-- `src/components/PriceOverridesTab.tsx`
-- `src/components/SubstitutionModal.tsx`
-- `src/pages/RecipesPage.tsx`
+#### 1. Contract расширить (mock, локально)
+- [ ] Алиас `products≡ingredients` (одинаковый count/форма)
+- [ ] Пагинация одной формой
+- [ ] 409-payload (DUPLICATE_PRODUCT, PRODUCT_IN_USE, DUPLICATE_PRICE_DATE, SYNC_ALREADY_RUNNING)
+- [ ] unitLabel, planned/actual/packsToBuy/leftover/substitutedFrom
+- [ ] Гейт: `npm run test`
 
-После миграции:
-- Удалить `src/store/AppContext.tsx`
-- Удалить папку `src/store/` (если пуста)
-- Убрать файлы из `excludedFiles` в `.eslintrc.cjs`
-- Глобальный поиск не должен находить AppContext
+#### 2. Баг агрегации стоимости — red-green
+- [ ] Включить `ShoppingListCostAggregationBugTest` (падает 108 vs 120 на старом)
+- [ ] Починить `SummaryService` (сумма по дням, а не `totalAmount×price(endDate)`)
+- [ ] Тест зеленеет, `@Disabled` снять
+- [ ] Гейт: `mvn test`
+
+#### 3. Интеграционные бэкенд-тесты вернуть ЛОКАЛЬНО
+- [ ] `AuthIntegrationTest` — `/auth/me` 401 вместо 500; `register→accessToken`
+- [ ] `CatalogIntegrationTest` — 403→`permitAll` на публичные GET
+- [ ] `ConflictIntegrationTest` / `SecurityIntegrationTest` — login в setUp
+- [ ] Testcontainers поднимает БД в песочнице кодера
+- [ ] Гейт: `mvn -B -ntp test` зелёный локально
+
+### P2 — после миграции Батча 3
+
+#### 1. Playwright e2e: 6–10 сценариев
+- [ ] Логин→продукт+дубль→поход+спаренные даты→сводка план/факт/калории/humanize→фолбэк→смена режима+очистка кеша
+- [ ] Ночной job; локально кодер прогоняет `npx playwright test` и приносит вывод
+
+### P3 — бэклог v2 (не сейчас)
+
+#### 1. Visual regression (скриншоты дизайн-системы)
+- [ ] Дорого в поддержке, после стабилизации UI
+
+#### 2. Чистка Maven `<repositories>`
+- [ ] spring-release (401), flyway-repo (DNS/не browseable), flyway-community-db-support (401)
+- [ ] Шум в логах, маскирует реальные падения
+- [ ] Отдельный тикет, не в тестовой фазе
 
 ### Задача 3: Усиление Mock-сервера и контрактных тестов
 
@@ -113,6 +158,40 @@ for each day:
 - Добавить недостающие зависимости в useEffect
 - Или обернуть функции в useCallback
 - Или убрать лишние зависимости
+
+### Задача 7: Полировка UI — единый дизайн-системный апгрейд
+
+**Приоритет:** P1 (после завершения фазы тестирования)
+**Оценка:** 4–6 часов
+**Зависимости:** завершена фаза тестирования
+
+**Описание:** Применить ко всем экранам визуальные улучшения из прототипа `proviant-products-v3.html`. Цель — превратить интерфейс в полированный SaaS-продукт без изменения палитры и структуры. Референс: файл `proviant-products-v3.html` (хранить в корне репо).
+
+**Чек-лист нововведений:**
+1. **Глубина и свет (Refined Glassmorphism):** CSS-переменные (`--surface-highlight`, `--glow-primary`), обновленные `.card`/`.glass` с `backdrop-filter`, hover-эффекты.
+2. **Микро-взаимодействия:** Глобальный `transition`, эффект нажатия `scale(0.97)`, улучшенный фокус полей, анимация модалок `slideUpFade`.
+3. **Бейджи (chips):** Полупрозрачный фон + цветная обводка для `.tag.off/.man/.fire/.ok/.dn`.
+4. **Таблицы:** Hover на строках, только горизонтальные разделители, плавный transition фона.
+5. **Типографика:** `letter-spacing` для заголовков и мелких подписей, сохранение `tabular-nums`.
+6. **Empty States:** SVG-иконки + описание + кнопка действия вместо текста.
+7. **Скелетоны:** Класс `.skeleton` с градиентом и анимацией `shimmer`.
+8. **Humanize units:** Словарь `UNIT_LABELS` (кг, л, шт, уп), функция `humanize()`, замена всех «PCS/KG/L/PACK» в UI.
+
+**Критерии готовности:**
+- Все 8 пунктов применены ко всем экранам.
+- Визуальная консистентность компонентов.
+- `npm run lint` — 0 errors, `npm run build` — SUCCESS.
+- Нет технических единиц измерения в интерфейсе.
+- Прототип остается в репо как референс.
+
+**Что НЕ делать:**
+- Менять цветовую палитру или структуру страниц.
+- Подключать новые фреймворки/библиотеки.
+- Писать отчёты (только правка PLAN.md).
+
+**Связанные задачи:**
+- CR-2 (единицы измерения) — завершить применение humanize везде.
+- Миграция Батча 3 — блокирующий предшественник.
 
 ## Known Bugs
 
@@ -225,14 +304,22 @@ for each day:
 - **In Progress:** 0
 - **Remaining:** 0
 
+### Testing Phase Status
+- **P0 задачи:** 1/5 завершено (calc.test.ts + mockServer.test.ts возвращены в vitest)
+- **P1 задачи:** 0/3 завершено
+- **P2 задачи:** 0/1 завершено
+- **P3 задачи:** 0/2 завершено
+- **Критерии готовности фазы:** 1/6 выполнено
+
 ## Timeline
 
 - **Week 1:** ✅ Batch 2 migration (4 компонента) — ЗАВЕРШЕНО
 - **Week 2:** ✅ Batch 3 migration (5/5 завершено) — ЗАВЕРШЕНО
-- **Week 3:** Удаление AppContext + усиление mock + контрактные тесты
-- **Week 4:** Интеграционные тесты backend
-- **Week 5:** Фикс бага агрегации стоимости
-- **Week 6:** Гигиена CI и кода
+- **Week 3:** 🔄 Тестирование P0 (вернуть calc.test/mockServer.test, component-тесты, MODE-сьют) — В ПРОЦЕССЕ
+- **Week 4:** Тестирование P1 (contract расширить, баг агрегации, интеграционные бэкенд-тесты)
+- **Week 5:** Тестирование P2 (Playwright e2e)
+- **Week 6:** Полировка UI (дизайн-системный апгрейд)
+- **Week 7:** Гигиена CI и кода
 
 ## Тикет: Завершение Батча 3 миграции
 
