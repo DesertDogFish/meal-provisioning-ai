@@ -4,7 +4,7 @@ public record ConnectionStatus(
     boolean available,
     String message
 ) {
-    public static ConnectionStatus available() {
+    public static ConnectionStatus success() {
         return new ConnectionStatus(true, "Connected successfully");
     }
     

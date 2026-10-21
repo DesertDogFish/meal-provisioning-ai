@@ -1,30 +1,66 @@
-import { useApp } from '../store/AppContext';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Calendar } from 'lucide-react';
-import { calculatePersonSummary } from '../utils/calculations';
+import { api } from '../api/client';
+
+interface User {
+  id: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  role: 'USER' | 'ADMIN';
+}
+
+interface Trip {
+  id: string;
+  userId: string;
+  name: string;
+  startDate: string;
+  endDate: string;
+  defaultPeople: number;
+  days?: any[];
+}
 
 export default function DashboardPage() {
-  const { state } = useApp();
   const navigate = useNavigate();
-  
-  const myTrips = state.trips.filter(t => t.userId === state.currentUser?.id);
-  const recipesMap = new Map(state.recipes.map(r => [r.id, r]));
-  
-  const stats = myTrips.map(trip => {
-    const { tripSummary } = calculatePersonSummary(trip, recipesMap, state.prices);
-    const totalDays = trip.days?.length || 0;
-    const totalMeals = trip.days?.reduce((acc, d) => acc + (d.meals?.length || 0), 0) || 0;
-    return { trip, tripSummary, totalDays, totalMeals };
-  });
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [trips, setTrips] = useState<Trip[]>([]);
+  const [loading, setLoading] = useState(true);
 
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      const [user, tripsData] = await Promise.all([
+        api.get<User>('/auth/me'),
+        api.get<Trip[]>('/trips')
+      ]);
+      setCurrentUser(user);
+      setTrips(tripsData);
+    } catch (error) {
+      console.error('Failed to load ', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
+    return <div style={{ padding: '20px', color: 'var(--muted)' }}>Загрузка...</div>;
+  }
+
+  const myTrips = trips.filter(t => t.userId === currentUser?.id);
+  
+  // Упрощённая статистика без расчёта стоимости (пока нет API для summaries)
   const totalPeople = myTrips.reduce((acc, t) => acc + t.defaultPeople, 0);
-  const totalBudget = stats.reduce((acc, s) => acc + s.tripSummary.totalCost, 0);
 
   return (
     <div className="space-y-8">
       <div>
         <h1 className="text-2xl md:text-3xl font-bold" style={{ color: 'var(--text)' }}>Мои походы</h1>
-        <p className="text-sm mt-1" style={{ color: 'var(--muted)' }}>Добро пожаловать, {state.currentUser?.firstName}!</p>
+        <p className="text-sm mt-1" style={{ color: 'var(--muted)' }}>Добро пожаловать, {currentUser?.firstName}!</p>
       </div>
 
       {/* Stats */}
@@ -40,8 +76,8 @@ export default function DashboardPage() {
           <div className="h-6 mt-2" style={{ background: 'linear-gradient(90deg, transparent, rgba(56, 189, 248, 0.25))', clipPath: 'polygon(0 70%, 20% 50%, 40% 60%, 60% 30%, 80% 45%, 100% 35%, 100% 100%, 0 100%)' }}></div>
         </div>
         <div className="rounded-2xl p-5" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
-          <span className="text-xs" style={{ color: 'var(--muted)' }}>Бюджет</span>
-          <p className="text-2xl font-bold mt-1" style={{ color: 'var(--text)' }}>{totalBudget.toLocaleString('ru-RU')} ₽</p>
+          <span className="text-xs" style={{ color: 'var(--muted)' }}>Всего дней</span>
+          <p className="text-2xl font-bold mt-1" style={{ color: 'var(--text)' }}>{myTrips.reduce((acc, t) => acc + (t.days?.length || 0), 0)}</p>
           <div className="h-6 mt-2" style={{ background: 'linear-gradient(90deg, transparent, rgba(245, 158, 11, 0.25))', clipPath: 'polygon(0 60%, 25% 45%, 50% 55%, 75% 35%, 100% 50%, 100% 100%, 0 100%)' }}></div>
         </div>
       </div>

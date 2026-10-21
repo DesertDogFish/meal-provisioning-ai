@@ -14,6 +14,38 @@ let prices: IngredientPrice[] = [...mockPrices];
 let recipes: Recipe[] = [...mockRecipes];
 let trips: Trip[] = [...mockTrips];
 
+// Auth хранилище
+interface MockUser {
+  id: string;
+  email: string;
+  password: string;
+  firstName: string;
+  lastName: string;
+  role: 'USER' | 'ADMIN';
+  createdAt: string;
+}
+
+let users: MockUser[] = [
+  {
+    id: '1',
+    email: 'admin@provision.app',
+    password: 'password123',
+    firstName: 'Admin',
+    lastName: 'User',
+    role: 'ADMIN',
+    createdAt: '2024-01-01'
+  },
+  {
+    id: '2',
+    email: 'user@provision.app',
+    password: 'password123',
+    firstName: 'John',
+    lastName: 'Doe',
+    role: 'USER',
+    createdAt: '2024-01-15'
+  }
+];
+
 // Утилиты
 const normalize = (s: string) => s.toLowerCase().replace(/ё/g, 'е').replace(/\s+/g, ' ').trim();
 
@@ -28,6 +60,9 @@ const UNIT_LABELS: Record<string, string> = {
 export const mockServer = {
   handleRequest<T>(method: string, path: string, body?: any): T {
     // Маршрутизация
+    if (path.startsWith('/auth/')) {
+      return this.handleAuth(method, path, body) as T;
+    }
     if (path.startsWith('/product-categories')) {
       return this.handleCategories(method, path) as T;
     }
@@ -214,5 +249,70 @@ export const mockServer = {
     }
 
     throw { status: 405, message: 'Method not allowed' };
+  },
+
+  // Авторизация
+  handleAuth(method: string, path: string, body?: any): any {
+    if (path === '/auth/register' && method === 'POST') {
+      const { email, password, firstName, lastName } = body;
+      
+      // Проверка существования пользователя
+      if (users.find(u => u.email === email)) {
+        throw { status: 409, message: 'Conflict', detail: 'Email already registered' };
+      }
+      
+      // Создание нового пользователя
+      const newUser: MockUser = {
+        id: String(users.length + 1),
+        email,
+        password,
+        firstName,
+        lastName,
+        role: 'USER',
+        createdAt: new Date().toISOString()
+      };
+      users.push(newUser);
+      
+      // Возвращаем токены
+      return {
+        accessToken: `mock-access-token-${newUser.id}`,
+        refreshToken: `mock-refresh-token-${newUser.id}`,
+        tokenType: 'Bearer'
+      };
+    }
+    
+    if (path === '/auth/login' && method === 'POST') {
+      const { email, password } = body;
+      const user = users.find(u => u.email === email && u.password === password);
+      
+      if (!user) {
+        throw { status: 401, message: 'Unauthorized', detail: 'Invalid email or password' };
+      }
+      
+      return {
+        accessToken: `mock-access-token-${user.id}`,
+        refreshToken: `mock-refresh-token-${user.id}`,
+        tokenType: 'Bearer'
+      };
+    }
+    
+    if (path === '/auth/me' && method === 'GET') {
+      // В реальном приложении здесь будет проверка токена
+      // Для мока возвращаем первого пользователя
+      const user = users[0];
+      return {
+        id: user.id,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        role: user.role
+      };
+    }
+    
+    if (path === '/auth/logout' && method === 'POST') {
+      return null;
+    }
+    
+    throw { status: 404, message: 'Not found', detail: `Auth route ${path} not implemented` };
   }
 };

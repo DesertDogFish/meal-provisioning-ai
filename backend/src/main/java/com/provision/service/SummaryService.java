@@ -176,7 +176,12 @@ public class SummaryService {
                     plannedCost,
                     actualCost,
                     overridden,
-                    hasPlannedPrice
+                    hasPlannedPrice,
+                    null,  // packSize
+                    null,  // packsToBuy
+                    null,  // buyAmount
+                    null,  // leftoverAmount
+                    null   // substitutedFrom
             ));
         }
 
@@ -263,7 +268,12 @@ public class SummaryService {
                                 plannedCost,
                                 actualCost,
                                 overridden,
-                                hasPlannedPrice
+                                hasPlannedPrice,
+                                null,  // packSize
+                                null,  // packsToBuy
+                                null,  // buyAmount
+                                null,  // leftoverAmount
+                                null   // substitutedFrom
                         ));
                     }
 

@@ -1,10 +1,15 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useApp } from '../store/AppContext';
+import { api } from '../api/client';
 import { Compass, Mail, Lock, User, Eye, EyeOff } from 'lucide-react';
 
+interface AuthResponse {
+  accessToken: string;
+  refreshToken: string;
+  tokenType: string;
+}
+
 export default function LoginPage() {
-  const { state, dispatch } = useApp();
   const navigate = useNavigate();
   const [isRegister, setIsRegister] = useState(false);
   const [email, setEmail] = useState('');
@@ -13,38 +18,73 @@ export default function LoginPage() {
   const [lastName, setLastName] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
 
-  if (state.isAuthenticated) {
-    navigate('/dashboard');
+  useEffect(() => {
+    // Проверка авторизации при монтировании
+    const token = localStorage.getItem('accessToken');
+    if (token) {
+      api.get('/auth/me')
+        .then(() => {
+          setIsAuthenticated(true);
+          navigate('/dashboard');
+        })
+        .catch(() => {
+          // Токен невалиден, очищаем
+          localStorage.removeItem('accessToken');
+          localStorage.removeItem('refreshToken');
+        });
+    }
+  }, [navigate]);
+
+  if (isAuthenticated) {
     return null;
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setLoading(true);
 
-    if (isRegister) {
-      if (!firstName || !lastName || !email || !password) {
-        setError('Заполните все поля');
-        return;
+    try {
+      if (isRegister) {
+        if (!firstName || !lastName || !email || !password) {
+          setError('Заполните все поля');
+          return;
+        }
+        
+        // Регистрация
+        await api.post('/auth/register', {
+          email,
+          password,
+          firstName,
+          lastName
+        });
+        
+        // Вход после регистрации
+        const loginResponse = await api.post<AuthResponse>('/auth/login', { email, password });
+        localStorage.setItem('accessToken', loginResponse.accessToken);
+        localStorage.setItem('refreshToken', loginResponse.refreshToken);
+        setIsAuthenticated(true);
+        navigate('/dashboard');
+      } else {
+        if (!email || !password) {
+          setError('Введите email и пароль');
+          return;
+        }
+        
+        // Вход
+        const response = await api.post<AuthResponse>('/auth/login', { email, password });
+        localStorage.setItem('accessToken', response.accessToken);
+        localStorage.setItem('refreshToken', response.refreshToken);
+        setIsAuthenticated(true);
+        navigate('/dashboard');
       }
-      // Simulate registration - use admin account for demo
-      const user = email === 'admin@provision.app' 
-        ? { id: '1', email, firstName, lastName, role: 'ADMIN' as const, createdAt: new Date().toISOString() }
-        : { id: '2', email, firstName, lastName, role: 'USER' as const, createdAt: new Date().toISOString() };
-      dispatch({ type: 'LOGIN', payload: user });
-      navigate('/dashboard');
-    } else {
-      if (!email || !password) {
-        setError('Введите email и пароль');
-        return;
-      }
-      // Simulate login
-      const user = email === 'admin@provision.app'
-        ? { id: '1', email, firstName: 'Admin', lastName: 'User', role: 'ADMIN' as const, createdAt: '2024-01-01' }
-        : { id: '2', email, firstName: 'John', lastName: 'Doe', role: 'USER' as const, createdAt: '2024-01-15' };
-      dispatch({ type: 'LOGIN', payload: user });
-      navigate('/dashboard');
+    } catch (err: any) {
+      setError(err.detail || err.message || 'Ошибка авторизации');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -152,10 +192,16 @@ export default function LoginPage() {
 
             <button
               type="submit"
+              disabled={loading}
               className="w-full py-3 font-semibold rounded-full transition-all"
-              style={{ background: 'linear-gradient(90deg, var(--w1), var(--w2))', color: '#04121A' }}
+              style={{ 
+                background: 'linear-gradient(90deg, var(--w1), var(--w2))', 
+                color: '#04121A',
+                opacity: loading ? 0.6 : 1,
+                cursor: loading ? 'not-allowed' : 'pointer'
+              }}
             >
-              {isRegister ? 'Зарегистрироваться' : 'Войти'}
+              {loading ? 'Загрузка...' : (isRegister ? 'Зарегистрироваться' : 'Войти')}
             </button>
           </form>
 

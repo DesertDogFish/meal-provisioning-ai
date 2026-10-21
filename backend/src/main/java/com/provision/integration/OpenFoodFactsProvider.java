@@ -47,7 +47,7 @@ public class OpenFoodFactsProvider implements PriceProvider {
                     .uri(pricesUrl + "/api/v1/prices?size=1")
                     .retrieve()
                     .toBodilessEntity();
-            return ConnectionStatus.available();
+            return ConnectionStatus.success();
         } catch (Exception e) {
             log.error("Failed to connect to Open Food Facts: {}", e.getMessage());
             return ConnectionStatus.error(e.getMessage());

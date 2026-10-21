@@ -1,18 +1,51 @@
 import { NavLink, useNavigate } from 'react-router-dom';
-import { useApp } from '../store/AppContext';
 import { Compass, LogOut, Menu, Mountain, Ship } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import ApiModeBadge from './ApiModeBadge';
+import { api } from '../api/client';
+
+interface User {
+  id: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  role: 'USER' | 'ADMIN';
+}
 
 export default function Layout({ children }: { children: React.ReactNode }) {
-  const { state, dispatch } = useApp();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const isAdmin = state.currentUser?.role === 'ADMIN';
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
 
-  const handleLogout = () => {
-    dispatch({ type: 'LOGOUT' });
-    navigate('/login');
+  useEffect(() => {
+    loadUser();
+  }, []);
+
+  const loadUser = async () => {
+    try {
+      const user = await api.get<User>('/auth/me');
+      setCurrentUser(user);
+    } catch (error) {
+      console.error('Failed to load user:', error);
+    }
+  };
+
+  const isAdmin = currentUser?.role === 'ADMIN';
+
+  const handleLogout = async () => {
+    try {
+      const refreshToken = localStorage.getItem('refreshToken');
+      if (refreshToken) {
+        await api.post('/auth/logout', { refreshToken });
+      }
+    } catch (error) {
+      console.error('Logout error:', error);
+    } finally {
+      localStorage.removeItem('accessToken');
+      localStorage.removeItem('refreshToken');
+      setCurrentUser(null);
+      navigate('/login');
+    }
   };
 
   const navItems = [
@@ -72,11 +105,11 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         <div className="absolute bottom-0 left-0 right-0 p-4" style={{ borderTop: '1px solid var(--border)' }}>
           <div className="flex items-center gap-3 px-4 py-2 mb-2">
             <div className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold" style={{ background: 'var(--elev)', color: 'var(--text)' }}>
-              {state.currentUser?.firstName?.[0]}{state.currentUser?.lastName?.[0]}
+              {currentUser?.firstName?.[0]}{currentUser?.lastName?.[0]}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium truncate" style={{ color: 'var(--text)' }}>{state.currentUser?.firstName} {state.currentUser?.lastName}</p>
-              <p className="text-xs truncate" style={{ color: 'var(--muted)' }}>{state.currentUser?.email}</p>
+              <p className="text-sm font-medium truncate" style={{ color: 'var(--text)' }}>{currentUser?.firstName} {currentUser?.lastName}</p>
+              <p className="text-xs truncate" style={{ color: 'var(--muted)' }}>{currentUser?.email}</p>
             </div>
           </div>
           <button
