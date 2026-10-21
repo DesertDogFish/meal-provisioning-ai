@@ -170,10 +170,10 @@ describe('Контрактные тесты FIX-1/FIX-2', () => {
         expect(tushenka.calculatedCaloriesPerServing).toBeCloseTo(812.5, 1);
       }
       
-      // Овсянка: 350 ккал/100г, 0.08 KG → 280 ккал
+      // Овсянка на воде с сухофруктами: 0.08 KG овсянки (280 ккал) + 0.02 PCS сгущёнки (24.32 ккал) + 0.01 KG сахара (40 ккал) = 344.32 ккал
       const ovsyanka = recipes.find(r => r.name.includes('Овсянка'));
       if (ovsyanka) {
-        expect(ovsyanka.calculatedCaloriesPerServing).toBeCloseTo(280, 0);
+        expect(ovsyanka.calculatedCaloriesPerServing).toBeCloseTo(344, 0);
       }
     });
   });
