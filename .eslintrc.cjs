@@ -1,88 +1,88 @@
-{
-  "root": true,
-  "env": {
-    "browser": true,
-    "es2020": true,
-    "node": true
+module.exports = {
+  root: true,
+  env: {
+    browser: true,
+    es2020: true,
+    node: true
   },
-  "extends": [
-    "eslint:recommended",
-    "plugin:@typescript-eslint/recommended",
-    "plugin:react-hooks/recommended"
+  extends: [
+    'eslint:recommended',
+    'plugin:@typescript-eslint/recommended',
+    'plugin:react-hooks/recommended'
   ],
-  "ignorePatterns": [
-    "dist",
-    ".eslintrc.cjs",
-    "node_modules",
-    "backend"
+  ignorePatterns: [
+    'dist',
+    '.eslintrc.cjs',
+    'node_modules',
+    'backend'
   ],
-  "parser": "@typescript-eslint/parser",
-  "parserOptions": {
-    "ecmaVersion": "latest",
-    "sourceType": "module"
+  parser: '@typescript-eslint/parser',
+  parserOptions: {
+    ecmaVersion: 'latest',
+    sourceType: 'module'
   },
-  "plugins": [
-    "react-refresh",
-    "@typescript-eslint"
+  plugins: [
+    'react-refresh',
+    '@typescript-eslint'
   ],
-  "rules": {
-    "react-refresh/only-export-components": [
-      "warn",
+  rules: {
+    'react-refresh/only-export-components': [
+      'warn',
       {
-        "allowConstantExport": true
+        allowConstantExport: true
       }
     ],
-    "@typescript-eslint/no-unused-vars": [
-      "error",
+    '@typescript-eslint/no-unused-vars': [
+      'error',
       {
-        "argsIgnorePattern": "^_",
-        "varsIgnorePattern": "^_"
+        argsIgnorePattern: '^_',
+        varsIgnorePattern: '^_'
       }
     ],
-    "@typescript-eslint/no-explicit-any": "warn",
-    "no-console": [
-      "warn",
+    '@typescript-eslint/no-explicit-any': 'warn',
+    'no-console': [
+      'warn',
       {
-        "allow": [
-          "warn",
-          "error"
+        allow: [
+          'warn',
+          'error'
         ]
       }
     ],
-    "no-restricted-imports": [
-      "error",
+    'no-restricted-imports': [
+      'error',
       {
-        "patterns": [
+        patterns: [
           {
-            "group": [
-              "**/AppContext",
-              "**/mockData",
-              "**/mockSeed"
+            group: [
+              '**/AppContext',
+              '**/mockData',
+              '**/mockSeed'
             ],
-            "message": "Прямой импорт AppContext/mockData/mockSeed запрещён вне src/api/. Используйте API клиент из src/api/client.ts"
+            message: 'Прямой импорт AppContext/mockData/mockSeed запрещён вне src/api/. Используйте API клиент из src/api/client.ts'
           }
         ],
-        "paths": [
+        paths: [
           {
-            "name": "../store/AppContext",
-            "message": "AppContext удалён. Используйте API клиент из src/api/client.ts"
+            name: '../store/AppContext',
+            message: 'AppContext удалён. Используйте API клиент из src/api/client.ts'
           },
           {
-            "name": "../data/mockData",
-            "message": "mockData перемещён в src/api/mockSeed.ts. Используйте API клиент."
+            name: '../data/mockData',
+            message: 'mockData перемещён в src/api/mockSeed.ts. Используйте API клиент.'
           }
         ]
       }
     ]
   },
-  "overrides": [
+  overrides: [
     {
-      "files": [
-        "src/api/**/*"
+      files: [
+        'src/api/**/*'
       ],
-      "rules": {
-        "no-restricted-imports": "off"
+      rules: {
+        'no-restricted-imports': 'off'
       }
     }
   ]
-}
+};
