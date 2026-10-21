@@ -21,7 +21,10 @@ public record ProductRequest(
     Boolean roundToPacks,
     
     @DecimalMin("0")
-    BigDecimal caloriesPerUnit,
+    BigDecimal kcalPer100g,
+    
+    @DecimalMin(value = "0.01", inclusive = false)
+    BigDecimal pieceWeightG,
     
     @Size(max = 1000)
     String description

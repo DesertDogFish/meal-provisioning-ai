@@ -145,6 +145,26 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(error);
     }
 
+    @ExceptionHandler(com.provision.exception.ValidationException.class)
+    public ResponseEntity<ErrorResponse> handleValidation(
+            com.provision.exception.ValidationException ex,
+            HttpServletRequest request
+    ) {
+        log.warn("Validation error: {}", ex.getMessage());
+        ErrorResponse error = new ErrorResponse(
+                "about:blank",
+                "Validation Error",
+                HttpStatus.BAD_REQUEST.value(),
+                ex.getMessage(),
+                request.getRequestURI(),
+                LocalDateTime.now(),
+                null,
+                null,
+                null
+        );
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
+    }
+
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ErrorResponse> handleIllegalArgument(
             IllegalArgumentException ex,

@@ -16,6 +16,8 @@ public record RecipeResponse(
     Integer cookMinutes,
     Integer baseServings,
     Integer caloriesPerServing,
+    BigDecimal calculatedCaloriesPerServing,
+    List<String> missingKcalIngredients,
     RecipeSource source,
     List<RecipeIngredientResponse> ingredients,
     LocalDateTime createdAt
@@ -24,6 +26,7 @@ public record RecipeResponse(
         Long ingredientId,
         String ingredientName,
         UnitOfMeasure unit,
+        String unitLabel,
         BigDecimal amount
     ) {}
 }

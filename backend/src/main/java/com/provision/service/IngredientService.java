@@ -88,7 +88,8 @@ public class IngredientService {
                 .nameNorm(nameNorm)
                 .unit(request.unit())
                 .category(defaultCategory)
-                .caloriesPerUnit(request.caloriesPerUnit())
+                .kcalPer100g(request.kcalPer100g())
+                .pieceWeightG(request.pieceWeightG())
                 .build();
 
         ingredient = ingredientRepository.save(ingredient);
@@ -123,7 +124,8 @@ public class IngredientService {
         ingredient.setNameNorm(nameNorm);
         ingredient.setUnit(request.unit());
         // Категория не меняется в deprecated API
-        ingredient.setCaloriesPerUnit(request.caloriesPerUnit());
+        ingredient.setKcalPer100g(request.kcalPer100g());
+        ingredient.setPieceWeightG(request.pieceWeightG());
 
         ingredient = ingredientRepository.save(ingredient);
         log.info("Updated ingredient: {}", ingredient.getName());
@@ -153,13 +155,17 @@ public class IngredientService {
     }
 
     private IngredientResponse toResponse(Ingredient ingredient) {
+        String unitLabel = com.provision.dto.product.ProductResponse.UNIT_LABELS
+            .getOrDefault(ingredient.getUnit(), ingredient.getUnit().name());
         return new IngredientResponse(
                 ingredient.getId(),
                 ingredient.getCode(),
                 ingredient.getName(),
                 ingredient.getUnit(),
+                unitLabel,
                 ingredient.getCategory().getName(),
-                ingredient.getCaloriesPerUnit(),
+                ingredient.getKcalPer100g(),
+                ingredient.getPieceWeightG(),
                 ingredient.getCreatedAt()
         );
     }

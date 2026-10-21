@@ -202,6 +202,43 @@ input[type=number]::-webkit-outer-spin-button {
   }
 }
 
+/* CR-4: тёмная схема дат + видимая иконка */
+input[type="date"],
+input[type="datetime-local"] {
+  color-scheme: dark;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(0.75);
+  opacity: 0.75;
+  cursor: pointer;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+}
+
+/* CR-1: чипы отсутствия ккал */
+.kcal-missing {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 2px 9px;
+  font: 700 10px Manrope;
+  background: rgba(245, 158, 11, 0.16);
+  color: #F8C468;
+}
+
+/* CR-1: расчётная калорийность */
+.kcal-calculated {
+  background: rgba(45, 212, 191, 0.1);
+  border: 1px solid rgba(45, 212, 191, 0.35);
+  border-radius: 12px;
+  padding: 10px 12px;
+  font-size: 13px;
+  margin-top: 10px;
+  color: var(--text);
+}
+
 .chip-delta {
   display: inline-block;
   border-radius: 999px;

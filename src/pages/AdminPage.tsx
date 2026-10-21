@@ -9,7 +9,7 @@ import { useToast } from '../components/ToastProvider';
 
 type AdminTab = 'prices' | 'recipes' | 'import';
 
-const unitLabels: Record<UnitOfMeasure, string> = { KG: 'кг', L: 'л', PCS: 'шт' };
+const unitLabels: Record<UnitOfMeasure, string> = { KG: 'кг', L: 'л', PCS: 'шт', PACK: 'уп' };
 const mealTypeLabels: Record<MealType, string> = { BREAKFAST: 'Завтрак', LUNCH: 'Обед', DINNER: 'Ужин', SNACK: 'Перекус' };
 
 export default function AdminPage() {

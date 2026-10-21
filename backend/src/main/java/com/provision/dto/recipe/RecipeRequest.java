@@ -27,6 +27,8 @@ public record RecipeRequest(
     @NotNull @Min(1)
     Integer baseServings,
     
+    // CR-1: caloriesPerServing deprecated, считается из продуктов
+    // @Deprecated
     Integer caloriesPerServing,
     
     @NotEmpty @Valid

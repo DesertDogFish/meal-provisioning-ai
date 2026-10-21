@@ -14,6 +14,7 @@ interface Product extends Ingredient {
   };
   usageRecipes: number;
   bindingStatus: string;
+  kcalPer100g?: number;
 }
 
 export default function ProductsPage() {
@@ -214,7 +215,7 @@ export default function ProductsPage() {
           category: formCategory,
           packSize: formPackSize || undefined,
           roundToPacks: formRoundToPacks,
-          caloriesPerUnit: formCalories || undefined
+          kcalPer100g: formCalories || undefined
         }
       });
       showSuccess('Продукт обновлён');
@@ -229,7 +230,7 @@ export default function ProductsPage() {
           category: formCategory,
           packSize: formPackSize || undefined,
           roundToPacks: formRoundToPacks,
-          caloriesPerUnit: formCalories || undefined,
+          kcalPer100g: formCalories || undefined,
           createdAt: new Date().toISOString()
         }
       });
@@ -259,7 +260,7 @@ export default function ProductsPage() {
     setFormUnit(product.unit);
     setFormPackSize(product.packSize ?? null);
     setFormRoundToPacks(product.roundToPacks ?? false);
-    setFormCalories(product.caloriesPerUnit ?? null);
+    setFormCalories(product.kcalPer100g ?? null);
     setShowModal(true);
   };
 
@@ -350,9 +351,10 @@ export default function ProductsPage() {
           style={{ background: 'var(--elev)', border: '1px solid var(--border)', color: 'var(--text)' }}
         >
           <option value="">Единица: все</option>
-          <option value="KG">KG</option>
-          <option value="L">L</option>
-          <option value="PCS">PCS</option>
+          <option value="KG">кг</option>
+          <option value="L">л</option>
+          <option value="PCS">шт</option>
+          <option value="PACK">уп</option>
         </select>
 
         <select
@@ -539,7 +541,7 @@ export default function ProductsPage() {
                   Единица измерения *
                 </label>
                 <div className="flex gap-2">
-                  {(['KG', 'L', 'PCS'] as const).map(u => (
+                  {(['KG', 'L', 'PCS', 'PACK'] as const).map(u => (
                     <button
                       key={u}
                       onClick={() => {
@@ -553,10 +555,15 @@ export default function ProductsPage() {
                         color: formUnit === u ? '#04121A' : 'var(--text)'
                       }}
                     >
-                      {u}
+                      {u === 'KG' ? 'кг' : u === 'L' ? 'л' : u === 'PCS' ? 'шт' : 'уп'}
                     </button>
                   ))}
                 </div>
+                {(formUnit === 'PCS' || formUnit === 'PACK') && (
+                  <p className="text-xs mt-1" style={{ color: 'var(--muted)' }}>
+                    {formUnit === 'PACK' ? 'уп — редко: коробки, блоки' : ''}
+                  </p>
+                )}
               </div>
 
               <div>
@@ -584,16 +591,34 @@ export default function ProductsPage() {
 
               <div>
                 <label className="block text-sm font-medium mb-1" style={{ color: 'var(--muted)' }}>
-                  Калорийность на единицу, ккал
+                  Калорийность на 100 г / 100 мл * (как на упаковке)
                 </label>
                 <NumberField
                   value={formCalories}
                   stepRef={formCalories ?? 100}
                   maxDecimals={0}
                   onCommit={v => setFormCalories(v)}
-                  placeholder="необязательно"
+                  placeholder="как на упаковке"
                 />
+                <p className="text-xs mt-1" style={{ color: 'var(--muted)' }}>
+                  Всегда на 100 — не на порцию и не на упаковку
+                </p>
               </div>
+
+              {(formUnit === 'PCS' || formUnit === 'PACK') && formCalories && (
+                <div>
+                  <label className="block text-sm font-medium mb-1" style={{ color: 'var(--muted)' }}>
+                    Вес 1 {formUnit === 'PCS' ? 'шт' : 'уп'}, г * (обязательно для шт и уп)
+                  </label>
+                  <NumberField
+                    value={formPackSize}
+                    stepRef={formPackSize ?? 100}
+                    maxDecimals={0}
+                    onCommit={v => setFormPackSize(v)}
+                    placeholder="например, 325 для тушёнки"
+                  />
+                </div>
+              )}
             </div>
 
             <div className="flex gap-3 mt-6">

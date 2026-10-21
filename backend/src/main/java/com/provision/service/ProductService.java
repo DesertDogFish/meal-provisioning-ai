@@ -87,6 +87,14 @@ public class ProductService {
         ProductCategory category = categoryRepository.findById(request.categoryId())
                 .orElseThrow(() -> new NotFoundException("Category not found"));
 
+        // CR-1: валидация piece_weight_g для PCS/PACK при наличии ккал
+        if ((request.unit() == UnitOfMeasure.PCS || request.unit() == UnitOfMeasure.PACK)
+                && request.kcalPer100g() != null
+                && request.pieceWeightG() == null) {
+            throw new com.provision.exception.ValidationException(
+                "VALIDATION_ERROR: pieceWeightG is required for PCS/PACK when kcalPer100g is set");
+        }
+
         // Проверка дубля
         String nameNorm = normalizeName(request.name());
         if (ingredientRepository.existsByNameNormAndUnit(nameNorm, request.unit())) {
@@ -100,7 +108,8 @@ public class ProductService {
                 .unit(request.unit())
                 .packSize(request.packSize())
                 .roundToPacks(request.roundToPacks() != null ? request.roundToPacks() : false)
-                .caloriesPerUnit(request.caloriesPerUnit())
+                .kcalPer100g(request.kcalPer100g())
+                .pieceWeightG(request.pieceWeightG())
                 .build();
 
         ingredient = ingredientRepository.save(ingredient);
@@ -117,6 +126,14 @@ public class ProductService {
         // Проверка категории
         ProductCategory category = categoryRepository.findById(request.categoryId())
                 .orElseThrow(() -> new NotFoundException("Category not found"));
+
+        // CR-1: валидация piece_weight_g для PCS/PACK при наличии ккал
+        if ((request.unit() == UnitOfMeasure.PCS || request.unit() == UnitOfMeasure.PACK)
+                && request.kcalPer100g() != null
+                && request.pieceWeightG() == null) {
+            throw new com.provision.exception.ValidationException(
+                "VALIDATION_ERROR: pieceWeightG is required for PCS/PACK when kcalPer100g is set");
+        }
 
         String newNameNorm = normalizeName(request.name());
         
@@ -144,7 +161,8 @@ public class ProductService {
         ingredient.setUnit(request.unit());
         ingredient.setPackSize(request.packSize());
         ingredient.setRoundToPacks(request.roundToPacks() != null ? request.roundToPacks() : false);
-        ingredient.setCaloriesPerUnit(request.caloriesPerUnit());
+        ingredient.setKcalPer100g(request.kcalPer100g());
+        ingredient.setPieceWeightG(request.pieceWeightG());
 
         ingredient = ingredientRepository.save(ingredient);
         log.info("Updated product: {} (id={})", ingredient.getName(), ingredient.getId());
@@ -193,14 +211,19 @@ public class ProductService {
             log.warn("Ingredient {} has null category, using 'Прочее'", ingredient.getId());
         }
 
+        // CR-2: unitLabel
+        String unitLabel = ProductResponse.UNIT_LABELS.getOrDefault(ingredient.getUnit(), ingredient.getUnit().name());
+
         return new ProductResponse(
                 ingredient.getId(),
                 ingredient.getName(),
                 ingredient.getCategory() != null ? toCategoryDto(ingredient.getCategory()) : null,
                 ingredient.getUnit(),
+                unitLabel,
                 ingredient.getPackSize(),
                 ingredient.getRoundToPacks(),
-                ingredient.getCaloriesPerUnit(),
+                ingredient.getKcalPer100g(),
+                ingredient.getPieceWeightG(),
                 null, // description
                 priceDto,
                 usageCount,

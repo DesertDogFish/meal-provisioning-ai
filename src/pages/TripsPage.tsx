@@ -6,6 +6,7 @@ import { validateTrip } from '../utils/validation';
 import { ValidationError } from '../utils/errors';
 import { ProblemDetailAlert } from '../components/ProblemDetailAlert';
 import { useToast } from '../components/ToastProvider';
+import { DateRange } from '../components/DateRange';
 
 export default function TripsPage() {
   const { state, dispatch } = useApp();
@@ -99,36 +100,14 @@ export default function TripsPage() {
                   placeholder="Поход на Алтай"
                 />
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm font-medium mb-1" style={{ color: 'var(--muted)' }}>Дата начала</label>
-                  <input
-                    type="date"
-                    value={newTrip.startDate}
-                    onChange={e => { setNewTrip({ ...newTrip, startDate: e.target.value }); setFormErrors([]); }}
-                    className="w-full px-3 py-2.5 rounded-lg outline-none"
-                    style={{ 
-                      background: 'var(--elev)', 
-                      border: formErrors.find(e => e.field === 'startDate') ? '1px solid #FCA5A5' : '1px solid var(--border)',
-                      color: 'var(--text)'
-                    }}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1" style={{ color: 'var(--muted)' }}>Дата окончания</label>
-                  <input
-                    type="date"
-                    value={newTrip.endDate}
-                    onChange={e => { setNewTrip({ ...newTrip, endDate: e.target.value }); setFormErrors([]); }}
-                    className="w-full px-3 py-2.5 rounded-lg outline-none"
-                    style={{ 
-                      background: 'var(--elev)', 
-                      border: formErrors.find(e => e.field === 'endDate') ? '1px solid #FCA5A5' : '1px solid var(--border)',
-                      color: 'var(--text)'
-                    }}
-                  />
-                </div>
-              </div>
+              <DateRange
+                startDate={newTrip.startDate}
+                endDate={newTrip.endDate}
+                onStartDateChange={date => { setNewTrip({ ...newTrip, startDate: date }); setFormErrors([]); }}
+                onEndDateChange={date => { setNewTrip({ ...newTrip, endDate: date }); setFormErrors([]); }}
+                startLabel="Дата начала"
+                endLabel="Дата окончания"
+              />
               <div>
                 <label className="block text-sm font-medium mb-1" style={{ color: 'var(--muted)' }}>Количество человек</label>
                 <input

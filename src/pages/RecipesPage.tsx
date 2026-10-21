@@ -242,7 +242,7 @@ export default function RecipesPage() {
                   )}
                   {recipe.caloriesPerServing && (
                     <span className="px-2 py-0.5 text-xs rounded-full" style={{ background: 'var(--elev)', color: 'var(--muted)' }}>
-                      {recipe.caloriesPerServing} ккал
+                      {Math.round(recipe.caloriesPerServing)} ккал
                     </span>
                   )}
                 </div>
@@ -297,7 +297,7 @@ export default function RecipesPage() {
                   </span>
                   {selected.category && <span>{selected.category}</span>}
                   <span>{selected.baseServings} порций</span>
-                  {selected.caloriesPerServing && <span>{selected.caloriesPerServing} ккал/порция</span>}
+                  {selected.caloriesPerServing && <span>{Math.round(selected.caloriesPerServing)} ккал/порция · рассчитано из продуктов</span>}
                 </div>
               </div>
               <span className="px-2 py-0.5 text-xs rounded-full" style={{ background: 'var(--elev)', color: 'var(--muted)' }}>

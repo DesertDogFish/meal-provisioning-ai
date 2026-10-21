@@ -10,7 +10,9 @@ public record IngredientResponse(
     String code,
     String name,
     UnitOfMeasure unit,
+    String unitLabel,
     String category,
-    BigDecimal caloriesPerUnit,
+    BigDecimal kcalPer100g,
+    BigDecimal pieceWeightG,
     LocalDateTime createdAt
 ) {}

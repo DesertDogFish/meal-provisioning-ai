@@ -1,13 +1,19 @@
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useApp } from '../store/AppContext';
 import { Compass, LogOut, Menu, Mountain, Ship } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { api } from '../api/client';
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const { state, dispatch } = useApp();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [apiMode, setApiMode] = useState<'mock' | 'real'>('mock');
   const isAdmin = state.currentUser?.role === 'ADMIN';
+
+  useEffect(() => {
+    setApiMode(api.getMode());
+  }, []);
 
   const handleLogout = () => {
     dispatch({ type: 'LOGOUT' });

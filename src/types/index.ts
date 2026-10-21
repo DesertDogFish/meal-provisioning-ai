@@ -1,5 +1,12 @@
 export type UserRole = 'USER' | 'ADMIN';
-export type UnitOfMeasure = 'KG' | 'L' | 'PCS';
+export type UnitOfMeasure = 'KG' | 'L' | 'PCS' | 'PACK';
+
+export const UNIT_LABELS: Record<UnitOfMeasure, string> = {
+  KG: 'кг',
+  L: 'л',
+  PCS: 'шт',
+  PACK: 'уп'
+};
 export type MealType = 'BREAKFAST' | 'LUNCH' | 'DINNER' | 'SNACK';
 export type RecipeSource = 'MANUAL' | 'API' | 'AI';
 export type StagingStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
@@ -29,12 +36,14 @@ export interface Ingredient {
   id: string;
   name: string;
   unit: UnitOfMeasure;
+  unitLabel?: string;
   category: string;
   categoryId?: string;
   code?: string;
   packSize?: number;
   roundToPacks?: boolean;
-  caloriesPerUnit?: number;
+  kcalPer100g?: number;
+  pieceWeightG?: number;
   createdAt: string;
 }
 

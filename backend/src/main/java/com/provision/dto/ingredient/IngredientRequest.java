@@ -20,5 +20,7 @@ public record IngredientRequest(
     @NotBlank @Size(min = 1, max = 100)
     String category,
     
-    BigDecimal caloriesPerUnit
+    BigDecimal kcalPer100g,
+    
+    BigDecimal pieceWeightG
 ) {}

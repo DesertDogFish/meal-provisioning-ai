@@ -136,13 +136,23 @@ public class RecipeService {
 
     private RecipeResponse toResponse(Recipe recipe) {
         List<RecipeResponse.RecipeIngredientResponse> ingredients = recipe.getIngredients().stream()
-                .map(ri -> new RecipeResponse.RecipeIngredientResponse(
-                        ri.getIngredient().getId(),
-                        ri.getIngredient().getName(),
-                        ri.getIngredient().getUnit(),
-                        ri.getAmount()
-                ))
+                .map(ri -> {
+                    String unitLabel = com.provision.dto.product.ProductResponse.UNIT_LABELS
+                        .getOrDefault(ri.getIngredient().getUnit(), ri.getIngredient().getUnit().name());
+                    return new RecipeResponse.RecipeIngredientResponse(
+                            ri.getIngredient().getId(),
+                            ri.getIngredient().getName(),
+                            ri.getIngredient().getUnit(),
+                            unitLabel,
+                            ri.getAmount()
+                    );
+                })
                 .toList();
+
+        // CR-1: расчёт калорийности из продуктов
+        com.provision.util.KcalCalculator.KcalResult kcalResult = 
+            com.provision.util.KcalCalculator.calculateRecipeKcal(
+                recipe.getIngredients(), recipe.getBaseServings());
 
         return new RecipeResponse(
                 recipe.getId(),
@@ -152,6 +162,8 @@ public class RecipeService {
                 recipe.getCookMinutes(),
                 recipe.getBaseServings(),
                 recipe.getCaloriesPerServing(),
+                kcalResult.caloriesPerServing(),
+                kcalResult.missingKcalIngredients(),
                 recipe.getSource(),
                 ingredients,
                 recipe.getCreatedAt()

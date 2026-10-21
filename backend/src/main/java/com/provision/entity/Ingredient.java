@@ -35,8 +35,11 @@ public class Ingredient {
     @JoinColumn(name = "category_id", nullable = false)
     private ProductCategory category;
 
-    @Column(name = "calories_per_unit", precision = 10, scale = 2)
-    private BigDecimal caloriesPerUnit;
+    @Column(name = "kcal_per_100g", precision = 10, scale = 2)
+    private BigDecimal kcalPer100g;
+
+    @Column(name = "piece_weight_g", precision = 10, scale = 2)
+    private BigDecimal pieceWeightG;
 
     @Column(name = "pack_size", precision = 14, scale = 3)
     private BigDecimal packSize;
