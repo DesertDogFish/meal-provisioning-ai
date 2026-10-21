@@ -309,6 +309,30 @@ export const mockServer = {
           actualCost: priceOverrides[tripId]?.['3']?.actualPrice ? priceOverrides[tripId]['3'].actualPrice * 0.045 : null,
           overridden: !!priceOverrides[tripId]?.['3'],
           hasPlannedPrice: false
+        },
+        {
+          ingredientId: '4',
+          ingredientName: 'Овсяные хлопья',
+          unit: 'KG',
+          totalAmount: 0.32,
+          plannedUnitPrice: 150,
+          actualUnitPrice: priceOverrides[tripId]?.['4']?.actualPrice || 150,
+          plannedCost: 48,
+          actualCost: (priceOverrides[tripId]?.['4']?.actualPrice || 150) * 0.32,
+          overridden: !!priceOverrides[tripId]?.['4'],
+          hasPlannedPrice: true
+        },
+        {
+          ingredientId: '5',
+          ingredientName: 'Вода',
+          unit: 'L',
+          totalAmount: 1.0,
+          plannedUnitPrice: 45,
+          actualUnitPrice: priceOverrides[tripId]?.['5']?.actualPrice || 45,
+          plannedCost: 45,
+          actualCost: (priceOverrides[tripId]?.['5']?.actualPrice || 45) * 1.0,
+          overridden: !!priceOverrides[tripId]?.['5'],
+          hasPlannedPrice: true
         }
       ];
       
