@@ -50,9 +50,12 @@ jobs:
       
       - run: npm ci
       
+      - run: npm run lint
+      
       - run: npm run build
       
-      - run: npx vitest run --reporter=verbose
+      - name: Frontend tests
+        run: npm run test
       
       - name: Upload vitest reports
         if: failure()
