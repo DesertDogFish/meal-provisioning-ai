@@ -110,8 +110,10 @@ export default function DashboardPage() {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {stats.map(({ trip, tripSummary, totalDays }) => {
-              const completion = Math.min(100, Math.round((trip.days?.reduce((acc, d) => acc + (d.meals?.length || 0), 0) || 0) / (totalDays * 3) * 100));
+            {myTrips.map((trip: Trip) => {
+              const totalDays = trip.days?.length || 0;
+              const totalMeals = trip.days?.reduce((acc: number, d: any) => acc + (d.meals?.length || 0), 0) || 0;
+              const completion = Math.min(100, Math.round((totalMeals) / (totalDays * 3) * 100));
               return (
                 <div
                   key={trip.id}
@@ -134,15 +136,9 @@ export default function DashboardPage() {
                     <span className="inline-block rounded-full px-2.5 py-1 text-xs font-bold" style={{ background: 'rgba(56, 189, 248, 0.14)', color: '#9BD8F5' }}>
                       {trip.defaultPeople} чел
                     </span>
-                    {tripSummary.hasMissingPrices ? (
-                      <span className="inline-block rounded-full px-2.5 py-1 text-xs font-bold" style={{ background: 'rgba(245, 158, 11, 0.16)', color: '#F8C468' }}>
-                        нет цен
-                      </span>
-                    ) : (
-                      <span className="inline-block rounded-full px-2.5 py-1 text-xs font-bold" style={{ background: 'rgba(56, 189, 248, 0.14)', color: '#9BD8F5' }}>
-                        {tripSummary.totalCost.toLocaleString('ru-RU')} ₽
-                      </span>
-                    )}
+                    <span className="inline-block rounded-full px-2.5 py-1 text-xs font-bold" style={{ background: 'rgba(56, 189, 248, 0.14)', color: '#9BD8F5' }}>
+                      {totalDays} дн
+                    </span>
                   </div>
                   <div className="flex items-center justify-between mt-3">
                     <span className="text-xs" style={{ color: 'var(--muted)' }}>Меню {completion}%</span>
