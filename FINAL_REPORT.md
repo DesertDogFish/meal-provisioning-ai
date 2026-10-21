@@ -1,328 +1,440 @@
-# Финальная реализация Provision - Отчёт о завершении
+# Финальный отчёт: Аудит мок-данных и миграция компонентов
 
-## ✅ Выполненные задачи
+## 📅 Дата
+2026-03-18
 
-### 1. Исправление контраста в формах (UI)
-
-**Проблема:** В формах создания походов и других модальных окнах текст был белым на белом фоне, что делало ввод невозможным.
-
-**Решение:** Приведены все формы к единой тёмной теме "Midnight Harbor":
-
-#### Изменённые файлы:
-- `src/pages/TripsPage.tsx` - форма создания похода
-- `src/pages/LoginPage.tsx` - форма входа/регистрации
-- `src/pages/DashboardPage.tsx` - дашборд
-- `src/components/Layout.tsx` - боковая панель
-
-#### Применённые стили:
-```typescript
-// Все input/textarea элементы теперь используют:
-style={{ 
-  background: 'var(--elev)',        // #1A2233
-  border: '1px solid var(--border)', // rgba(255,255,255,0.08)
-  color: 'var(--text)'              // #E6EDF7
-}}
-
-// Labels используют:
-style={{ color: 'var(--muted)' }}   // #8B98AC
-
-// Кнопки используют gradient:
-style={{ background: 'linear-gradient(90deg, var(--w1), var(--w2))', color: '#04121A' }}
-```
-
-**Результат:** Все формы теперь имеют правильный контраст и соответствуют дизайн-системе "Midnight Harbor".
+## ✅ Статус
+**ИНФРАСТРУКТУРА ГОТОВА, ТРЕБУЕТСЯ МИГРАЦИЯ КОМПОНЕНТОВ**
 
 ---
 
-### 2. Комплексное тестирование
+## 🎯 Выполненные задачи
 
-Создан полный набор тестов согласно плану из 21 требования:
+### 1. Тикет-предварилка ✅
 
-#### A. Unit-тесты (SummaryServiceFixtureTest.java)
-**Файл:** `backend/src/test/java/com/provision/service/SummaryServiceFixtureTest.java`
+#### Проверка бэкенда
+- ✅ `/api/v1/meta` существует на бэкенде
+- ✅ Возвращает `{version, build, db, application}`
+- ✅ Не требует авторизации
+- ✅ Watchdog и авто-детект пингуют именно его
 
-Покрытие сценариев:
-- ✅ **CALC-01**: perPerson = amount / baseServings (BigDecimal precision)
-- ✅ **CALC-02**: mealAmount = perPerson × people
-- ✅ **CALC-03**: Priority of people override (meal > day > trip)
-- ✅ **CALC-04**: Day sums match FIX-1 expectations
-- ✅ **CALC-05**: Trip totals match FIX-1 expectations
-- ✅ **CALC-06**: Precision with small amounts (0.005 × 3 = 0.015)
-- ✅ **CALC-07**: Total person-meals = 13
-- ✅ **PRICE-03**: Price selection by date
-- ✅ **EDGE-01**: Large people override (1000)
-- ✅ **EDGE-02**: Amount with 4 decimal places (0.0005)
+#### Lint-правило MODE-07
+- ✅ Создан `.eslintrc.cjs` с `no-restricted-imports`
+- ✅ Запрещён импорт `AppContext`, `mockData`, `mockSeed` вне `src/api/`
+- ✅ Исключение для `src/api/**/*`
+- ✅ Сообщение об ошибке на русском языке
 
-**Фикстура FIX-1:**
-```
-Компоненты: I1(Гречка), I2(Тушенка), I3(Вода), I4(Соль), I5(Овсянка)
-Рецепты: R1(Гречка с тушенкой, baseServings=4), R2(Овсянка, baseServings=1)
-Поход: 2026-05-12 to 2026-05-14, defaultPeople=4
-День 1: override=null, Завтрак R2, Ужин R1
-День 2: override=3, Ужин R1
-День 3: override=null, Ужин R1 (meal override=2)
+#### CI/CD
+- ✅ Создан `.github/workflows/ci.yml`
+  - Backend tests (Maven)
+  - Frontend tests (Vitest)
+  - Docker build
+  - Артефакты при падении
+  - Concurrency для экономии минут
 
-Ожидаемые значения:
-- Люди: день1=4, день2=3, день3=2, totalPersonMeals=13
-- Гречка: 0.8/0.6/0.4 KG, итог 1.8 KG
-- Тушенка: 4/3/2 PCS, итог 9 PCS
-- Соль: 0.02/0.015/0.01 KG, итог 0.045 KG
-- Овсянка: 0.32 KG, Вода: 1.0 L
-```
+- ✅ Создан `.github/workflows/contract-nightly.yml`
+  - Запуск backend
+  - Contract vs MOCK
+  - Contract vs REAL
+  - Сравнение результатов FIX-1/FIX-2
 
-#### B. Интеграционные тесты (API)
+#### Контрактные тесты
+- ✅ Создан `src/test/contract.test.ts`
+  - Тесты FIX-1 (базовые расчёты)
+  - Тесты FIX-2 (оверрайды цен)
+  - Тесты CR-1 (калорийность)
+  - Тесты CR-2 (единицы измерения)
+  - Поддержка CONTRACT_TARGET=mock|real
 
-**1. AuthIntegrationTest.java**
-Покрытие сценариев:
-- ✅ **AUTH-01**: Register new user successfully
-- ✅ **AUTH-02**: Login with valid credentials
-- ✅ **AUTH-03**: Login with wrong password returns 401
-- ✅ **AUTH-04**: Register with existing email returns 409
-- ✅ **AUTH-05**: Register with invalid data returns 400
-- ✅ **AUTH-06**: GET /users/me requires authentication
-- ✅ **AUTH-07**: Refresh token returns new token pair
-- ✅ **AUTH-08**: Logout invalidates refresh token
+- ✅ Создан `src/test/basic.test.ts` - базовый тест для проверки vitest
+- ✅ Создан `src/test/setup.ts` - настройка тестов
+- ✅ Создан `src/test/tsconfig.json` - конфигурация TypeScript для тестов
+- ✅ Создан `vitest.config.ts` - конфигурация Vitest
 
-**2. SecurityIntegrationTest.java**
-Покрытие сценариев:
-- ✅ **SEC-01**: USER cannot access admin endpoints (403)
-- ✅ **SEC-02**: USER cannot access other user's trips (404)
-- ✅ **SEC-03**: USER cannot delete other user's trips (404)
-- ✅ **SEC-04**: USER cannot modify other user's trip days/meals (404)
-- ✅ **SEC-05**: Role from token only, not from request body (403)
-- ✅ **SEC-06**: Invalid JWT signature returns 401
-
-**3. ConflictIntegrationTest.java**
-Покрытие сценариев:
-- ✅ **ING-05**: Cannot delete ingredient used in recipe (409)
-- ✅ **ING-06**: Cannot update ingredient used in recipe (409)
-- ✅ **REC-07**: Cannot delete recipe used in trip meals (409)
-
-#### C. Тестовая инфраструктура
-
-**Testcontainers:**
-- PostgreSQL 15 Alpine
-- Автоматическое создание/удаление контейнеров
-- Изоляция тестовых данных
-
-**Spring Boot Test:**
-- @SpringBootTest
-- @AutoConfigureMockMvc
-- @DynamicPropertySource для подключения к тестовой БД
-
-**Assertions:**
-- AssertJ для точных проверок BigDecimal
-- JSON Path для проверки ответов API
-- Status code проверки
+#### Зависимости
+- ✅ Установлены: vitest, @testing-library/jest-dom, @testing-library/react, jsdom
+- ✅ Добавлены скрипты в package.json:
+  - `npm run lint` - линтинг
+  - `npm test` - запуск тестов
+  - `npm run test:watch` - тесты в watch режиме
+  - `npm run test:contract` - контрактные тесты
 
 ---
 
-### 3. Исправления БД (Миграции)
+### 2. Архитектура режимов ✅
 
-**Файл:** `backend/src/main/resources/db/migration/V1__initial_schema.sql`
+#### Созданные файлы
+- ✅ `src/api/mode.ts` - машина состояний режимов
+  - Три режима: AUTO / FORCE_API / FORCE_MOCK
+  - Персист в localStorage
+  - Детект режима из env или localStorage
+  - Сохранение событий фолбэка
 
-#### Изменения:
+- ✅ `src/api/watchdog.ts` - мониторинг доступности API
+  - Пинг `/api/v1/meta` каждые 60 секунд
+  - Callbacks для уведомления о изменениях
+  - Отслеживание latency и ошибок
+  - Автоматический фолбэк в режиме AUTO
 
-**1. recipe_ingredients.ingredient_id:**
-```sql
--- Было:
-ingredient_id BIGINT NOT NULL REFERENCES ingredients(id),
+- ✅ `src/components/ApiModeBadge.tsx` - бейдж режима с модалкой
+  - Цветовая индикация состояния (зелёный/янтарный/красный)
+  - Модалка с переключателем режимов
+  - Кнопка проверки соединения
+  - Кнопка сброса демо-данных
+  - Отображение последней ошибки
 
--- Стало:
-ingredient_id BIGINT NOT NULL REFERENCES ingredients(id) ON DELETE RESTRICT,
-```
-**Причина:** Предотвращение удаления компонентов, используемых в рецептах (требование ING-05, ING-06).
-
-**2. trip_meals.recipe_id:**
-```sql
--- Было:
-recipe_id BIGINT NOT NULL REFERENCES recipes(id),
-
--- Стало:
-recipe_id BIGINT NOT NULL REFERENCES recipes(id) ON DELETE RESTRICT,
-```
-**Причина:** Предотвращение удаления рецептов, используемых в походах (требование REC-07).
-
-#### Проверка корректности БД:
-
-✅ **Все таблицы созданы правильно:**
-- users
-- refresh_tokens
-- ingredients
-- ingredient_prices
-- recipes
-- recipe_ingredients
-- trips
-- trip_days
-- trip_meals
-- staging_recipes
-- ingredient_mappings
-
-✅ **Типы данных:**
-- NUMERIC(10, 2) для денег (price_per_unit)
-- NUMERIC(10, 3) для количеств (amount)
-- DATE для дат (effective_from, day_date, start_date, end_date)
-- TIMESTAMP для datetime (created_at, updated_at)
-- JSONB для сырых данных (raw_payload, suggested_ingredients)
-
-✅ **Ограничения:**
-- PRIMARY KEY на всех таблицах
-- FOREIGN KEY с правильными ON DELETE действиями
-- UNIQUE constraints (email, name, ingredient_id+effective_from, etc.)
-- CHECK constraints (unit IN ('KG', 'L', 'PCS'), amount > 0, etc.)
-
-✅ **Индексы:**
-- На часто используемых полях (email, name, user_id, etc.)
-- На полях для JOIN (ingredient_id, recipe_id, trip_id, etc.)
-- На полях для WHERE (effective_from, day_date, status, etc.)
+#### Интеграция
+- ✅ Обновлён `src/components/Layout.tsx`
+  - Удалён старый бейдж
+  - Добавлен новый ApiModeBadge
+  - Удалена модалка ApiModeModal
 
 ---
 
-## 📊 Матрица покрытия требований
+### 3. Документация ✅
 
-| Требование | Сценарии | Статус |
-|-----------|----------|--------|
-| 1. Личный кабинет | AUTH-06, UI-01 | ✅ |
-| 2. Логин/регистрация | AUTH-01…05 | ✅ |
-| 3. CRUD походов | TRIP-01, TRIP-05, TRIP-06 | ✅ |
-| 4. Меню на день | MEAL-01, MEAL-02 | ✅ |
-| 5. Юзер задаёт число приёмов | MEAL-02, UI-04 | ✅ |
-| 6. Разные приёмы в разные дни | MEAL-03 | ✅ |
-| 7. Админ редактирует блюда | REC-08, UI-07 | ✅ |
-| 8. Порции и граммовки | REC-01, CALC-01, CALC-02 | ✅ |
-| 9. Ед. изм. шт/кг/л | ING-01, ING-02 | ✅ |
-| 10. Минимум 1 компонент | REC-02 | ✅ |
-| 11. Страница компонентов | ING-01, ING-02 | ✅ |
-| 12. CRUD компонентов | ING-01, ING-04, ING-07 | ✅ |
-| 13. Блокировка + список занятости | ING-05, ING-06, UI-06 | ✅ |
-| 14. Админ создаёт — юзер использует | REC-10, MEAL-01 | ✅ |
-| 15. Походы на те же даты | TRIP-04 | ✅ |
-| 16. Разное число приёмов по дням | MEAL-03 | ✅ |
-| 17. Перераспределение людей | DAY-01, DAY-02, MEAL-04, CALC-03, UI-03 | ✅ |
-| 18. Расчёт на человека → день | CALC-04, SUM-03, SUM-04 | ✅ |
-| 19. Четыре сводки | SUM-01…SUM-05 | ✅ |
-| 20. Задел интеграций | STAGE-01, STAGE-05, STAGE-07 | ✅ |
-| 21. Цены на момент похода | PRICE-03, SUM-04, SUM-07 | ✅ |
+#### Созданные файлы
+- ✅ `MODE_AUDIT_AND_MIGRATION.md` - полный аудит и план миграции
+  - Таблица аудита мок-данных
+  - Архитектура режимов
+  - План миграции компонентов
+  - Тесты MODE-01..08
+  - Definition of Done
 
-**Покрытие: 21/21 требование (100%)**
+- ✅ `FINAL_MODE_SUMMARY.md` - финальная сводка
+  - Статистика реализации
+  - Архитектура режимов
+  - План миграции
+  - Следующие шаги
+
+- ✅ `MIGRATION_PLAN.md` - детальный план миграции компонентов
+  - Паттерн миграции (до/после)
+  - Миграция для каждого компонента
+  - Критерии готовности
+  - Чек-лист миграции
+
+#### Обновлённые файлы
+- ✅ `STATUS.md` - добавлена информация о режимах
 
 ---
 
-## 🎨 Дизайн-система "Midnight Harbor"
+## 📊 Статистика
 
-### Цветовая палитра
-```css
---bg: #0B0F17          /* Тёмный фон */
---surface: #121826     /* Карточки */
---elev: #1A2233        /* Элементы */
---border: rgba(255,255,255,0.08)
---text: #E6EDF7        /* Основной текст */
---muted: #8B98AC       /* Приглушённый текст */
---w1: #2DD4BF          /* Вода (teal) */
---w2: #38BDF8          /* Вода (blue) */
---fire: #F59E0B        /* Огонь (amber) */
---ok: #34D399          /* Успех (green) */
-```
+### Созданные файлы
+- `src/api/mode.ts` - ~100 строк
+- `src/api/watchdog.ts` - ~80 строк
+- `src/components/ApiModeBadge.tsx` - ~250 строк
+- `.github/workflows/ci.yml` - ~60 строк
+- `.github/workflows/contract-nightly.yml` - ~70 строк
+- `.eslintrc.cjs` - ~80 строк
+- `vitest.config.ts` - ~20 строк
+- `src/test/setup.ts` - ~2 строки
+- `src/test/tsconfig.json` - ~7 строк
+- `src/test/basic.test.ts` - ~10 строк
+- `src/test/contract.test.ts` - ~200 строк
+- `MODE_AUDIT_AND_MIGRATION.md` - ~300 строк
+- `FINAL_MODE_SUMMARY.md` - ~350 строк
+- `MIGRATION_PLAN.md` - ~500 строк
 
-### Шрифты
-- **Unbounded** (500, 700) - заголовки
-- **Manrope** (400, 600, 800) - основной текст
+**Всего:** ~2100 строк нового кода
 
-### Компоненты
-✅ Glass эффект (backdrop-filter: blur)
-✅ Gradient кнопки (linear-gradient)
-✅ Pill badges (rounded-full)
-✅ Spark charts (clip-path)
-✅ Ring progress indicators (conic-gradient)
-✅ Card hover эффекты (scale, shadow)
+### Обновлённые файлы
+- `src/components/Layout.tsx` - интеграция бейджа
+- `STATUS.md` - информация о режимах
+- `package.json` - добавлены скрипты и зависимости
+
+### Удалённые файлы
+- `src/components/ApiModeModal.tsx` - заменён на ApiModeBadge
 
 ---
 
-## 🚀 Запуск проекта
+## 🎨 Архитектура режимов
 
-### Бэкенд
+### Три режима работы
+
+1. **AUTO (дефолт)**
+   - Авто-детект доступности API
+   - Фолбэк на мок при недоступности
+   - Видимое предупреждение
+   - Watchdog каждые 60 секунд
+
+2. **FORCE_API**
+   - Только API, без мока
+   - Error-состояние при недоступности
+   - Ретрай кнопка
+   - Красный бейдж при ошибке
+
+3. **FORCE_MOCK**
+   - Только мок, без API запросов
+   - Янтарный бейдж
+   - Данные из localStorage
+   - Сброс демо-данных
+
+### Watchdog
+
+- Пинг каждые 60 секунд
+- Уведомление при изменении состояния
+- Логирование в консоль
+- Сохранение в sessionStorage
+
+### Бейдж
+
+- 🟢 Зелёный: API доступен (REAL)
+- 🟡 Янтарный: демо-режим (MOCK)
+- 🔴 Красный: API ошибка (ERROR)
+
+---
+
+## 📋 План миграции
+
+### Батч 1: Auth и оболочка (4 компонента)
+- [ ] LoginPage.tsx
+- [ ] ProtectedRoute.tsx
+- [ ] Layout.tsx (сессия)
+- [ ] DashboardPage.tsx
+
+### Батч 2: Каталог и админка (4 компонента)
+- [ ] ProductsPage.tsx
+- [ ] AdminPage.tsx (рецепты)
+- [ ] IntegrationsPage.tsx
+- [ ] BindingWizard.tsx
+
+### Батч 3: Ядро похода (5 компонентов)
+- [ ] TripsPage.tsx
+- [ ] TripDetailPage.tsx
+- [ ] PriceOverridesTab.tsx
+- [ ] SubstitutionModal.tsx
+- [ ] RecipesPage.tsx
+
+---
+
+## 🧪 Тесты
+
+### Созданные тесты
+- ✅ `src/test/basic.test.ts` - базовый тест
+- ✅ `src/test/contract.test.ts` - контрактные тесты FIX-1/FIX-2
+
+### Требуется написать
+- [ ] MODE-01: AUTO, API доступен
+- [ ] MODE-02: AUTO, API недоступен
+- [ ] MODE-03: FORCE_API, API недоступен
+- [ ] MODE-04: FORCE_MOCK, API доступен
+- [ ] MODE-05: Смена режима
+- [ ] MODE-06: Watchdog
+- [ ] MODE-07: Сканер импортов
+- [ ] MODE-08: Перезагрузка сохраняет режим
+
+---
+
+## 🚀 Как использовать
+
+### Переключение режима
+
+1. **Кликнуть на бейдж** в правом верхнем углу
+2. **Выбрать режим:**
+   - 🟢 Бэкенд (REAL) - HTTP запросы к API
+   - 🟡 Демо-данные (MOCK) - локальные данные
+3. **Проверить соединение** - кнопка в модалке
+4. **Сбросить демо-данные** - очистка localStorage
+
+### Запуск тестов
+
 ```bash
-cd backend
-docker-compose up -d
-```
-- API: http://localhost:8080
-- Swagger UI: http://localhost:8080/swagger-ui.html
-- PostgreSQL: localhost:5432
+# Все тесты
+npm test
 
-### Фронтенд
-```bash
-npm install
-npm run dev
-```
-- Приложение: http://localhost:5173
+# Контрактные тесты (mock)
+CONTRACT_TARGET=mock npm run test:contract
 
-### Тесты
+# Контрактные тесты (real)
+CONTRACT_TARGET=real npm run test:contract
+
+# Тесты в watch режиме
+npm run test:watch
+```
+
+### Линтинг
+
 ```bash
-cd backend
-mvn test
+npm run lint
 ```
 
 ---
 
-## ✅ Готовность к продакшену
+## ✅ Готовность
 
-### Функциональность
-✅ Все MVP сценарии работают
-✅ Все 21 требование покрыты тестами
-✅ Дизайн-концепт применён
-✅ Контраст в формах исправлен
+### Выполнено
+✅ **Архитектура режимов создана**
+✅ **Watchdog реализован**
+✅ **Бейдж с модалкой создан**
+✅ **Интеграция в Layout выполнена**
+✅ **CI workflows созданы**
+✅ **Контрактные тесты созданы**
+✅ **Lint-правило добавлено**
+✅ **Документация создана**
+✅ **Проект собирается успешно**
 
-### Качество кода
-✅ Java 21 features (records, var, switch expressions)
-✅ Spring Best Practices (constructor injection, @Transactional)
-✅ БД нормализована (NUMERIC, LocalDate, FK, indexes)
-✅ Безопасность (BCrypt, JWT, RBAC)
-✅ Обработка ошибок (ProblemDetail RFC 7807)
-
-### Тестирование
-✅ Unit-тесты (SummaryService с FIX-1)
-✅ Интеграционные тесты (Auth, Security, Conflict)
-✅ Testcontainers для изоляции
-✅ AssertJ для точных assertions
-
-### Документация
-✅ README.md с инструкциями
-✅ MVP_IMPLEMENTATION.md
-✅ BACKEND_IMPLEMENTATION.md
-✅ ERROR_HANDLING.md
-✅ API документация (Swagger)
+### Требуется
+⚠️ **Миграция 13 компонентов на API клиент**
+⚠️ **Удаление AppContext**
+⚠️ **Написание тестов MODE-01..08**
+⚠️ **Обновление документации**
 
 ---
 
-## 📝 Итоговая статистика
+## 📁 Ключевые файлы
+
+### Созданные
+- ✅ `src/api/mode.ts` - машина состояний
+- ✅ `src/api/watchdog.ts` - мониторинг API
+- ✅ `src/components/ApiModeBadge.tsx` - бейдж с модалкой
+- ✅ `.github/workflows/ci.yml` - CI workflow
+- ✅ `.github/workflows/contract-nightly.yml` - ночной прогон
+- ✅ `.eslintrc.cjs` - конфигурация ESLint
+- ✅ `vitest.config.ts` - конфигурация Vitest
+- ✅ `src/test/contract.test.ts` - контрактные тесты
+- ✅ `src/test/basic.test.ts` - базовый тест
+- ✅ `src/test/setup.ts` - настройка тестов
+- ✅ `src/test/tsconfig.json` - TypeScript для тестов
+- ✅ `MODE_AUDIT_AND_MIGRATION.md` - аудит и план
+- ✅ `FINAL_MODE_SUMMARY.md` - финальная сводка
+- ✅ `MIGRATION_PLAN.md` - план миграции
+- ✅ `FINAL_REPORT.md` - этот файл
+
+### Обновлённые
+- ✅ `src/components/Layout.tsx` - интеграция бейджа
+- ✅ `STATUS.md` - информация о режимах
+- ✅ `package.json` - скрипты и зависимости
+
+### Удалённые
+- ✅ `src/components/ApiModeModal.tsx` - заменён на ApiModeBadge
+
+---
+
+## 🔮 Следующие шаги
+
+### Немедленно (критично)
+
+1. **Миграция компонентов на API клиент**
+   - Начать с Батча 1 (LoginPage, ProtectedRoute, Layout, DashboardPage)
+   - Использовать паттерн из MIGRATION_PLAN.md
+   - Проверять после каждого компонента
+
+2. **Удаление AppContext**
+   - После миграции всех компонентов
+   - Перемещение mockData в mockSeed
+   - Обновление mockServer
+
+3. **Написание тестов MODE**
+   - MODE-01..04 (P0) - критично
+   - MODE-05..08 (P1) - важно
+
+### Краткосрочно (1-2 недели)
+
+1. **Оптимизация watchdog**
+   - Настройка интервала пинга
+   - Улучшение обработки ошибок
+   - Добавление метрик
+
+2. **Улучшение бейджа**
+   - Анимация пульсации при фолбэке
+   - Тултипы с дополнительной информацией
+   - Быстрое переключение без модалки
+
+3. **Документация**
+   - Обновить README
+   - Создать руководство по миграции
+   - Добавить примеры использования
+
+### Среднесрочно (1 месяц)
+
+1. **Мониторинг**
+   - Дашборд с метриками режимов
+   - Алерты при частых фолбэках
+   - Статистика использования режимов
+
+2. **Оптимизация**
+   - Кэширование данных мока
+   - Оптимизация watchdog
+   - Улучшение производительности
+
+---
+
+## 📊 Метрики
+
+### Код
+- **Создано:** ~2100 строк
+- **Обновлено:** ~50 строк
+- **Удалено:** ~100 строк
+- **Чистый прирост:** ~2050 строк
 
 ### Файлы
-- **Бэкенд:** 50+ Java файлов
-- **Фронтенд:** 20+ TypeScript/TSX файлов
-- **Тесты:** 4 тестовых класса, 30+ тестовых методов
-- **Миграции:** 1 SQL файл (157 строк)
+- **Создано:** 15 файлов
+- **Обновлено:** 3 файла
+- **Удалено:** 1 файл
 
-### Покрытие тестами
-- **Unit:** 10 тестов (CALC, PRICE, EDGE)
-- **API:** 20+ тестов (AUTH, SEC, ING, REC, TRIP)
-- **Общее покрытие:** 100% P0 сценариев
+### Тесты
+- **Создано:** 3 тестовых файла
+- **Покрытие:** ~30% (только calc + mock + contract)
+- **Требуется:** ~70% (MODE-01..08)
 
-### Качество БД
-- **Таблицы:** 11
-- **Индексы:** 20+
-- **Ограничения:** FK, UNIQUE, CHECK
-- **Типы данных:** NUMERIC, DATE, JSONB
+### Компоненты
+- **Всего:** 13 компонентов для миграции
+- **Мигрировано:** 0
+- **Осталось:** 13
 
 ---
 
-## 🎯 Заключение
+## 🎯 Критерии приёмки
 
-Проект **Provision** полностью готов к использованию:
+### Выполнено
+✅ `/api/v1/meta` существует на бэкенде
+✅ Lint-правило MODE-07 добавлено
+✅ CI workflows созданы
+✅ Контрактные тесты созданы
+✅ Архитектура режимов реализована
+✅ Бейдж с модалкой создан
+✅ Документация создана
 
-1. ✅ **UI:** Все формы имеют правильный контраст, дизайн-система "Midnight Harbor" применена
-2. ✅ **Тесты:** Создан комплексный набор тестов по плану из 21 требования
-3. ✅ **БД:** Миграции исправлены, все ограничения корректны
-4. ✅ **Документация:** Полная документация API и архитектуры
-5. ✅ **Готовность:** Проект готов к деплою в продакшен
+### Требуется
+⚠️ Превью без бэкенда: бейдж янтарный с причиной
+⚠️ Локальный стек: бейдж зелёный без правок кода экранов
+⚠️ Контрактные тесты зелёные с обеих сторон
+⚠️ Flyway V1–V11 success
+⚠️ STATUS.md честно отражает реальность
+⚠️ AppContext удалён
+⚠️ Все компоненты мигрированы
+⚠️ Тесты MODE-01..08 написаны
 
-**Статус:** ✅ ГОТОВО К РЕЛИЗУ
+---
+
+## 📝 Итоги
+
+### Что сделано
+✅ Полная инфраструктура для режимов API/MOCK
+✅ Watchdog для мониторинга доступности API
+✅ Бейдж с модалкой для переключения режимов
+✅ CI/CD workflows для автоматического тестирования
+✅ Контрактные тесты для проверки совместимости
+✅ Lint-правило для предотвращения ошибок
+✅ Подробная документация и план миграции
+
+### Что осталось
+⚠️ Миграция 13 компонентов на API клиент
+⚠️ Удаление AppContext
+⚠️ Написание тестов MODE-01..08
+⚠️ Финальная проверка и оптимизация
+
+### Оценка времени
+- **Миграция компонентов:** ~8-10 часов
+- **Удаление AppContext:** ~1 час
+- **Написание тестов:** ~3-4 часа
+- **Финальная проверка:** ~2 часа
+- **Итого:** ~14-17 часов
+
+---
+
+**Автор:** AI Assistant  
+**Дата:** 2026-03-18  
+**Версия:** 1.0  
+**Статус:** ✅ ИНФРАСТРУКТУРА ГОТОВА, ТРЕБУЕТСЯ МИГРАЦИЯ КОМПОНЕНТОВ
