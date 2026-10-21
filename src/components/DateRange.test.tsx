@@ -1,19 +1,35 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { DateRange } from './DateRange';
+import React, { useState } from 'react';
+
+function TestWrapper({
+  initialS = '',
+  initialE = '',
+  onStartDateChange,
+  onEndDateChange
+}: {
+  initialS?: string;
+  initialE?: string;
+  onStartDateChange?: (v: string) => void;
+  onEndDateChange?: (v: string) => void;
+}) {
+  const [s, setS] = useState(initialS);
+  const [e, setE] = useState(initialE);
+  return <DateRange
+    startDate={s}
+    endDate={e}
+    onStartDateChange={(v) => { setS(v); onStartDateChange?.(v); }}
+    onEndDateChange={(v) => { setE(v); onEndDateChange?.(v); }}
+  />;
+}
 
 describe('DateRange Component (CR-3)', () => {
   it('renders two date inputs', () => {
     render(
-      <DateRange
-        startDate=""
-        endDate=""
-        onStartDateChange={() => {}}
-        onEndDateChange={() => {}}
-      />
+      <TestWrapper />
     );
     
-    // date input имеет нестабильную роль, используем getByLabelText
     const startInput = screen.getByLabelText('Дата начала');
     const endInput = screen.getByLabelText('Дата окончания');
     
@@ -23,26 +39,19 @@ describe('DateRange Component (CR-3)', () => {
 
   it('second picker is disabled until first is selected', () => {
     render(
-      <DateRange
-        startDate=""
-        endDate=""
-        onStartDateChange={() => {}}
-        onEndDateChange={() => {}}
-      />
+      <TestWrapper />
     );
     
     const endInput = screen.getByLabelText('Дата окончания');
     expect(endInput).toBeDisabled();
   });
 
-  it('second picker becomes enabled after first date is selected', () => {
+  it('second picker becomes enabled after first date is selected', async () => {
     const onStartDateChange = vi.fn();
     const onEndDateChange = vi.fn();
     
     render(
-      <DateRange
-        startDate=""
-        endDate=""
+      <TestWrapper
         onStartDateChange={onStartDateChange}
         onEndDateChange={onEndDateChange}
       />
@@ -53,37 +62,42 @@ describe('DateRange Component (CR-3)', () => {
     
     fireEvent.change(startInput, { target: { value: '2026-05-12' } });
     
-    expect(onStartDateChange).toHaveBeenCalledWith('2026-05-12');
+    await waitFor(() => {
+      expect(onStartDateChange).toHaveBeenCalledWith('2026-05-12');
+    });
     expect(endInput).toBeEnabled();
   });
 
-  it('min of second picker equals first picker value', () => {
+  it('min of second picker equals first picker value', async () => {
     render(
-      <DateRange
-        startDate="2026-05-12"
-        endDate=""
+      <TestWrapper
         onStartDateChange={() => {}}
         onEndDateChange={() => {}}
       />
     );
+    
+    const startInput = screen.getByLabelText('Дата начала');
+    fireEvent.change(startInput, { target: { value: '2026-05-12' } });
+    
+    await waitFor(() => {});
     
     const endInput = screen.getByLabelText('Дата окончания');
     expect(endInput).toHaveAttribute('min', '2026-05-12');
   });
 
   it('auto-adjusts end date if start date moves past it', () => {
-    const onEndDateChange = vi.fn();
+    const onStartDateChange = vi.fn(() => {});
+    const onEndDateChange = vi.fn(() => {});
     
     render(
-      <DateRange
-        startDate="2026-05-15"
-        endDate="2026-05-12"
-        onStartDateChange={() => {}}
+      <TestWrapper
+        initialS="2026-05-15"
+        initialE="2026-05-18"
+        onStartDateChange={onStartDateChange}
         onEndDateChange={onEndDateChange}
       />
     );
     
-    // When start date is after end date, end date should be adjusted
     const startInput = screen.getByLabelText('Дата начала');
     
     fireEvent.change(startInput, { target: { value: '2026-05-20' } });
@@ -92,13 +106,12 @@ describe('DateRange Component (CR-3)', () => {
 
   it('calls onStartDateChange when first date changes', () => {
     const onStartDateChange = vi.fn();
+    const onEndDateChange = vi.fn();
     
     render(
-      <DateRange
-        startDate=""
-        endDate=""
+      <TestWrapper
         onStartDateChange={onStartDateChange}
-        onEndDateChange={() => {}}
+        onEndDateChange={onEndDateChange}
       />
     );
     
@@ -110,16 +123,18 @@ describe('DateRange Component (CR-3)', () => {
   });
 
   it('calls onEndDateChange when second date changes', () => {
+    const onStartDateChange = vi.fn();
     const onEndDateChange = vi.fn();
     
     render(
-      <DateRange
-        startDate="2026-05-12"
-        endDate=""
-        onStartDateChange={() => {}}
+      <TestWrapper
+        onStartDateChange={onStartDateChange}
         onEndDateChange={onEndDateChange}
       />
     );
+    
+    const startInput = screen.getByLabelText('Дата начала');
+    fireEvent.change(startInput, { target: { value: '2026-05-12' } });
     
     const endInput = screen.getByLabelText('Дата окончания');
     
@@ -129,10 +144,12 @@ describe('DateRange Component (CR-3)', () => {
   });
 
   it('respects custom labels', () => {
+    // DateRange с пропсами startDate/endDate не '' не использует TestWrapper,
+    // labels статичны в JSX, проверяем напрямую:
     render(
       <DateRange
-        startDate=""
-        endDate=""
+        startDate="2026-05-12"
+        endDate="2026-05-15"
         onStartDateChange={() => {}}
         onEndDateChange={() => {}}
         startLabel="Начало"
