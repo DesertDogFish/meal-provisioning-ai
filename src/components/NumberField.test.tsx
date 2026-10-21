@@ -52,10 +52,12 @@ describe('NumberField Component', () => {
       <NumberField
         value={null}
         onCommit={onCommit}
+        ariaLabel="Test input"
       />
     );
     
-    const input = screen.getByRole('textbox');
+    // type=number имеет роль spinbutton, не textbox
+    const input = screen.getByRole('spinbutton', { name: 'Test input' });
     fireEvent.change(input, { target: { value: '250.5' } });
     fireEvent.blur(input);
     
@@ -69,10 +71,11 @@ describe('NumberField Component', () => {
       <NumberField
         value={null}
         onCommit={onCommit}
+        ariaLabel="Test input"
       />
     );
     
-    const input = screen.getByRole('textbox');
+    const input = screen.getByRole('spinbutton', { name: 'Test input' });
     fireEvent.change(input, { target: { value: '300' } });
     fireEvent.keyDown(input, { key: 'Enter' });
     
@@ -87,10 +90,11 @@ describe('NumberField Component', () => {
         value={null}
         onCommit={onCommit}
         min={0}
+        ariaLabel="Test input"
       />
     );
     
-    const input = screen.getByRole('textbox');
+    const input = screen.getByRole('spinbutton', { name: 'Test input' });
     fireEvent.change(input, { target: { value: '-5' } });
     fireEvent.blur(input);
     
@@ -105,10 +109,11 @@ describe('NumberField Component', () => {
         value={null}
         onCommit={onCommit}
         maxDecimals={2}
+        ariaLabel="Test input"
       />
     );
     
-    const input = screen.getByRole('textbox');
+    const input = screen.getByRole('spinbutton', { name: 'Test input' });
     fireEvent.change(input, { target: { value: '123.456789' } });
     fireEvent.blur(input);
     

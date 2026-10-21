@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { DateRange } from './DateRange';
 
@@ -13,8 +13,12 @@ describe('DateRange Component (CR-3)', () => {
       />
     );
     
-    const dateInputs = screen.getAllByRole('textbox');
-    expect(dateInputs).toHaveLength(2);
+    // date input имеет нестабильную роль, используем getByLabelText
+    const startInput = screen.getByLabelText('Дата начала');
+    const endInput = screen.getByLabelText('Дата окончания');
+    
+    expect(startInput).toBeInTheDocument();
+    expect(endInput).toBeInTheDocument();
   });
 
   it('second picker is disabled until first is selected', () => {
@@ -27,10 +31,8 @@ describe('DateRange Component (CR-3)', () => {
       />
     );
     
-    const dateInputs = screen.getAllByRole('textbox');
-    const endDateInput = dateInputs[1];
-    
-    expect(endDateInput).toBeDisabled();
+    const endInput = screen.getByLabelText('Дата окончания');
+    expect(endInput).toBeDisabled();
   });
 
   it('second picker becomes enabled after first date is selected', () => {
@@ -46,12 +48,13 @@ describe('DateRange Component (CR-3)', () => {
       />
     );
     
-    const dateInputs = screen.getAllByRole('textbox');
-    const startDateInput = dateInputs[0];
+    const startInput = screen.getByLabelText('Дата начала');
+    const endInput = screen.getByLabelText('Дата окончания');
     
-    fireEvent.change(startDateInput, { target: { value: '2026-05-12' } });
+    fireEvent.change(startInput, { target: { value: '2026-05-12' } });
     
     expect(onStartDateChange).toHaveBeenCalledWith('2026-05-12');
+    expect(endInput).toBeEnabled();
   });
 
   it('min of second picker equals first picker value', () => {
@@ -64,10 +67,8 @@ describe('DateRange Component (CR-3)', () => {
       />
     );
     
-    const dateInputs = screen.getAllByRole('textbox');
-    const endDateInput = dateInputs[1];
-    
-    expect(endDateInput).toHaveAttribute('min', '2026-05-12');
+    const endInput = screen.getByLabelText('Дата окончания');
+    expect(endInput).toHaveAttribute('min', '2026-05-12');
   });
 
   it('auto-adjusts end date if start date moves past it', () => {
@@ -83,12 +84,9 @@ describe('DateRange Component (CR-3)', () => {
     );
     
     // When start date is after end date, end date should be adjusted
-    const dateInputs = screen.getAllByRole('textbox');
-    const startDateInput = dateInputs[0];
+    const startInput = screen.getByLabelText('Дата начала');
     
-    fireEvent.change(startDateInput, { target: { value: '2026-05-20' } });
-    
-    // End date should be adjusted to match start date
+    fireEvent.change(startInput, { target: { value: '2026-05-20' } });
     expect(onEndDateChange).toHaveBeenCalled();
   });
 
@@ -104,10 +102,9 @@ describe('DateRange Component (CR-3)', () => {
       />
     );
     
-    const dateInputs = screen.getAllByRole('textbox');
-    const startDateInput = dateInputs[0];
+    const startInput = screen.getByLabelText('Дата начала');
     
-    fireEvent.change(startDateInput, { target: { value: '2026-05-12' } });
+    fireEvent.change(startInput, { target: { value: '2026-05-12' } });
     
     expect(onStartDateChange).toHaveBeenCalledWith('2026-05-12');
   });
@@ -124,10 +121,9 @@ describe('DateRange Component (CR-3)', () => {
       />
     );
     
-    const dateInputs = screen.getAllByRole('textbox');
-    const endDateInput = dateInputs[1];
+    const endInput = screen.getByLabelText('Дата окончания');
     
-    fireEvent.change(endDateInput, { target: { value: '2026-05-15' } });
+    fireEvent.change(endInput, { target: { value: '2026-05-15' } });
     
     expect(onEndDateChange).toHaveBeenCalledWith('2026-05-15');
   });
