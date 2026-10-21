@@ -8,10 +8,10 @@ import { Ingredient, Recipe, Trip, ProductCategory } from '../types';
 import { calculateRecipeKcal } from '../utils/calc';
 
 // In-memory хранилище
-let products: Ingredient[] = [...mockIngredients];
-let categories: ProductCategory[] = [...mockProductCategories];
-let recipes: Recipe[] = [...mockRecipes];
-let trips: Trip[] = [...mockTrips];
+const products: Ingredient[] = [...mockIngredients];
+const categories: ProductCategory[] = [...mockProductCategories];
+const recipes: Recipe[] = [...mockRecipes];
+const trips: Trip[] = [...mockTrips];
 
 // Auth хранилище
 interface MockUser {
@@ -24,7 +24,7 @@ interface MockUser {
   createdAt: string;
 }
 
-let users: MockUser[] = [
+const users: MockUser[] = [
   {
     id: '1',
     email: 'admin@provision.app',
