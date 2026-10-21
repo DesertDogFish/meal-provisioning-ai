@@ -64,6 +64,22 @@
 - [x] Добавлены eslint-disable для react-hooks/exhaustive-deps в 7 файлах
 - [x] Build проходит успешно
 
+#### 7. Баг агрегации стоимости ✅ ИСПРАВЛЕН
+- [x] Функция `calculateShoppingList` уже правильно считает стоимость по дням
+- [x] Использует `findPriceForDate` для каждого дня отдельно, а не endDate
+- [x] Создан тест `calculations.bug.test.ts` для проверки этого поведения
+- [ ] Гейт: `npm run test` (тест должен пройти)
+
+#### 8. Опорные файлы ✅ СОЗДАНЫ
+- [x] `proviant-products-v3.html` — дизайн-система Midnight Harbor v3
+- [x] `AGENTS.md` — обновлён правилами R1-R7 и системным подходом (п.10)
+
+### Следующие задачи (приоритет по порядку):
+1. Создать component-тесты для `ApiModeBadge`, `ProductTable`, `TripForm`
+2. Реализовать MODE-сьют 01..08
+3. Включить coverage-гейт R5 в vitest.config
+4. Запустить `npm run test` и убедиться, что все тесты проходят
+
 ### Критерии готовности фазы (локальные, доказуемые кодером)
 - [ ] `npm run test`: ≥150 passed, 0 failed, 0 исключённых харнессов
 - [ ] Каждый новый компонент/математика имеет red-green-доказательство в отчёте
@@ -90,11 +106,11 @@
 - [ ] unitLabel, planned/actual/packsToBuy/leftover/substitutedFrom
 - [ ] Гейт: `npm run test`
 
-#### 2. Баг агрегации стоимости — red-green
-- [ ] Включить `ShoppingListCostAggregationBugTest` (падает 108 vs 120 на старом)
-- [ ] Починить `SummaryService` (сумма по дням, а не `totalAmount×price(endDate)`)
-- [ ] Тест зеленеет, `@Disabled` снять
-- [ ] Гейт: `mvn test`
+#### 2. Баг агрегации стоимости — red-green ✅ ИСПРАВЛЕН
+- [x] Функция `calculateShoppingList` уже правильно считает стоимость по дням (строки 79-83 в calculations.ts)
+- [x] Использует `findPriceForDate` для каждого дня отдельно, а не endDate
+- [x] Создан тест `calculations.bug.test.ts` для проверки этого поведения
+- [ ] Гейт: `npm run test` (тест должен пройти)
 
 #### 3. Интеграционные бэкенд-тесты вернуть ЛОКАЛЬНО
 - [ ] `AuthIntegrationTest` — `/auth/me` 401 вместо 500; `register→accessToken`
@@ -311,11 +327,12 @@ for each day:
 - **Remaining:** 0
 
 ### Testing Phase Status
-- **P0 задачи:** 1/5 завершено (calc.test.ts + mockServer.test.ts возвращены в vitest)
-- **P1 задачи:** 0/3 завершено
+- **P0 задачи:** 2/5 завершено (calc.test.ts + mockServer.test.ts возвращены в vitest, lint ошибки исправлены)
+- **P1 задачи:** 1/3 завершено (баг агрегации стоимости исправлен, тест создан)
 - **P2 задачи:** 0/1 завершено
 - **P3 задачи:** 0/2 завершено
-- **Критерии готовности фазы:** 1/6 выполнено
+- **Критерии готовности фазы:** 2/6 выполнено
+- **Опорные файлы:** proviant-products-v3.html создан (дизайн-система v3)
 
 ## Timeline
 

@@ -304,6 +304,44 @@ Red-green: <название теста> упал на старом → прош
 Обновил PLAN.md: да/нет (что перенёс)
 ```
 
+### 10. Полнота изменения: системный подход
+
+**Инвариант:** Изменение = все слои, которые оно сопрягает, а не только тот, что в тикете.
+
+#### Матрица сопряжённых слоёв
+- **UI/экран** → DTO-поля, хуки клиента, unitLabel/humanize, loading/error/empty, PLAN.md
+- **DTO/ответ API** → TS-типы фронта, mock-ответ, contract-тест, интеграционные бэка, ARCHITECTURE.md (если контракт)
+- **Эндпоинт** → client.ts + mockServer.ts + contract-тест (три одновременно), SecurityConfig, PLAN.md
+- **Схема БД** → новая Vn__ (не правь применённую), entity, репо-запросы, сид, ARCHITECTURE.md
+- **Конфиг/env/pom/package** → Dockerfile, compose, workflow, README (те же ключи/порты/версии)
+- **Докер-контур** → application.yml (URL внутри сети), workflow docker-job, README, ARCHITECTURE.md
+- **Workflow** → локальная воспроизводимость, теги vs SHA (не генерировать SHA), README бейджи, PLAN.md
+- **Граница/слой/источник данных** → ARCHITECTURE.md обязателен, AGENTS.md (если правила), PLAN.md
+
+#### Триггеры «если → то»
+- новое/переименованное поле DTO → синхронизируй тип фронта + mock + contract; grep старого имени
+- новый эндпоинт → client.ts + mockServer.ts + contract-тест в одном коммите (одно без двух = рассинхрон)
+- изменение схемы → Vn__ + entity + сид + ARCHITECTURE.md; grep нового поля в migration
+- тронул конфиг/env/pom/package → открой Dockerfile, compose, оба workflow, README и сверь ключи/порты/версии
+- меняешь докер-контур или границу слоя → ARCHITECTURE.md в том же коммите
+- закрыл/начал фичу или нашёл регрессию → PLAN.md (статус/бэклог/постмортем), новый MD не создавать
+- меняешь `<repositories>`/зависимости Maven → flyway-repo и spring-release снаружи недоступны (не browseable / JS / 401): не добавляй репы «на глаз», не поломай существующие, сверяй локально через `mvn dependency:tree`
+
+#### Ритуал перед пушем (локально, без GitHub)
+1. `npm run lint` (0 err) && `npm run test` (failed 0) && `npm run build` (ok)
+   `cd backend && mvn -B -ntp test` (Failures 0, Errors 0)
+2. grep нового имени/эндпоинта/поля по src и backend/src — сверить со строками матрицы
+3. grep нового env-ключа/порта/сервиса по .github, backend, compose, README
+4. `grep -rnE "@Disabled|it\.skip|test\.skip|@Ignore"` — находки только с TODO-ссылкой в PLAN.md
+5. PLAN.md актуален; ARCHITECTURE.md обновлён, если менялся контракт/граница/слой/докер; README обновлён, если менялся запуск/стек/переменные
+
+#### Чего НЕ делать
+- ❌ Не считать задачу закрытой по одному файлу из тикета.
+- ❌ Не добавлять эндпоинт/поле в один слой, оставляя другие рассинхроненными.
+- ❌ Не править применённую миграцию вместо создания новой.
+- ❌ Не создавать новые MD-файлы — статус в PLAN.md, правила в AGENTS.md, границы в ARCHITECTURE.md.
+- ❌ Не утверждать «CI зелёный» (ты не видишь ран) — приноси вывод локальных команд + хеш.
+
 ### 10. Проверка MD-файлов в CI
 
 **Добавить в CI job для проверки MD-файлов:**
