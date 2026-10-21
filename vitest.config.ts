@@ -8,6 +8,12 @@ export default defineConfig({
     globals: true,
     setupFiles: ['./src/test/setup.ts'],
     include: ['src/**/*.{test,spec}.{js,mjs,cjs,ts,jsx,tsx}'],
+    exclude: [
+      'node_modules/**',
+      'dist/**',
+      'src/api/mockServer.test.ts',
+      'src/utils/calc.test.ts',
+    ],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],

@@ -195,6 +195,16 @@
 - **Month 2:** Кладовая, SSE, ретенция
 - **Month 3:** Экспорт, мобильное приложение
 
+## CI Follow-ups
+
+- [ ] **Портнуть src/utils/calc.test.ts** из самописных assert в нормальные Vitest it()/expect()
+- [ ] **Портнуть src/api/mockServer.test.ts** из самописных assert в нормальные Vitest it()/expect()
+- [ ] **Разобраться с MOCK-03**: сейчас ожидается 500, а mock возвращает 404
+- [ ] **Почистить Maven repositories** в backend/pom.xml, убрать шум:
+  - spring-release 401
+  - flyway-repo DNS
+  - flyway-community-db-support 401
+
 ## Notes
 
 - Все изменения в архитектуре должны быть отражены в ARCHITECTURE.md
