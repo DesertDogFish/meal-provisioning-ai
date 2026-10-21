@@ -1,0 +1,312 @@
+@import url('https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700&family=Manrope:wght@400;600;800&display=swap');
+@import "tailwindcss";
+
+:root {
+  --bg: #0B0F17;
+  --surface: #121826;
+  --elev: #1A2233;
+  --border: rgba(255, 255, 255, 0.08);
+  --text: #E6EDF7;
+  --muted: #8B98AC;
+  --w1: #2DD4BF;
+  --w2: #38BDF8;
+  --fire: #F59E0B;
+  --ok: #34D399;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  background: radial-gradient(1100px 500px at 85% -10%, rgba(56, 189, 248, 0.09), transparent),
+              radial-gradient(900px 500px at -10% 30%, rgba(45, 212, 191, 0.07), transparent),
+              var(--bg);
+  color: var(--text);
+  font-family: Manrope, system-ui, sans-serif;
+}
+
+h1, h2, h3, .logo-word {
+  font-family: Unbounded, Manrope, sans-serif;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* Toast animation */
+@keyframes slide-in {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.animate-slide-in {
+  animation: slide-in 0.3s ease-out;
+}
+
+/* Midnight Harbor theme classes */
+.bg-midnight { background: var(--bg); }
+.bg-surface { background: var(--surface); }
+.bg-elev { background: var(--elev); }
+.border-midnight { border-color: var(--border); }
+.text-midnight { color: var(--text); }
+.text-muted-midnight { color: var(--muted); }
+.text-water { color: var(--w1); }
+.text-water-2 { color: var(--w2); }
+.text-fire { color: var(--fire); }
+
+.glass {
+  background: rgba(26, 34, 51, 0.62);
+  backdrop-filter: blur(14px);
+  border: 1px solid var(--border);
+}
+
+.grad-btn {
+  background: linear-gradient(90deg, var(--w1), var(--w2));
+  color: #04121A;
+  border: none;
+  border-radius: 999px;
+  padding: 10px 18px;
+  font: 800 13px Manrope;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.grad-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 26px rgba(45, 212, 191, 0.4);
+}
+
+.ghost-btn {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 999px;
+  padding: 10px 18px;
+  font: 600 13px Manrope;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.ghost-btn:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+/* Price Overrides v2 */
+.note-box {
+  border: 1px dashed rgba(255, 255, 255, 0.25);
+  border-radius: 12px;
+  padding: 10px 14px;
+  color: var(--muted);
+  font-size: 12px;
+  margin: 10px 0;
+}
+
+/* Нативные спиннеры не существуют нигде в приложении */
+input[type=number] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+input[type=number]::-webkit-inner-spin-button,
+input[type=number]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* Тематический степпер Midnight Harbor */
+.nf {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.nf-btn {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--elev);
+  color: var(--muted);
+  font: 800 13px/1 Manrope;
+  cursor: pointer;
+  user-select: none;
+  transition: border-color 0.15s, color 0.15s, box-shadow 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.nf-btn:hover {
+  color: var(--text);
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+.nf-btn:active {
+  color: var(--w1);
+  border-color: var(--w1);
+  box-shadow: 0 0 0 3px rgba(45, 212, 191, 0.18);
+}
+
+.nf-input {
+  width: 86px;
+  background: var(--elev);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 10px;
+  padding: 7px 9px;
+  font: 700 12px Manrope;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.nf-input:focus {
+  outline: none;
+  border-color: var(--w1);
+  box-shadow: 0 0 0 3px rgba(45, 212, 191, 0.18);
+}
+
+.nf-input::placeholder {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.nf-sm .nf-input {
+  width: 74px;
+}
+
+/* Перчаточная зона на мобиле */
+@media (pointer: coarse) {
+  .nf-btn {
+    width: 44px;
+    height: 44px;
+  }
+}
+
+/* CR-4: тёмная схема дат + видимая иконка */
+input[type="date"],
+input[type="datetime-local"] {
+  color-scheme: dark;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(0.75);
+  opacity: 0.75;
+  cursor: pointer;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+}
+
+/* CR-1: чипы отсутствия ккал */
+.kcal-missing {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 2px 9px;
+  font: 700 10px Manrope;
+  background: rgba(245, 158, 11, 0.16);
+  color: #F8C468;
+}
+
+/* CR-1: расчётная калорийность */
+.kcal-calculated {
+  background: rgba(45, 212, 191, 0.1);
+  border: 1px solid rgba(45, 212, 191, 0.35);
+  border-radius: 12px;
+  padding: 10px 12px;
+  font-size: 13px;
+  margin-top: 10px;
+  color: var(--text);
+}
+
+.chip-delta {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 2px 9px;
+  font: 700 10px Manrope;
+}
+
+.chip-delta.dim {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--muted);
+}
+
+.chip-delta.fire {
+  background: rgba(245, 158, 11, 0.16);
+  color: #F8C468;
+}
+
+.chip-delta.ok {
+  background: rgba(52, 211, 153, 0.16);
+  color: #7EE2B8;
+}
+
+.sticky-totals {
+  position: sticky;
+  bottom: 10px;
+  margin-top: 12px;
+  padding: 14px 18px;
+  display: flex;
+  gap: 18px;
+  align-items: center;
+  flex-wrap: wrap;
+  background: rgba(26, 34, 51, 0.62);
+  backdrop-filter: blur(14px);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+}
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(5, 8, 13, 0.6);
+  backdrop-filter: blur(6px);
+  display: grid;
+  place-items: center;
+  z-index: 50;
+}
+
+.modal-sheet {
+  width: min(560px, 92vw);
+  max-height: 86vh;
+  overflow: auto;
+  padding: 22px;
+  background: rgba(26, 34, 51, 0.62);
+  backdrop-filter: blur(14px);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+}
+
+.reset-btn {
+  background: none;
+  border: 0;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 4px;
+  transition: color 0.2s;
+}
+
+.reset-btn:hover {
+  color: var(--fire);
+}
