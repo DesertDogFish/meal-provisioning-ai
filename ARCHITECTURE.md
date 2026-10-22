@@ -152,4 +152,19 @@ delta = (actualCost - plannedCost) / plannedCost × 100
 - **Unit tests** — бизнес-логика (SummaryService, KcalCalculator)
 - **Integration tests** — API endpoints (Auth, Security, Conflict, Catalog)
 - **Contract tests** — FIX-1/FIX-2 числа (mock vs real)
+- **Smoke tests** — живой стек (`DockerStackSmokeTest`: meta, регистрация → логин → создание продукта)
 - **E2E tests** — пользовательские сценарии (планируются)
+
+## Deployment (Docker Compose)
+
+Три сервиса в сети `provision-network`, порядок старта обеспечивается healthcheck'ами:
+
+```
+postgres:15-alpine ──(pg_isready)──▶ backend (Spring Boot, Flyway миграции при старте) ──(/api/v1/meta)──▶ frontend (nginx)
+   5432                                    8080                                                              3000 → 80
+```
+
+- **postgres** — volume `postgres_data` для персистентности; БД и каталог создаются миграциями Flyway (V1–V11, сид каталога — V3).
+- **backend** — ждёт `service_healthy` у postgres; сам healthy по `GET /api/v1/meta` (эндпоинт доступен без авторизации); JPA `ddl-auto=validate`.
+- **frontend** — ждёт `service_healthy` у backend; nginx раздаёт статику и проксирует `/api/` на `http://backend:8080/api/`, поэтому браузер работает в same-origin и CORS не требуется.
+- Адрес API зашивается в бандл при сборке через build-args `VITE_API_URL`/`VITE_API_MODE` (runtime-переменные окружения для Vite не работают).
