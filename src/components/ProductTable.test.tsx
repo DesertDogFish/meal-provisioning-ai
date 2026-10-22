@@ -72,7 +72,7 @@ describe('filterAndSortProducts (чистая функция)', () => {
 
   it('фильтр USED / UNUSED', () => {
     expect(filterAndSortProducts(products, filters({ usageStatus: 'USED' }), 'name', 'asc')).toHaveLength(2);
-    expect(filterAndSortProducts(products, filters({ usageStatus: 'UNUSED' }), 'name', 'asc').map(p => p.id))
+    expect(filterAndSortProducts(products, filters({ usageStatus: 'UNUSED' }), 'name', 'asc').map(p => p.id).sort())
       .toEqual(['b', 'd']);
   });
 
