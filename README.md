@@ -4,26 +4,73 @@
 
 ## 🚀 Быстрый старт (одна кнопка)
 
-### PowerShell (Windows)
+### Требования
+- Docker Desktop (https://www.docker.com/products/docker-desktop)
+- Git
 
-```powershell
-.\dev.ps1 -Action start
-```
+### Установка и запуск
 
-### Bash (Linux/Mac)
+1. Клонируйте репозиторий:
+   ```bash
+   git clone https://github.com/DesertDogFish/meal-provisioning-ai.git
+   cd meal-provisioning-ai
+   ```
 
+2. Скопируйте пример окружения:
+   ```bash
+   cp .env.example .env
+   ```
+
+3. Запустите одной командой:
+   ```bash
+   docker compose up --build
+   ```
+
+4. Дождитесь пока все сервисы станут healthy (2-3 минуты):
+   ```bash
+   docker compose ps
+   ```
+   Все три сервиса (postgres, backend, frontend) должны показать статус `healthy`.
+
+5. Откройте браузер:
+   - **Приложение**: http://localhost:3000
+   - **API**: http://localhost:8080/api/v1/meta (должен вернуть JSON с `"db":"ok"`)
+   - **Swagger UI**: http://localhost:8080/swagger-ui.html
+
+### Первый запуск
+
+При первом запуске автоматически:
+- Создастся база данных PostgreSQL
+- Применятся миграции Flyway (V1–V11)
+- Загрузится каталог продуктов и рецептов (из V3__seed_catalog.sql)
+
+### Регистрация первого пользователя
+
+1. Откройте http://localhost:3000
+2. Нажмите "Регистрация"
+3. Заполните форму (имя, email, пароль)
+4. Войдите в систему
+
+Теперь вы можете:
+- Создавать продукты и рецепты
+- Планировать походы
+- Генерировать списки покупок
+
+### Остановка и очистка
+
+**Остановить сервисы:**
 ```bash
-# 1. Скопировать .env
-cp .env.example .env
-
-# 2. Запустить Docker Compose
-docker-compose up -d
-
-# 3. Открыть браузер
-# Frontend: http://localhost:3000
-# Backend API: http://localhost:8080
-# Swagger UI: http://localhost:8080/swagger-ui.html
+docker compose down
 ```
+
+**Полная очистка (включая базу данных):**
+```bash
+docker compose down -v
+```
+
+### Альтернатива: скрипт разработчика
+
+PowerShell (Windows): `.\dev.ps1 -Action start`
 
 ## 📋 Возможности
 
@@ -282,46 +329,51 @@ docker --version
 # Mac: меню Docker → Restart
 
 # Очистить и пересобрать
-docker-compose down -v
-docker-compose up -d --build
+docker compose down -v
+docker compose up -d --build
 ```
 
 ### Backend не подключается к БД
 
 ```bash
 # Проверить PostgreSQL
-docker-compose ps postgres
+docker compose ps postgres
 
 # Проверить логи
-docker-compose logs postgres
+docker compose logs postgres
 
 # Пересоздать контейнер
-docker-compose rm -f postgres
-docker-compose up -d postgres
+docker compose rm -f postgres
+docker compose up -d postgres
 ```
 
 ### Frontend не видит backend
 
+Фронтенд ходит на бэкенд по относительному пути `/api/v1` через nginx-прокси
+(build-arg `VITE_API_URL=/api/v1` подставляется при сборке образа).
+Проверьте, что бэкенд healthy и прокси работает:
+
 ```bash
-# Проверить .env
-cat .env | grep VITE_API_URL
+# Бэкенд напрямую
+curl http://localhost:8080/api/v1/meta
 
-# Должно быть:
-# VITE_API_URL=http://localhost:8080/api/v1
+# Через nginx-прокси фронта (тот же origin, CORS не нужен)
+curl http://localhost:3000/api/v1/meta
 
-# Пересобрать frontend
-docker-compose restart frontend
+# Пересобрать frontend с актуальными build-args
+docker compose build --no-cache frontend
+docker compose up -d frontend
 ```
 
 ### Миграции не применяются
 
 ```bash
 # Проверить статус миграций
-docker-compose exec postgres psql -U provision -d provision -c "SELECT * FROM flyway_schema_history;"
+docker compose exec postgres psql -U provision -d provision -c "SELECT * FROM flyway_schema_history;"
 
 # Очистить и пересоздать БД
-docker-compose down -v
-docker-compose up -d
+docker compose down -v
+docker compose up -d
 ```
 
 ## 📚 Документация

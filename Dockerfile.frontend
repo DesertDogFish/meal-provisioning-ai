@@ -4,6 +4,14 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci
 COPY . .
+
+# VITE_* переменные подставляются в бандл только при сборке —
+# передаём их как build-args, а не runtime-env
+ARG VITE_API_URL=/api/v1
+ARG VITE_API_MODE=real
+ENV VITE_API_URL=$VITE_API_URL
+ENV VITE_API_MODE=$VITE_API_MODE
+
 RUN npm run build
 
 # Runtime stage
