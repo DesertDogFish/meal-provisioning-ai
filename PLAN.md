@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-**✅ Фаза 10 закрыта (2026-10-22). В работе: бэклог P1 — «Contract расширить (mock, локально)» (следующий по приоритету).**
+**✅ Фаза 10 закрыта (2026-10-22). Бэклог P1 п.1 «Contract расширить» закрыт (2026-10-22). В работе: P1 п.3 — интеграционные бэкенд-тесты локально (следующий по приоритету).**
 
 Предыдущие фазы:
 - ✅ Фаза 1: Core Features (CRUD продуктов, рецептов, походов)
@@ -105,12 +105,13 @@
 
 ### P1 — следующий спринт
 
-#### 1. Contract расширить (mock, локально)
-- [ ] Алиас `products≡ingredients` (одинаковый count/форма)
-- [ ] Пагинация одной формой
-- [ ] 409-payload (DUPLICATE_PRODUCT, PRODUCT_IN_USE, DUPLICATE_PRICE_DATE, SYNC_ALREADY_RUNNING)
-- [ ] unitLabel, planned/actual/packsToBuy/leftover/substitutedFrom
-- [ ] Гейт: `npm run test`
+#### 1. Contract расширить (mock, локально) ✅ ЗАКРЫТО (2026-10-22)
+- [x] Алиас `products≡ingredients` (одинаковый count/форма)
+- [x] Пагинация одной формой (`PageResponse`: content/page/size/totalElements/totalPages)
+- [x] 409-payload (DUPLICATE_PRODUCT, PRODUCT_IN_USE, DUPLICATE_PRICE_DATE, SYNC_ALREADY_RUNNING) — машиночитаемые `code` + детали (`usedIn` и т.п.)
+- [x] unitLabel, planned/actual/packsToBuy/leftover/substitutedFrom в shopping-сводках
+- [x] Гейт: `npm run test` ✅ (194 passed; contractExtension.test.ts 17/17 + регрессии нет: contract.test.ts 9/9)
+- Примечание: при реализации найден и исправлен дрейф ключей price-overrides (FIX-2): строки сводки берут override по своему ingredientId, а не по catalogId. Формула агрегации mock сохранена байт-в-байт — контрактные числа FIX-1/FIX-2 не изменились.
 
 #### 2. Баг агрегации стоимости — red-green ✅ ИСПРАВЛЕН
 - [x] Функция `calculateShoppingList` уже правильно считает стоимость по дням (строки 79-83 в calculations.ts)
@@ -334,7 +335,7 @@ for each day:
 
 ### Testing Phase Status
 - **P0 задачи:** 2/5 завершено (calc.test.ts + mockServer.test.ts возвращены в vitest, lint ошибки исправлены)
-- **P1 задачи:** 1/3 завершено (баг агрегации стоимости исправлен, тест создан)
+- **P1 задачи:** 2/3 завершено (баг агрегации стоимости ✅; Contract расширить ✅ 2026-10-22 — 17 тестов contractExtension + без регрессий; остался п.3 «Интеграционные бэкенд-тесты локально»)
 - **P2 задачи:** 0/1 завершено
 - **P3 задачи:** 0/2 завершено
 - **Критерии готовности фазы:** 2/6 выполнено
