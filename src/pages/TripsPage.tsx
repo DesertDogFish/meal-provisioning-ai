@@ -4,6 +4,7 @@ import { Plus, Mountain, Calendar, Users, Trash2, Edit2 } from 'lucide-react';
 import { useToast } from '../components/ToastProvider';
 import { TripForm, type TripFormData } from '../components/TripForm';
 import { api } from '../api/client';
+import { getTripCover } from '../utils/getTripCover';
 
 interface Trip {
   id: string;
@@ -55,7 +56,13 @@ export default function TripsPage() {
     }
   };
 
-  const myTrips = trips.filter(t => t.userId === currentUser?.id);
+  // FIX: TripResponse бэкенда (/api/v1/trips) уже отфильтрован по текущему
+  // пользователю и НЕ содержит поля userId — из-за строгого сравнения
+  // undefined !== id список всегда оказывался пустым. Фильтруем только
+  // когда userId реально присутствует в ответе (mock-режим).
+  const myTrips = trips.some(t => t.userId != null)
+    ? trips.filter(t => String(t.userId) === String(currentUser?.id))
+    : trips;
 
   const handleCreate = async (formData: TripFormData) => {
     try {
@@ -152,7 +159,10 @@ export default function TripsPage() {
             <div
               key={trip.id}
               className="rounded-xl p-5 transition-all hover:scale-[1.01]"
-              style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
+              style={{
+                background: `linear-gradient(rgba(10, 16, 28, 0.82), rgba(10, 16, 28, 0.88)), url(${getTripCover(trip.name)}) center/cover no-repeat, var(--surface)`,
+                border: '1px solid var(--border)'
+              }}
             >
               <div className="flex items-center justify-between">
                 <div data-testid={`trip-card-${trip.id}`} className="flex-1 cursor-pointer" onClick={() => navigate(`/trips/${trip.id}`)}>

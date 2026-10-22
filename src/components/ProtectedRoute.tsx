@@ -57,7 +57,8 @@ export default function ProtectedRoute({ children, adminOnly = false }: { childr
     return <Navigate to="/login" replace />;
   }
   
-  if (adminOnly && currentUser?.role !== 'ADMIN') {
+  // FIX: нормализация роли (без учёта регистра) перед проверкой доступа
+  if (adminOnly && currentUser?.role?.toUpperCase() !== 'ADMIN') {
     return <Navigate to="/dashboard" replace />;
   }
   

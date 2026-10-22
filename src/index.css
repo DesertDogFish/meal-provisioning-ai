@@ -310,3 +310,19 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
 .reset-btn:hover {
   color: var(--fire);
 }
+
+/* Fix Date Picker icon color */
+input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(0.6);
+  cursor: pointer;
+}
+
+/* Fix Autofill background */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 30px transparent inset !important;
+  -webkit-text-fill-color: inherit !important;
+  transition: background-color 5000s ease-in-out 0s;
+}

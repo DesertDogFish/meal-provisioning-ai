@@ -41,6 +41,22 @@ interface Ingredient {
 
 export default function IntegrationsPage() {
   const { showError, showSuccess } = useToast();
+
+  // FIX: корректная извлечение детали ошибки из ApiClientError.
+  // У объекта ошибки нет поля detail — оно лежит в error.error.detail (ProblemDetail),
+  // либо это нативная Error с message. Graceful fallback для OFF-интеграции.
+  const extractErrorMessage = (error: any): string =>
+    error?.error?.detail ?? error?.detail ?? error?.message ?? 'Неизвестная ошибка';
+
+  const handleApiError = (error: any, fallback: string) => {
+    const msg = extractErrorMessage(error);
+    if (/not connected|Provider is not connected/i.test(msg)) {
+      showError('Функция в разработке: интеграция OFF пока недоступна');
+      return;
+    }
+    showError(msg || fallback);
+  };
+
   const [integrations, setIntegrations] = useState<Integration[]>([]);
   const [syncLogs, setSyncLogs] = useState<SyncLog[]>([]);
   const [ingredients, setIngredients] = useState<Ingredient[]>([]);
@@ -93,7 +109,7 @@ export default function IntegrationsPage() {
       showSuccess(`Successfully connected to ${provider}`);
     } catch (error: any) {
       console.error('Failed to connect:', error);
-      showError(error.detail || 'Failed to connect');
+      handleApiError(error, 'Failed to connect');
     } finally {
       setLoading(false);
     }
@@ -107,7 +123,7 @@ export default function IntegrationsPage() {
       showSuccess(`Successfully disconnected from ${provider}`);
     } catch (error: any) {
       console.error('Failed to disconnect:', error);
-      showError(error.detail || 'Failed to disconnect');
+      handleApiError(error, 'Failed to disconnect');
     } finally {
       setLoading(false);
     }
@@ -122,7 +138,7 @@ export default function IntegrationsPage() {
       showSuccess(`Sync completed: ${log.createdCount} created, ${log.updatedCount} updated, ${log.errorCount} errors`);
     } catch (error: any) {
       console.error('Failed to sync prices:', error);
-      showError(error.detail || 'Failed to sync prices');
+      handleApiError(error, 'Failed to sync prices');
     } finally {
       setSyncing(false);
     }
@@ -141,7 +157,7 @@ export default function IntegrationsPage() {
       }
     } catch (error: any) {
       console.error('Failed to search products:', error);
-      showError(error.detail || 'Failed to search products');
+      handleApiError(error, 'Failed to search products');
     }
   };
 
@@ -162,7 +178,7 @@ export default function IntegrationsPage() {
       showSuccess('Product mapping created successfully');
     } catch (error: any) {
       console.error('Failed to create mapping:', error);
-      showError(error.detail || 'Failed to create mapping');
+      handleApiError(error, 'Failed to create mapping');
     }
   };
 
