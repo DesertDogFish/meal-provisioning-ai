@@ -13,8 +13,12 @@ FROM (
     SELECT i.id AS ingredient_id,
            (DATE_TRUNC('month', DATE '2026-10-01') - (n || ' month')::interval)::date AS effective_from
     FROM ingredients i
-    CROSS JOIN generate_series(1, 23) AS n
+    CROSS JOIN generate_series(1, 24) AS n
 ) p
 JOIN ingredient_prices q ON q.ingredient_id = p.ingredient_id
+WHERE NOT EXISTS (
+    SELECT 1 FROM ingredient_prices e
+    WHERE e.ingredient_id = p.ingredient_id AND e.effective_from = p.effective_from
+)
 GROUP BY p.ingredient_id, p.effective_from
 ON CONFLICT (ingredient_id, effective_from) DO NOTHING;
