@@ -18,4 +18,9 @@ public interface TripMealRepository extends JpaRepository<TripMeal, Long> {
     
     @Query("SELECT tm FROM TripMeal tm JOIN FETCH tm.tripDay td JOIN FETCH td.trip WHERE tm.recipe.id = :recipeId")
     List<TripMeal> findAllByRecipeIdWithTrip(@Param("recipeId") Long recipeId);
+
+    /** P0-3: id рецептов всех блюд во всех походах пользователя (для /api/v1/prices/relevant-to-trips). */
+    @Query("SELECT DISTINCT tm.recipe.id FROM TripMeal tm " +
+           "JOIN tm.tripDay td JOIN td.trip t WHERE t.user.id = :userId")
+    List<Long> findRecipeIdsByUserId(@Param("userId") Long userId);
 }

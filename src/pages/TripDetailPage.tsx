@@ -98,7 +98,9 @@ export default function TripDetailPage() {
       const [tripData, recipesData, pricesData] = await Promise.all([
         api.get<Trip>(`/trips/${id}`),
         api.get<Recipe[]>('/recipes'),
-        api.get<Price[]>('/admin/prices')
+        // P0-3: GET /admin/prices не существовало на бэкенде; цены доступны всем
+        // аутентифицированным пользователям на GET /prices (UserPriceController)
+        api.get<Price[]>('/prices')
       ]);
       setTrip(tripData);
       setRecipes(recipesData);

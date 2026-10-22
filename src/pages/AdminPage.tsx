@@ -85,7 +85,8 @@ export default function AdminPage() {
       const [ingredientsData, recipesData, pricesData, stagingData] = await Promise.all([
         api.get<any>('/admin/products'),
         api.get<Recipe[]>('/recipes'),
-        api.get<Price[]>('/admin/prices'),
+        // P0-3: чтение цен — общий GET /prices (доступен и ADMIN); запись осталась на админском пути
+        api.get<Price[]>('/prices'),
         api.get<StagingRecipe[]>('/admin/staging')
       ]);
       
@@ -116,7 +117,7 @@ export default function AdminPage() {
     if (!priceForm.ingredientId || !priceForm.pricePerUnit || !priceForm.effectiveFrom) return;
     
     try {
-      await api.post('/admin/prices', {
+      await api.post('/admin/ingredient-prices', {
         ingredientId: priceForm.ingredientId,
         pricePerUnit: parseFloat(priceForm.pricePerUnit),
         currency: priceForm.currency,

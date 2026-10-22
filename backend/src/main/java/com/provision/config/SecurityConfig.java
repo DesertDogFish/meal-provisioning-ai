@@ -48,6 +48,11 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/auth/**").permitAll()
                         .requestMatchers("/api/v1/meta").permitAll()
                         .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
+                        // P0-3: GET /api/v1/prices** — чтение цен для ВСЕХ аутентифицированных
+                        // (страницы походов обычного USER). Эндпоинт лежит вне /api/v1/admin/**,
+                        // поэтому его открывает любое из правил ниже + anyRequest().authenticated();
+                        // явное правило добавлено для читаемости и защиты от будущих правок.
+                        .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/v1/prices", "/api/v1/prices/**").authenticated()
                         .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
                         .anyRequest().authenticated()
                 )
