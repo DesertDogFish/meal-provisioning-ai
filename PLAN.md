@@ -50,13 +50,15 @@
 - [x] MODE-07: Сканер импортов → нет AppContext/mockData вне src/api ✅
 - [x] MODE-08: Перезагрузка → режим сохраняется ✅ (env-инъекция в ApiClient для тестируемости)
 
-#### 4. Страж R4 (grep @Disabled/it.skip без TODO)
-- [ ] Прогонять локально перед пушем: `grep -rnE "@Disabled|it\.skip|test\.skip|@Ignore" src backend/src`
-- [ ] Каждая находка без `// TODO PLAN.md: ...` = красный, чинить
+#### 4. Страж R4 (grep @Disabled/it.skip без TODO) ✅ ЗЕЛЁНЫЙ (2026-10-22)
+- [x] Прогон локально: `grep -rnE "@Disabled|it\.skip|test\.skip|@Ignore" src backend/src` — единственная находка `ShoppingListCostAggregationBugTest.java:25` имеет `// TODO PLAN.md:` (строка 24) ✅
+- [x] Находок без TODO нет; skip-тестов во фронтенде нет ✅
 
-#### 5. Coverage-гейт R5
-- [ ] Включить в `vitest.config.ts` thresholds на зоне изменения
-- [ ] Порог lines ≥ 80% на `src/utils/**`, `src/api/**`, новых компонентах
+#### 5. Coverage-гейт R5 ✅ ВКЛЮЧЁН (2026-10-22)
+- [x] `vitest.config.ts`: `coverage.thresholds { lines: 80, perFile: true }` + точечный include (api client/mode/watchdog, новые компоненты, utils/calc/calculations); legacy (mockServer, страницы) вне гейта по правилу «не гнаться за 100% legacy» ✅
+- [x] Порог lines ≥ 80% выполняется пофайлово: client.ts 83.6%, mode.ts 97.8%, watchdog 100%, ApiModeBadge 100%, ProductTable 97.8%, TripForm 100%, DateRange 97%, NumberField 90.7%, calc.ts 96.2%, calculations.ts 99.6% ✅
+- [x] Дописаны тесты для прохода гейта: `modeStateMachine.test.ts` (~20 unit-тестов mode.ts), `calculations.test.ts` (25 тестов расчётного ядра) ✅
+- [x] Скрипт `npm run test:coverage`; прогон зелёный: exit 0, ошибок порогов нет ✅
 
 #### 6. Исправление lint ошибок ✅ ЗАВЕРШЕНО
 - [x] Удалены неиспользуемые переменные `recipes` и `prices` в PriceOverridesTab.tsx
@@ -68,7 +70,7 @@
 - [x] Функция `calculateShoppingList` уже правильно считает стоимость по дням
 - [x] Использует `findPriceForDate` для каждого дня отдельно, а не endDate
 - [x] Создан тест `calculations.bug.test.ts` для проверки этого поведения
-- [ ] Гейт: `npm run test` (тест должен пройти)
+- [x] Гейт: `npm run test` зелёный — calculations.bug.test.ts 2/2 passed (2026-10-22, всего 177/177) ✅
 
 #### 8. Опорные файлы ✅ СОЗДАНЫ
 - [x] `proviant-products-v3.html` — дизайн-система Midnight Harbor v3
@@ -78,14 +80,15 @@
 1. ~~Создать component-тесты для `ProductTable`, `TripForm`~~ ✅ ГОТОВО (рефакторинг + 32 теста, гейт зелёный)
 2. ~~Реализовать MODE-сьют 01..08~~ ✅ DONE (src/api/mode.test.ts, 27 тестов; ApiClient принимает env-инъекцию)
    - ✅ CI lint fix (2026-10-22): в GitHub Actions `npm run lint` падал с ошибкой `no-useless-escape` (mode.test.ts:376 — комментарий `// \\`). Исправлено (комментарии заменены на текстовые). Локально: lint 0 errors, mode.test.ts 27/27 passed. Осталось 1 предсуществующее предупреждение react-hooks/exhaustive-deps в BindingWizard.tsx:51 (не блокирует гейт).
-3. Включить coverage-гейт R5 в vitest.config
-4. Запустить `npm run test` и убедиться, что все тесты проходят
+3. ~~Включить coverage-гейт R5 в vitest.config~~ ✅ ГОТОВО (2026-10-22: thresholds lines≥80 perFile, точечный include, см. п.5 выше)
+4. ~~Запустить `npm run test` и убедиться, что все тесты проходят~~ ✅ (2026-10-22: 13 files / 177 passed / 0 failed)
+5. Типчек зелёный: убрать `.at(-1)` из mode.test.ts (target es2020), починить обращение к несуществующему полю в calculations.test.ts ✅ (2026-10-22: `tsc --noEmit` без ошибок)
 
 ### Критерии готовности фазы (локальные, доказуемые кодером)
-- [ ] `npm run test`: ≥150 passed, 0 failed, 0 исключённых харнессов
+- [x] `npm run test`: ≥150 passed, 0 failed, 0 исключённых харнессов ✅ (2026-10-22: 177 passed, 13 files, skip-ов нет)
 - [ ] Каждый новый компонент/математика имеет red-green-доказательство в отчёте
-- [ ] grep-страж R4 зелёный (нет @Disabled/it.skip без TODO)
-- [ ] coverage на зоне изменения ≥80% (вывод `vitest --coverage`)
+- [x] grep-страж R4 зелёный (нет @Disabled/it.skip без TODO) ✅ (2026-10-22)
+- [x] coverage на зоне изменения ≥80% (вывод `vitest --coverage`) ✅ (2026-10-22: все файлы гейта ≥80% lines, см. п.5)
 - [ ] Матрица R2 и правила R1–R7 перенесены в AGENTS.md
 - [ ] Отчёт кодера = хеш + выводы локальных команд (НЕ ссылка на run)
 

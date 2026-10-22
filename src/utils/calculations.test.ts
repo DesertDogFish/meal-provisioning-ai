@@ -132,7 +132,7 @@ describe('calculateMenuByDays', () => {
     expect(menu).toHaveLength(1);
     expect(menu[0].effectivePeople).toBe(4);
     const meal = menu[0].meals[0];
-    expect(meal.recipeName).toBe(RECIPE_OMELET.name ?? 'Unknown'); // name не задан → Unknown
+    expect(meal.recipeName).toBe('Unknown'); // name не задан в рецепте → Unknown
     expect(meal.ingredients.find(i => i.name === 'Яйцо')!.amount).toBe(8); // 2*4
     expect(meal.ingredients.find(i => i.name === 'Хлеб')!.amount).toBeCloseTo(0.4);
   });

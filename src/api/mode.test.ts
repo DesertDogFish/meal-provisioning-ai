@@ -297,13 +297,13 @@ describe('MODE-06: Watchdog → события при падении/восст�
 
       fetchShouldFail = true; // API «упал»
       await vi.advanceTimersByTimeAsync(1000); // пинг по интервалу — fail
-      expect(events.at(-1)?.[0]).toBe(false);
-      expect(events.at(-1)?.[2]).toBeTruthy();
+      expect(events[events.length - 1]?.[0]).toBe(false);
+      expect(events[events.length - 1]?.[2]).toBeTruthy();
       expect(wd.getLastAvailability()).toBe(false);
 
       fetchShouldFail = false; // API «восстановился»
       await vi.advanceTimersByTimeAsync(1000);
-      expect(events.at(-1)?.[0]).toBe(true);
+      expect(events[events.length - 1]?.[0]).toBe(true);
       expect(wd.getLastAvailability()).toBe(true);
     } finally {
       wd.stopWatchdog();
