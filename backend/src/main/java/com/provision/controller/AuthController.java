@@ -39,6 +39,11 @@ public class AuthController {
 
     @GetMapping("/me")
     public UserResponse getCurrentUser(@AuthenticationPrincipal User user) {
+        // FIX: без валидного JWT Spring не подставляет principal -> user == null.
+        // Раньше это давало NullPointerException (500 вместо 401).
+        if (user == null) {
+            throw new com.provision.exception.UnauthorizedException("Not authenticated");
+        }
         return authService.getCurrentUser(user.getId());
     }
 }

@@ -18,6 +18,7 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
@@ -47,7 +48,7 @@ class CatalogIntegrationTest {
 
     @DynamicPropertySource
     static void configureProperties(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", () -> LOCAL_PG ? com.provision.integration.LocalPgFallback.jdbcUrl("provision_test_catalog") : postgres.getJdbcUrl());
+        registry.add("spring.datasource.url", () -> LOCAL_PG ? com.provision.integration.LocalPgFallback.jdbcUrl("provision_test_catalog") : "jdbc:postgresql://localhost:5432/na");
         registry.add("spring.datasource.username", () -> LOCAL_PG ? "test" : postgres.getUsername());
         registry.add("spring.datasource.password", () -> LOCAL_PG ? "test" : postgres.getPassword());
     }
@@ -58,11 +59,34 @@ class CatalogIntegrationTest {
     @Autowired
     private ObjectMapper objectMapper;
 
+    @Autowired
+    private com.provision.repository.UserRepository userRepository;
+
+    /** SEC: /api/v1/recipes* требует аутентификации (anyRequest().authenticated()) — раньше запросы шли без токена и получали 403. */
+    private String userToken;
+
+    @BeforeEach
+    void setUp() throws Exception {
+        userRepository.deleteAll();
+        userToken = TestUsers.registerUser(mockMvc, objectMapper, "cat_user@test.com");
+    }
+
+    private MockHttpServletRequestBuilder authGet(String url) {
+        return get(url).header("Authorization", "Bearer " + userToken);
+    }
+
+    private static String lastResponseBody(org.springframework.test.web.servlet.MvcResult r) throws Exception {
+        String body = r.getResponse().getContentAsString();
+        System.err.println("CAT response: " + (body.length() > 800 ? body.substring(0, 800) : body));
+        return body;
+    }
+
     @Test
     @Order(1)
     @DisplayName("CAT-01: After migrations GET /recipes returns ≥ 50 dishes; each has non-empty ingredients")
     void cat01_recipesCatalogHasAtLeast50Dishes() throws Exception {
-        MvcResult result = mockMvc.perform(get("/api/v1/recipes"))
+        MvcResult result = mockMvc.perform(authGet("/api/v1/recipes"))
+                .andDo(r -> { if (r.getResponse().getStatus() != 200) System.err.println("CAT-ERR " + r.getRequest().getRequestURI() + " -> " + r.getResponse().getStatus() + " body=" + r.getResponse().getContentAsString()); })
                 .andExpect(status().isOk())
                 .andReturn();
 
@@ -84,7 +108,7 @@ class CatalogIntegrationTest {
     @DisplayName("CAT-02: Filter mealType=BREAKFAST returns exactly 15; SNACK returns 16")
     void cat02_filterByMealType() throws Exception {
         // Test BREAKFAST
-        MvcResult breakfastResult = mockMvc.perform(get("/api/v1/recipes?mealType=BREAKFAST"))
+        MvcResult breakfastResult = mockMvc.perform(authGet("/api/v1/recipes?mealType=BREAKFAST"))
                 .andExpect(status().isOk())
                 .andReturn();
 
@@ -96,7 +120,7 @@ class CatalogIntegrationTest {
         assertThat(breakfastRecipes).hasSize(15);
 
         // Test SNACK
-        MvcResult snackResult = mockMvc.perform(get("/api/v1/recipes?mealType=SNACK"))
+        MvcResult snackResult = mockMvc.perform(authGet("/api/v1/recipes?mealType=SNACK"))
                 .andExpect(status().isOk())
                 .andReturn();
 
@@ -112,7 +136,7 @@ class CatalogIntegrationTest {
     @Order(3)
     @DisplayName("CAT-03: Search 'тушенка' returns all dishes containing beef_stew/chicken_stew (≥ 10)")
     void cat03_searchByIngredient() throws Exception {
-        MvcResult result = mockMvc.perform(get("/api/v1/recipes?search=тушенка"))
+        MvcResult result = mockMvc.perform(authGet("/api/v1/recipes?search=тушенка"))
                 .andExpect(status().isOk())
                 .andReturn();
 
@@ -135,7 +159,7 @@ class CatalogIntegrationTest {
     @Order(4)
     @DisplayName("CAT-04: Filter cookMinutes=0 returns only 'no fire' dishes (22)")
     void cat04_filterNoFireDishes() throws Exception {
-        MvcResult result = mockMvc.perform(get("/api/v1/recipes?cookMinutes=0"))
+        MvcResult result = mockMvc.perform(authGet("/api/v1/recipes?cookMinutes=0"))
                 .andExpect(status().isOk())
                 .andReturn();
 
@@ -157,7 +181,7 @@ class CatalogIntegrationTest {
     @DisplayName("CAT-05: costPerServing in response is calculated by current date prices")
     void cat05_costPerServingCalculation() throws Exception {
         // Get a specific recipe with known ingredients
-        MvcResult result = mockMvc.perform(get("/api/v1/recipes?search=Гречка+с+тушенкой+и+луком"))
+        MvcResult result = mockMvc.perform(authGet("/api/v1/recipes?search=Гречка+с+тушенкой+и+луком"))
                 .andExpect(status().isOk())
                 .andReturn();
 
@@ -182,7 +206,7 @@ class CatalogIntegrationTest {
     @DisplayName("CAT-06: Sorting by calories returns ascending/descending sequence")
     void cat06_sortByCalories() throws Exception {
         // Get all recipes
-        MvcResult result = mockMvc.perform(get("/api/v1/recipes"))
+        MvcResult result = mockMvc.perform(authGet("/api/v1/recipes"))
                 .andExpect(status().isOk())
                 .andReturn();
 
@@ -204,7 +228,7 @@ class CatalogIntegrationTest {
     @DisplayName("CAT-07: Combined filters work correctly")
     void cat07_combinedFilters() throws Exception {
         // Test combination: BREAKFAST + category=КАШИ
-        MvcResult result = mockMvc.perform(get("/api/v1/recipes?mealType=BREAKFAST&category=КАШИ"))
+        MvcResult result = mockMvc.perform(authGet("/api/v1/recipes?mealType=BREAKFAST&category=КАШИ"))
                 .andExpect(status().isOk())
                 .andReturn();
 

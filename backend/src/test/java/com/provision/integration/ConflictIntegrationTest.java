@@ -1,16 +1,12 @@
 package com.provision.integration;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.provision.dto.auth.LoginRequest;
-import com.provision.dto.auth.RegisterRequest;
 import com.provision.dto.ingredient.IngredientRequest;
 import com.provision.dto.recipe.RecipeRequest;
 import com.provision.dto.trip.TripMealRequest;
 import com.provision.dto.trip.TripRequest;
 import com.provision.entity.MealType;
 import com.provision.entity.UnitOfMeasure;
-import com.provision.entity.User;
-import com.provision.entity.UserRole;
 import com.provision.repository.UserRepository;
 import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -81,49 +77,11 @@ class ConflictIntegrationTest {
     void setUp() throws Exception {
         userRepository.deleteAll();
 
-        // Create ADMIN
-        User admin = User.builder()
-                .email("admin@test.com")
-                .passwordHash("$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy")
-                .firstName("Admin")
-                .lastName("Test")
-                .role(UserRole.ADMIN)
-                .build();
-        userRepository.save(admin);
-
-        LoginRequest adminLogin = new LoginRequest("admin@test.com", "password123");
-        MvcResult adminResult = mockMvc.perform(post("/api/v1/auth/login")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(adminLogin)))
-                .andExpect(status().isOk())
-                .andReturn();
-
-        Map<String, Object> adminTokens = objectMapper.readValue(
-                adminResult.getResponse().getContentAsString(), Map.class);
-        adminToken = (String) adminTokens.get("accessToken");
-
-        // Create USER
-        RegisterRequest userRequest = new RegisterRequest(
-                "user@test.com",
-                "password123",
-                "User",
-                "Test"
-        );
-        mockMvc.perform(post("/api/v1/auth/register")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(userRequest)))
-                .andExpect(status().isCreated());
-
-        LoginRequest userLogin = new LoginRequest("user@test.com", "password123");
-        MvcResult userResult = mockMvc.perform(post("/api/v1/auth/login")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(userLogin)))
-                .andExpect(status().isOk())
-                .andReturn();
-
-        Map<String, Object> userTokens = objectMapper.readValue(
-                userResult.getResponse().getContentAsString(), Map.class);
-        userToken = (String) userTokens.get("accessToken");
+        // FIX: раньше ADMIN заводился с захардкоженным BCrypt-хэшем из чужих доков,
+        // который НЕ соответствует паролю "password123" -> логин давал 401 и весь класс падал.
+        // TestUsers создаёт пользователей с корректным хэшем через реальный PasswordEncoder.
+        adminToken = TestUsers.createAdmin(mockMvc, objectMapper, userRepository, "admin@test.com");
+        userToken = TestUsers.registerUser(mockMvc, objectMapper, "user@test.com");
     }
 
     @Test

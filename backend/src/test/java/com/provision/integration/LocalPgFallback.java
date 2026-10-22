@@ -54,9 +54,27 @@ public final class LocalPgFallback {
         try {
             ensureClusterUp();
             ensureDatabase(dbname);
+            // FIX: initdb без --locale=C поднимает кластер с encoding='SQL_ASCII' (в минимальных
+            // контейнерах LANG не задан). Тогда JDBC-драйвер отдаёт строки как bytea и запросы
+            // вида lower(r.name) падают с "ERROR: function lower(bytea) does not exist".
+            // Приводим тестовую БД к UTF8, как в реальном postgres:15-alpine.
+            fixEncodingIfNeeded(dbname);
             return "jdbc:postgresql://localhost:" + PORT + "/" + dbname;
         } catch (Exception e) {
             throw new RuntimeException("Local PostgreSQL fallback failed for db '" + dbname + "'", e);
+        }
+    }
+
+    private static void fixEncodingIfNeeded(String dbname) throws Exception {
+        try (Connection c = DriverManager.getConnection(
+                "jdbc:postgresql://localhost:" + PORT + "/postgres", SUPERUSER, "");
+             Statement st = c.createStatement()) {
+            var rs = st.executeQuery("SELECT pg_encoding_to_char(encoding) FROM pg_database WHERE datname='" + dbname + "'");
+            if (rs.next() && !"UTF8".equals(rs.getString(1))) {
+                st.execute("UPDATE pg_database SET datcollate='C.UTF-8', datctype='C.UTF-8' WHERE datname='" + dbname + "'");
+                st.execute("ALTER DATABASE \"" + dbname + "\" REFRESH COLLATION VERSION");
+                st.execute("ALTER DATABASE \"" + dbname + "\" WITH encoding='UTF8' lc_collate='C.UTF-8' lc_ctype='C.UTF-8' template=template0");
+            }
         }
     }
 
