@@ -1,5 +1,4 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { AppProvider } from './store/AppContext';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { ToastProvider } from './components/ToastProvider';
 import Layout from './components/Layout';
@@ -18,8 +17,7 @@ import SyncLogsPage from './pages/SyncLogsPage';
 function App() {
   return (
     <ErrorBoundary>
-      <AppProvider>
-        <ToastProvider>
+      <ToastProvider>
           <BrowserRouter>
             <Routes>
               <Route path="/login" element={<LoginPage />} />
@@ -68,10 +66,10 @@ function App() {
               <Layout><ErrorsDemoPage /></Layout>
             </ProtectedRoute>
           } />
-          <Route path="*" element={<Navigate to="/login" replace />} />            </Routes>
+          <Route path="*" element={<Navigate to="/login" replace />} />
+            </Routes>
           </BrowserRouter>
         </ToastProvider>
-      </AppProvider>
     </ErrorBoundary>
   );
 }

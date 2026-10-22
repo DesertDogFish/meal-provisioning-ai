@@ -36,6 +36,7 @@ export function DateRange({
       setInternalEndDate(startDate);
       onEndDateChange(startDate);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // При изменении startDate
@@ -57,10 +58,11 @@ export function DateRange({
   return (
     <div className="grid grid-cols-2 gap-3">
       <div>
-        <label className="block text-sm font-medium mb-1" style={{ color: 'var(--muted)' }}>
+        <label htmlFor="start-date" className="block text-sm font-medium mb-1" style={{ color: 'var(--muted)' }}>
           {startLabel}
         </label>
         <input
+          id="start-date"
           type="date"
           value={startDate}
           onChange={e => handleStartDateChange(e.target.value)}
@@ -75,10 +77,11 @@ export function DateRange({
         />
       </div>
       <div>
-        <label className="block text-sm font-medium mb-1" style={{ color: 'var(--muted)' }}>
+        <label htmlFor="end-date" className="block text-sm font-medium mb-1" style={{ color: 'var(--muted)' }}>
           {endLabel}
         </label>
         <input
+          id="end-date"
           type="date"
           value={internalEndDate}
           onChange={e => handleEndDateChange(e.target.value)}

@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
-import { useApp } from '../store/AppContext';
 import { useToast } from './ToastProvider';
 import { Download } from 'lucide-react';
-import { formatAmount, calculateShoppingList, calculateDayShopping } from '../utils/calculations';
+import { formatAmount } from '../utils/calculations';
 import { NumberField } from './NumberField';
+import { api } from '../api/client';
 
 interface ShoppingItem {
   ingredientId: string;
@@ -30,126 +30,179 @@ interface Props {
 
 type TabType = 'total' | 'days' | 'person';
 
+interface Trip {
+  id: string;
+  userId: string;
+  name: string;
+  startDate: string;
+  endDate: string;
+  defaultPeople: number;
+  notes?: string;
+  days?: TripDay[];
+}
+
+interface TripDay {
+  id: string;
+  tripId: string;
+  dayDate: string;
+  peopleOverride?: number;
+  meals?: TripMeal[];
+}
+
+interface TripMeal {
+  id: string;
+  tripDayId: string;
+  mealType: string;
+  recipeId: string;
+  recipe?: any;
+  peopleOverride?: number;
+  sortOrder: number;
+}
+
+interface Recipe {
+  id: string;
+  name: string;
+  mealType: string;
+  baseServings: number;
+  caloriesPerServing?: number;
+  ingredients: any[];
+}
+
+interface Price {
+  id: string;
+  ingredientId: string;
+  pricePerUnit: number;
+  currency: string;
+  effectiveFrom: string;
+}
+
 export default function PriceOverridesTab({ tripId }: Props) {
-  const { state } = useApp();
   const { showError, showSuccess } = useToast();
   const [shoppingItems, setShoppingItems] = useState<ShoppingItem[]>([]);
   const [dayShopping, setDayShopping] = useState<DayShopping[]>([]);
   const [activeTab, setActiveTab] = useState<TabType>('total');
   const [showModal, setShowModal] = useState(false);
   const [onlyDiff, setOnlyDiff] = useState(false);
+  const [trip, setTrip] = useState<Trip | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const trip = state.trips.find(t => t.id === tripId);
-
-  // Загрузка данных из моковых данных
+  // Загрузка данных через API
   useEffect(() => {
-    if (!trip) {
-      console.warn('PriceOverridesTab: trip not found for id', tripId);
-      return;
-    }
+    loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tripId]);
 
-    console.log('=== PriceOverridesTab: loading data ===');
-    console.log('Trip:', trip.name);
-    console.log('  - trip.days:', trip.days?.length || 0);
-    console.log('  - trip.days[0]?.meals:', trip.days?.[0]?.meals?.length || 0);
-    console.log('  - state.recipes:', state.recipes.length);
-    console.log('  - state.prices:', state.prices.length);
-    console.log('  - state.ingredients:', state.ingredients.length);
-
-    // Расчёт списка закупок
-    const recipesMap = new Map(state.recipes.map(r => [r.id, r]));
-    
-    // Проверяем, что рецепты имеют ингредиенты
-    if (state.recipes.length > 0) {
-      const firstRecipe = state.recipes[0];
-      console.log('  - first recipe:', firstRecipe.name);
-      console.log('    - ingredients count:', firstRecipe.ingredients?.length || 0);
-      if (firstRecipe.ingredients && firstRecipe.ingredients.length > 0) {
-        const firstIng = firstRecipe.ingredients[0];
-        console.log('    - first ingredient:', {
-          ingredientId: firstIng.ingredientId,
-          amount: firstIng.amount,
-          hasIngredientData: !!firstIng.ingredient,
-          ingredientName: firstIng.ingredient?.name,
-          ingredientUnit: firstIng.ingredient?.unit
-        });
-      }
-    }
-    
-    // Проверяем, что в recipesMap есть все рецепты
-    console.log('  - recipesMap size:', recipesMap.size);
-    if (trip.days && trip.days.length > 0 && trip.days[0].meals && trip.days[0].meals.length > 0) {
-      const firstMealRecipeId = trip.days[0].meals[0].recipeId;
-      console.log('  - first meal recipeId:', firstMealRecipeId);
-      console.log('  - recipe found in map:', recipesMap.has(firstMealRecipeId));
-      const recipeFromMap = recipesMap.get(firstMealRecipeId);
-      if (recipeFromMap) {
-        console.log('    - recipe name:', recipeFromMap.name);
-        console.log('    - recipe ingredients:', recipeFromMap.ingredients?.length || 0);
-      }
-    }
-    
-    // Проверяем, что в походе есть приёмы пищи
-    if (trip.days && trip.days.length > 0) {
-      const firstDay = trip.days[0];
-      console.log('  - first day:', firstDay.dayDate);
-      console.log('    - meals count:', firstDay.meals?.length || 0);
-      if (firstDay.meals && firstDay.meals.length > 0) {
-        const firstMeal = firstDay.meals[0];
-        console.log('    - first meal:', {
-          mealType: firstMeal.mealType,
-          recipeId: firstMeal.recipeId,
-          hasRecipe: !!firstMeal.recipe,
-          recipeName: firstMeal.recipe?.name
-        });
-      }
-    }
-    
+  const loadData = async () => {
     try {
-      const shopping = calculateShoppingList(trip, recipesMap, state.prices);
+      setLoading(true);
+      setError(null);
       
-      console.log('  - shopping items calculated:', shopping.length);
-      if (shopping.length > 0) {
-        console.log('  - first shopping item:', shopping[0]);
-      }
-
-      // Преобразование в формат ShoppingItem
-      const items: ShoppingItem[] = shopping.map(item => {
-        const unitPrice = item.estimatedCost && item.totalAmount > 0 
-          ? item.estimatedCost / item.totalAmount 
-          : undefined;
-        
-        return {
-          ingredientId: item.ingredientId,
-          ingredientName: item.ingredientName || 'Unknown',
-          unit: item.unit || 'PCS',
-          totalAmount: item.totalAmount,
-          plannedUnitPrice: unitPrice,
-          actualUnitPrice: unitPrice,
-          plannedCost: item.estimatedCost,
-          actualCost: item.estimatedCost,
-          overridden: false,
-          hasPlannedPrice: item.hasPrice
-        };
-      });
+      const [tripData, recipesData, pricesData] = await Promise.all([
+        api.get<Trip>(`/trips/${tripId}`),
+        api.get<Recipe[]>('/recipes'),
+        api.get<Price[]>('/admin/prices')
+      ]);
       
-      console.log('  - converted items:', items.length);
-      setShoppingItems(items);
-
-      // Расчёт закупок по дням
-      const dayShoppingData = calculateDayShopping(trip, recipesMap, state.prices);
-      console.log('  - day shopping calculated:', dayShoppingData.length);
+      setTrip(tripData);
       
-      setDayShopping(dayShoppingData.map(d => ({
-        dayDate: d.dayDate,
-        plannedCost: d.dayCost,
-        actualCost: d.dayCost
-      })));
-    } catch (error) {
-      console.error('Error calculating shopping list:', error);
-      showError('Ошибка расчёта закупок: ' + (error as Error).message);
+      // Расчёт списка закупок
+      calculateShoppingData(tripData, recipesData, pricesData);
+    } catch (err) {
+      console.error('Failed to load ', err);
+      setError('Не удалось загрузить данные');
+      showError('Ошибка загрузки данных');
+    } finally {
+      setLoading(false);
     }
-  }, [tripId, trip, state.recipes, state.prices, showError]);
+  };
+
+  const calculateShoppingData = (tripData: Trip, recipesData: Recipe[], pricesData: Price[]) => {
+    // Расчёт списка закупок
+    const recipesMap = new Map(recipesData.map(r => [r.id, r]));
+    
+    // Простой расчёт закупок (без использования calculateShoppingList из utils)
+    const items: ShoppingItem[] = [];
+    const ingredientTotals = new Map<string, { amount: number; ingredient: any }>();
+    
+    if (tripData.days) {
+      for (const day of tripData.days) {
+        if (day.meals) {
+          for (const meal of day.meals) {
+            const recipe = recipesMap.get(meal.recipeId);
+            if (!recipe) continue;
+            
+            const people = meal.peopleOverride || day.peopleOverride || tripData.defaultPeople;
+            
+            for (const ri of recipe.ingredients) {
+              const amount = (ri.amount / recipe.baseServings) * people;
+              const existing = ingredientTotals.get(ri.ingredientId);
+              
+              if (existing) {
+                existing.amount += amount;
+              } else {
+                ingredientTotals.set(ri.ingredientId, { amount, ingredient: ri.ingredient });
+              }
+            }
+          }
+        }
+      }
+    }
+    
+    // Преобразование в ShoppingItem
+    for (const [ingredientId, data] of ingredientTotals.entries()) {
+      const price = pricesData.find(p => p.ingredientId === ingredientId);
+      const unitPrice = price?.pricePerUnit;
+      
+      items.push({
+        ingredientId,
+        ingredientName: data.ingredient?.name || 'Unknown',
+        unit: data.ingredient?.unit || 'PCS',
+        totalAmount: data.amount,
+        plannedUnitPrice: unitPrice,
+        actualUnitPrice: unitPrice,
+        plannedCost: unitPrice ? data.amount * unitPrice : undefined,
+        actualCost: unitPrice ? data.amount * unitPrice : undefined,
+        overridden: false,
+        hasPlannedPrice: !!unitPrice
+      });
+    }
+    
+    setShoppingItems(items);
+    
+    // Расчёт закупок по дням
+    const dayShoppingData: DayShopping[] = [];
+    if (tripData.days) {
+      for (const day of tripData.days) {
+        let dayCost = 0;
+        
+        if (day.meals) {
+          for (const meal of day.meals) {
+            const recipe = recipesMap.get(meal.recipeId);
+            if (!recipe) continue;
+            
+            const people = meal.peopleOverride || day.peopleOverride || tripData.defaultPeople;
+            
+            for (const ri of recipe.ingredients) {
+              const amount = (ri.amount / recipe.baseServings) * people;
+              const price = pricesData.find(p => p.ingredientId === ri.ingredientId);
+              if (price) {
+                dayCost += amount * price.pricePerUnit;
+              }
+            }
+          }
+        }
+        
+        dayShoppingData.push({
+          dayDate: day.dayDate,
+          plannedCost: dayCost,
+          actualCost: dayCost
+        });
+      }
+    }
+    
+    setDayShopping(dayShoppingData);
+  };
 
   // В mock-режиме оверрайды не поддерживаются
   // В реальном приложении здесь будет API вызов
@@ -177,9 +230,28 @@ export default function PriceOverridesTab({ tripId }: Props) {
     ? shoppingItems.filter(item => item.overridden && item.actualUnitPrice !== item.plannedUnitPrice)
     : shoppingItems;
 
-  const defaultPeople = trip?.defaultPeople || 1;
-  const totalPersonMeals = trip?.days?.reduce((acc, d) => 
-    acc + (d.meals?.reduce((mealAcc, m) => mealAcc + (m.peopleOverride || d.peopleOverride || trip.defaultPeople), 0) || 0)
+  if (loading) {
+    return (
+      <div className="space-y-4">
+        <div className="note-box">Загрузка...</div>
+      </div>
+    );
+  }
+
+  if (error || !trip) {
+    return (
+      <div className="space-y-4">
+        <div className="note-box" style={{ color: 'var(--fire)' }}>
+          {error || 'Поход не найден'}
+        </div>
+        <button onClick={loadData} className="ghost-btn">Повторить</button>
+      </div>
+    );
+  }
+
+  const defaultPeople = trip.defaultPeople || 1;
+  const totalPersonMeals = trip.days?.reduce((acc: number, d: TripDay) => 
+    acc + (d.meals?.reduce((mealAcc: number, m: TripMeal) => mealAcc + (m.peopleOverride || d.peopleOverride || trip.defaultPeople || 1), 0) || 0)
   , 0) || 1;
 
   return (

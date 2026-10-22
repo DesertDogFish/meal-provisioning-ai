@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useToast } from './ToastProvider';
 import { NumberField } from './NumberField';
+import { api } from '../api/client';
 
 interface Ingredient {
   id: string;
@@ -33,13 +34,8 @@ export function SubstitutionModal({ tripId, recipeId, recipeName, ingredients, o
 
   const loadSimilar = async (ingredientId: string) => {
     try {
-      const response = await fetch(`/api/v1/ingredients/similar/${ingredientId}?limit=5`, {
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('accessToken')}` }
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setSimilar(data);
-      }
+      const data = await api.get<Ingredient[]>(`/ingredients/similar/${ingredientId}?limit=5`);
+      setSimilar(data);
     } catch (error) {
       console.error('Failed to load similar ingredients:', error);
     }
@@ -51,13 +47,8 @@ export function SubstitutionModal({ tripId, recipeId, recipeName, ingredients, o
       return;
     }
     try {
-      const response = await fetch(`/api/v1/admin/ingredients?query=${encodeURIComponent(query)}`, {
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('accessToken')}` }
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setSearchResults(data.items || []);
-      }
+      const data = await api.get<any>(`/admin/ingredients?query=${encodeURIComponent(query)}`);
+      setSearchResults(data.items || []);
     } catch (error) {
       console.error('Failed to search ingredients:', error);
     }
@@ -77,30 +68,17 @@ export function SubstitutionModal({ tripId, recipeId, recipeName, ingredients, o
   const handleSubstitute = async (toIngredientId: string) => {
     if (!fromId) return;
     try {
-      const response = await fetch(`/api/v1/trips/${tripId}/substitutions`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
-        },
-        body: JSON.stringify({
-          recipeId: parseInt(recipeId),
-          fromIngredientId: parseInt(fromId),
-          toIngredientId: parseInt(toIngredientId),
-          ratio: ratio || 1,
-          comment: q || null
-        })
+      await api.post(`/trips/${tripId}/substitutions`, {
+        recipeId: parseInt(recipeId),
+        fromIngredientId: parseInt(fromId),
+        toIngredientId: parseInt(toIngredientId),
+        ratio: ratio || 1,
+        comment: q || null
       });
-
-      if (response.ok) {
-        showSuccess('Замена создана');
-        onClose();
-      } else {
-        const error = await response.json();
-        showError(error.detail || 'Failed to create substitution');
-      }
-    } catch (error) {
-      showError('Network error');
+      showSuccess('Замена создана');
+      onClose();
+    } catch (error: any) {
+      showError(error.detail || 'Failed to create substitution');
     }
   };
 

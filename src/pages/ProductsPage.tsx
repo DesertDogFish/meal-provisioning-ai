@@ -1,11 +1,21 @@
-import { useState, useMemo } from 'react';
-import { useApp } from '../store/AppContext';
+import { useState, useEffect, useMemo } from 'react';
 import { useToast } from '../components/ToastProvider';
 import { Plus, Edit2, Trash2, Search, X } from 'lucide-react';
 import { NumberField } from '../components/NumberField';
-import { Ingredient, UnitOfMeasure } from '../types';
+import { api } from '../api/client';
+import type { UnitOfMeasure, ProductCategory } from '../types';
 
-interface Product extends Ingredient {
+interface Product {
+  id: string;
+  name: string;
+  unit: UnitOfMeasure;
+  category: string;
+  categoryId?: string;
+  code?: string;
+  packSize?: number;
+  roundToPacks?: boolean;
+  kcalPer100g?: number;
+  pieceWeightG?: number;
   categoryName: string;
   currentPrice?: {
     value: number;
@@ -14,12 +24,14 @@ interface Product extends Ingredient {
   };
   usageRecipes: number;
   bindingStatus: string;
-  kcalPer100g?: number;
 }
 
 export default function ProductsPage() {
-  const { state, dispatch } = useApp();
   const { showError, showSuccess } = useToast();
+  const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<ProductCategory[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   
@@ -45,40 +57,32 @@ export default function ProductsPage() {
   const [formPieceWeightG, setFormPieceWeightG] = useState<number | null>(null);
   const [duplicateWarning, setDuplicateWarning] = useState<{ type: 'hard' | 'soft'; message: string } | null>(null);
 
-  // Преобразование ингредиентов в продукты
-  const products = useMemo((): Product[] => {
-    return state.ingredients.map(ing => {
-      // Найти текущую цену
-      const prices = state.prices
-        .filter(p => p.ingredientId === ing.id)
-        .sort((a, b) => new Date(b.effectiveFrom).getTime() - new Date(a.effectiveFrom).getTime());
-      const currentPrice = prices[0] ? {
-        value: prices[0].pricePerUnit,
-        currency: prices[0].currency,
-        source: 'MANUAL'
-      } : undefined;
+  // Загрузка данных
+  useEffect(() => {
+    loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-      // Подсчитать использование в рецептах
-      const usageRecipes = state.recipes.filter(r => 
-        r.ingredients.some(ri => ri.ingredientId === ing.id)
-      ).length;
-
-      // Статус привязки
-      const bindingStatus = ing.code ? 'BOUND' : 'UNBOUND';
-
-      // Название категории
-      const category = state.categories.find(c => c.name === ing.category);
-      const categoryName = category?.name || ing.category || 'Прочее';
-
-      return {
-        ...ing,
-        categoryName,
-        currentPrice,
-        usageRecipes,
-        bindingStatus
-      };
-    });
-  }, [state.ingredients, state.prices, state.recipes, state.categories]);
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const [productsData, categoriesData] = await Promise.all([
+        api.get<any>('/admin/products'),
+        api.get<ProductCategory[]>('/product-categories')
+      ]);
+      
+      setProducts(productsData.content || productsData);
+      setCategories(categoriesData);
+    } catch (err) {
+      console.error('Failed to load data:', err);
+      setError('Не удалось загрузить данные');
+      showError('Ошибка загрузки данных');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Фильтрация и сортировка
   const filteredProducts = useMemo(() => {
@@ -158,43 +162,38 @@ export default function ProductsPage() {
   }, [products, query, selectedCategories, selectedUnit, priceStatus, bindingStatus, usageStatus, sortKey, sortDir]);
 
   // Проверка дубликата
-  const checkDuplicate = (name: string, unit: UnitOfMeasure) => {
+  const checkDuplicate = async (name: string, unit: UnitOfMeasure) => {
     if (!name) {
       setDuplicateWarning(null);
       return;
     }
 
-    const normalize = (s: string) => s.toLowerCase().replace(/ё/g, 'е').replace(/\s+/g, ' ').trim();
-    const normalizedName = normalize(name);
-
-    const existing = products.find(p => 
-      normalize(p.name) === normalizedName && p.unit === unit
-    );
-
-    if (existing) {
-      if (editingProduct && existing.id === editingProduct.id) {
+    try {
+      const response = await api.get<any>(
+        `/admin/products/check-name?name=${encodeURIComponent(name)}&unit=${unit}`
+      );
+      
+      if (response.duplicate) {
+        if (response.sameUnit) {
+          setDuplicateWarning({
+            type: 'hard',
+            message: `Жёсткий дубль: продукт «${response.existingName}» в ${unit} уже существует.`
+          });
+        } else {
+          setDuplicateWarning({
+            type: 'soft',
+            message: `Есть «${response.existingName}» в другой единице. Создаёте отдельный продукт в ${unit}?`
+          });
+        }
+      } else {
         setDuplicateWarning(null);
-        return;
       }
-      setDuplicateWarning({
-        type: 'hard',
-        message: `Жёсткий дубль: продукт «${existing.name}» в ${unit} уже существует.`
-      });
-      return;
-    }
-
-    const softDuplicate = products.find(p => normalize(p.name) === normalizedName && p.unit !== unit);
-    if (softDuplicate) {
-      setDuplicateWarning({
-        type: 'soft',
-        message: `Есть «${softDuplicate.name}» в ${softDuplicate.unit}. Создаёте отдельный продукт в ${unit}?`
-      });
-    } else {
-      setDuplicateWarning(null);
+    } catch (error) {
+      console.error('Failed to check duplicate:', error);
     }
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!formName || !formCategory) {
       showError('Заполните обязательные поля');
       return;
@@ -205,52 +204,40 @@ export default function ProductsPage() {
       return;
     }
 
-    // CR-1: валидация pieceWeightG для PCS/PACK при наличии ккал
+    // CR-1: валидация pieceWeightG для PCS/PACK
     if ((formUnit === 'PCS' || formUnit === 'PACK') && formCalories && !formPieceWeightG) {
       showError('Для шт/уп с калорийностью обязателен вес 1 шт/уп в граммах');
       return;
     }
 
-    if (editingProduct) {
-      // Обновление
-      dispatch({
-        type: 'UPDATE_INGREDIENT',
-        payload: {
-          ...editingProduct,
-          name: formName,
-          unit: formUnit,
-          category: formCategory,
-          packSize: formPackSize || undefined,
-          roundToPacks: formRoundToPacks,
-          kcalPer100g: formCalories || undefined,
-          pieceWeightG: formPieceWeightG || undefined
-        }
-      });
-      showSuccess('Продукт обновлён');
-    } else {
-      // Создание
-      dispatch({
-        type: 'ADD_INGREDIENT',
-        payload: {
-          id: `ing_${Date.now()}`,
-          name: formName,
-          unit: formUnit,
-          category: formCategory,
-          packSize: formPackSize || undefined,
-          roundToPacks: formRoundToPacks,
-          kcalPer100g: formCalories || undefined,
-          pieceWeightG: formPieceWeightG || undefined,
-          createdAt: new Date().toISOString()
-        }
-      });
-      showSuccess('Продукт создан');
-    }
+    try {
+      const body = {
+        name: formName,
+        categoryId: parseInt(formCategory),
+        unit: formUnit,
+        packSize: formPackSize,
+        roundToPacks: formRoundToPacks,
+        kcalPer100g: formCalories,
+        pieceWeightG: formPieceWeightG
+      };
 
-    setShowModal(false);
-    resetForm();
+      if (editingProduct) {
+        await api.put(`/admin/products/${editingProduct.id}`, body);
+        showSuccess('Продукт обновлён');
+      } else {
+        await api.post('/admin/products', body);
+        showSuccess('Продукт создан');
+      }
+
+      setShowModal(false);
+      resetForm();
+      await loadData();
+    } catch (error: any) {
+      showError(error.detail || error.message || 'Ошибка сохранения');
+    }
   };
 
-  const handleDelete = (product: Product) => {
+  const handleDelete = async (product: Product) => {
     if (product.usageRecipes > 0) {
       showError(`Продукт используется в ${product.usageRecipes} рецептах и не может быть удалён`);
       return;
@@ -258,14 +245,19 @@ export default function ProductsPage() {
 
     if (!confirm(`Удалить продукт "${product.name}"?`)) return;
 
-    dispatch({ type: 'DELETE_INGREDIENT', payload: product.id });
-    showSuccess('Продукт удалён');
+    try {
+      await api.del(`/admin/products/${product.id}`);
+      showSuccess('Продукт удалён');
+      await loadData();
+    } catch (error: any) {
+      showError(error.detail || 'Ошибка удаления');
+    }
   };
 
   const openEditModal = (product: Product) => {
     setEditingProduct(product);
     setFormName(product.name);
-    setFormCategory(product.categoryName);
+    setFormCategory(product.categoryId || '');
     setFormUnit(product.unit);
     setFormPackSize(product.packSize ?? null);
     setFormRoundToPacks(product.roundToPacks ?? false);
@@ -316,6 +308,29 @@ export default function ProductsPage() {
     );
   };
 
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl md:text-3xl font-bold" style={{ color: 'var(--text)' }}>Продукты</h1>
+          <p className="mt-1" style={{ color: 'var(--muted)' }}>Загрузка...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl md:text-3xl font-bold" style={{ color: 'var(--text)' }}>Продукты</h1>
+          <p className="mt-1" style={{ color: 'var(--fire)' }}>{error}</p>
+          <button onClick={loadData} className="ghost-btn mt-4">Повторить</button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -323,7 +338,7 @@ export default function ProductsPage() {
         <div>
           <h1 className="text-2xl md:text-3xl font-bold" style={{ color: 'var(--text)' }}>Продукты</h1>
           <p className="mt-1" style={{ color: 'var(--muted)' }}>
-            {products.length} продуктов · {state.categories.length} категорий
+            {products.length} продуктов · {categories.length} категорий
           </p>
         </div>
         <button
@@ -535,8 +550,8 @@ export default function ProductsPage() {
                   style={{ background: 'var(--elev)', border: '1px solid var(--border)', color: 'var(--text)' }}
                 >
                   <option value="">Выберите категорию...</option>
-                  {state.categories.map(cat => (
-                    <option key={cat.id} value={cat.name}>{cat.name}</option>
+                  {categories.map(cat => (
+                    <option key={cat.id} value={cat.id}>{cat.name}</option>
                   ))}
                 </select>
               </div>
@@ -569,29 +584,6 @@ export default function ProductsPage() {
                     {formUnit === 'PACK' ? 'уп — редко: коробки, блоки' : ''}
                   </p>
                 )}
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-1" style={{ color: 'var(--muted)' }}>
-                  Упаковка (размер)
-                </label>
-                <NumberField
-                  value={formPackSize}
-                  stepRef={formPackSize ?? 1}
-                  maxDecimals={3}
-                  minStep={0.001}
-                  onCommit={v => setFormPackSize(v)}
-                  placeholder="напр. 0.9 для упаковки 900 г"
-                />
-                <label className="flex items-center gap-2 mt-2 cursor-pointer" style={{ color: 'var(--muted)', fontSize: '12px' }}>
-                  <input
-                    type="checkbox"
-                    checked={formRoundToPacks}
-                    onChange={e => setFormRoundToPacks(e.target.checked)}
-                    disabled={!formPackSize}
-                  />
-                  округлять закупку до упаковок
-                </label>
               </div>
 
               <div>

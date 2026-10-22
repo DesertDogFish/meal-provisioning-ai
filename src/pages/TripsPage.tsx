@@ -1,23 +1,67 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useApp, generateId } from '../store/AppContext';
 import { Plus, Mountain, Calendar, Users, Trash2, Edit2 } from 'lucide-react';
 import { validateTrip } from '../utils/validation';
 import { ValidationError } from '../utils/errors';
 import { useToast } from '../components/ToastProvider';
 import { DateRange } from '../components/DateRange';
+import { api } from '../api/client';
+
+interface Trip {
+  id: string;
+  userId: string;
+  name: string;
+  startDate: string;
+  endDate: string;
+  defaultPeople: number;
+  notes?: string;
+  days?: any[];
+}
+
+interface User {
+  id: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  role: string;
+}
 
 export default function TripsPage() {
-  const { state, dispatch } = useApp();
   const navigate = useNavigate();
   const { showError, showSuccess } = useToast();
   const [showCreate, setShowCreate] = useState(false);
   const [newTrip, setNewTrip] = useState({ name: '', startDate: '', endDate: '', defaultPeople: 4, notes: '' });
   const [formErrors, setFormErrors] = useState<{ field: string; message: string }[]>([]);
+  const [trips, setTrips] = useState<Trip[]>([]);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const myTrips = state.trips.filter(t => t.userId === state.currentUser?.id);
+  useEffect(() => {
+    loadData();
+  }, []);
 
-  const handleCreate = () => {
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const [user, tripsData] = await Promise.all([
+        api.get<User>('/auth/me'),
+        api.get<Trip[]>('/trips')
+      ]);
+      setCurrentUser(user);
+      setTrips(tripsData);
+    } catch (err) {
+      console.error('Failed to load ', err);
+      setError('Не удалось загрузить данные');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const myTrips = trips.filter(t => t.userId === currentUser?.id);
+
+  const handleCreate = async () => {
     // Validate trip data
     const errors = validateTrip(newTrip);
     if (errors.length > 0) {
@@ -28,27 +72,57 @@ export default function TripsPage() {
     }
     setFormErrors([]);
     
-    const trip = {
-      id: generateId(),
-      userId: state.currentUser!.id,
-      name: newTrip.name,
-      startDate: newTrip.startDate,
-      endDate: newTrip.endDate,
-      defaultPeople: newTrip.defaultPeople,
-      notes: newTrip.notes || undefined,
-      createdAt: new Date().toISOString(),
-    };
-    dispatch({ type: 'ADD_TRIP', payload: trip });
-    setShowCreate(false);
-    setNewTrip({ name: '', startDate: '', endDate: '', defaultPeople: 4, notes: '' });
-    showSuccess('Поход успешно создан');
-  };
-
-  const handleDelete = (id: string) => {
-    if (confirm('Удалить поход?')) {
-      dispatch({ type: 'DELETE_TRIP', payload: id });
+    try {
+      await api.post('/trips', {
+        name: newTrip.name,
+        startDate: newTrip.startDate,
+        endDate: newTrip.endDate,
+        defaultPeople: newTrip.defaultPeople,
+        notes: newTrip.notes || undefined
+      });
+      setShowCreate(false);
+      setNewTrip({ name: '', startDate: '', endDate: '', defaultPeople: 4, notes: '' });
+      showSuccess('Поход успешно создан');
+      await loadData();
+    } catch (err: any) {
+      showError(err.detail || 'Ошибка создания похода');
     }
   };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('Удалить поход?')) return;
+    
+    try {
+      await api.del(`/trips/${id}`);
+      showSuccess('Поход удалён');
+      await loadData();
+    } catch (err: any) {
+      showError(err.detail || 'Ошибка удаления похода');
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl md:text-3xl font-bold" style={{ color: 'var(--text)' }}>Походы</h1>
+          <p className="mt-1" style={{ color: 'var(--muted)' }}>Загрузка...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl md:text-3xl font-bold" style={{ color: 'var(--text)' }}>Походы</h1>
+          <p className="mt-1" style={{ color: 'var(--fire)' }}>{error}</p>
+          <button onClick={loadData} className="ghost-btn mt-4">Повторить</button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

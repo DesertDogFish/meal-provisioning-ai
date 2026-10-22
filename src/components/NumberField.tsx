@@ -35,7 +35,7 @@ export function NumberField({
 
   const ref = stepRef ?? value ?? 10;
   const step = Math.max(adaptiveStep(ref), minStep);
-  const decimals = Math.min(maxDecimals, Math.max(0, -Math.floor(Math.log10(step))));
+  const decimals = maxDecimals;
 
   const commit = (raw: string) => {
     if (raw.trim() === '') return onCommit(null);

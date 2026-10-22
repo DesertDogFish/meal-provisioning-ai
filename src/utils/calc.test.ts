@@ -1,92 +1,108 @@
-// Тесты для calc.ts
-// Запуск: node src/utils/calc.test.ts
-
+import { describe, it, expect } from 'vitest';
 import { calculateKcal, calculateRecipeKcal, humanize, getUnitLabel } from './calc';
 
-let passed = 0;
-let failed = 0;
+describe('calculateKcal', () => {
+  it('KCAL-01: овсянка 350 ккал/100г, 0.08 KG → 280 ккал', () => {
+    const result = calculateKcal(0.08, 'KG', 350, null);
+    expect(result).toBe(280);
+  });
 
-function assert(condition: boolean, message: string) {
-  if (condition) {
-    console.log(`✅ ${message}`);
-    passed++;
-  } else {
-    console.error(`❌ ${message}`);
-    failed++;
-  }
-}
+  it('KCAL-02: тушёнка PCS, piece_weight 325, 250 ккал/100г, 1 шт → 812.5 ккал', () => {
+    const result = calculateKcal(1, 'PCS', 250, 325);
+    expect(result).toBe(812.5);
+  });
 
-function assertEqual(actual: any, expected: any, message: string) {
-  if (actual === expected) {
-    console.log(`✅ ${message}`);
-    passed++;
-  } else {
-    console.error(`❌ ${message}: expected ${expected}, got ${actual}`);
-    failed++;
-  }
-}
+  it('KCAL-03: молоко 60 ккал/100мл, 0.25 L → 150 ккал', () => {
+    const result = calculateKcal(0.25, 'L', 60, null);
+    expect(result).toBe(150);
+  });
 
-console.log('\n=== KCAL-01: овсянка 350 ккал/100г, 0.08 KG → 280 ккал ===');
-const kcal1 = calculateKcal(0.08, 'KG', 350, null);
-assertEqual(kcal1, 280, 'KCAL-01 passed');
+  it('возвращает null если kcalPer100g отсутствует', () => {
+    const result = calculateKcal(1, 'KG', null, null);
+    expect(result).toBeNull();
+  });
 
-console.log('\n=== KCAL-02: тушёнка PCS, piece_weight 325, 250 ккал/100г, 1 шт → 812.5 ккал ===');
-const kcal2 = calculateKcal(1, 'PCS', 250, 325);
-assertEqual(kcal2, 812.5, 'KCAL-02 passed');
+  it('KCAL-05: возвращает null для PCS без pieceWeightG', () => {
+    const result = calculateKcal(1, 'PCS', 250, null);
+    expect(result).toBeNull();
+  });
 
-console.log('\n=== KCAL-03: молоко 60 ккал/100мл, 0.25 L → 150 ккал ===');
-const kcal3 = calculateKcal(0.25, 'L', 60, null);
-assertEqual(kcal3, 150, 'KCAL-03 passed');
+  it('PACK с pieceWeightG работает как PCS', () => {
+    const result = calculateKcal(1, 'PACK', 300, 600);
+    expect(result).toBe(1800); // 600г * 300ккал/100г = 1800
+  });
+});
 
-console.log('\n=== KCAL-04: сводка "на человека" ===');
-const ingredients = [
-  { amount: 0.08, unit: 'KG' as const, kcalPer100g: 350, pieceWeightG: null, name: 'Овсянка' },
-  { amount: 0.25, unit: 'L' as const, kcalPer100g: 60, pieceWeightG: null, name: 'Молоко' },
-];
-const recipeKcal = calculateRecipeKcal(ingredients, 1);
-assertEqual(recipeKcal.caloriesPerServing, 430, 'KCAL-04 passed');
-assertEqual(recipeKcal.missingKcalIngredients.length, 0, 'KCAL-04 no missing');
+describe('calculateRecipeKcal', () => {
+  it('KCAL-04: рассчитывает ккал порции из продуктов', () => {
+    const ingredients = [
+      { amount: 0.08, unit: 'KG' as const, kcalPer100g: 350, pieceWeightG: null, name: 'Овсянка' },
+      { amount: 0.25, unit: 'L' as const, kcalPer100g: 60, pieceWeightG: null, name: 'Молоко' },
+    ];
+    const result = calculateRecipeKcal(ingredients, 1);
+    expect(result.caloriesPerServing).toBe(430); // 280 + 150
+    expect(result.missingKcalIngredients).toHaveLength(0);
+  });
 
-console.log('\n=== KCAL-05: валидация pieceWeightG для PCS ===');
-const kcal5 = calculateKcal(1, 'PCS', 250, null);
-assertEqual(kcal5, null, 'KCAL-05 passed: returns null without pieceWeightG');
+  it('KCAL-06: рецепт с продуктом без ккал → calories=null + чип', () => {
+    const ingredients = [
+      { amount: 0.01, unit: 'KG' as const, kcalPer100g: null, pieceWeightG: null, name: 'Соль' },
+    ];
+    const result = calculateRecipeKcal(ingredients, 1);
+    expect(result.caloriesPerServing).toBeNull();
+    expect(result.missingKcalIngredients).toContain('Соль');
+  });
 
-console.log('\n=== KCAL-06: рецепт без ккал → null + чип ===');
-const ingredientsMissing = [
-  { amount: 0.01, unit: 'KG' as const, kcalPer100g: null, pieceWeightG: null, name: 'Соль' },
-];
-const recipeKcalMissing = calculateRecipeKcal(ingredientsMissing, 1);
-assertEqual(recipeKcalMissing.caloriesPerServing, null, 'KCAL-06 passed: calories is null');
-assert(recipeKcalMissing.missingKcalIngredients.includes('Соль'), 'KCAL-06: missing ingredient listed');
+  it('делит на baseServings', () => {
+    const ingredients = [
+      { amount: 0.4, unit: 'KG' as const, kcalPer100g: 350, pieceWeightG: null, name: 'Гречка' },
+    ];
+    const result = calculateRecipeKcal(ingredients, 4);
+    // 0.4 KG = 400г * 350/100 = 1400 ккал / 4 порции = 350 ккал/порция
+    expect(result.caloriesPerServing).toBe(350);
+  });
+});
 
-console.log('\n=== UNIT-01: PACK → "уп" ===');
-assertEqual(getUnitLabel('PACK'), 'уп', 'UNIT-01 passed');
+describe('humanize', () => {
+  it('0.8 KG → "800 г"', () => {
+    expect(humanize(0.8, 'KG')).toBe('800 г');
+  });
 
-console.log('\n=== UNIT-02: нет "PCS" в UI ===');
-assertEqual(getUnitLabel('PCS'), 'шт', 'UNIT-02 passed: PCS → шт');
+  it('1.5 KG → "1.50 кг"', () => {
+    expect(humanize(1.5, 'KG')).toBe('1.50 кг');
+  });
 
-console.log('\n=== UNIT-03: старые PCS → "шт" ===');
-const humanized = humanize(2, 'PCS');
-assertEqual(humanized, '2 шт', 'UNIT-03 passed');
+  it('0.25 L → "250 мл"', () => {
+    expect(humanize(0.25, 'L')).toBe('250 мл');
+  });
 
-console.log('\n=== humanize: 0.8 KG → "800 г" ===');
-assertEqual(humanize(0.8, 'KG'), '800 г', 'humanize KG < 1');
+  it('UNIT-03: 2 PCS → "2 шт"', () => {
+    expect(humanize(2, 'PCS')).toBe('2 шт');
+  });
 
-console.log('\n=== humanize: 1.5 KG → "1.50 кг" ===');
-assertEqual(humanize(1.5, 'KG'), '1.50 кг', 'humanize KG >= 1');
+  it('3 PACK → "3 уп"', () => {
+    expect(humanize(3, 'PACK')).toBe('3 уп');
+  });
 
-console.log('\n=== humanize: 0.25 L → "250 мл" ===');
-assertEqual(humanize(0.25, 'L'), '250 мл', 'humanize L < 1');
+  it('null → "—"', () => {
+    expect(humanize(null as any, 'KG')).toBe('—');
+  });
+});
 
-console.log('\n=== humanize: 3 PACK → "3 уп" ===');
-assertEqual(humanize(3, 'PACK'), '3 уп', 'humanize PACK');
+describe('getUnitLabel', () => {
+  it('UNIT-01: KG → "кг"', () => {
+    expect(getUnitLabel('KG')).toBe('кг');
+  });
 
-console.log('\n=== humanize: null → "—" ===');
-assertEqual(humanize(null as any, 'KG'), '—', 'humanize null');
+  it('L → "л"', () => {
+    expect(getUnitLabel('L')).toBe('л');
+  });
 
-console.log('\n=== Итоги ===');
-console.log(`✅ Passed: ${passed}`);
-console.log(`❌ Failed: ${failed}`);
-console.log(`Total: ${passed + failed}`);
+  it('UNIT-02: PCS → "шт" (нет "PCS" в UI)', () => {
+    expect(getUnitLabel('PCS')).toBe('шт');
+  });
 
-export const testResults = { passed, failed };
+  it('PACK → "уп"', () => {
+    expect(getUnitLabel('PACK')).toBe('уп');
+  });
+});

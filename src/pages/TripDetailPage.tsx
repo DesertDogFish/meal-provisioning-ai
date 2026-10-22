@@ -1,10 +1,56 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useApp } from '../store/AppContext';
 import { calculateMenuByDays, calculateShoppingList, calculateDayShopping, calculatePersonSummary, formatAmount } from '../utils/calculations';
 import { ArrowLeft, Plus, Trash2, Users, ShoppingCart, BookOpen, TrendingUp, Calendar, ChevronDown, ChevronRight } from 'lucide-react';
 import { MealType } from '../types';
 import PriceOverridesTab from '../components/PriceOverridesTab';
+import { api } from '../api/client';
+
+interface Trip {
+  id: string;
+  userId: string;
+  name: string;
+  startDate: string;
+  endDate: string;
+  defaultPeople: number;
+  notes?: string;
+  days?: TripDay[];
+}
+
+interface TripDay {
+  id: string;
+  tripId: string;
+  dayDate: string;
+  peopleOverride?: number;
+  meals?: TripMeal[];
+}
+
+interface TripMeal {
+  id: string;
+  tripDayId: string;
+  mealType: MealType;
+  recipeId: string;
+  recipe?: any;
+  peopleOverride?: number;
+  sortOrder: number;
+}
+
+interface Recipe {
+  id: string;
+  name: string;
+  mealType: MealType;
+  baseServings: number;
+  caloriesPerServing?: number;
+  ingredients: any[];
+}
+
+interface Price {
+  id: string;
+  ingredientId: string;
+  pricePerUnit: number;
+  currency: string;
+  effectiveFrom: string;
+}
 
 const mealTypeLabels: Record<MealType, string> = {
   BREAKFAST: 'Завтрак',
@@ -25,25 +71,62 @@ type TabType = 'menu' | 'shopping' | 'dayShopping' | 'person' | 'overrides';
 export default function TripDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { state, dispatch } = useApp();
   const [activeTab, setActiveTab] = useState<TabType>('menu');
   const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set());
   const [showAddMeal, setShowAddMeal] = useState<{ dayId: string } | null>(null);
   const [newMeal, setNewMeal] = useState({ mealType: 'LUNCH' as MealType, recipeId: '', peopleOverride: '' });
   const [editingDay, setEditingDay] = useState<string | null>(null);
   const [dayPeopleOverride, setDayPeopleOverride] = useState('');
+  const [trip, setTrip] = useState<Trip | null>(null);
+  const [recipes, setRecipes] = useState<Recipe[]>([]);
+  const [prices, setPrices] = useState<Price[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const trip = state.trips.find(t => t.id === id);
-  if (!trip) {
+  useEffect(() => {
+    if (id) {
+      loadData();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
+
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const [tripData, recipesData, pricesData] = await Promise.all([
+        api.get<Trip>(`/trips/${id}`),
+        api.get<Recipe[]>('/recipes'),
+        api.get<Price[]>('/admin/prices')
+      ]);
+      setTrip(tripData);
+      setRecipes(recipesData);
+      setPrices(pricesData);
+    } catch (err) {
+      console.error('Failed to load ', err);
+      setError('Не удалось загрузить данные');
+    } finally {
+      setLoading(false);
+    }
+  };
+  if (loading) {
     return (
       <div className="text-center py-12">
-        <p className="text-slate-500">Поход не найден</p>
-        <button onClick={() => navigate('/trips')} className="mt-4 text-emerald-600 hover:text-emerald-700">← Назад к походам</button>
+        <p style={{ color: 'var(--muted)' }}>Загрузка...</p>
       </div>
     );
   }
 
-  const recipesMap = new Map(state.recipes.map(r => [r.id, r]));
+  if (error || !trip) {
+    return (
+      <div className="text-center py-12">
+        <p style={{ color: 'var(--fire)' }}>{error || 'Поход не найден'}</p>
+        <button onClick={() => navigate('/trips')} className="mt-4 ghost-btn">← Назад к походам</button>
+      </div>
+    );
+  }
+
+  const recipesMap = new Map(recipes.map((r: Recipe) => [r.id, r]));
 
   const toggleDay = (dayId: string) => {
     const next = new Set(expandedDays);
@@ -52,41 +135,54 @@ export default function TripDetailPage() {
     setExpandedDays(next);
   };
 
-  const handleAddMeal = () => {
+  const handleAddMeal = async () => {
     if (!showAddMeal || !newMeal.recipeId) return;
-    const day = trip.days?.find(d => d.id === showAddMeal.dayId);
+    const day = trip.days?.find((d: TripDay) => d.id === showAddMeal.dayId);
     if (!day) return;
-    dispatch({
-      type: 'ADD_MEAL',
-      payload: {
-        tripId: trip.id,
-        dayId: showAddMeal.dayId,
+    
+    try {
+      await api.post(`/trips/${trip.id}/days/${showAddMeal.dayId}/meals`, {
         mealType: newMeal.mealType,
         recipeId: newMeal.recipeId,
         peopleOverride: newMeal.peopleOverride ? parseInt(newMeal.peopleOverride) : undefined,
         sortOrder: (day.meals?.length || 0) + 1,
-      }
-    });
-    setShowAddMeal(null);
-    setNewMeal({ mealType: 'LUNCH', recipeId: '', peopleOverride: '' });
+      });
+      setShowAddMeal(null);
+      setNewMeal({ mealType: 'LUNCH', recipeId: '', peopleOverride: '' });
+      await loadData();
+    } catch (err: any) {
+      console.error('Failed to add meal:', err);
+    }
   };
 
-  const handleDeleteMeal = (dayId: string, mealId: string) => {
-    dispatch({ type: 'DELETE_MEAL', payload: { tripId: trip.id, dayId, mealId } });
+  const handleDeleteMeal = async (dayId: string, mealId: string) => {
+    try {
+      await api.del(`/trips/${trip.id}/days/${dayId}/meals/${mealId}`);
+      await loadData();
+    } catch (err: any) {
+      console.error('Failed to delete meal:', err);
+    }
   };
 
-  const handleUpdateDayPeople = (dayId: string) => {
+  const handleUpdateDayPeople = async (dayId: string) => {
     const val = dayPeopleOverride ? parseInt(dayPeopleOverride) : null;
-    dispatch({ type: 'UPDATE_DAY', payload: { tripId: trip.id, dayId, peopleOverride: val ?? undefined } });
-    setEditingDay(null);
-    setDayPeopleOverride('');
+    try {
+      await api.put(`/trips/${trip.id}/days/${dayId}`, {
+        peopleOverride: val ?? undefined
+      });
+      setEditingDay(null);
+      setDayPeopleOverride('');
+      await loadData();
+    } catch (err: any) {
+      console.error('Failed to update day:', err);
+    }
   };
 
   // Calculations
-  const menuByDays = calculateMenuByDays(trip, recipesMap);
-  const shoppingList = calculateShoppingList(trip, recipesMap, state.prices);
-  const dayShopping = calculateDayShopping(trip, recipesMap, state.prices);
-  const { summary: personSummary, tripSummary } = calculatePersonSummary(trip, recipesMap, state.prices);
+  const menuByDays = calculateMenuByDays(trip as any, recipesMap);
+  const shoppingList = calculateShoppingList(trip as any, recipesMap, prices);
+  const dayShopping = calculateDayShopping(trip as any, recipesMap, prices);
+  const { summary: personSummary, tripSummary } = calculatePersonSummary(trip as any, recipesMap, prices);
 
   const tabs = [
     { id: 'menu' as TabType, label: 'Меню по дням', icon: <BookOpen size={16} /> },
@@ -434,7 +530,7 @@ export default function TripDetailPage() {
                   style={{ background: 'var(--elev)', border: '1px solid var(--border)', color: 'var(--text)' }}
                 >
                   <option value="">Выберите блюдо...</option>
-                  {state.recipes.map(r => (
+                  {recipes.map((r: Recipe) => (
                     <option key={r.id} value={r.id}>{r.name} ({mealTypeLabels[r.mealType]})</option>
                   ))}
                 </select>

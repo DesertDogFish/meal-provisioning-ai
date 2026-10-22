@@ -61,23 +61,26 @@ const UNIT_LABELS: Record<string, string> = {
 // Обработчик запросов
 export const mockServer = {
   handleRequest<T>(method: string, path: string, body?: any): T {
+    // Отрезаем query string для матчинга маршрута
+    const pathWithoutQuery = path.split('?')[0];
+    
     // Маршрутизация
-    if (path.startsWith('/auth/')) {
+    if (pathWithoutQuery.startsWith('/auth/')) {
       return this.handleAuth(method, path, body) as T;
     }
-    if (path.startsWith('/product-categories')) {
+    if (pathWithoutQuery.startsWith('/product-categories')) {
       return this.handleCategories(method, path) as T;
     }
-    if (path.startsWith('/admin/products')) {
+    if (pathWithoutQuery.startsWith('/admin/products')) {
       return this.handleProducts(method, path, body) as T;
     }
-    if (path.startsWith('/recipes')) {
+    if (pathWithoutQuery.startsWith('/recipes')) {
       return this.handleRecipes(method, path, body) as T;
     }
-    if (path.startsWith('/trips')) {
+    if (pathWithoutQuery.startsWith('/trips')) {
       return this.handleTrips(method, path, body) as T;
     }
-    if (path === '/meta') {
+    if (pathWithoutQuery === '/meta') {
       return { version: '1.0.0', build: new Date().toISOString(), db: 'mock', application: 'provision' } as T;
     }
 
@@ -94,6 +97,13 @@ export const mockServer = {
 
   // Продукты
   handleProducts(method: string, path: string, body?: any): any {
+    // Проверяем fail из query string
+    const url = new URL(`http://localhost${path}`);
+    const failMode = url.searchParams.get('fail');
+    if (failMode === 'products') {
+      throw { status: 500, message: 'Mock server error' };
+    }
+    
     const parts = path.split('/').filter(Boolean);
     
     // GET /admin/products/check-name

@@ -63,6 +63,7 @@ export default function SyncLogsPage() {
   useEffect(() => {
     loadSyncLogs();
     loadKpi();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filterType, filterStatus, filterFrom, filterTo]);
 
   // Polling for RUNNING status
@@ -74,6 +75,7 @@ export default function SyncLogsPage() {
       }, 2000);
       return () => clearInterval(interval);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [syncLogs]);
 
   const loadSyncLogs = async () => {
