@@ -39,9 +39,10 @@ test('E2E-03 продукт + предупреждение о дубле', async
   await login(page);
   await page.goto('/products');
   await page.getByRole('button', { name: /Продукт/ }).first().click();
-  // soft-duplicate: в сиде есть «Гречка» (KG), а форма по умолчанию KG — берём LG
+  // soft-duplicate: в сиде есть «Гречка» (KG); форма по умолчанию тоже KG →
+  // жёсткий дубль. Берём другую единицу ('л') — тогда checkDuplicate даёт soft-предупреждение.
   await page.getByPlaceholder('Например: Гречка ядрица').fill('Гречка');
-  await page.getByRole('button', { name: 'LG', exact: true }).click();
+  await page.getByRole('button', { name: 'л', exact: true }).click();
   // debounce checkDuplicate = 300ms (ProductsPage)
   await expect(page.getByText(/Есть «Гречка» в другой единице/)).toBeVisible({ timeout: 8_000 });
 });
@@ -58,7 +59,8 @@ test('E2E-04 создание похода со спаренными датам�
   await expect(end).toHaveAttribute('min', '2026-07-01');
   await end.fill('2026-07-05');
   await page.getByLabel('Количество человек').fill('4');
-  await page.getByRole('button', { name: 'Создать' }).click();
+  // в модалке и под ней есть похожие кнопки — скопимся к форме, чтобы не словить strict-mode
+  await page.locator('.fixed').getByRole('button', { name: 'Создать', exact: true }).click();
   await expect(page.getByText('Поход на Алтай').first()).toBeVisible({ timeout: 15_000 });
 });
 
@@ -70,7 +72,7 @@ test('E2E-05 сводка поездки: закупки/стоимость/ка
   await page.getByLabel(/Название/).fill('Тестовый маршрут');
   await page.locator('#start-date').fill('2026-08-01');
   await page.locator('#end-date').fill('2026-08-03');
-  await page.getByRole('button', { name: 'Создать' }).click();
+  await page.locator('.fixed').getByRole('button', { name: 'Создать', exact: true }).click();
   await expect(page.getByText('Тестовый маршрут').first()).toBeVisible({ timeout: 15_000 });
   const card = page.locator('[data-testid^="trip-card-"]').first();
   await card.click();
@@ -95,8 +97,9 @@ test('E2E-07 смена режима через модалку бейджа', as
   const badge = page.getByText(/демо-режим/).first();
   await expect(badge).toBeVisible({ timeout: 15_000 });
   await badge.click();
-  await page.getByRole('button', { name: /бэкенд|реальный/i }).first().click();
-  await expect(page.getByText(/бэкенд/i).first()).toBeVisible({ timeout: 15_000 });
+  // карточки режимов в модалке — кликабельные div (не <button>)
+  await page.getByText('Бэкенд', { exact: true }).click();
+  await expect(page.getByText(/АКТИВЕН/)).toBeVisible({ timeout: 15_000 });
 });
 
 test('E2E-08 очистка демо-кеша с подтверждением', async ({ page }) => {

@@ -7,63 +7,68 @@
 # Test info
 
 - Name: main-flow.spec.ts >> E2E-05 сводка поездки: закупки/стоимость/калории
-- Location: e2e/main-flow.spec.ts:62:1
+- Location: e2e/main-flow.spec.ts:67:1
 
 # Error details
 
 ```
-Test timeout of 30000ms exceeded.
-```
+Error: expect(locator).toBeVisible() failed
 
-```
-Error: locator.click: Test timeout of 30000ms exceeded.
+Locator: getByText('Список закупок на весь поход')
+Expected: visible
+Timeout: 15000ms
+Error: element(s) not found
+
 Call log:
-  - waiting for locator('a[href*="/trips/"]').first()
+  - Expect "toBeVisible" getByText('Список закупок на весь поход') with timeout 15000ms
+  - waiting for getByText('Список закупок на весь поход')
 
 ```
-
-# Page snapshot
 
 ```yaml
-- generic [ref=f1e3]:
-  - complementary [ref=f1e4]:
-    - generic [ref=f1e10]:
-      - heading "Провиант" [level=1] [ref=f1e11]
-      - paragraph [ref=f1e12]: Планировщик питания
-    - navigation [ref=f1e13]:
-      - link "Мои походы" [ref=f1e14] [cursor=pointer]:
-        - /url: /dashboard
-      - link "Походы" [ref=f1e19] [cursor=pointer]:
-        - /url: /trips
-      - link "Каталог блюд" [ref=f1e23] [cursor=pointer]:
-        - /url: /recipes
-      - link "Ошибки (демо)" [ref=f1e29] [cursor=pointer]:
-        - /url: /errors-demo
-      - link "Продукты" [ref=f1e32] [cursor=pointer]:
-        - /url: /products
-      - link "Интеграции" [ref=f1e35] [cursor=pointer]:
-        - /url: /integrations
-      - link "Журнал синков" [ref=f1e38] [cursor=pointer]:
-        - /url: /sync-logs
-    - generic [ref=f1e41]:
-      - generic [ref=f1e42]:
-        - generic [ref=f1e43]: AU
-        - generic [ref=f1e44]:
-          - paragraph [ref=f1e45]: Admin User
-          - paragraph [ref=f1e46]: admin@provision.app
-      - button "Выйти" [ref=f1e47]
-  - generic [ref=f1e52]:
-    - generic "Клик для настройки режима" [ref=f1e53] [cursor=pointer]: демо-режим
-    - main [ref=f1e56]:
-      - generic [ref=f1e57]:
-        - generic [ref=f1e58]:
-          - generic [ref=f1e59]:
-            - heading "Походы" [level=1] [ref=f1e60]
-            - paragraph [ref=f1e61]: Управление вашими походами и запасами
-          - button "Новый поход" [ref=f1e62]
-        - generic [ref=f1e65]:
-          - paragraph [ref=f1e68]: У вас пока нет походов
-          - button "Создать первый поход" [ref=f1e69] [cursor=pointer]
+- complementary:
+  - img
+  - heading "Провиант" [level=1]
+  - paragraph: Планировщик питания
+  - navigation:
+    - link "Мои походы":
+      - /url: /dashboard
+      - img
+      - text: Мои походы
+    - link "Походы":
+      - /url: /trips
+      - img
+      - text: Походы
+    - link "Каталог блюд":
+      - /url: /recipes
+      - img
+      - text: Каталог блюд
+    - link "Ошибки (демо)":
+      - /url: /errors-demo
+      - img
+      - text: Ошибки (демо)
+    - link "Продукты":
+      - /url: /products
+      - img
+      - text: Продукты
+    - link "Интеграции":
+      - /url: /integrations
+      - img
+      - text: Интеграции
+    - link "Журнал синков":
+      - /url: /sync-logs
+      - img
+      - text: Журнал синков
+  - text: AU
+  - paragraph: Admin User
+  - paragraph: admin@provision.app
+  - button "Выйти":
+    - img
+    - text: Выйти
+- text: демо-режим
+- main:
+  - paragraph: Не удалось загрузить данные
+  - button "← Назад к походам"
 ```
 
 # Test source
@@ -102,72 +107,87 @@ Call log:
   31  | test('E2E-02 пользователь без прав на /products (redirect)', async ({ page }) => {
   32  |   await login(page, { email: 'user@provision.app', password: 'password123' });
   33  |   await page.goto('/products');
-  34  |   await expect(page).not.toHaveURL(/\/products$/);
-  35  | });
-  36  | 
-  37  | test('E2E-03 продукт + предупреждение о дубле', async ({ page }) => {
-  38  |   await login(page);
-  39  |   await page.goto('/products');
-  40  |   await page.getByRole('button', { name: /Продукт/ }).first().click();
-  41  |   await page.getByPlaceholder('Например: Гречка ядрица').fill('Гречка ядрица');
-  42  |   // debounce checkDuplicate = 300ms (ProductsPage)
-  43  |   await expect(page.getByText(/Есть «Гречка ядрица»/)).toBeVisible({ timeout: 8_000 });
-  44  | });
-  45  | 
-  46  | test('E2E-04 создание похода со спаренными датами (CR-3)', async ({ page }) => {
-  47  |   await login(page);
-  48  |   await page.goto('/trips');
-  49  |   await page.getByRole('button', { name: /Новый поход/ }).click();
-  50  |   await page.getByLabel(/Название/).fill('Поход на Алтай');
-  51  |   const start = page.locator('#start-date');
-  52  |   const end = page.locator('#end-date');
-  53  |   await start.fill('2026-07-01');
-  54  |   // спаривание пикеров: min у end подтягивается за start (DateRange)
-  55  |   await expect(end).toHaveAttribute('min', '2026-07-01');
-  56  |   await end.fill('2026-07-05');
-  57  |   await page.getByLabel(/Людей|Количество людей/).fill('4');
-  58  |   await page.getByRole('button', { name: 'Создать' }).click();
-  59  |   await expect(page.getByText('Поход на Алтай').first()).toBeVisible({ timeout: 15_000 });
-  60  | });
-  61  | 
-  62  | test('E2E-05 сводка поездки: закупки/стоимость/калории', async ({ page }) => {
-  63  |   await login(page);
-  64  |   await page.goto('/trips');
-> 65  |   await page.locator('a[href*="/trips/"]').first().click();
-      |                                                    ^ Error: locator.click: Test timeout of 30000ms exceeded.
-  66  |   await expect(page.getByText('Список закупок на весь поход')).toBeVisible({ timeout: 15_000 });
-  67  |   await expect(page.getByText('Сводка')).toBeVisible();
-  68  |   await expect(page.getByText('Калории/приём')).toBeVisible();
-  69  |   await expect(page.getByText(/₽/).first()).toBeVisible();
-  70  | });
-  71  | 
-  72  | test('E2E-06 фолбэк: принудительный real без бэкенда → не падаем', async ({ page }) => {
-  73  |   await login(page);
-  74  |   await page.evaluate(() => localStorage.setItem('apiMode', 'real'));
-  75  |   await page.reload();
-  76  |   // watchdog/health-check должен либо показать статус бэкенда, либо вернуть в демо — но не белый экран
-  77  |   await expect(page.locator('body')).toBeVisible();
-  78  |   await expect(page.getByText(/демо-режим|бэкенд/i).first()).toBeVisible({ timeout: 20_000 });
-  79  | });
-  80  | 
-  81  | test('E2E-07 смена режима через модалку бейджа', async ({ page }) => {
-  82  |   await login(page);
-  83  |   const badge = page.getByText(/демо-режим/).first();
-  84  |   await expect(badge).toBeVisible({ timeout: 15_000 });
-  85  |   await badge.click();
-  86  |   await page.getByRole('button', { name: /бэкенд|реальный/i }).first().click();
-  87  |   await expect(page.getByText(/бэкенд/i).first()).toBeVisible({ timeout: 15_000 });
-  88  | });
-  89  | 
-  90  | test('E2E-08 очистка демо-кеша с подтверждением', async ({ page }) => {
-  91  |   await login(page);
-  92  |   const badge = page.getByText(/демо-режим/).first();
-  93  |   await expect(badge).toBeVisible({ timeout: 15_000 });
-  94  |   await badge.click();
-  95  |   page.once('dialog', d => d.accept());
-  96  |   await page.getByRole('button', { name: /Сбросить демо-данные/ }).click();
-  97  |   // после resetSeedData() идёт reload — снова видимый бейдж demo-режима
-  98  |   await expect(page.getByText(/демо-режим/).first()).toBeVisible({ timeout: 15_000 });
-  99  | });
-  100 | 
+  34  |   // ProtectedRoute adminOnly → <Navigate to="/dashboard" replace/>
+  35  |   await expect(page).toHaveURL(/\/dashboard/, { timeout: 15_000 });
+  36  | });
+  37  | 
+  38  | test('E2E-03 продукт + предупреждение о дубле', async ({ page }) => {
+  39  |   await login(page);
+  40  |   await page.goto('/products');
+  41  |   await page.getByRole('button', { name: /Продукт/ }).first().click();
+  42  |   // soft-duplicate: в сиде есть «Гречка» (KG); форма по умолчанию тоже KG →
+  43  |   // жёсткий дубль. Берём другую единицу ('л') — тогда checkDuplicate даёт soft-предупреждение.
+  44  |   await page.getByPlaceholder('Например: Гречка ядрица').fill('Гречка');
+  45  |   await page.getByRole('button', { name: 'л', exact: true }).click();
+  46  |   // debounce checkDuplicate = 300ms (ProductsPage)
+  47  |   await expect(page.getByText(/Есть «Гречка» в другой единице/)).toBeVisible({ timeout: 8_000 });
+  48  | });
+  49  | 
+  50  | test('E2E-04 создание похода со спаренными датами (CR-3)', async ({ page }) => {
+  51  |   await login(page);
+  52  |   await page.goto('/trips');
+  53  |   await page.getByRole('button', { name: /Новый поход/ }).click();
+  54  |   await page.getByLabel(/Название/).fill('Поход на Алтай');
+  55  |   const start = page.locator('#start-date');
+  56  |   const end = page.locator('#end-date');
+  57  |   await start.fill('2026-07-01');
+  58  |   // спаривание пикеров: min у end подтягивается за start (DateRange)
+  59  |   await expect(end).toHaveAttribute('min', '2026-07-01');
+  60  |   await end.fill('2026-07-05');
+  61  |   await page.getByLabel('Количество человек').fill('4');
+  62  |   // в модалке и под ней есть похожие кнопки — скопимся к форме, чтобы не словить strict-mode
+  63  |   await page.locator('.fixed').getByRole('button', { name: 'Создать', exact: true }).click();
+  64  |   await expect(page.getByText('Поход на Алтай').first()).toBeVisible({ timeout: 15_000 });
+  65  | });
+  66  | 
+  67  | test('E2E-05 сводка поездки: закупки/стоимость/калории', async ({ page }) => {
+  68  |   await login(page);
+  69  |   // детерминированный вход: создаём свой поход через UI и идём в него по testid
+  70  |   await page.goto('/trips');
+  71  |   await page.getByRole('button', { name: /Новый поход/ }).click();
+  72  |   await page.getByLabel(/Название/).fill('Тестовый маршрут');
+  73  |   await page.locator('#start-date').fill('2026-08-01');
+  74  |   await page.locator('#end-date').fill('2026-08-03');
+  75  |   await page.locator('.fixed').getByRole('button', { name: 'Создать', exact: true }).click();
+  76  |   await expect(page.getByText('Тестовый маршрут').first()).toBeVisible({ timeout: 15_000 });
+  77  |   const card = page.locator('[data-testid^="trip-card-"]').first();
+  78  |   await card.click();
+  79  |   await expect(page).toHaveURL(/\/trips\/trip-/, { timeout: 15_000 });
+> 80  |   await expect(page.getByText('Список закупок на весь поход')).toBeVisible({ timeout: 15_000 });
+      |                                                                ^ Error: expect(locator).toBeVisible() failed
+  81  |   await expect(page.getByText('Сводка')).toBeVisible();
+  82  |   await expect(page.getByText('Калории/приём')).toBeVisible();
+  83  |   await expect(page.getByText(/₽/).first()).toBeVisible();
+  84  | });
+  85  | 
+  86  | test('E2E-06 фолбэк: принудительный real без бэкенда → не падаем', async ({ page }) => {
+  87  |   await login(page);
+  88  |   await page.evaluate(() => localStorage.setItem('apiMode', 'real'));
+  89  |   await page.reload();
+  90  |   // watchdog/health-check должен либо показать статус бэкенда, либо вернуть в демо — но не белый экран
+  91  |   await expect(page.locator('body')).toBeVisible();
+  92  |   await expect(page.getByText(/демо-режим|бэкенд/i).first()).toBeVisible({ timeout: 20_000 });
+  93  | });
+  94  | 
+  95  | test('E2E-07 смена режима через модалку бейджа', async ({ page }) => {
+  96  |   await login(page);
+  97  |   const badge = page.getByText(/демо-режим/).first();
+  98  |   await expect(badge).toBeVisible({ timeout: 15_000 });
+  99  |   await badge.click();
+  100 |   // карточки режимов в модалке — кликабельные div (не <button>)
+  101 |   await page.getByText('Бэкенд', { exact: true }).click();
+  102 |   await expect(page.getByText(/АКТИВЕН/)).toBeVisible({ timeout: 15_000 });
+  103 | });
+  104 | 
+  105 | test('E2E-08 очистка демо-кеша с подтверждением', async ({ page }) => {
+  106 |   await login(page);
+  107 |   const badge = page.getByText(/демо-режим/).first();
+  108 |   await expect(badge).toBeVisible({ timeout: 15_000 });
+  109 |   await badge.click();
+  110 |   page.once('dialog', d => d.accept());
+  111 |   await page.getByRole('button', { name: /Сбросить демо-данные/ }).click();
+  112 |   // после resetSeedData() идёт reload — снова видимый бейдж demo-режима
+  113 |   await expect(page.getByText(/демо-режим/).first()).toBeVisible({ timeout: 15_000 });
+  114 | });
+  115 | 
 ```

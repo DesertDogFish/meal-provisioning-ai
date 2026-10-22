@@ -8,7 +8,8 @@ export default defineConfig({
   testDir: './e2e',
   fullyParallel: false, // mock-сервер делит localStorage per-context, но последовательность стабильнее
   retries: 0,
-  reporter: [['list']],
+  // list — для локального запуска; html — артефакт в CI (e2e-nightly.yml)
+  reporter: [['list'], ['html', { open: 'never' }]],
   use: {
     baseURL: 'http://localhost:5173',
     trace: 'retain-on-failure',
