@@ -35,11 +35,15 @@ export class ApiClient {
   private modeResolved = false;
   private resolvePromise: Promise<void> | null = null;
 
-  constructor(env?: Record<string, string | undefined>) {
-    // env опционально инжектируется (для тестов); в рантайме берётся import.meta.env
-    const e = env ?? ((import.meta as any).env || {});
-    this.baseUrl = e.VITE_API_URL || 'http://localhost:8080/api/v1';
-
+  constructor() {
+    // NOTE: window['meta'] — намеренно нестатический доступ: Vite заменяет статическое
+    // обращение import.meta.env.* на литералы при сборке, из-за чего тестовые подмены
+    // (vi.stubEnv / присваивание) не применяются. В браузере window.meta пуст → fallback.
+    const env =
+      (window as unknown as { meta?: Record<string, string> }).meta ??
+      ((import.meta as any).env || {});
+    this.baseUrl = env.VITE_API_URL || 'http://localhost:8080/api/v1';
+    
     const storedMode = localStorage.getItem(LS_MODE_KEY) as ApiMode | null;
     const envMode = e.VITE_API_MODE as ApiMode | undefined;
     

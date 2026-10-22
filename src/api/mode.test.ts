@@ -34,9 +34,25 @@ function installFetchMock() {
  * localStorage/env. Через класс, а не через singleton `api`, чтобы тесты
  * MODE-01..05/08 не зависели от общего состояния модуля.
  */
-async function freshClient(env?: Record<string, string | undefined>) {
+async function freshClient(envOverrides?: Record<string, string>) {
+  // Vite заменяет статическое обращение import.meta.env.* в исходниках на литералы,
+  // поэтому ни vi.stubEnv, ни присваивание в (import.meta as any).env не действуют.
+  // Обход: нестатический доступ через window['meta'] (Vite его не трансформирует) —
+  // см. src/api/client.ts. Подменяем значения на время создания клиента.
+  const meta = ((window as any).meta ??= {});
+  const saved: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(envOverrides ?? {})) {
+    saved[k] = meta.env?.[k];
+    meta.env[k] = v;
+  }
+  vi.resetModules();
   const mod = await import('./client');
-  return new mod.ApiClient(env);
+  const client = new mod.ApiClient();
+  for (const [k, v] of Object.entries(saved)) {
+    if (v === undefined) delete meta.env[k];
+    else meta.env[k] = v;
+  }
+  return client;
 }
 
 /**
@@ -375,7 +391,7 @@ describe('MODE-07: Сканирование импортов — AppContext/mock
     const SQ = String.fromCharCode(39); // одинарная кавычка
     const BS = String.fromCharCode(92); // обратный слэш
     const out = execSync(
-      `grep -rlE "from [${SQ}${BS}].*(data/mockData|AppContext)" src --include="*.ts" --include="*.tsx" ` +
+      `grep -rlE "from ['\\\"]+.*(data/mockData|AppContext)" src --include="*.ts" --include="*.tsx" ` +
       `| grep -v "^src/api/" || true`,
       { encoding: 'utf8' }
     ).trim();
@@ -408,10 +424,11 @@ describe('MODE-08: Перезагрузка страницы → режим со
 
   it('выбор пользователя из UI приоритетнее VITE_API_MODE на следующем запуске', async () => {
     const api1 = await freshClient({ VITE_API_MODE: 'mock' }); // env: mock
+    expect(api1.getMode()).toBe('mock');
     api1.setMode('real');            // пользователь переключился в UI
     expect(localStorage.getItem('apiMode')).toBe('real');
 
-    const api2 = await freshClient({ VITE_API_MODE: 'mock' }); // «перезагрузка»
+    const api2 = await freshClient(); // «перезагрузка»
     expect(api2.getMode()).toBe('real'); // localStorage победил env
     expect(api2.isResolved()).toBe(true);
   });
