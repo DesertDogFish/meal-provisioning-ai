@@ -51,10 +51,8 @@ public class SummaryService {
     }
 
     public List<MenuByDayResponse> getMenuByDays(Long tripId, Long userId) {
-        Trip trip = tripRepository.findByIdWithDaysAndMeals(tripId, userId);
-        if (trip == null) {
-            throw new IllegalArgumentException("Trip not found or access denied");
-        }
+        Trip trip = tripRepository.findByIdWithDaysAndMeals(tripId, userId)
+                .orElseThrow(() -> new com.provision.exception.NotFoundException("Trip not found or access denied"));
 
         return trip.getDays().stream()
                 .map(day -> {
@@ -99,10 +97,8 @@ public class SummaryService {
     }
 
     public ShoppingListResponse getShoppingList(Long tripId, Long userId) {
-        Trip trip = tripRepository.findByIdWithDaysAndMeals(tripId, userId);
-        if (trip == null) {
-            throw new IllegalArgumentException("Trip not found or access denied");
-        }
+        Trip trip = tripRepository.findByIdWithDaysAndMeals(tripId, userId)
+                .orElseThrow(() -> new com.provision.exception.NotFoundException("Trip not found or access denied"));
 
         Map<Long, BigDecimal> overrides = priceResolutionService.getAllOverrides(tripId);
         Map<Long, ShoppingAggregation> aggregation = new LinkedHashMap<>();
@@ -199,10 +195,8 @@ public class SummaryService {
     }
 
     public List<DayShoppingResponse> getShoppingByDays(Long tripId, Long userId) {
-        Trip trip = tripRepository.findByIdWithDaysAndMeals(tripId, userId);
-        if (trip == null) {
-            throw new IllegalArgumentException("Trip not found or access denied");
-        }
+        Trip trip = tripRepository.findByIdWithDaysAndMeals(tripId, userId)
+                .orElseThrow(() -> new com.provision.exception.NotFoundException("Trip not found or access denied"));
 
         Map<Long, BigDecimal> overrides = priceResolutionService.getAllOverrides(tripId);
 
@@ -289,10 +283,8 @@ public class SummaryService {
     }
 
     public PersonSummaryResponse getPersonSummary(Long tripId, Long userId) {
-        Trip trip = tripRepository.findByIdWithDaysAndMeals(tripId, userId);
-        if (trip == null) {
-            throw new IllegalArgumentException("Trip not found or access denied");
-        }
+        Trip trip = tripRepository.findByIdWithDaysAndMeals(tripId, userId)
+                .orElseThrow(() -> new com.provision.exception.NotFoundException("Trip not found or access denied"));
 
         ShoppingListResponse shoppingList = getShoppingList(tripId, userId);
         

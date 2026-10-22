@@ -97,7 +97,7 @@ class DetailedShoppingCalculationTest {
                 .recipe(recipeGrechka)
                 .peopleOverride(null)
                 .build();
-        day1.setMeals(Arrays.asList(meal1));
+        day1.setMeals(new java.util.LinkedHashSet<>(Arrays.asList(meal1)));
 
         // День 2: 13 мая, 3 человека (override), ужин = Гречка с тушенкой
         day2 = TripDay.builder()
@@ -112,7 +112,7 @@ class DetailedShoppingCalculationTest {
                 .recipe(recipeGrechka)
                 .peopleOverride(null)
                 .build();
-        day2.setMeals(Arrays.asList(meal2));
+        day2.setMeals(new java.util.LinkedHashSet<>(Arrays.asList(meal2)));
 
         // День 3: 14 мая, 2 человека (meal override), ужин = Гречка с тушенкой
         day3 = TripDay.builder()
@@ -127,9 +127,9 @@ class DetailedShoppingCalculationTest {
                 .recipe(recipeGrechka)
                 .peopleOverride(2)
                 .build();
-        day3.setMeals(Arrays.asList(meal3));
+        day3.setMeals(new java.util.LinkedHashSet<>(Arrays.asList(meal3)));
 
-        trip.setDays(Arrays.asList(day1, day2, day3));
+        trip.setDays(new java.util.LinkedHashSet<>(Arrays.asList(day1, day2, day3)));
 
         // === ЦЕНЫ (меняются во время похода) ===
         // Гречка: 180₽ до 1 мая, 200₽ с 1 мая
@@ -159,7 +159,7 @@ class DetailedShoppingCalculationTest {
         saltPrices = Collections.emptyList();
 
         // Настройка моков
-        when(tripRepository.findByIdWithDaysAndMeals(1L, 1L)).thenReturn(trip);
+        when(tripRepository.findByIdWithDaysAndMeals(1L, 1L)).thenReturn(java.util.Optional.of(trip));
         
         // Гречка: цена на 12 мая = 200₽ (после 1 мая)
         when(priceRepository.findEffectivePrice(1L, LocalDate.of(2026, 5, 12)))
