@@ -59,6 +59,8 @@ export interface RecipeIngredient {
   ingredientId: string;
   ingredient?: Ingredient;
   amount: number;
+  /** CONTRACT-P1 (PLAN.md, Backlog P1 п.1): id замещаемого продукта (SubstitutionModal) */
+  substitutedFrom?: string;
 }
 
 export interface Recipe {
