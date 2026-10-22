@@ -1,9 +1,11 @@
 /workspace/backend/src/test/java/com/provision/integration/AuthIntegrationTest.java
 /workspace/backend/src/test/java/com/provision/integration/TestDataIsolation.java
+/workspace/backend/src/test/java/com/provision/controller/MetaControllerTest.java
 /workspace/backend/src/test/java/com/provision/integration/ConflictIntegrationTest.java
 /workspace/backend/src/test/java/com/provision/integration/SecurityIntegrationTest.java
 /workspace/backend/src/test/java/com/provision/integration/CatalogIntegrationTest.java
 /workspace/backend/src/test/java/com/provision/service/SummaryServiceTest.java
+/workspace/backend/src/test/java/com/provision/smoke/DockerStackSmokeTest.java
 /workspace/backend/src/test/java/com/provision/service/PriceOverrideTest.java
 /workspace/backend/src/test/java/com/provision/service/DetailedShoppingCalculationTest.java
 /workspace/backend/src/test/java/com/provision/integration/LocalPgFallback.java

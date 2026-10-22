@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://maven.apache.org/surefire/maven-surefire-plugin/xsd/surefire-test-report-3.0.xsd" version="3.0" name="com.provision.integration.SecurityIntegrationTest" time="19.638" tests="6" errors="0" skipped="0" failures="0">
+<testsuite xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://maven.apache.org/surefire/maven-surefire-plugin/xsd/surefire-test-report-3.0.xsd" version="3.0" name="com.provision.integration.SecurityIntegrationTest" time="8.817" tests="6" errors="0" skipped="0" failures="0">
   <properties>
     <property name="java.specification.version" value="21"/>
     <property name="sun.jnu.encoding" value="UTF-8"/>
@@ -13,7 +13,7 @@
     <property name="java.vm.specification.version" value="21"/>
     <property name="sun.java.launcher" value="SUN_STANDARD"/>
     <property name="sun.boot.library.path" value="/tmp/jdk-21.0.13+9/lib"/>
-    <property name="sun.java.command" value="/workspace/backend/target/surefire/surefirebooter-20261022170146736_3.jar /workspace/backend/target/surefire 2026-10-22T17-01-46_636-jvmRun1 surefire-20261022170146736_1tmp surefire_0-20261022170146736_2tmp"/>
+    <property name="sun.java.command" value="/workspace/backend/target/surefire/surefirebooter-20261022192308508_3.jar /workspace/backend/target/surefire 2026-10-22T19-23-08_322-jvmRun1 surefire-20261022192308508_1tmp surefire_0-20261022192308508_2tmp"/>
     <property name="jdk.debug" value="release"/>
     <property name="surefire.test.class.path" value="/workspace/backend/target/test-classes:/workspace/backend/target/classes:/root/.m2/repository/org/springframework/boot/spring-boot-starter-web/3.2.5/spring-boot-starter-web-3.2.5.jar:/root/.m2/repository/org/springframework/boot/spring-boot-starter/3.2.5/spring-boot-starter-3.2.5.jar:/root/.m2/repository/org/springframework/boot/spring-boot/3.2.5/spring-boot-3.2.5.jar:/root/.m2/repository/org/springframework/boot/spring-boot-autoconfigure/3.2.5/spring-boot-autoconfigure-3.2.5.jar:/root/.m2/repository/org/springframework/boot/spring-boot-starter-logging/3.2.5/spring-boot-starter-logging-3.2.5.jar:/root/.m2/repository/ch/qos/logback/logback-classic/1.4.14/logback-classic-1.4.14.jar:/root/.m2/repository/ch/qos/logback/logback-core/1.4.14/logback-core-1.4.14.jar:/root/.m2/repository/org/apache/logging/log4j/log4j-to-slf4j/2.21.1/log4j-to-slf4j-2.21.1.jar:/root/.m2/repository/org/apache/logging/log4j/log4j-api/2.21.1/log4j-api-2.21.1.jar:/root/.m2/repository/org/slf4j/jul-to-slf4j/2.0.13/jul-to-slf4j-2.0.13.jar:/root/.m2/repository/jakarta/annotation/jakarta.annotation-api/2.1.1/jakarta.annotation-api-2.1.1.jar:/root/.m2/repository/org/yaml/snakeyaml/2.2/snakeyaml-2.2.jar:/root/.m2/repository/org/springframework/boot/spring-boot-starter-json/3.2.5/spring-boot-starter-json-3.2.5.jar:/root/.m2/repository/com/fasterxml/jackson/datatype/jackson-datatype-jdk8/2.15.4/jackson-datatype-jdk8-2.15.4.jar:/root/.m2/repository/com/fasterxml/jackson/datatype/jackson-datatype-jsr310/2.15.4/jackson-datatype-jsr310-2.15.4.jar:/root/.m2/repository/com/fasterxml/jackson/module/jackson-module-parameter-names/2.15.4/jackson-module-parameter-names-2.15.4.jar:/root/.m2/repository/org/springframework/boot/spring-boot-starter-tomcat/3.2.5/spring-boot-starter-tomcat-3.2.5.jar:/root/.m2/repository/org/apache/tomcat/embed/tomcat-embed-core/10.1.20/tomcat-embed-core-10.1.20.jar:/root/.m2/repository/org/apache/tomcat/embed/tomcat-embed-websocket/10.1.20/tomcat-embed-websocket-10.1.20.jar:/root/.m2/repository/org/springframework/spring-web/6.1.6/spring-web-6.1.6.jar:/root/.m2/repository/org/springframework/spring-beans/6.1.6/spring-beans-6.1.6.jar:/root/.m2/repository/io/micrometer/micrometer-observation/1.12.5/micrometer-observation-1.12.5.jar:/root/.m2/repository/io/micrometer/micrometer-commons/1.12.5/micrometer-commons-1.12.5.jar:/root/.m2/repository/org/springframework/spring-webmvc/6.1.6/spring-webmvc-6.1.6.jar:/root/.m2/repository/org/springframework/spring-context/6.1.6/spring-context-6.1.6.jar:/root/.m2/repository/org/springframework/spring-expression/6.1.6/spring-expression-6.1.6.jar:/root/.m2/repository/org/springframework/boot/spring-boot-starter-data-jpa/3.2.5/spring-boot-starter-data-jpa-3.2.5.jar:/root/.m2/repository/org/springframework/boot/spring-boot-starter-aop/3.2.5/spring-boot-starter-aop-3.2.5.jar:/root/.m2/repository/org/aspectj/aspectjweaver/1.9.22/aspectjweaver-1.9.22.jar:/root/.m2/repository/org/springframework/boot/spring-boot-starter-jdbc/3.2.5/spring-boot-starter-jdbc-3.2.5.jar:/root/.m2/repository/com/zaxxer/HikariCP/5.0.1/HikariCP-5.0.1.jar:/root/.m2/repository/org/springframework/spring-jdbc/6.1.6/spring-jdbc-6.1.6.jar:/root/.m2/repository/org/hibernate/orm/hibernate-core/6.4.4.Final/hibernate-core-6.4.4.Final.jar:/root/.m2/repository/jakarta/persistence/jakarta.persistence-api/3.1.0/jakarta.persistence-api-3.1.0.jar:/root/.m2/repository/jakarta/transaction/jakarta.transaction-api/2.0.1/jakarta.transaction-api-2.0.1.jar:/root/.m2/repository/org/jboss/logging/jboss-logging/3.5.3.Final/jboss-logging-3.5.3.Final.jar:/root/.m2/repository/org/hibernate/common/hibernate-commons-annotations/6.0.6.Final/hibernate-commons-annotations-6.0.6.Final.jar:/root/.m2/repository/io/smallrye/jandex/3.1.2/jandex-3.1.2.jar:/root/.m2/repository/com/fasterxml/classmate/1.6.0/classmate-1.6.0.jar:/root/.m2/repository/net/bytebuddy/byte-buddy/1.14.13/byte-buddy-1.14.13.jar:/root/.m2/repository/org/glassfish/jaxb/jaxb-runtime/4.0.5/jaxb-runtime-4.0.5.jar:/root/.m2/repository/org/glassfish/jaxb/jaxb-core/4.0.5/jaxb-core-4.0.5.jar:/root/.m2/repository/org/eclipse/angus/angus-activation/2.0.2/angus-activation-2.0.2.jar:/root/.m2/repository/org/glassfish/jaxb/txw2/4.0.5/txw2-4.0.5.jar:/root/.m2/repository/com/sun/istack/istack-commons-runtime/4.1.2/istack-commons-runtime-4.1.2.jar:/root/.m2/repository/jakarta/inject/jakarta.inject-api/2.0.1/jakarta.inject-api-2.0.1.jar:/root/.m2/repository/org/antlr/antlr4-runtime/4.13.0/antlr4-runtime-4.13.0.jar:/root/.m2/repository/org/springframework/data/spring-data-jpa/3.2.5/spring-data-jpa-3.2.5.jar:/root/.m2/repository/org/springframework/data/spring-data-commons/3.2.5/spring-data-commons-3.2.5.jar:/root/.m2/repository/org/springframework/spring-orm/6.1.6/spring-orm-6.1.6.jar:/root/.m2/repository/org/springframework/spring-tx/6.1.6/spring-tx-6.1.6.jar:/root/.m2/repository/org/springframework/spring-aspects/6.1.6/spring-aspects-6.1.6.jar:/root/.m2/repository/org/springframework/boot/spring-boot-starter-security/3.2.5/spring-boot-starter-security-3.2.5.jar:/root/.m2/repository/org/springframework/spring-aop/6.1.6/spring-aop-6.1.6.jar:/root/.m2/repository/org/springframework/security/spring-security-config/6.2.4/spring-security-config-6.2.4.jar:/root/.m2/repository/org/springframework/security/spring-security-web/6.2.4/spring-security-web-6.2.4.jar:/root/.m2/repository/org/springframework/boot/spring-boot-starter-validation/3.2.5/spring-boot-starter-validation-3.2.5.jar:/root/.m2/repository/org/apache/tomcat/embed/tomcat-embed-el/10.1.20/tomcat-embed-el-10.1.20.jar:/root/.m2/repository/org/hibernate/validator/hibernate-validator/8.0.1.Final/hibernate-validator-8.0.1.Final.jar:/root/.m2/repository/jakarta/validation/jakarta.validation-api/3.0.2/jakarta.validation-api-3.0.2.jar:/root/.m2/repository/org/postgresql/postgresql/42.6.2/postgresql-42.6.2.jar:/root/.m2/repository/org/checkerframework/checker-qual/3.31.0/checker-qual-3.31.0.jar:/root/.m2/repository/org/flywaydb/flyway-core/10.10.0/flyway-core-10.10.0.jar:/root/.m2/repository/com/fasterxml/jackson/dataformat/jackson-dataformat-toml/2.15.4/jackson-dataformat-toml-2.15.4.jar:/root/.m2/repository/com/fasterxml/jackson/core/jackson-core/2.15.4/jackson-core-2.15.4.jar:/root/.m2/repository/com/google/code/gson/gson/2.10.1/gson-2.10.1.jar:/root/.m2/repository/org/flywaydb/flyway-database-postgresql/10.10.0/flyway-database-postgresql-10.10.0.jar:/root/.m2/repository/io/jsonwebtoken/jjwt-api/0.12.5/jjwt-api-0.12.5.jar:/root/.m2/repository/io/jsonwebtoken/jjwt-impl/0.12.5/jjwt-impl-0.12.5.jar:/root/.m2/repository/io/jsonwebtoken/jjwt-jackson/0.12.5/jjwt-jackson-0.12.5.jar:/root/.m2/repository/com/fasterxml/jackson/core/jackson-databind/2.15.4/jackson-databind-2.15.4.jar:/root/.m2/repository/com/fasterxml/jackson/core/jackson-annotations/2.15.4/jackson-annotations-2.15.4.jar:/root/.m2/repository/org/mapstruct/mapstruct/1.5.5.Final/mapstruct-1.5.5.Final.jar:/root/.m2/repository/org/springdoc/springdoc-openapi-starter-webmvc-ui/2.5.0/springdoc-openapi-starter-webmvc-ui-2.5.0.jar:/root/.m2/repository/org/springdoc/springdoc-openapi-starter-webmvc-api/2.5.0/springdoc-openapi-starter-webmvc-api-2.5.0.jar:/root/.m2/repository/org/springdoc/springdoc-openapi-starter-common/2.5.0/springdoc-openapi-starter-common-2.5.0.jar:/root/.m2/repository/io/swagger/core/v3/swagger-core-jakarta/2.2.21/swagger-core-jakarta-2.2.21.jar:/root/.m2/repository/org/apache/commons/commons-lang3/3.13.0/commons-lang3-3.13.0.jar:/root/.m2/repository/io/swagger/core/v3/swagger-annotations-jakarta/2.2.21/swagger-annotations-jakarta-2.2.21.jar:/root/.m2/repository/io/swagger/core/v3/swagger-models-jakarta/2.2.21/swagger-models-jakarta-2.2.21.jar:/root/.m2/repository/com/fasterxml/jackson/dataformat/jackson-dataformat-yaml/2.15.4/jackson-dataformat-yaml-2.15.4.jar:/root/.m2/repository/org/webjars/swagger-ui/5.13.0/swagger-ui-5.13.0.jar:/root/.m2/repository/org/projectlombok/lombok/1.18.32/lombok-1.18.32.jar:/root/.m2/repository/org/springframework/boot/spring-boot-starter-test/3.2.5/spring-boot-starter-test-3.2.5.jar:/root/.m2/repository/org/springframework/boot/spring-boot-test/3.2.5/spring-boot-test-3.2.5.jar:/root/.m2/repository/org/springframework/boot/spring-boot-test-autoconfigure/3.2.5/spring-boot-test-autoconfigure-3.2.5.jar:/root/.m2/repository/com/jayway/jsonpath/json-path/2.9.0/json-path-2.9.0.jar:/root/.m2/repository/jakarta/xml/bind/jakarta.xml.bind-api/4.0.2/jakarta.xml.bind-api-4.0.2.jar:/root/.m2/repository/jakarta/activation/jakarta.activation-api/2.1.3/jakarta.activation-api-2.1.3.jar:/root/.m2/repository/net/minidev/json-smart/2.5.1/json-smart-2.5.1.jar:/root/.m2/repository/net/minidev/accessors-smart/2.5.1/accessors-smart-2.5.1.jar:/root/.m2/repository/org/ow2/asm/asm/9.6/asm-9.6.jar:/root/.m2/repository/org/assertj/assertj-core/3.24.2/assertj-core-3.24.2.jar:/root/.m2/repository/org/awaitility/awaitility/4.2.1/awaitility-4.2.1.jar:/root/.m2/repository/org/hamcrest/hamcrest/2.2/hamcrest-2.2.jar:/root/.m2/repository/org/junit/jupiter/junit-jupiter/5.10.2/junit-jupiter-5.10.2.jar:/root/.m2/repository/org/junit/jupiter/junit-jupiter-api/5.10.2/junit-jupiter-api-5.10.2.jar:/root/.m2/repository/org/opentest4j/opentest4j/1.3.0/opentest4j-1.3.0.jar:/root/.m2/repository/org/junit/platform/junit-platform-commons/1.10.2/junit-platform-commons-1.10.2.jar:/root/.m2/repository/org/apiguardian/apiguardian-api/1.1.2/apiguardian-api-1.1.2.jar:/root/.m2/repository/org/junit/jupiter/junit-jupiter-params/5.10.2/junit-jupiter-params-5.10.2.jar:/root/.m2/repository/org/junit/jupiter/junit-jupiter-engine/5.10.2/junit-jupiter-engine-5.10.2.jar:/root/.m2/repository/org/junit/platform/junit-platform-engine/1.10.2/junit-platform-engine-1.10.2.jar:/root/.m2/repository/org/mockito/mockito-core/5.14.2/mockito-core-5.14.2.jar:/root/.m2/repository/net/bytebuddy/byte-buddy-agent/1.14.13/byte-buddy-agent-1.14.13.jar:/root/.m2/repository/org/objenesis/objenesis/3.3/objenesis-3.3.jar:/root/.m2/repository/org/mockito/mockito-junit-jupiter/5.14.2/mockito-junit-jupiter-5.14.2.jar:/root/.m2/repository/org/skyscreamer/jsonassert/1.5.1/jsonassert-1.5.1.jar:/root/.m2/repository/com/vaadin/external/google/android-json/0.0.20131108.vaadin1/android-json-0.0.20131108.vaadin1.jar:/root/.m2/repository/org/springframework/spring-core/6.1.6/spring-core-6.1.6.jar:/root/.m2/repository/org/springframework/spring-jcl/6.1.6/spring-jcl-6.1.6.jar:/root/.m2/repository/org/springframework/spring-test/6.1.6/spring-test-6.1.6.jar:/root/.m2/repository/org/xmlunit/xmlunit-core/2.9.1/xmlunit-core-2.9.1.jar:/root/.m2/repository/org/springframework/security/spring-security-test/6.2.4/spring-security-test-6.2.4.jar:/root/.m2/repository/org/springframework/security/spring-security-core/6.2.4/spring-security-core-6.2.4.jar:/root/.m2/repository/org/springframework/security/spring-security-crypto/6.2.4/spring-security-crypto-6.2.4.jar:/root/.m2/repository/org/testcontainers/testcontainers/1.19.7/testcontainers-1.19.7.jar:/root/.m2/repository/junit/junit/4.13.2/junit-4.13.2.jar:/root/.m2/repository/org/hamcrest/hamcrest-core/2.2/hamcrest-core-2.2.jar:/root/.m2/repository/org/slf4j/slf4j-api/2.0.13/slf4j-api-2.0.13.jar:/root/.m2/repository/org/apache/commons/commons-compress/1.24.0/commons-compress-1.24.0.jar:/root/.m2/repository/org/rnorth/duct-tape/duct-tape/1.0.8/duct-tape-1.0.8.jar:/root/.m2/repository/org/jetbrains/annotations/17.0.0/annotations-17.0.0.jar:/root/.m2/repository/com/github/docker-java/docker-java-api/3.3.6/docker-java-api-3.3.6.jar:/root/.m2/repository/com/github/docker-java/docker-java-transport-zerodep/3.3.6/docker-java-transport-zerodep-3.3.6.jar:/root/.m2/repository/com/github/docker-java/docker-java-transport/3.3.6/docker-java-transport-3.3.6.jar:/root/.m2/repository/net/java/dev/jna/jna/5.13.0/jna-5.13.0.jar:/root/.m2/repository/org/testcontainers/postgresql/1.19.7/postgresql-1.19.7.jar:/root/.m2/repository/org/testcontainers/jdbc/1.19.7/jdbc-1.19.7.jar:/root/.m2/repository/org/testcontainers/database-commons/1.19.7/database-commons-1.19.7.jar:/root/.m2/repository/org/testcontainers/junit-jupiter/1.19.7/junit-jupiter-1.19.7.jar:"/>
     <property name="sun.cpu.endian" value="little"/>
@@ -30,7 +30,7 @@
     <property name="java.specification.name" value="Java Platform API Specification"/>
     <property name="FILE_LOG_CHARSET" value="UTF-8"/>
     <property name="java.awt.headless" value="true"/>
-    <property name="surefire.real.class.path" value="/workspace/backend/target/surefire/surefirebooter-20261022170146736_3.jar"/>
+    <property name="surefire.real.class.path" value="/workspace/backend/target/surefire/surefirebooter-20261022192308508_3.jar"/>
     <property name="sun.management.compiler" value="HotSpot 64-Bit Tiered Compilers"/>
     <property name="java.runtime.version" value="21.0.13+9-LTS"/>
     <property name="user.name" value="root"/>
@@ -39,7 +39,7 @@
     <property name="os.version" value="5.10.134-013.15.kangaroo.al8.x86_64"/>
     <property name="java.runtime.name" value="OpenJDK Runtime Environment"/>
     <property name="file.encoding" value="UTF-8"/>
-    <property name="jnidispatch.path" value="/root/.cache/JNA/temp/jna8293978736592841676.tmp"/>
+    <property name="jnidispatch.path" value="/root/.cache/JNA/temp/jna12907390452511705437.tmp"/>
     <property name="java.vm.name" value="OpenJDK 64-Bit Server VM"/>
     <property name="jna.platform.library.path" value="/usr/lib/x86_64-linux-gnu:/lib/x86_64-linux-gnu:/usr/lib64:/lib64:/usr/lib:/lib:/usr/local/lib"/>
     <property name="java.vendor.version" value="Temurin-21.0.13+9"/>
@@ -47,12 +47,12 @@
     <property name="jna.loaded" value="true"/>
     <property name="java.vendor.url.bug" value="https://github.com/adoptium/adoptium-support/issues"/>
     <property name="java.io.tmpdir" value="/tmp"/>
-    <property name="com.zaxxer.hikari.pool_number" value="1"/>
+    <property name="com.zaxxer.hikari.pool_number" value="2"/>
     <property name="java.version" value="21.0.13"/>
     <property name="user.dir" value="/workspace/backend"/>
     <property name="os.arch" value="amd64"/>
     <property name="java.vm.specification.name" value="Java Virtual Machine Specification"/>
-    <property name="PID" value="19534"/>
+    <property name="PID" value="5795"/>
     <property name="CONSOLE_LOG_CHARSET" value="UTF-8"/>
     <property name="native.encoding" value="UTF-8"/>
     <property name="java.library.path" value="/usr/java/packages/lib:/usr/lib64:/lib64:/lib:/usr/lib"/>
@@ -64,14 +64,9 @@
     <property name="java.class.version" value="65.0"/>
     <property name="LOGGED_APPLICATION_NAME" value="[provision] "/>
   </properties>
-  <testcase name="sec01_userCannotAccessAdmin" classname="com.provision.integration.SecurityIntegrationTest" time="2.012">
-    <system-out><![CDATA[17:01:48.027 [main] INFO org.springframework.test.context.support.AnnotationConfigContextLoaderUtils -- Could not detect default configuration classes for test class [com.provision.integration.SecurityIntegrationTest]: SecurityIntegrationTest does not declare any static, non-private, non-final, nested classes annotated with @Configuration.
-17:01:48.301 [main] INFO org.springframework.boot.test.context.SpringBootTestContextBootstrapper -- Found @SpringBootConfiguration com.provision.ProvisionApplication for test class com.provision.integration.SecurityIntegrationTest
-17:01:48.826 [main] INFO org.testcontainers.dockerclient.DockerMachineClientProviderStrategy -- docker-machine executable was not found on PATH ([/tmp/jdk-21.0.13+9/bin, /tmp/jdk-21.0.13+9/bin, /tmp/jdk-21.0.13+9/bin, /tmp/jdk-21.0.13+9/bin, /tmp/jdk-21.0.13+9/bin, /tmp/jdk-21.0.13+9/bin, /tmp/jdk-21.0.13+9/bin, /usr/local/sbin, /usr/local/bin, /usr/sbin, /usr/bin, /sbin, /bin])
-17:01:48.827 [main] ERROR org.testcontainers.dockerclient.DockerClientProviderStrategy -- Could not find a valid Docker environment. Please check configuration. Attempted configurations were:
-	UnixSocketClientProviderStrategy: failed with exception InvalidConfigurationException (Could not find unix domain socket). Root cause NoSuchFileException (/var/run/docker.sock)
-	DockerDesktopClientProviderStrategy: failed with exception NullPointerException (Cannot invoke "java.nio.file.Path.toString()" because the return value of "org.testcontainers.dockerclient.DockerDesktopClientProviderStrategy.getSocketPath()" is null)As no valid configuration was found, execution cannot continue.
-See https://java.testcontainers.org/on_failure.html for more details.
+  <testcase name="sec01_userCannotAccessAdmin" classname="com.provision.integration.SecurityIntegrationTest" time="1.811">
+    <system-out><![CDATA[2026-10-22T19:23:24.520Z  INFO 5795 --- [provision] [           main] t.c.s.AnnotationConfigContextLoaderUtils : Could not detect default configuration classes for test class [com.provision.integration.SecurityIntegrationTest]: SecurityIntegrationTest does not declare any static, non-private, non-final, nested classes annotated with @Configuration.
+2026-10-22T19:23:24.548Z  INFO 5795 --- [provision] [           main] .b.t.c.SpringBootTestContextBootstrapper : Found @SpringBootConfiguration com.provision.ProvisionApplication for test class com.provision.integration.SecurityIntegrationTest
 
   .   ____          _            __ _ _
  /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
@@ -81,297 +76,282 @@ See https://java.testcontainers.org/on_failure.html for more details.
  =========|_|==============|___/=/_/_/_/
  :: Spring Boot ::                (v3.2.5)
 
-2026-10-22T17:01:49.313Z  INFO 19534 --- [provision] [           main] c.p.integration.SecurityIntegrationTest  : Starting SecurityIntegrationTest using Java 21.0.13 with PID 19534 (started by root in /workspace/backend)
-2026-10-22T17:01:49.313Z DEBUG 19534 --- [provision] [           main] c.p.integration.SecurityIntegrationTest  : Running with Spring Boot v3.2.5, Spring v6.1.6
-2026-10-22T17:01:49.314Z  INFO 19534 --- [provision] [           main] c.p.integration.SecurityIntegrationTest  : No active profile set, falling back to 1 default profile: "default"
-2026-10-22T17:01:51.042Z  INFO 19534 --- [provision] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data JPA repositories in DEFAULT mode.
-2026-10-22T17:01:51.147Z  INFO 19534 --- [provision] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 99 ms. Found 17 JPA repository interfaces.
-2026-10-22T17:01:52.239Z  INFO 19534 --- [provision] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Starting...
-2026-10-22T17:01:52.305Z  INFO 19534 --- [provision] [           main] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Added connection org.postgresql.jdbc.PgConnection@1c8f71a7
-2026-10-22T17:01:52.306Z  INFO 19534 --- [provision] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Start completed.
-2026-10-22T17:01:52.324Z  INFO 19534 --- [provision] [           main] org.flywaydb.core.FlywayExecutor         : Database: jdbc:postgresql://localhost:5433/provision_test_sec (PostgreSQL 15.19)
-2026-10-22T17:01:52.346Z  INFO 19534 --- [provision] [           main] o.f.c.i.s.JdbcTableSchemaHistory         : Schema history table "public"."flyway_schema_history" does not exist yet
-2026-10-22T17:01:52.399Z  INFO 19534 --- [provision] [           main] o.f.core.internal.command.DbValidate     : Successfully validated 11 migrations (execution time 00:00.064s)
-2026-10-22T17:01:52.408Z  INFO 19534 --- [provision] [           main] o.f.c.i.s.JdbcTableSchemaHistory         : Creating Schema History table "public"."flyway_schema_history" ...
-2026-10-22T17:01:52.435Z  INFO 19534 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Current version of schema "public": << Empty Schema >>
-2026-10-22T17:01:52.519Z  INFO 19534 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "1 - initial schema"
-2026-10-22T17:01:52.618Z  INFO 19534 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "2 - catalog extensions"
-2026-10-22T17:01:52.639Z  INFO 19534 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "3 - seed catalog"
-2026-10-22T17:01:52.711Z  INFO 19534 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "4 - recipe ingredients"
-2026-10-22T17:01:52.747Z  INFO 19534 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "5 - integrations"
-2026-10-22T17:01:52.809Z  INFO 19534 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "6 - trip price overrides"
-2026-10-22T17:01:52.816Z  INFO 19534 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "7 - packs and substitutions"
-2026-10-22T17:01:52.826Z  INFO 19534 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "8 - product categories and identity"
-2026-10-22T17:01:52.839Z  INFO 19534 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "10 - sync trigger"
-2026-10-22T17:01:52.900Z  INFO 19534 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "11 - kcal per 100g and pack unit"
-2026-10-22T17:01:52.909Z  INFO 19534 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "12 - seed all recipe ingredients"
-2026-10-22T17:01:52.920Z  INFO 19534 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Successfully applied 11 migrations to schema "public", now at version v12 (execution time 00:00.214s)
-2026-10-22T17:01:53.031Z  INFO 19534 --- [provision] [           main] o.hibernate.jpa.internal.util.LogHelper  : HHH000204: Processing PersistenceUnitInfo [name: default]
-2026-10-22T17:01:53.113Z  INFO 19534 --- [provision] [           main] org.hibernate.Version                    : HHH000412: Hibernate ORM core version 6.4.4.Final
-2026-10-22T17:01:53.132Z  INFO 19534 --- [provision] [           main] o.h.c.internal.RegionFactoryInitiator    : HHH000026: Second-level cache disabled
-2026-10-22T17:01:53.408Z  INFO 19534 --- [provision] [           main] o.s.o.j.p.SpringPersistenceUnitInfo      : No LoadTimeWeaver setup: ignoring JPA class transformer
-2026-10-22T17:01:53.442Z  WARN 19534 --- [provision] [           main] org.hibernate.orm.deprecation            : HHH90000025: PostgreSQLDialect does not need to be specified explicitly using 'hibernate.dialect' (remove the property setting and it will be selected by default)
-2026-10-22T17:01:55.329Z  INFO 19534 --- [provision] [           main] o.h.e.t.j.p.i.JtaPlatformInitiator       : HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
-2026-10-22T17:01:55.415Z  INFO 19534 --- [provision] [           main] j.LocalContainerEntityManagerFactoryBean : Initialized JPA EntityManagerFactory for persistence unit 'default'
-2026-10-22T17:01:55.904Z  INFO 19534 --- [provision] [           main] o.s.d.j.r.query.QueryEnhancerFactory     : Hibernate is in classpath; If applicable, HQL parser will be used.
-2026-10-22T17:01:58.731Z  INFO 19534 --- [provision] [           main] c.provision.service.IntegrationService   : Loaded 1 price providers: [OFF]
-2026-10-22T17:01:59.539Z  WARN 19534 --- [provision] [           main] .s.s.UserDetailsServiceAutoConfiguration : 
+2026-10-22T19:23:24.641Z  INFO 5795 --- [provision] [           main] c.p.integration.SecurityIntegrationTest  : Starting SecurityIntegrationTest using Java 21.0.13 with PID 5795 (started by root in /workspace/backend)
+2026-10-22T19:23:24.641Z DEBUG 5795 --- [provision] [           main] c.p.integration.SecurityIntegrationTest  : Running with Spring Boot v3.2.5, Spring v6.1.6
+2026-10-22T19:23:24.642Z  INFO 5795 --- [provision] [           main] c.p.integration.SecurityIntegrationTest  : No active profile set, falling back to 1 default profile: "default"
+2026-10-22T19:23:25.030Z  INFO 5795 --- [provision] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data JPA repositories in DEFAULT mode.
+2026-10-22T19:23:25.043Z  INFO 5795 --- [provision] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 12 ms. Found 17 JPA repository interfaces.
+2026-10-22T19:23:25.222Z  INFO 5795 --- [provision] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-2 - Starting...
+2026-10-22T19:23:25.228Z  INFO 5795 --- [provision] [           main] com.zaxxer.hikari.pool.HikariPool        : HikariPool-2 - Added connection org.postgresql.jdbc.PgConnection@768abaa1
+2026-10-22T19:23:25.228Z  INFO 5795 --- [provision] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-2 - Start completed.
+2026-10-22T19:23:25.229Z  INFO 5795 --- [provision] [           main] org.flywaydb.core.FlywayExecutor         : Database: jdbc:postgresql://localhost:5433/provision_test_sec (PostgreSQL 15.19)
+2026-10-22T19:23:25.237Z  INFO 5795 --- [provision] [           main] o.f.core.internal.command.DbValidate     : Successfully validated 11 migrations (execution time 00:00.005s)
+2026-10-22T19:23:25.244Z  INFO 5795 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Current version of schema "public": 12
+2026-10-22T19:23:25.244Z  INFO 5795 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Schema "public" is up to date. No migration necessary.
+2026-10-22T19:23:25.314Z  INFO 5795 --- [provision] [           main] o.hibernate.jpa.internal.util.LogHelper  : HHH000204: Processing PersistenceUnitInfo [name: default]
+2026-10-22T19:23:25.316Z  INFO 5795 --- [provision] [           main] o.h.c.internal.RegionFactoryInitiator    : HHH000026: Second-level cache disabled
+2026-10-22T19:23:25.318Z  INFO 5795 --- [provision] [           main] o.s.o.j.p.SpringPersistenceUnitInfo      : No LoadTimeWeaver setup: ignoring JPA class transformer
+2026-10-22T19:23:25.320Z  WARN 5795 --- [provision] [           main] org.hibernate.orm.deprecation            : HHH90000025: PostgreSQLDialect does not need to be specified explicitly using 'hibernate.dialect' (remove the property setting and it will be selected by default)
+2026-10-22T19:23:25.637Z  INFO 5795 --- [provision] [           main] o.h.e.t.j.p.i.JtaPlatformInitiator       : HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+2026-10-22T19:23:25.702Z  INFO 5795 --- [provision] [           main] j.LocalContainerEntityManagerFactoryBean : Initialized JPA EntityManagerFactory for persistence unit 'default'
+2026-10-22T19:23:26.211Z  INFO 5795 --- [provision] [           main] c.provision.service.IntegrationService   : Loaded 1 price providers: [OFF]
+2026-10-22T19:23:26.508Z  WARN 5795 --- [provision] [           main] .s.s.UserDetailsServiceAutoConfiguration : 
 
-Using generated security password: 6222c1f4-52cb-456d-b70c-a1b3e4ca797b
+Using generated security password: 604403ae-f520-4a6e-8de2-56a84edf3a32
 
 This generated password is for development use only. Your security configuration must be updated before running your application in production.
 
-2026-10-22T17:02:00.133Z  INFO 19534 --- [provision] [           main] o.s.s.web.DefaultSecurityFilterChain     : Will secure any request with [org.springframework.security.web.session.DisableEncodeUrlFilter@3179f8eb, org.springframework.security.web.context.request.async.WebAsyncManagerIntegrationFilter@56259be0, org.springframework.security.web.context.SecurityContextHolderFilter@427a7297, org.springframework.security.web.header.HeaderWriterFilter@1127ec2d, org.springframework.web.filter.CorsFilter@3516b79e, org.springframework.security.web.authentication.logout.LogoutFilter@719de15f, com.provision.security.JwtAuthenticationFilter@3a5e591b, org.springframework.security.web.savedrequest.RequestCacheAwareFilter@5dcb3031, org.springframework.security.web.servletapi.SecurityContextHolderAwareRequestFilter@468cbe8c, org.springframework.security.web.authentication.AnonymousAuthenticationFilter@84a3e9f, org.springframework.security.web.session.SessionManagementFilter@8843c51, org.springframework.security.web.access.ExceptionTranslationFilter@70d4590b, org.springframework.security.web.access.intercept.AuthorizationFilter@23488e7a]
-2026-10-22T17:02:00.917Z DEBUG 19534 --- [provision] [           main] c.p.security.JwtAuthenticationFilter     : Filter 'jwtAuthenticationFilter' configured for use
-2026-10-22T17:02:00.918Z  INFO 19534 --- [provision] [           main] o.s.b.t.m.w.SpringBootMockServletContext : Initializing Spring TestDispatcherServlet ''
-2026-10-22T17:02:00.918Z  INFO 19534 --- [provision] [           main] o.s.t.web.servlet.TestDispatcherServlet  : Initializing Servlet ''
-2026-10-22T17:02:00.920Z  INFO 19534 --- [provision] [           main] o.s.t.web.servlet.TestDispatcherServlet  : Completed initialization in 2 ms
-2026-10-22T17:02:00.999Z  INFO 19534 --- [provision] [           main] c.p.integration.SecurityIntegrationTest  : Started SecurityIntegrationTest in 12.095 seconds (process running for 14.173)
-2026-10-22T17:02:01.404Z  INFO 19534 --- [provision] [           main] o.f.c.i.s.JdbcTableSchemaHistory         : Schema history table "public"."flyway_schema_history" does not exist yet
-2026-10-22T17:02:01.404Z  INFO 19534 --- [provision] [           main] o.f.core.internal.command.DbValidate     : Successfully validated 11 migrations (execution time 00:00.002s)
-2026-10-22T17:02:01.409Z  INFO 19534 --- [provision] [           main] o.f.c.i.s.JdbcTableSchemaHistory         : Creating Schema History table "public"."flyway_schema_history" ...
-2026-10-22T17:02:01.415Z  INFO 19534 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Current version of schema "public": << Empty Schema >>
-2026-10-22T17:02:01.417Z  INFO 19534 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "1 - initial schema"
-2026-10-22T17:02:01.443Z  INFO 19534 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "2 - catalog extensions"
-2026-10-22T17:02:01.501Z  INFO 19534 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "3 - seed catalog"
-2026-10-22T17:02:01.522Z  INFO 19534 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "4 - recipe ingredients"
-2026-10-22T17:02:01.539Z  INFO 19534 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "5 - integrations"
-2026-10-22T17:02:01.605Z  INFO 19534 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "6 - trip price overrides"
-2026-10-22T17:02:01.614Z  INFO 19534 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "7 - packs and substitutions"
-2026-10-22T17:02:01.626Z  INFO 19534 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "8 - product categories and identity"
-2026-10-22T17:02:01.642Z  INFO 19534 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "10 - sync trigger"
-2026-10-22T17:02:01.701Z  INFO 19534 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "11 - kcal per 100g and pack unit"
-2026-10-22T17:02:01.711Z  INFO 19534 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "12 - seed all recipe ingredients"
-2026-10-22T17:02:01.720Z  INFO 19534 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Successfully applied 11 migrations to schema "public", now at version v12 (execution time 00:00.154s)
-2026-10-22T17:02:01.737Z DEBUG 19534 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Securing POST /api/v1/auth/register
-2026-10-22T17:02:01.741Z DEBUG 19534 --- [provision] [           main] o.s.s.w.a.AnonymousAuthenticationFilter  : Set SecurityContextHolder to anonymous SecurityContext
-2026-10-22T17:02:01.742Z DEBUG 19534 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Secured POST /api/v1/auth/register
-2026-10-22T17:02:02.229Z  INFO 19534 --- [provision] [           main] com.provision.service.AuthService        : Registered new user: user@test.com
-2026-10-22T17:02:02.407Z DEBUG 19534 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Securing POST /api/v1/auth/login
-2026-10-22T17:02:02.407Z DEBUG 19534 --- [provision] [           main] o.s.s.w.a.AnonymousAuthenticationFilter  : Set SecurityContextHolder to anonymous SecurityContext
-2026-10-22T17:02:02.407Z DEBUG 19534 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Secured POST /api/v1/auth/login
-2026-10-22T17:02:02.597Z  INFO 19534 --- [provision] [           main] com.provision.service.AuthService        : User logged in: user@test.com
-2026-10-22T17:02:02.713Z DEBUG 19534 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Securing POST /api/v1/auth/login
-2026-10-22T17:02:02.713Z DEBUG 19534 --- [provision] [           main] o.s.s.w.a.AnonymousAuthenticationFilter  : Set SecurityContextHolder to anonymous SecurityContext
-2026-10-22T17:02:02.713Z DEBUG 19534 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Secured POST /api/v1/auth/login
-2026-10-22T17:02:02.797Z  INFO 19534 --- [provision] [           main] com.provision.service.AuthService        : User logged in: admin@test.com
-2026-10-22T17:02:02.803Z DEBUG 19534 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Securing POST /api/v1/trips
-2026-10-22T17:02:02.915Z DEBUG 19534 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Secured POST /api/v1/trips
-2026-10-22T17:02:03.002Z  INFO 19534 --- [provision] [           main] com.provision.service.TripService        : Created trip: Test Trip for user: user@test.com
-2026-10-22T17:02:03.017Z DEBUG 19534 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Securing POST /api/v1/admin/ingredients
-2026-10-22T17:02:03.021Z DEBUG 19534 --- [provision] [           main] o.s.s.w.access.AccessDeniedHandlerImpl   : Responding with 403 status code
+2026-10-22T19:23:26.700Z  INFO 5795 --- [provision] [           main] o.s.s.web.DefaultSecurityFilterChain     : Will secure any request with [org.springframework.security.web.session.DisableEncodeUrlFilter@25b905fd, org.springframework.security.web.context.request.async.WebAsyncManagerIntegrationFilter@4ed2114e, org.springframework.security.web.context.SecurityContextHolderFilter@956579b, org.springframework.security.web.header.HeaderWriterFilter@6d39cb0a, org.springframework.web.filter.CorsFilter@a6719ed, org.springframework.security.web.authentication.logout.LogoutFilter@4a043094, com.provision.security.JwtAuthenticationFilter@7cfeee84, org.springframework.security.web.savedrequest.RequestCacheAwareFilter@4c89e7fa, org.springframework.security.web.servletapi.SecurityContextHolderAwareRequestFilter@6f4b04fa, org.springframework.security.web.authentication.AnonymousAuthenticationFilter@24eb2b21, org.springframework.security.web.session.SessionManagementFilter@26d71aeb, org.springframework.security.web.access.ExceptionTranslationFilter@4841bb70, org.springframework.security.web.access.intercept.AuthorizationFilter@7e6a1911]
+2026-10-22T19:23:26.904Z DEBUG 5795 --- [provision] [           main] c.p.security.JwtAuthenticationFilter     : Filter 'jwtAuthenticationFilter' configured for use
+2026-10-22T19:23:26.904Z  INFO 5795 --- [provision] [           main] o.s.b.t.m.w.SpringBootMockServletContext : Initializing Spring TestDispatcherServlet ''
+2026-10-22T19:23:26.904Z  INFO 5795 --- [provision] [           main] o.s.t.web.servlet.TestDispatcherServlet  : Initializing Servlet ''
+2026-10-22T19:23:26.905Z  INFO 5795 --- [provision] [           main] o.s.t.web.servlet.TestDispatcherServlet  : Completed initialization in 1 ms
+2026-10-22T19:23:26.913Z  INFO 5795 --- [provision] [           main] c.p.integration.SecurityIntegrationTest  : Started SecurityIntegrationTest in 2.306 seconds (process running for 18.305)
+2026-10-22T19:23:27.000Z  INFO 5795 --- [provision] [           main] o.f.c.i.s.JdbcTableSchemaHistory         : Schema history table "public"."flyway_schema_history" does not exist yet
+2026-10-22T19:23:27.001Z  INFO 5795 --- [provision] [           main] o.f.core.internal.command.DbValidate     : Successfully validated 11 migrations (execution time 00:00.052s)
+2026-10-22T19:23:27.005Z  INFO 5795 --- [provision] [           main] o.f.c.i.s.JdbcTableSchemaHistory         : Creating Schema History table "public"."flyway_schema_history" ...
+2026-10-22T19:23:27.012Z  INFO 5795 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Current version of schema "public": << Empty Schema >>
+2026-10-22T19:23:27.018Z  INFO 5795 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "1 - initial schema"
+2026-10-22T19:23:27.105Z  INFO 5795 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "2 - catalog extensions"
+2026-10-22T19:23:27.117Z  INFO 5795 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "3 - seed catalog"
+2026-10-22T19:23:27.140Z  INFO 5795 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "4 - recipe ingredients"
+2026-10-22T19:23:27.216Z  INFO 5795 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "5 - integrations"
+2026-10-22T19:23:27.229Z  INFO 5795 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "6 - trip price overrides"
+2026-10-22T19:23:27.238Z  INFO 5795 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "7 - packs and substitutions"
+2026-10-22T19:23:27.300Z  INFO 5795 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "8 - product categories and identity"
+2026-10-22T19:23:27.314Z  INFO 5795 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "10 - sync trigger"
+2026-10-22T19:23:27.319Z  INFO 5795 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "11 - kcal per 100g and pack unit"
+2026-10-22T19:23:27.326Z  INFO 5795 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "12 - seed all recipe ingredients"
+2026-10-22T19:23:27.334Z  INFO 5795 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Successfully applied 11 migrations to schema "public", now at version v12 (execution time 00:00.160s)
+2026-10-22T19:23:27.343Z DEBUG 5795 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Securing POST /api/v1/auth/register
+2026-10-22T19:23:27.344Z DEBUG 5795 --- [provision] [           main] o.s.s.w.a.AnonymousAuthenticationFilter  : Set SecurityContextHolder to anonymous SecurityContext
+2026-10-22T19:23:27.344Z DEBUG 5795 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Secured POST /api/v1/auth/register
+2026-10-22T19:23:27.834Z  INFO 5795 --- [provision] [           main] com.provision.service.AuthService        : Registered new user: user@test.com
+2026-10-22T19:23:27.947Z DEBUG 5795 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Securing POST /api/v1/auth/login
+2026-10-22T19:23:27.947Z DEBUG 5795 --- [provision] [           main] o.s.s.w.a.AnonymousAuthenticationFilter  : Set SecurityContextHolder to anonymous SecurityContext
+2026-10-22T19:23:27.947Z DEBUG 5795 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Secured POST /api/v1/auth/login
+2026-10-22T19:23:28.143Z  INFO 5795 --- [provision] [           main] com.provision.service.AuthService        : User logged in: user@test.com
+2026-10-22T19:23:28.327Z DEBUG 5795 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Securing POST /api/v1/auth/login
+2026-10-22T19:23:28.327Z DEBUG 5795 --- [provision] [           main] o.s.s.w.a.AnonymousAuthenticationFilter  : Set SecurityContextHolder to anonymous SecurityContext
+2026-10-22T19:23:28.327Z DEBUG 5795 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Secured POST /api/v1/auth/login
+2026-10-22T19:23:28.497Z  INFO 5795 --- [provision] [           main] com.provision.service.AuthService        : User logged in: admin@test.com
+2026-10-22T19:23:28.507Z DEBUG 5795 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Securing POST /api/v1/trips
+2026-10-22T19:23:28.602Z DEBUG 5795 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Secured POST /api/v1/trips
+2026-10-22T19:23:28.641Z  INFO 5795 --- [provision] [           main] com.provision.service.TripService        : Created trip: Test Trip for user: user@test.com
+2026-10-22T19:23:28.719Z DEBUG 5795 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Securing POST /api/v1/admin/ingredients
+2026-10-22T19:23:28.724Z DEBUG 5795 --- [provision] [           main] o.s.s.w.access.AccessDeniedHandlerImpl   : Responding with 403 status code
 ]]></system-out>
   </testcase>
-  <testcase name="sec02_userCannotAccessOtherTrips" classname="com.provision.integration.SecurityIntegrationTest" time="0.974">
-    <system-out><![CDATA[2026-10-22T17:02:03.100Z  INFO 19534 --- [provision] [           main] o.f.c.i.s.JdbcTableSchemaHistory         : Schema history table "public"."flyway_schema_history" does not exist yet
-2026-10-22T17:02:03.101Z  INFO 19534 --- [provision] [           main] o.f.core.internal.command.DbValidate     : Successfully validated 11 migrations (execution time 00:00.003s)
-2026-10-22T17:02:03.103Z  INFO 19534 --- [provision] [           main] o.f.c.i.s.JdbcTableSchemaHistory         : Creating Schema History table "public"."flyway_schema_history" ...
-2026-10-22T17:02:03.107Z  INFO 19534 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Current version of schema "public": << Empty Schema >>
-2026-10-22T17:02:03.110Z  INFO 19534 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "1 - initial schema"
-2026-10-22T17:02:03.133Z  INFO 19534 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "2 - catalog extensions"
-2026-10-22T17:02:03.141Z  INFO 19534 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "3 - seed catalog"
-2026-10-22T17:02:03.198Z  INFO 19534 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "4 - recipe ingredients"
-2026-10-22T17:02:03.214Z  INFO 19534 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "5 - integrations"
-2026-10-22T17:02:03.224Z  INFO 19534 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "6 - trip price overrides"
-2026-10-22T17:02:03.230Z  INFO 19534 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "7 - packs and substitutions"
-2026-10-22T17:02:03.236Z  INFO 19534 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "8 - product categories and identity"
-2026-10-22T17:02:03.299Z  INFO 19534 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "10 - sync trigger"
-2026-10-22T17:02:03.305Z  INFO 19534 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "11 - kcal per 100g and pack unit"
-2026-10-22T17:02:03.311Z  INFO 19534 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "12 - seed all recipe ingredients"
-2026-10-22T17:02:03.318Z  INFO 19534 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Successfully applied 11 migrations to schema "public", now at version v12 (execution time 00:00.070s)
-2026-10-22T17:02:03.319Z DEBUG 19534 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Securing POST /api/v1/auth/register
-2026-10-22T17:02:03.320Z DEBUG 19534 --- [provision] [           main] o.s.s.w.a.AnonymousAuthenticationFilter  : Set SecurityContextHolder to anonymous SecurityContext
-2026-10-22T17:02:03.320Z DEBUG 19534 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Secured POST /api/v1/auth/register
-2026-10-22T17:02:03.432Z  INFO 19534 --- [provision] [           main] com.provision.service.AuthService        : Registered new user: user@test.com
-2026-10-22T17:02:03.437Z DEBUG 19534 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Securing POST /api/v1/auth/login
-2026-10-22T17:02:03.437Z DEBUG 19534 --- [provision] [           main] o.s.s.w.a.AnonymousAuthenticationFilter  : Set SecurityContextHolder to anonymous SecurityContext
-2026-10-22T17:02:03.437Z DEBUG 19534 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Secured POST /api/v1/auth/login
-2026-10-22T17:02:03.607Z  INFO 19534 --- [provision] [           main] com.provision.service.AuthService        : User logged in: user@test.com
-2026-10-22T17:02:03.669Z DEBUG 19534 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Securing POST /api/v1/auth/login
-2026-10-22T17:02:03.670Z DEBUG 19534 --- [provision] [           main] o.s.s.w.a.AnonymousAuthenticationFilter  : Set SecurityContextHolder to anonymous SecurityContext
-2026-10-22T17:02:03.670Z DEBUG 19534 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Secured POST /api/v1/auth/login
-2026-10-22T17:02:03.746Z  INFO 19534 --- [provision] [           main] com.provision.service.AuthService        : User logged in: admin@test.com
-2026-10-22T17:02:03.748Z DEBUG 19534 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Securing POST /api/v1/trips
-2026-10-22T17:02:03.751Z DEBUG 19534 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Secured POST /api/v1/trips
-2026-10-22T17:02:03.757Z  INFO 19534 --- [provision] [           main] com.provision.service.TripService        : Created trip: Test Trip for user: user@test.com
-2026-10-22T17:02:03.759Z DEBUG 19534 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Securing POST /api/v1/auth/register
-2026-10-22T17:02:03.759Z DEBUG 19534 --- [provision] [           main] o.s.s.w.a.AnonymousAuthenticationFilter  : Set SecurityContextHolder to anonymous SecurityContext
-2026-10-22T17:02:03.759Z DEBUG 19534 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Secured POST /api/v1/auth/register
-2026-10-22T17:02:03.844Z  INFO 19534 --- [provision] [           main] com.provision.service.AuthService        : Registered new user: user2@test.com
-2026-10-22T17:02:03.849Z DEBUG 19534 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Securing POST /api/v1/auth/login
-2026-10-22T17:02:03.849Z DEBUG 19534 --- [provision] [           main] o.s.s.w.a.AnonymousAuthenticationFilter  : Set SecurityContextHolder to anonymous SecurityContext
-2026-10-22T17:02:03.849Z DEBUG 19534 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Secured POST /api/v1/auth/login
-2026-10-22T17:02:03.933Z  INFO 19534 --- [provision] [           main] com.provision.service.AuthService        : User logged in: user2@test.com
-2026-10-22T17:02:03.935Z DEBUG 19534 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Securing GET /api/v1/trips/1
-2026-10-22T17:02:03.939Z DEBUG 19534 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Secured GET /api/v1/trips/1
-2026-10-22T17:02:03.997Z  WARN 19534 --- [provision] [           main] c.p.exception.GlobalExceptionHandler     : Not found: Trip not found or access denied
+  <testcase name="sec02_userCannotAccessOtherTrips" classname="com.provision.integration.SecurityIntegrationTest" time="1.191">
+    <system-out><![CDATA[2026-10-22T19:23:28.803Z  INFO 5795 --- [provision] [           main] o.f.c.i.s.JdbcTableSchemaHistory         : Schema history table "public"."flyway_schema_history" does not exist yet
+2026-10-22T19:23:28.804Z  INFO 5795 --- [provision] [           main] o.f.core.internal.command.DbValidate     : Successfully validated 11 migrations (execution time 00:00.004s)
+2026-10-22T19:23:28.808Z  INFO 5795 --- [provision] [           main] o.f.c.i.s.JdbcTableSchemaHistory         : Creating Schema History table "public"."flyway_schema_history" ...
+2026-10-22T19:23:28.813Z  INFO 5795 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Current version of schema "public": << Empty Schema >>
+2026-10-22T19:23:28.825Z  INFO 5795 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "1 - initial schema"
+2026-10-22T19:23:28.905Z  INFO 5795 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "2 - catalog extensions"
+2026-10-22T19:23:28.914Z  INFO 5795 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "3 - seed catalog"
+2026-10-22T19:23:28.927Z  INFO 5795 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "4 - recipe ingredients"
+2026-10-22T19:23:28.999Z  INFO 5795 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "5 - integrations"
+2026-10-22T19:23:29.014Z  INFO 5795 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "6 - trip price overrides"
+2026-10-22T19:23:29.021Z  INFO 5795 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "7 - packs and substitutions"
+2026-10-22T19:23:29.029Z  INFO 5795 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "8 - product categories and identity"
+2026-10-22T19:23:29.097Z  INFO 5795 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "10 - sync trigger"
+2026-10-22T19:23:29.104Z  INFO 5795 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "11 - kcal per 100g and pack unit"
+2026-10-22T19:23:29.111Z  INFO 5795 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "12 - seed all recipe ingredients"
+2026-10-22T19:23:29.118Z  INFO 5795 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Successfully applied 11 migrations to schema "public", now at version v12 (execution time 00:00.129s)
+2026-10-22T19:23:29.120Z DEBUG 5795 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Securing POST /api/v1/auth/register
+2026-10-22T19:23:29.120Z DEBUG 5795 --- [provision] [           main] o.s.s.w.a.AnonymousAuthenticationFilter  : Set SecurityContextHolder to anonymous SecurityContext
+2026-10-22T19:23:29.121Z DEBUG 5795 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Secured POST /api/v1/auth/register
+2026-10-22T19:23:29.234Z  INFO 5795 --- [provision] [           main] com.provision.service.AuthService        : Registered new user: user@test.com
+2026-10-22T19:23:29.238Z DEBUG 5795 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Securing POST /api/v1/auth/login
+2026-10-22T19:23:29.238Z DEBUG 5795 --- [provision] [           main] o.s.s.w.a.AnonymousAuthenticationFilter  : Set SecurityContextHolder to anonymous SecurityContext
+2026-10-22T19:23:29.238Z DEBUG 5795 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Secured POST /api/v1/auth/login
+2026-10-22T19:23:29.372Z  INFO 5795 --- [provision] [           main] com.provision.service.AuthService        : User logged in: user@test.com
+2026-10-22T19:23:29.459Z DEBUG 5795 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Securing POST /api/v1/auth/login
+2026-10-22T19:23:29.460Z DEBUG 5795 --- [provision] [           main] o.s.s.w.a.AnonymousAuthenticationFilter  : Set SecurityContextHolder to anonymous SecurityContext
+2026-10-22T19:23:29.460Z DEBUG 5795 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Secured POST /api/v1/auth/login
+2026-10-22T19:23:29.603Z  INFO 5795 --- [provision] [           main] com.provision.service.AuthService        : User logged in: admin@test.com
+2026-10-22T19:23:29.607Z DEBUG 5795 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Securing POST /api/v1/trips
+2026-10-22T19:23:29.612Z DEBUG 5795 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Secured POST /api/v1/trips
+2026-10-22T19:23:29.622Z  INFO 5795 --- [provision] [           main] com.provision.service.TripService        : Created trip: Test Trip for user: user@test.com
+2026-10-22T19:23:29.627Z DEBUG 5795 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Securing POST /api/v1/auth/register
+2026-10-22T19:23:29.627Z DEBUG 5795 --- [provision] [           main] o.s.s.w.a.AnonymousAuthenticationFilter  : Set SecurityContextHolder to anonymous SecurityContext
+2026-10-22T19:23:29.627Z DEBUG 5795 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Secured POST /api/v1/auth/register
+2026-10-22T19:23:29.738Z  INFO 5795 --- [provision] [           main] com.provision.service.AuthService        : Registered new user: user2@test.com
+2026-10-22T19:23:29.744Z DEBUG 5795 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Securing POST /api/v1/auth/login
+2026-10-22T19:23:29.745Z DEBUG 5795 --- [provision] [           main] o.s.s.w.a.AnonymousAuthenticationFilter  : Set SecurityContextHolder to anonymous SecurityContext
+2026-10-22T19:23:29.745Z DEBUG 5795 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Secured POST /api/v1/auth/login
+2026-10-22T19:23:29.860Z  INFO 5795 --- [provision] [           main] com.provision.service.AuthService        : User logged in: user2@test.com
+2026-10-22T19:23:29.863Z DEBUG 5795 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Securing GET /api/v1/trips/1
+2026-10-22T19:23:29.867Z DEBUG 5795 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Secured GET /api/v1/trips/1
+2026-10-22T19:23:29.915Z  WARN 5795 --- [provision] [           main] c.p.exception.GlobalExceptionHandler     : Not found: Trip not found or access denied
 ]]></system-out>
   </testcase>
-  <testcase name="sec03_userCannotDeleteOtherTrips" classname="com.provision.integration.SecurityIntegrationTest" time="1.003">
-    <system-out><![CDATA[2026-10-22T17:02:04.025Z  INFO 19534 --- [provision] [           main] o.f.c.i.s.JdbcTableSchemaHistory         : Schema history table "public"."flyway_schema_history" does not exist yet
-2026-10-22T17:02:04.026Z  INFO 19534 --- [provision] [           main] o.f.core.internal.command.DbValidate     : Successfully validated 11 migrations (execution time 00:00.002s)
-2026-10-22T17:02:04.028Z  INFO 19534 --- [provision] [           main] o.f.c.i.s.JdbcTableSchemaHistory         : Creating Schema History table "public"."flyway_schema_history" ...
-2026-10-22T17:02:04.032Z  INFO 19534 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Current version of schema "public": << Empty Schema >>
-2026-10-22T17:02:04.034Z  INFO 19534 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "1 - initial schema"
-2026-10-22T17:02:04.110Z  INFO 19534 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "2 - catalog extensions"
-2026-10-22T17:02:04.116Z  INFO 19534 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "3 - seed catalog"
-2026-10-22T17:02:04.125Z  INFO 19534 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "4 - recipe ingredients"
-2026-10-22T17:02:04.142Z  INFO 19534 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "5 - integrations"
-2026-10-22T17:02:04.202Z  INFO 19534 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "6 - trip price overrides"
-2026-10-22T17:02:04.208Z  INFO 19534 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "7 - packs and substitutions"
-2026-10-22T17:02:04.215Z  INFO 19534 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "8 - product categories and identity"
-2026-10-22T17:02:04.226Z  INFO 19534 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "10 - sync trigger"
-2026-10-22T17:02:04.230Z  INFO 19534 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "11 - kcal per 100g and pack unit"
-2026-10-22T17:02:04.236Z  INFO 19534 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "12 - seed all recipe ingredients"
-2026-10-22T17:02:04.242Z  INFO 19534 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Successfully applied 11 migrations to schema "public", now at version v12 (execution time 00:00.169s)
-2026-10-22T17:02:04.244Z DEBUG 19534 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Securing POST /api/v1/auth/register
-2026-10-22T17:02:04.244Z DEBUG 19534 --- [provision] [           main] o.s.s.w.a.AnonymousAuthenticationFilter  : Set SecurityContextHolder to anonymous SecurityContext
-2026-10-22T17:02:04.244Z DEBUG 19534 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Secured POST /api/v1/auth/register
-2026-10-22T17:02:04.404Z  INFO 19534 --- [provision] [           main] com.provision.service.AuthService        : Registered new user: user@test.com
-2026-10-22T17:02:04.408Z DEBUG 19534 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Securing POST /api/v1/auth/login
-2026-10-22T17:02:04.409Z DEBUG 19534 --- [provision] [           main] o.s.s.w.a.AnonymousAuthenticationFilter  : Set SecurityContextHolder to anonymous SecurityContext
-2026-10-22T17:02:04.409Z DEBUG 19534 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Secured POST /api/v1/auth/login
-2026-10-22T17:02:04.523Z  INFO 19534 --- [provision] [           main] com.provision.service.AuthService        : User logged in: user@test.com
-2026-10-22T17:02:04.637Z DEBUG 19534 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Securing POST /api/v1/auth/login
-2026-10-22T17:02:04.637Z DEBUG 19534 --- [provision] [           main] o.s.s.w.a.AnonymousAuthenticationFilter  : Set SecurityContextHolder to anonymous SecurityContext
-2026-10-22T17:02:04.637Z DEBUG 19534 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Secured POST /api/v1/auth/login
-2026-10-22T17:02:04.734Z  INFO 19534 --- [provision] [           main] com.provision.service.AuthService        : User logged in: admin@test.com
-2026-10-22T17:02:04.736Z DEBUG 19534 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Securing POST /api/v1/trips
-2026-10-22T17:02:04.739Z DEBUG 19534 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Secured POST /api/v1/trips
-2026-10-22T17:02:04.746Z  INFO 19534 --- [provision] [           main] com.provision.service.TripService        : Created trip: Test Trip for user: user@test.com
-2026-10-22T17:02:04.751Z DEBUG 19534 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Securing POST /api/v1/auth/register
-2026-10-22T17:02:04.751Z DEBUG 19534 --- [provision] [           main] o.s.s.w.a.AnonymousAuthenticationFilter  : Set SecurityContextHolder to anonymous SecurityContext
-2026-10-22T17:02:04.751Z DEBUG 19534 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Secured POST /api/v1/auth/register
-2026-10-22T17:02:04.849Z  INFO 19534 --- [provision] [           main] com.provision.service.AuthService        : Registered new user: user2@test.com
-2026-10-22T17:02:04.856Z DEBUG 19534 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Securing POST /api/v1/auth/login
-2026-10-22T17:02:04.856Z DEBUG 19534 --- [provision] [           main] o.s.s.w.a.AnonymousAuthenticationFilter  : Set SecurityContextHolder to anonymous SecurityContext
-2026-10-22T17:02:04.857Z DEBUG 19534 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Secured POST /api/v1/auth/login
-2026-10-22T17:02:04.944Z  INFO 19534 --- [provision] [           main] com.provision.service.AuthService        : User logged in: user2@test.com
-2026-10-22T17:02:04.946Z DEBUG 19534 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Securing DELETE /api/v1/trips/1
-2026-10-22T17:02:04.950Z DEBUG 19534 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Secured DELETE /api/v1/trips/1
-2026-10-22T17:02:04.955Z  WARN 19534 --- [provision] [           main] c.p.exception.GlobalExceptionHandler     : Not found: Trip not found or access denied
-2026-10-22T17:02:04.963Z DEBUG 19534 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Securing GET /api/v1/trips/1
-2026-10-22T17:02:04.968Z DEBUG 19534 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Secured GET /api/v1/trips/1
+  <testcase name="sec03_userCannotDeleteOtherTrips" classname="com.provision.integration.SecurityIntegrationTest" time="0.998">
+    <system-out><![CDATA[2026-10-22T19:23:29.945Z  INFO 5795 --- [provision] [           main] o.f.c.i.s.JdbcTableSchemaHistory         : Schema history table "public"."flyway_schema_history" does not exist yet
+2026-10-22T19:23:29.946Z  INFO 5795 --- [provision] [           main] o.f.core.internal.command.DbValidate     : Successfully validated 11 migrations (execution time 00:00.005s)
+2026-10-22T19:23:30.000Z  INFO 5795 --- [provision] [           main] o.f.c.i.s.JdbcTableSchemaHistory         : Creating Schema History table "public"."flyway_schema_history" ...
+2026-10-22T19:23:30.004Z  INFO 5795 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Current version of schema "public": << Empty Schema >>
+2026-10-22T19:23:30.006Z  INFO 5795 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "1 - initial schema"
+2026-10-22T19:23:30.038Z  INFO 5795 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "2 - catalog extensions"
+2026-10-22T19:23:30.047Z  INFO 5795 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "3 - seed catalog"
+2026-10-22T19:23:30.105Z  INFO 5795 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "4 - recipe ingredients"
+2026-10-22T19:23:30.119Z  INFO 5795 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "5 - integrations"
+2026-10-22T19:23:30.130Z  INFO 5795 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "6 - trip price overrides"
+2026-10-22T19:23:30.135Z  INFO 5795 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "7 - packs and substitutions"
+2026-10-22T19:23:30.141Z  INFO 5795 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "8 - product categories and identity"
+2026-10-22T19:23:30.203Z  INFO 5795 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "10 - sync trigger"
+2026-10-22T19:23:30.207Z  INFO 5795 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "11 - kcal per 100g and pack unit"
+2026-10-22T19:23:30.212Z  INFO 5795 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "12 - seed all recipe ingredients"
+2026-10-22T19:23:30.218Z  INFO 5795 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Successfully applied 11 migrations to schema "public", now at version v12 (execution time 00:00.172s)
+2026-10-22T19:23:30.220Z DEBUG 5795 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Securing POST /api/v1/auth/register
+2026-10-22T19:23:30.220Z DEBUG 5795 --- [provision] [           main] o.s.s.w.a.AnonymousAuthenticationFilter  : Set SecurityContextHolder to anonymous SecurityContext
+2026-10-22T19:23:30.220Z DEBUG 5795 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Secured POST /api/v1/auth/register
+2026-10-22T19:23:30.334Z  INFO 5795 --- [provision] [           main] com.provision.service.AuthService        : Registered new user: user@test.com
+2026-10-22T19:23:30.338Z DEBUG 5795 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Securing POST /api/v1/auth/login
+2026-10-22T19:23:30.338Z DEBUG 5795 --- [provision] [           main] o.s.s.w.a.AnonymousAuthenticationFilter  : Set SecurityContextHolder to anonymous SecurityContext
+2026-10-22T19:23:30.338Z DEBUG 5795 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Secured POST /api/v1/auth/login
+2026-10-22T19:23:30.508Z  INFO 5795 --- [provision] [           main] com.provision.service.AuthService        : User logged in: user@test.com
+2026-10-22T19:23:30.612Z DEBUG 5795 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Securing POST /api/v1/auth/login
+2026-10-22T19:23:30.612Z DEBUG 5795 --- [provision] [           main] o.s.s.w.a.AnonymousAuthenticationFilter  : Set SecurityContextHolder to anonymous SecurityContext
+2026-10-22T19:23:30.612Z DEBUG 5795 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Secured POST /api/v1/auth/login
+2026-10-22T19:23:30.679Z  INFO 5795 --- [provision] [           main] com.provision.service.AuthService        : User logged in: admin@test.com
+2026-10-22T19:23:30.681Z DEBUG 5795 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Securing POST /api/v1/trips
+2026-10-22T19:23:30.685Z DEBUG 5795 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Secured POST /api/v1/trips
+2026-10-22T19:23:30.702Z  INFO 5795 --- [provision] [           main] com.provision.service.TripService        : Created trip: Test Trip for user: user@test.com
+2026-10-22T19:23:30.704Z DEBUG 5795 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Securing POST /api/v1/auth/register
+2026-10-22T19:23:30.705Z DEBUG 5795 --- [provision] [           main] o.s.s.w.a.AnonymousAuthenticationFilter  : Set SecurityContextHolder to anonymous SecurityContext
+2026-10-22T19:23:30.705Z DEBUG 5795 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Secured POST /api/v1/auth/register
+2026-10-22T19:23:30.768Z  INFO 5795 --- [provision] [           main] com.provision.service.AuthService        : Registered new user: user2@test.com
+2026-10-22T19:23:30.772Z DEBUG 5795 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Securing POST /api/v1/auth/login
+2026-10-22T19:23:30.772Z DEBUG 5795 --- [provision] [           main] o.s.s.w.a.AnonymousAuthenticationFilter  : Set SecurityContextHolder to anonymous SecurityContext
+2026-10-22T19:23:30.772Z DEBUG 5795 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Secured POST /api/v1/auth/login
+2026-10-22T19:23:30.858Z  INFO 5795 --- [provision] [           main] com.provision.service.AuthService        : User logged in: user2@test.com
+2026-10-22T19:23:30.860Z DEBUG 5795 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Securing DELETE /api/v1/trips/1
+2026-10-22T19:23:30.863Z DEBUG 5795 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Secured DELETE /api/v1/trips/1
+2026-10-22T19:23:30.900Z  WARN 5795 --- [provision] [           main] c.p.exception.GlobalExceptionHandler     : Not found: Trip not found or access denied
+2026-10-22T19:23:30.903Z DEBUG 5795 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Securing GET /api/v1/trips/1
+2026-10-22T19:23:30.909Z DEBUG 5795 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Secured GET /api/v1/trips/1
 ]]></system-out>
   </testcase>
-  <testcase name="sec04_userCannotModifyOtherTrips" classname="com.provision.integration.SecurityIntegrationTest" time="0.926">
-    <system-out><![CDATA[2026-10-22T17:02:05.036Z  INFO 19534 --- [provision] [           main] o.f.c.i.s.JdbcTableSchemaHistory         : Schema history table "public"."flyway_schema_history" does not exist yet
-2026-10-22T17:02:05.036Z  INFO 19534 --- [provision] [           main] o.f.core.internal.command.DbValidate     : Successfully validated 11 migrations (execution time 00:00.003s)
-2026-10-22T17:02:05.038Z  INFO 19534 --- [provision] [           main] o.f.c.i.s.JdbcTableSchemaHistory         : Creating Schema History table "public"."flyway_schema_history" ...
-2026-10-22T17:02:05.044Z  INFO 19534 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Current version of schema "public": << Empty Schema >>
-2026-10-22T17:02:05.056Z  INFO 19534 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "1 - initial schema"
-2026-10-22T17:02:05.122Z  INFO 19534 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "2 - catalog extensions"
-2026-10-22T17:02:05.129Z  INFO 19534 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "3 - seed catalog"
-2026-10-22T17:02:05.138Z  INFO 19534 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "4 - recipe ingredients"
-2026-10-22T17:02:05.203Z  INFO 19534 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "5 - integrations"
-2026-10-22T17:02:05.216Z  INFO 19534 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "6 - trip price overrides"
-2026-10-22T17:02:05.221Z  INFO 19534 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "7 - packs and substitutions"
-2026-10-22T17:02:05.231Z  INFO 19534 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "8 - product categories and identity"
-2026-10-22T17:02:05.242Z  INFO 19534 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "10 - sync trigger"
-2026-10-22T17:02:05.245Z  INFO 19534 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "11 - kcal per 100g and pack unit"
-2026-10-22T17:02:05.300Z  INFO 19534 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "12 - seed all recipe ingredients"
-2026-10-22T17:02:05.308Z  INFO 19534 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Successfully applied 11 migrations to schema "public", now at version v12 (execution time 00:00.168s)
-2026-10-22T17:02:05.309Z DEBUG 19534 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Securing POST /api/v1/auth/register
-2026-10-22T17:02:05.309Z DEBUG 19534 --- [provision] [           main] o.s.s.w.a.AnonymousAuthenticationFilter  : Set SecurityContextHolder to anonymous SecurityContext
-2026-10-22T17:02:05.309Z DEBUG 19534 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Secured POST /api/v1/auth/register
-2026-10-22T17:02:05.424Z  INFO 19534 --- [provision] [           main] com.provision.service.AuthService        : Registered new user: user@test.com
-2026-10-22T17:02:05.428Z DEBUG 19534 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Securing POST /api/v1/auth/login
-2026-10-22T17:02:05.428Z DEBUG 19534 --- [provision] [           main] o.s.s.w.a.AnonymousAuthenticationFilter  : Set SecurityContextHolder to anonymous SecurityContext
-2026-10-22T17:02:05.428Z DEBUG 19534 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Secured POST /api/v1/auth/login
-2026-10-22T17:02:05.597Z  INFO 19534 --- [provision] [           main] com.provision.service.AuthService        : User logged in: user@test.com
-2026-10-22T17:02:05.663Z DEBUG 19534 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Securing POST /api/v1/auth/login
-2026-10-22T17:02:05.663Z DEBUG 19534 --- [provision] [           main] o.s.s.w.a.AnonymousAuthenticationFilter  : Set SecurityContextHolder to anonymous SecurityContext
-2026-10-22T17:02:05.663Z DEBUG 19534 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Secured POST /api/v1/auth/login
-2026-10-22T17:02:05.744Z  INFO 19534 --- [provision] [           main] com.provision.service.AuthService        : User logged in: admin@test.com
-2026-10-22T17:02:05.746Z DEBUG 19534 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Securing POST /api/v1/trips
-2026-10-22T17:02:05.749Z DEBUG 19534 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Secured POST /api/v1/trips
-2026-10-22T17:02:05.756Z  INFO 19534 --- [provision] [           main] com.provision.service.TripService        : Created trip: Test Trip for user: user@test.com
-2026-10-22T17:02:05.759Z DEBUG 19534 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Securing POST /api/v1/auth/register
-2026-10-22T17:02:05.759Z DEBUG 19534 --- [provision] [           main] o.s.s.w.a.AnonymousAuthenticationFilter  : Set SecurityContextHolder to anonymous SecurityContext
-2026-10-22T17:02:05.759Z DEBUG 19534 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Secured POST /api/v1/auth/register
-2026-10-22T17:02:05.841Z  INFO 19534 --- [provision] [           main] com.provision.service.AuthService        : Registered new user: user2@test.com
-2026-10-22T17:02:05.845Z DEBUG 19534 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Securing POST /api/v1/auth/login
-2026-10-22T17:02:05.845Z DEBUG 19534 --- [provision] [           main] o.s.s.w.a.AnonymousAuthenticationFilter  : Set SecurityContextHolder to anonymous SecurityContext
-2026-10-22T17:02:05.845Z DEBUG 19534 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Secured POST /api/v1/auth/login
-2026-10-22T17:02:05.922Z  INFO 19534 --- [provision] [           main] com.provision.service.AuthService        : User logged in: user2@test.com
-2026-10-22T17:02:05.924Z DEBUG 19534 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Securing PUT /api/v1/trips/1/days/1
-2026-10-22T17:02:05.927Z DEBUG 19534 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Secured PUT /api/v1/trips/1/days/1
-2026-10-22T17:02:05.934Z  WARN 19534 --- [provision] [           main] c.p.exception.GlobalExceptionHandler     : Not found: Trip not found or access denied
+  <testcase name="sec04_userCannotModifyOtherTrips" classname="com.provision.integration.SecurityIntegrationTest" time="0.883">
+    <system-out><![CDATA[2026-10-22T19:23:30.944Z  INFO 5795 --- [provision] [           main] o.f.c.i.s.JdbcTableSchemaHistory         : Schema history table "public"."flyway_schema_history" does not exist yet
+2026-10-22T19:23:30.944Z  INFO 5795 --- [provision] [           main] o.f.core.internal.command.DbValidate     : Successfully validated 11 migrations (execution time 00:00.002s)
+2026-10-22T19:23:30.946Z  INFO 5795 --- [provision] [           main] o.f.c.i.s.JdbcTableSchemaHistory         : Creating Schema History table "public"."flyway_schema_history" ...
+2026-10-22T19:23:30.999Z  INFO 5795 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Current version of schema "public": << Empty Schema >>
+2026-10-22T19:23:31.001Z  INFO 5795 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "1 - initial schema"
+2026-10-22T19:23:31.021Z  INFO 5795 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "2 - catalog extensions"
+2026-10-22T19:23:31.027Z  INFO 5795 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "3 - seed catalog"
+2026-10-22T19:23:31.036Z  INFO 5795 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "4 - recipe ingredients"
+2026-10-22T19:23:31.099Z  INFO 5795 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "5 - integrations"
+2026-10-22T19:23:31.110Z  INFO 5795 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "6 - trip price overrides"
+2026-10-22T19:23:31.115Z  INFO 5795 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "7 - packs and substitutions"
+2026-10-22T19:23:31.122Z  INFO 5795 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "8 - product categories and identity"
+2026-10-22T19:23:31.138Z  INFO 5795 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "10 - sync trigger"
+2026-10-22T19:23:31.143Z  INFO 5795 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "11 - kcal per 100g and pack unit"
+2026-10-22T19:23:31.147Z  INFO 5795 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "12 - seed all recipe ingredients"
+2026-10-22T19:23:31.200Z  INFO 5795 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Successfully applied 11 migrations to schema "public", now at version v12 (execution time 00:00.106s)
+2026-10-22T19:23:31.201Z DEBUG 5795 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Securing POST /api/v1/auth/register
+2026-10-22T19:23:31.202Z DEBUG 5795 --- [provision] [           main] o.s.s.w.a.AnonymousAuthenticationFilter  : Set SecurityContextHolder to anonymous SecurityContext
+2026-10-22T19:23:31.202Z DEBUG 5795 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Secured POST /api/v1/auth/register
+2026-10-22T19:23:31.317Z  INFO 5795 --- [provision] [           main] com.provision.service.AuthService        : Registered new user: user@test.com
+2026-10-22T19:23:31.321Z DEBUG 5795 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Securing POST /api/v1/auth/login
+2026-10-22T19:23:31.321Z DEBUG 5795 --- [provision] [           main] o.s.s.w.a.AnonymousAuthenticationFilter  : Set SecurityContextHolder to anonymous SecurityContext
+2026-10-22T19:23:31.321Z DEBUG 5795 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Secured POST /api/v1/auth/login
+2026-10-22T19:23:31.433Z  INFO 5795 --- [provision] [           main] com.provision.service.AuthService        : User logged in: user@test.com
+2026-10-22T19:23:31.525Z DEBUG 5795 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Securing POST /api/v1/auth/login
+2026-10-22T19:23:31.526Z DEBUG 5795 --- [provision] [           main] o.s.s.w.a.AnonymousAuthenticationFilter  : Set SecurityContextHolder to anonymous SecurityContext
+2026-10-22T19:23:31.526Z DEBUG 5795 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Secured POST /api/v1/auth/login
+2026-10-22T19:23:31.598Z  INFO 5795 --- [provision] [           main] com.provision.service.AuthService        : User logged in: admin@test.com
+2026-10-22T19:23:31.600Z DEBUG 5795 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Securing POST /api/v1/trips
+2026-10-22T19:23:31.606Z DEBUG 5795 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Secured POST /api/v1/trips
+2026-10-22T19:23:31.618Z  INFO 5795 --- [provision] [           main] com.provision.service.TripService        : Created trip: Test Trip for user: user@test.com
+2026-10-22T19:23:31.620Z DEBUG 5795 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Securing POST /api/v1/auth/register
+2026-10-22T19:23:31.620Z DEBUG 5795 --- [provision] [           main] o.s.s.w.a.AnonymousAuthenticationFilter  : Set SecurityContextHolder to anonymous SecurityContext
+2026-10-22T19:23:31.620Z DEBUG 5795 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Secured POST /api/v1/auth/register
+2026-10-22T19:23:31.709Z  INFO 5795 --- [provision] [           main] com.provision.service.AuthService        : Registered new user: user2@test.com
+2026-10-22T19:23:31.712Z DEBUG 5795 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Securing POST /api/v1/auth/login
+2026-10-22T19:23:31.713Z DEBUG 5795 --- [provision] [           main] o.s.s.w.a.AnonymousAuthenticationFilter  : Set SecurityContextHolder to anonymous SecurityContext
+2026-10-22T19:23:31.713Z DEBUG 5795 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Secured POST /api/v1/auth/login
+2026-10-22T19:23:31.776Z  INFO 5795 --- [provision] [           main] com.provision.service.AuthService        : User logged in: user2@test.com
+2026-10-22T19:23:31.778Z DEBUG 5795 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Securing PUT /api/v1/trips/1/days/1
+2026-10-22T19:23:31.781Z DEBUG 5795 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Secured PUT /api/v1/trips/1/days/1
+2026-10-22T19:23:31.803Z  WARN 5795 --- [provision] [           main] c.p.exception.GlobalExceptionHandler     : Not found: Trip not found or access denied
 ]]></system-out>
   </testcase>
-  <testcase name="sec05_roleFromTokenOnly" classname="com.provision.integration.SecurityIntegrationTest" time="0.87">
-    <system-out><![CDATA[2026-10-22T17:02:05.959Z  INFO 19534 --- [provision] [           main] o.f.c.i.s.JdbcTableSchemaHistory         : Schema history table "public"."flyway_schema_history" does not exist yet
-2026-10-22T17:02:05.959Z  INFO 19534 --- [provision] [           main] o.f.core.internal.command.DbValidate     : Successfully validated 11 migrations (execution time 00:00.003s)
-2026-10-22T17:02:05.961Z  INFO 19534 --- [provision] [           main] o.f.c.i.s.JdbcTableSchemaHistory         : Creating Schema History table "public"."flyway_schema_history" ...
-2026-10-22T17:02:06.000Z  INFO 19534 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Current version of schema "public": << Empty Schema >>
-2026-10-22T17:02:06.002Z  INFO 19534 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "1 - initial schema"
-2026-10-22T17:02:06.035Z  INFO 19534 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "2 - catalog extensions"
-2026-10-22T17:02:06.043Z  INFO 19534 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "3 - seed catalog"
-2026-10-22T17:02:06.124Z  INFO 19534 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "4 - recipe ingredients"
-2026-10-22T17:02:06.203Z  INFO 19534 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "5 - integrations"
-2026-10-22T17:02:06.225Z  INFO 19534 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "6 - trip price overrides"
-2026-10-22T17:02:06.233Z  INFO 19534 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "7 - packs and substitutions"
-2026-10-22T17:02:06.298Z  INFO 19534 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "8 - product categories and identity"
-2026-10-22T17:02:06.316Z  INFO 19534 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "10 - sync trigger"
-2026-10-22T17:02:06.322Z  INFO 19534 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "11 - kcal per 100g and pack unit"
-2026-10-22T17:02:06.328Z  INFO 19534 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "12 - seed all recipe ingredients"
-2026-10-22T17:02:06.336Z  INFO 19534 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Successfully applied 11 migrations to schema "public", now at version v12 (execution time 00:00.222s)
-2026-10-22T17:02:06.339Z DEBUG 19534 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Securing POST /api/v1/auth/register
-2026-10-22T17:02:06.339Z DEBUG 19534 --- [provision] [           main] o.s.s.w.a.AnonymousAuthenticationFilter  : Set SecurityContextHolder to anonymous SecurityContext
-2026-10-22T17:02:06.339Z DEBUG 19534 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Secured POST /api/v1/auth/register
-2026-10-22T17:02:06.537Z  INFO 19534 --- [provision] [           main] com.provision.service.AuthService        : Registered new user: user@test.com
-2026-10-22T17:02:06.543Z DEBUG 19534 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Securing POST /api/v1/auth/login
-2026-10-22T17:02:06.543Z DEBUG 19534 --- [provision] [           main] o.s.s.w.a.AnonymousAuthenticationFilter  : Set SecurityContextHolder to anonymous SecurityContext
-2026-10-22T17:02:06.543Z DEBUG 19534 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Secured POST /api/v1/auth/login
-2026-10-22T17:02:06.631Z  INFO 19534 --- [provision] [           main] com.provision.service.AuthService        : User logged in: user@test.com
-2026-10-22T17:02:06.703Z DEBUG 19534 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Securing POST /api/v1/auth/login
-2026-10-22T17:02:06.703Z DEBUG 19534 --- [provision] [           main] o.s.s.w.a.AnonymousAuthenticationFilter  : Set SecurityContextHolder to anonymous SecurityContext
-2026-10-22T17:02:06.703Z DEBUG 19534 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Secured POST /api/v1/auth/login
-2026-10-22T17:02:06.767Z  INFO 19534 --- [provision] [           main] com.provision.service.AuthService        : User logged in: admin@test.com
-2026-10-22T17:02:06.769Z DEBUG 19534 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Securing POST /api/v1/trips
-2026-10-22T17:02:06.772Z DEBUG 19534 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Secured POST /api/v1/trips
-2026-10-22T17:02:06.778Z  INFO 19534 --- [provision] [           main] com.provision.service.TripService        : Created trip: Test Trip for user: user@test.com
-2026-10-22T17:02:06.800Z DEBUG 19534 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Securing POST /api/v1/admin/ingredients
-2026-10-22T17:02:06.806Z DEBUG 19534 --- [provision] [           main] o.s.s.w.access.AccessDeniedHandlerImpl   : Responding with 403 status code
+  <testcase name="sec05_roleFromTokenOnly" classname="com.provision.integration.SecurityIntegrationTest" time="0.706">
+    <system-out><![CDATA[2026-10-22T19:23:31.827Z  INFO 5795 --- [provision] [           main] o.f.c.i.s.JdbcTableSchemaHistory         : Schema history table "public"."flyway_schema_history" does not exist yet
+2026-10-22T19:23:31.827Z  INFO 5795 --- [provision] [           main] o.f.core.internal.command.DbValidate     : Successfully validated 11 migrations (execution time 00:00.002s)
+2026-10-22T19:23:31.830Z  INFO 5795 --- [provision] [           main] o.f.c.i.s.JdbcTableSchemaHistory         : Creating Schema History table "public"."flyway_schema_history" ...
+2026-10-22T19:23:31.834Z  INFO 5795 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Current version of schema "public": << Empty Schema >>
+2026-10-22T19:23:31.836Z  INFO 5795 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "1 - initial schema"
+2026-10-22T19:23:31.919Z  INFO 5795 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "2 - catalog extensions"
+2026-10-22T19:23:31.927Z  INFO 5795 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "3 - seed catalog"
+2026-10-22T19:23:31.942Z  INFO 5795 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "4 - recipe ingredients"
+2026-10-22T19:23:32.016Z  INFO 5795 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "5 - integrations"
+2026-10-22T19:23:32.027Z  INFO 5795 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "6 - trip price overrides"
+2026-10-22T19:23:32.033Z  INFO 5795 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "7 - packs and substitutions"
+2026-10-22T19:23:32.041Z  INFO 5795 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "8 - product categories and identity"
+2026-10-22T19:23:32.104Z  INFO 5795 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "10 - sync trigger"
+2026-10-22T19:23:32.109Z  INFO 5795 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "11 - kcal per 100g and pack unit"
+2026-10-22T19:23:32.117Z  INFO 5795 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "12 - seed all recipe ingredients"
+2026-10-22T19:23:32.124Z  INFO 5795 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Successfully applied 11 migrations to schema "public", now at version v12 (execution time 00:00.236s)
+2026-10-22T19:23:32.126Z DEBUG 5795 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Securing POST /api/v1/auth/register
+2026-10-22T19:23:32.126Z DEBUG 5795 --- [provision] [           main] o.s.s.w.a.AnonymousAuthenticationFilter  : Set SecurityContextHolder to anonymous SecurityContext
+2026-10-22T19:23:32.126Z DEBUG 5795 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Secured POST /api/v1/auth/register
+2026-10-22T19:23:32.245Z  INFO 5795 --- [provision] [           main] com.provision.service.AuthService        : Registered new user: user@test.com
+2026-10-22T19:23:32.249Z DEBUG 5795 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Securing POST /api/v1/auth/login
+2026-10-22T19:23:32.249Z DEBUG 5795 --- [provision] [           main] o.s.s.w.a.AnonymousAuthenticationFilter  : Set SecurityContextHolder to anonymous SecurityContext
+2026-10-22T19:23:32.249Z DEBUG 5795 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Secured POST /api/v1/auth/login
+2026-10-22T19:23:32.329Z  INFO 5795 --- [provision] [           main] com.provision.service.AuthService        : User logged in: user@test.com
+2026-10-22T19:23:32.399Z DEBUG 5795 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Securing POST /api/v1/auth/login
+2026-10-22T19:23:32.399Z DEBUG 5795 --- [provision] [           main] o.s.s.w.a.AnonymousAuthenticationFilter  : Set SecurityContextHolder to anonymous SecurityContext
+2026-10-22T19:23:32.399Z DEBUG 5795 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Secured POST /api/v1/auth/login
+2026-10-22T19:23:32.464Z  INFO 5795 --- [provision] [           main] com.provision.service.AuthService        : User logged in: admin@test.com
+2026-10-22T19:23:32.470Z DEBUG 5795 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Securing POST /api/v1/trips
+2026-10-22T19:23:32.499Z DEBUG 5795 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Secured POST /api/v1/trips
+2026-10-22T19:23:32.505Z  INFO 5795 --- [provision] [           main] com.provision.service.TripService        : Created trip: Test Trip for user: user@test.com
+2026-10-22T19:23:32.508Z DEBUG 5795 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Securing POST /api/v1/admin/ingredients
+2026-10-22T19:23:32.511Z DEBUG 5795 --- [provision] [           main] o.s.s.w.access.AccessDeniedHandlerImpl   : Responding with 403 status code
 ]]></system-out>
   </testcase>
-  <testcase name="sec06_invalidJwtSignature" classname="com.provision.integration.SecurityIntegrationTest" time="0.622">
-    <system-out><![CDATA[2026-10-22T17:02:06.831Z  INFO 19534 --- [provision] [           main] o.f.c.i.s.JdbcTableSchemaHistory         : Schema history table "public"."flyway_schema_history" does not exist yet
-2026-10-22T17:02:06.832Z  INFO 19534 --- [provision] [           main] o.f.core.internal.command.DbValidate     : Successfully validated 11 migrations (execution time 00:00.003s)
-2026-10-22T17:02:06.834Z  INFO 19534 --- [provision] [           main] o.f.c.i.s.JdbcTableSchemaHistory         : Creating Schema History table "public"."flyway_schema_history" ...
-2026-10-22T17:02:06.838Z  INFO 19534 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Current version of schema "public": << Empty Schema >>
-2026-10-22T17:02:06.840Z  INFO 19534 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "1 - initial schema"
-2026-10-22T17:02:06.913Z  INFO 19534 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "2 - catalog extensions"
-2026-10-22T17:02:06.919Z  INFO 19534 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "3 - seed catalog"
-2026-10-22T17:02:06.930Z  INFO 19534 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "4 - recipe ingredients"
-2026-10-22T17:02:06.943Z  INFO 19534 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "5 - integrations"
-2026-10-22T17:02:07.006Z  INFO 19534 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "6 - trip price overrides"
-2026-10-22T17:02:07.013Z  INFO 19534 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "7 - packs and substitutions"
-2026-10-22T17:02:07.021Z  INFO 19534 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "8 - product categories and identity"
-2026-10-22T17:02:07.033Z  INFO 19534 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "10 - sync trigger"
-2026-10-22T17:02:07.038Z  INFO 19534 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "11 - kcal per 100g and pack unit"
-2026-10-22T17:02:07.043Z  INFO 19534 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "12 - seed all recipe ingredients"
-2026-10-22T17:02:07.099Z  INFO 19534 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Successfully applied 11 migrations to schema "public", now at version v12 (execution time 00:00.170s)
-2026-10-22T17:02:07.101Z DEBUG 19534 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Securing POST /api/v1/auth/register
-2026-10-22T17:02:07.101Z DEBUG 19534 --- [provision] [           main] o.s.s.w.a.AnonymousAuthenticationFilter  : Set SecurityContextHolder to anonymous SecurityContext
-2026-10-22T17:02:07.101Z DEBUG 19534 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Secured POST /api/v1/auth/register
-2026-10-22T17:02:07.202Z  INFO 19534 --- [provision] [           main] com.provision.service.AuthService        : Registered new user: user@test.com
-2026-10-22T17:02:07.206Z DEBUG 19534 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Securing POST /api/v1/auth/login
-2026-10-22T17:02:07.206Z DEBUG 19534 --- [provision] [           main] o.s.s.w.a.AnonymousAuthenticationFilter  : Set SecurityContextHolder to anonymous SecurityContext
-2026-10-22T17:02:07.206Z DEBUG 19534 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Secured POST /api/v1/auth/login
-2026-10-22T17:02:07.270Z  INFO 19534 --- [provision] [           main] com.provision.service.AuthService        : User logged in: user@test.com
-2026-10-22T17:02:07.345Z DEBUG 19534 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Securing POST /api/v1/auth/login
-2026-10-22T17:02:07.345Z DEBUG 19534 --- [provision] [           main] o.s.s.w.a.AnonymousAuthenticationFilter  : Set SecurityContextHolder to anonymous SecurityContext
-2026-10-22T17:02:07.345Z DEBUG 19534 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Secured POST /api/v1/auth/login
-2026-10-22T17:02:07.415Z  INFO 19534 --- [provision] [           main] com.provision.service.AuthService        : User logged in: admin@test.com
-2026-10-22T17:02:07.418Z DEBUG 19534 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Securing POST /api/v1/trips
-2026-10-22T17:02:07.421Z DEBUG 19534 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Secured POST /api/v1/trips
-2026-10-22T17:02:07.426Z  INFO 19534 --- [provision] [           main] com.provision.service.TripService        : Created trip: Test Trip for user: user@test.com
-2026-10-22T17:02:07.428Z DEBUG 19534 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Securing GET /api/v1/auth/me
-2026-10-22T17:02:07.429Z  WARN 19534 --- [provision] [           main] c.p.security.JwtAuthenticationFilter     : JWT authentication failed: JWT signature does not match locally computed signature. JWT validity cannot be asserted and should not be trusted.
-2026-10-22T17:02:07.429Z DEBUG 19534 --- [provision] [           main] o.s.s.w.a.AnonymousAuthenticationFilter  : Set SecurityContextHolder to anonymous SecurityContext
-2026-10-22T17:02:07.429Z DEBUG 19534 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Secured GET /api/v1/auth/me
-2026-10-22T17:02:07.430Z  WARN 19534 --- [provision] [           main] c.p.exception.GlobalExceptionHandler     : Unauthorized: Not authenticated
+  <testcase name="sec06_invalidJwtSignature" classname="com.provision.integration.SecurityIntegrationTest" time="0.806">
+    <system-out><![CDATA[2026-10-22T19:23:32.537Z  INFO 5795 --- [provision] [           main] o.f.c.i.s.JdbcTableSchemaHistory         : Schema history table "public"."flyway_schema_history" does not exist yet
+2026-10-22T19:23:32.537Z  INFO 5795 --- [provision] [           main] o.f.core.internal.command.DbValidate     : Successfully validated 11 migrations (execution time 00:00.002s)
+2026-10-22T19:23:32.539Z  INFO 5795 --- [provision] [           main] o.f.c.i.s.JdbcTableSchemaHistory         : Creating Schema History table "public"."flyway_schema_history" ...
+2026-10-22T19:23:32.543Z  INFO 5795 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Current version of schema "public": << Empty Schema >>
+2026-10-22T19:23:32.545Z  INFO 5795 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "1 - initial schema"
+2026-10-22T19:23:32.615Z  INFO 5795 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "2 - catalog extensions"
+2026-10-22T19:23:32.622Z  INFO 5795 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "3 - seed catalog"
+2026-10-22T19:23:32.631Z  INFO 5795 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "4 - recipe ingredients"
+2026-10-22T19:23:32.644Z  INFO 5795 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "5 - integrations"
+2026-10-22T19:23:32.704Z  INFO 5795 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "6 - trip price overrides"
+2026-10-22T19:23:32.710Z  INFO 5795 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "7 - packs and substitutions"
+2026-10-22T19:23:32.716Z  INFO 5795 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "8 - product categories and identity"
+2026-10-22T19:23:32.726Z  INFO 5795 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "10 - sync trigger"
+2026-10-22T19:23:32.729Z  INFO 5795 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "11 - kcal per 100g and pack unit"
+2026-10-22T19:23:32.734Z  INFO 5795 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "12 - seed all recipe ingredients"
+2026-10-22T19:23:32.743Z  INFO 5795 --- [provision] [           main] o.f.core.internal.command.DbMigrate      : Successfully applied 11 migrations to schema "public", now at version v12 (execution time 00:00.161s)
+2026-10-22T19:23:32.744Z DEBUG 5795 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Securing POST /api/v1/auth/register
+2026-10-22T19:23:32.744Z DEBUG 5795 --- [provision] [           main] o.s.s.w.a.AnonymousAuthenticationFilter  : Set SecurityContextHolder to anonymous SecurityContext
+2026-10-22T19:23:32.744Z DEBUG 5795 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Secured POST /api/v1/auth/register
+2026-10-22T19:23:32.904Z  INFO 5795 --- [provision] [           main] com.provision.service.AuthService        : Registered new user: user@test.com
+2026-10-22T19:23:32.911Z DEBUG 5795 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Securing POST /api/v1/auth/login
+2026-10-22T19:23:32.911Z DEBUG 5795 --- [provision] [           main] o.s.s.w.a.AnonymousAuthenticationFilter  : Set SecurityContextHolder to anonymous SecurityContext
+2026-10-22T19:23:32.911Z DEBUG 5795 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Secured POST /api/v1/auth/login
+2026-10-22T19:23:33.030Z  INFO 5795 --- [provision] [           main] com.provision.service.AuthService        : User logged in: user@test.com
+2026-10-22T19:23:33.197Z DEBUG 5795 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Securing POST /api/v1/auth/login
+2026-10-22T19:23:33.197Z DEBUG 5795 --- [provision] [           main] o.s.s.w.a.AnonymousAuthenticationFilter  : Set SecurityContextHolder to anonymous SecurityContext
+2026-10-22T19:23:33.197Z DEBUG 5795 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Secured POST /api/v1/auth/login
+2026-10-22T19:23:33.264Z  INFO 5795 --- [provision] [           main] com.provision.service.AuthService        : User logged in: admin@test.com
+2026-10-22T19:23:33.297Z DEBUG 5795 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Securing POST /api/v1/trips
+2026-10-22T19:23:33.301Z DEBUG 5795 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Secured POST /api/v1/trips
+2026-10-22T19:23:33.311Z  INFO 5795 --- [provision] [           main] com.provision.service.TripService        : Created trip: Test Trip for user: user@test.com
+2026-10-22T19:23:33.317Z DEBUG 5795 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Securing GET /api/v1/auth/me
+2026-10-22T19:23:33.318Z  WARN 5795 --- [provision] [           main] c.p.security.JwtAuthenticationFilter     : JWT authentication failed: JWT signature does not match locally computed signature. JWT validity cannot be asserted and should not be trusted.
+2026-10-22T19:23:33.319Z DEBUG 5795 --- [provision] [           main] o.s.s.w.a.AnonymousAuthenticationFilter  : Set SecurityContextHolder to anonymous SecurityContext
+2026-10-22T19:23:33.319Z DEBUG 5795 --- [provision] [           main] o.s.security.web.FilterChainProxy        : Secured GET /api/v1/auth/me
+2026-10-22T19:23:33.320Z  WARN 5795 --- [provision] [           main] c.p.exception.GlobalExceptionHandler     : Unauthorized: Not authenticated
 ]]></system-out>
   </testcase>
 </testsuite>

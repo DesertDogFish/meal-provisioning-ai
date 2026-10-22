@@ -2,12 +2,18 @@
 
 ## Current Phase
 
-**✅ Фаза 10 закрыта (2026-10-22). Бэклог P1 п.1 «Contract расширить» закрыт (2026-10-22). В работе: P1 п.3 — интеграционные бэкенд-тесты локально (следующий по приоритету).**
+**✅ Фаза 10 закрыта (2026-10-22). Бэклог P1 закрыт (2026-10-22/23). P2 Playwright e2e: спеки 8/8 зелёные, ночной job + non-blocking PR-прогон настроены (.github/workflows/e2e-nightly.yml). CI Backend Tests починлен (2026-10-23), см. запись ниже.**
 
 > **HOTFIX 2026-10-23: `ReferenceError: e is not defined` на старте продакшен-билда.**
 > Причина: в `src/api/client.ts` (конструктор `ApiClient`, строка чтения env) при правке канала инъекции `VITE_API_MODE` (`window.meta`-обход для тестов) опечатка `e.VITE_API_MODE` вместо `env.VITE_API_MODE`. Vite/esbuild не резолвят идентификаторы — в минифицированном бандле остаётся голодная `e`, ReferenceError при создании синглтона `api` (модуль грузится на старте). Dockerfile.frontend (ARG/ENV VITE_API_URL/VITE_API_MODE) — ни при чём; `mode.ts`, `main.tsx`, `App.tsx` проверены, чисто.
 > Фикс: (1) `e.` → `env.`; (2) укрепление канала инъекции: клиент читает `window.meta.env ?? window.meta ?? import.meta.env` (раньше тестовый хелпер падал с `Cannot set properties of undefined`, т.к. `window.meta` создавался без вложенного `env`); (3) MODE-07 grep-страж переписан с shell-строки (ломкий экранинг + sh-синтаксис) на fs-рекурсию.
 > Доказательство: red — до фикса `npm run test` давал 2 failed (MODE-08), в `dist/assets/index-*.js` присутствовал паттерн `e.VITE_API_MODE`; green — после: 194/194 passed, `grep -c 'e\.VITE_API_MODE' dist = 0`, lint 0 errors, typecheck OK, build SUCCESS, preview отдаёт бандл 200.
+
+
+> **CI FIX 2026-10-23: GitHub Actions `Backend Tests` падал на `AuthIntegrationTest » IllegalState Failed to load ApplicationContext`.**
+> Диагноз по логам: (1) корневая причина — Testcontainers не находил Docker-окружение для строго-Docker классов `MetaControllerTest`/`DockerStackSmokeTest` (`@Testcontainers`+`@Container`) → «Could not find a valid Docker environment», и этот же отказ ломал контексты всех Integration* (в стеке кастомизаторов виден `DynamicPropertiesContextCustomizer`); (2) второй риск — `java-version: '21'` в ci.yml при `<java.version>17</java.version>` в pom (перекос, зафиксирован при переходе на Java 17); (3) усиление JWT: `JwtService.getSigningKey()` теперь даёт понятную ошибку при пустом секрете и SHA-256-доразмеряет ключ <256 бит вместо `WeakKeyException` при загрузке контекста.
+> Фикс: MetaControllerTest и DockerStackSmokeTest переведены на `@ContainerSuite` (fallback LocalPgFallback, как у Integration*); в ci.yml — Java 17 + шаг установки postgresql-15 для fallback + env `JWT_SECRET` для mvn; `docker compose config -q` проверен локально (compose использует `${JWT_SECRET:-…}` дефолт, падение CI — артефакт старого workflow-файла на другой ветке; если повторится — добавить тот же env в docker-job).
+> Гейт: `mvn -B -ntp test` = **Tests run: 54, Failures: 0, Errors: 0, Skipped: 3** (skipped — только @Disabled агрегационный баг-тест с TODO PLAN.md), BUILD SUCCESS.
 
 Предыдущие фазы:
 - ✅ Фаза 1: Core Features (CRUD продуктов, рецептов, походов)
@@ -134,9 +140,10 @@
 
 ### P2 — после миграции Батча 3
 
-#### 1. Playwright e2e: 6–10 сценариев
-- [ ] Логин→продукт+дубль→поход+спаренные даты→сводка план/факт/калории/humanize→фолбэк→смена режима+очистка кеша
-- [ ] Ночной job; локально кодер прогоняет `npx playwright test` и приносит вывод
+#### 1. Playwright e2e: 6–10 сценариев ✅ (2026-10-23)
+- [x] Логин→продукт+дубль→поход+спаренные даты→сводка план/факт/калории/humanize→фолбэк→смена режима+очистка кеша — `e2e/main-flow.spec.ts`, 8 сценариев, `npx playwright test` = 8 passed
+- [x] Ночной job + PR-прогон без блокировки: `.github/workflows/e2e-nightly.yml` (schedule 03:30 UTC — blocking; pull_request — `continue-on-error`). Локально кодер прогоняет `npx playwright test` и приносит вывод
+- Примечание: для стабильности в mock-режиме добавлены `data-testid`-атрибуты и GET /admin/prices в mockServer; исправлена передача токена `/auth/me` (парсинг ID из токена)
 
 ### P3 — бэклог v2 (не сейчас)
 

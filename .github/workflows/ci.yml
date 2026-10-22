@@ -21,11 +21,21 @@ jobs:
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '21'
+          java-version: '17'  # синхронно с backend/pom.xml (<java.version>17</java.version>)
           cache: maven
       
+
+      # Интеграционные тесты (Integration*) работают без Docker-демона через
+      # LocalPgFallback (initdb/pg_ctl). Ставим серверный пакет PostgreSQL заранее —
+      # fallback сам пакеты не устанавливает.
+      - name: Install PostgreSQL 15 (for LocalPgFallback integration tests)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -yq --no-install-recommends postgresql-15
       - name: Backend tests
         working-directory: backend
+        env:
+          JWT_SECRET: ci-test-secret-key-for-jwt-tokens-must-be-at-least-256-bits-long-hs256-ok
         run: mvn -B -ntp test
       
       - name: Upload surefire reports

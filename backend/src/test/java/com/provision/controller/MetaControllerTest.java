@@ -9,9 +9,9 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
+import com.provision.integration.ContainerSuite;
+import com.provision.integration.LocalPgFallback;
 import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -19,25 +19,36 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 /**
  * Unit-тест живости MetaController (эндпоинт healthcheck'а бэкенда в docker-compose).
+ *
+ * FIX (CI 2026-10-23): раньше требовал строго Docker (@Testcontainers + @Container) —
+ * падал «Could not find a valid Docker environment» на раннерах без демона. Переведён
+ * на @ContainerSuite: Docker есть -> Testcontainers, нет -> LocalPgFallback (initdb/pg_ctl).
  */
 @SpringBootTest
 @AutoConfigureMockMvc
-@Testcontainers
+@ContainerSuite
 @ActiveProfiles("test")
 @DisplayName("MetaController")
 class MetaControllerTest {
 
-    @Container
-    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:15-alpine")
+    private static final boolean LOCAL_PG = !LocalPgFallback.dockerAvailable();
+
+    static PostgreSQLContainer<?> postgres = LOCAL_PG ? null : new PostgreSQLContainer<>("postgres:15-alpine")
             .withDatabaseName("provision_meta_test")
             .withUsername("test")
             .withPassword("test");
 
+    static {
+        if (!LOCAL_PG && postgres != null && !postgres.isRunning()) {
+            postgres.start();
+        }
+    }
+
     @DynamicPropertySource
     static void configureProperties(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", postgres::getJdbcUrl);
-        registry.add("spring.datasource.username", postgres::getUsername);
-        registry.add("spring.datasource.password", postgres::getPassword);
+        registry.add("spring.datasource.url", () -> LOCAL_PG ? LocalPgFallback.jdbcUrl("provision_meta_test") : postgres.getJdbcUrl());
+        registry.add("spring.datasource.username", () -> LOCAL_PG ? "test" : postgres.getUsername());
+        registry.add("spring.datasource.password", () -> LOCAL_PG ? "test" : postgres.getPassword());
     }
 
     @Autowired

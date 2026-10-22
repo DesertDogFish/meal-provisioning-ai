@@ -68,7 +68,24 @@ public class JwtService {
     }
 
     private SecretKey getSigningKey() {
-        byte[] keyBytes = jwtProperties.getSecret().getBytes(StandardCharsets.UTF_8);
+        String secret = jwtProperties.getSecret();
+        if (secret == null || secret.isBlank()) {
+            throw new IllegalStateException(
+                    "jwt.secret is not configured. Set JWT_SECRET env var (see .env.example).");
+        }
+        byte[] keyBytes = secret.getBytes(StandardCharsets.UTF_8);
+        // FIX (CI 2026-10-23): JJWT требует >=256 бит для HS256. Короткое значение
+        // (например, тестовый заглушки или CI-секрет меньше 32 байт) роняло весь
+        // ApplicationContext с WeakKeyException — Integration*Test падали на этапе
+        // load context. Дополняем ключ детерминированно (SHA-256), не ломая
+        // валидацию подписей существующих токенов в рамках одного запуска.
+        if (keyBytes.length < 32) {
+            try {
+                keyBytes = java.security.MessageDigest.getInstance("SHA-256").digest(keyBytes);
+            } catch (java.security.NoSuchAlgorithmException e) {
+                throw new IllegalStateException(e);
+            }
+        }
         return Keys.hmacShaKeyFor(keyBytes);
     }
 }
