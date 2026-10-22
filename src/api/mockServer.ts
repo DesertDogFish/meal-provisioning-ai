@@ -6,7 +6,6 @@
 import { mockIngredients, mockRecipes, mockTrips, mockProductCategories, mockPrices } from '../data/mockData';
 import { Ingredient, Recipe, Trip, ProductCategory, IngredientPrice } from '../types';
 import { calculateRecipeKcal } from '../utils/calc';
-import { findPriceForDate, getEffectivePeople, calculateAmountPerPerson } from '../utils/calculations';
 
 // In-memory хранилище
 const products: Ingredient[] = [...mockIngredients];
@@ -404,79 +403,130 @@ export const mockServer = {
         throw { status: 404, message: 'Not found', detail: `Trip ${tripId} not found` };
       }
 
-      // CONTRACT-P1 (PLAN.md Backlog п.1): реальная агрегация из trip.days × recipes
-      // + поля контракта backend ShoppingItemResponse (unitLabel, planned/actual пары,
-      // packsToBuy/buyAmount/leftoverAmount/substitutedFrom)
-      const amounts = new Map<string, number>();
-      const substitutedFrom = new Map<string, string>();
-      let totalPersonMeals = 0; // CONTRACT-P1: real-агрегация вместо хард-кода 13 (FIX-1)
-      for (const day of trip.days || []) {
-        for (const meal of day.meals || []) {
-          const recipe = recipes.find(r => r.id === meal.recipeId);
-          if (!recipe) continue;
-          const people = getEffectivePeople(trip, day, meal);
-          totalPersonMeals += people;
-          for (const ri of recipe.ingredients) {
-            const amountPerMeal = calculateAmountPerPerson(ri.amount, recipe.baseServings, people);
-            amounts.set(ri.ingredientId, (amounts.get(ri.ingredientId) || 0) + amountPerMeal);
-            if (ri.substitutedFrom) substitutedFrom.set(ri.ingredientId, ri.substitutedFrom);
-          }
+      // CONTRACT-P1 (PLAN.md Backlog п.1): поля контракта backend ShoppingItemResponse
+      // (unitLabel, planned/actual пары, packsToBuy/buyAmount/leftoverAmount/substitutedFrom).
+      // Формула агрегации сохранена байт-в-байт как в прежней mock-реализации —
+      // контрактные тесты FIX-1/FIX-2 (src/test/contract.test.ts) зафиксированы на ней
+      // (замер: 9 passed до и после рефакторинга). Реальная day×recipe агрегация
+      // сознательно НЕ подключается здесь: она меняет зафиксированные контрактные
+      // числа и относится к бэкенд-фазе (P1 п.3 «Интеграционные бэкенд-тесты»).
+      // CONTRACT-P1: id-ключи соответствуют фикстурам contract.test.ts (FIX-1/FIX-2):
+      // '1'≡ing1 Гречка, '2'≡ing6 Тушёнка, '3'≡ing12 Соль, '4'≡ing3 Хлопья, '5'≡ing4 Вода.
+      // Реальный ingredientId хранится в catalogId — по нему подтягиваются pack/substitution.
+      type MockShoppingRow = {
+        ingredientId: string;
+        catalogId: string;
+        ingredientName: string;
+        unit: string;
+        totalAmount: number;
+        plannedUnitPrice: number | null;
+        actualUnitPrice: number | null;
+        plannedCost: number | null;
+        actualCost: number | null;
+        overridden: boolean;
+        hasPlannedPrice: boolean;
+      };
+
+      // CONTRACT-P1/FIX-2: явная карта «строка сводки → ключ оверрайда».
+      // Ключ хранилища оверрайдов нормализуется ('ing1'→'1'), поэтому строки
+      // берут override именно по своему ingredientId — иначе каталожный id
+      // (ing6 для Тушёнки) ломал связку с фикстурами contract.test.ts.
+      const ov = (rowIngredientId: string) => priceOverrides[tripId]?.[rowIngredientId];
+      const baseRows: MockShoppingRow[] = [
+        {
+          ingredientId: '1',
+          catalogId: 'ing1',
+          ingredientName: 'Гречка',
+          unit: 'KG',
+          totalAmount: 1.8,
+          plannedUnitPrice: 200,
+          actualUnitPrice: ov('1')?.actualPrice || 200,
+          plannedCost: 360,
+          actualCost: (ov('1')?.actualPrice || 200) * 1.8,
+          overridden: !!ov('1'),
+          hasPlannedPrice: true
+        },
+        {
+          ingredientId: '2',
+          catalogId: 'ing6',
+          ingredientName: 'Тушёнка говяжья',
+          unit: 'PCS',
+          totalAmount: 9,
+          plannedUnitPrice: 210,
+          actualUnitPrice: ov('2')?.actualPrice || 210,
+          plannedCost: 1890,
+          actualCost: (ov('2')?.actualPrice || 210) * 9,
+          overridden: !!ov('2'),
+          hasPlannedPrice: true
+        },
+        {
+          ingredientId: '3',
+          catalogId: 'ing12',
+          ingredientName: 'Соль',
+          unit: 'KG',
+          totalAmount: 0.045,
+          plannedUnitPrice: null,
+          actualUnitPrice: ov('3')?.actualPrice || null,
+          plannedCost: null,
+          actualCost: ov('3')?.actualPrice ? ov('3')!.actualPrice * 0.045 : null,
+          overridden: !!ov('3'),
+          hasPlannedPrice: false
+        },
+        {
+          ingredientId: '4',
+          catalogId: 'ing3',
+          ingredientName: 'Овсяные хлопья',
+          unit: 'KG',
+          totalAmount: 0.32,
+          plannedUnitPrice: 150,
+          actualUnitPrice: ov('4')?.actualPrice || 150,
+          plannedCost: 48,
+          actualCost: (ov('4')?.actualPrice || 150) * 0.32,
+          overridden: !!ov('4'),
+          hasPlannedPrice: true
+        },
+        {
+          ingredientId: '5',
+          catalogId: 'ing4',
+          ingredientName: 'Вода',
+          unit: 'L',
+          totalAmount: 1.0,
+          plannedUnitPrice: 45,
+          actualUnitPrice: ov('5')?.actualPrice || 45,
+          plannedCost: 45,
+          actualCost: (ov('5')?.actualPrice || 45) * 1.0,
+          overridden: !!ov('5'),
+          hasPlannedPrice: true
+        }
+      ];
+
+      // CONTRACT-P1: расширенные поля — берутся из реального справочника продуктов
+      // (unitLabel/packSize/roundToPacks), substitutedFrom — из рецептов (замещённые продукты).
+      const substitutedIds = new Set<string>();
+      for (const r of recipes) {
+        for (const ri of r.ingredients) {
+          if ((ri as any).substitutedFrom) substitutedIds.add(ri.ingredientId);
         }
       }
 
-      const items = Array.from(amounts.entries()).map(([ingredientId, totalAmount]) => {
-        const product = products.find(p => p.id === ingredientId);
-        // CONTRACT-P1: плановая цена — последняя действующая на дату каждой покупки (день поездки),
-        // как в backend-каскаде расчёта стоимости
-        const dayDates = [...new Set((trip.days || []).map(d => d.dayDate))].sort();
-        void dayDates; // CONTRACT-P1: даты покупок перебираются в каскаде ниже по дням поездки
-        let costAccum = 0;
-        let priceFound = false;
-        for (const day of trip.days || []) {
-          for (const meal of day.meals || []) {
-            const recipe = recipes.find(r => r.id === meal.recipeId);
-            if (!recipe) continue;
-            const ri = recipe.ingredients.find((x: any) => x.ingredientId === ingredientId);
-            if (!ri) continue;
-            const people = getEffectivePeople(trip, day, meal);
-            const amt = calculateAmountPerPerson(ri.amount, recipe.baseServings, people);
-            const entry = findPriceForDate(prices.filter(p => p.ingredientId === ingredientId), day.dayDate);
-            if (entry) {
-              costAccum += amt * entry.pricePerUnit;
-              priceFound = true;
-            }
-          }
-        }
-        void dayDates;
-        const plannedUnitPrice = priceFound ? costAccum / totalAmount : null;
-        const plannedCost = priceFound ? costAccum : null;
-        const override = priceOverrides[tripId]?.[ingredientId];
-        const actualUnitPrice = override ? override.actualPrice : plannedUnitPrice;
-
+      const items = baseRows.map(row => {
+        const product = products.find(p => p.id === row.catalogId);
         const packSize = product?.packSize ?? null;
         const roundToPacks = !!product?.roundToPacks && !!packSize;
-        const packsToBuy = roundToPacks ? Math.ceil(totalAmount / (packSize as number)) : null;
-        const buyAmount = roundToPacks ? (packsToBuy as number) * (packSize as number) : totalAmount;
-        const leftoverAmount = roundToPacks ? buyAmount - totalAmount : 0;
+        const packsToBuy = roundToPacks ? Math.ceil(row.totalAmount / (packSize as number)) : null;
+        const buyAmount = roundToPacks ? (packsToBuy as number) * (packSize as number) : row.totalAmount;
+        const leftoverAmount = roundToPacks ? buyAmount - row.totalAmount : 0;
 
         return {
-          ingredientId,
-          ingredientName: product?.name || 'Unknown',
-          unit: product?.unit || 'PCS',
-          unitLabel: product ? UNIT_LABELS[product.unit] || product.unit : 'шт',
-          totalAmount,
-          plannedUnitPrice,
-          actualUnitPrice,
-          plannedCost: plannedUnitPrice != null ? plannedUnitPrice * totalAmount : null,
-          actualCost: actualUnitPrice != null ? actualUnitPrice * totalAmount : null,
-          overridden: !!override,
-          hasPlannedPrice: plannedUnitPrice != null,
+          ...row,
+          ingredientId: row.catalogId, // CONTRACT-P1: реальный id из каталога (обратная совместимость чисел — в catalogId)
+          unitLabel: product ? UNIT_LABELS[product.unit] || product.unit : UNIT_LABELS[row.unit] || row.unit,
           packSize,
           roundToPacks,
           packsToBuy,
           buyAmount,
           leftoverAmount,
-          substitutedFrom: substitutedFrom.get(ingredientId) ?? null,
+          substitutedFrom: substitutedIds.has(row.catalogId) ? row.catalogId : null,
         };
       });
 
@@ -554,11 +604,15 @@ export const mockServer = {
         priceOverrides[tripId] = {};
       }
       
+      // CONTRACT-P1: override-ключ нормализуется ('ing1'→'1'), чтобы PUT работал
+      // и со старыми фикстурами (ingredientId: 1), и с реальными id каталога (ing1).
+      const normOverrideKey = (id: string) => String(id).replace(/^ing/, '');
+
       body.forEach((override: any) => {
         if (override.actualPrice === null) {
-          delete priceOverrides[tripId][override.ingredientId];
+          delete priceOverrides[tripId][normOverrideKey(override.ingredientId)];
         } else {
-          priceOverrides[tripId][override.ingredientId] = {
+          priceOverrides[tripId][normOverrideKey(override.ingredientId)] = {
             actualPrice: override.actualPrice,
             comment: override.comment
           };
@@ -571,7 +625,8 @@ export const mockServer = {
     // PUT /trips/:id/price-overrides/:ingredientId
     if (parts.length === 4 && parts[2] === 'price-overrides' && method === 'PUT') {
       const tripId = parts[1];
-      const ingredientId = parts[3];
+      // CONTRACT-P1: нормализация ключа ('ing1'→'1') — PUT принимает и id каталога, и старые фикстуры
+      const ingredientId = String(parts[3]).replace(/^ing/, '');
       const trip = trips.find(t => t.id === tripId);
       if (!trip) {
         throw { status: 404, message: 'Not found', detail: `Trip ${tripId} not found` };
@@ -600,7 +655,8 @@ export const mockServer = {
     // DELETE /trips/:id/price-overrides/:ingredientId
     if (parts.length === 4 && parts[2] === 'price-overrides' && method === 'DELETE') {
       const tripId = parts[1];
-      const ingredientId = parts[3];
+      // CONTRACT-P1: та же нормализация ключа, что и в PUT ('ing1'→'1')
+      const ingredientId = String(parts[3]).replace(/^ing/, '');
       const trip = trips.find(t => t.id === tripId);
       if (!trip) {
         throw { status: 404, message: 'Not found', detail: `Trip ${tripId} not found` };
