@@ -60,14 +60,19 @@ class CatalogIntegrationTest {
     private ObjectMapper objectMapper;
 
     @Autowired
-    private com.provision.repository.UserRepository userRepository;
+    private org.springframework.jdbc.core.JdbcTemplate jdbc;
+
+    @Autowired
+    private org.flywaydb.core.Flyway flyway;
 
     /** SEC: /api/v1/recipes* требует аутентификации (anyRequest().authenticated()) — раньше запросы шли без токена и получали 403. */
     private String userToken;
 
     @BeforeEach
     void setUp() throws Exception {
-        userRepository.deleteAll();
+        // FIX: вместо userRepository.deleteAll() (удалял только users и падал на FK) —
+        // полная пересборка схемы из миграций: детерминированный каталог V3/V4 перед каждым тестом.
+        TestDataIsolation.reset(jdbc, flyway);
         userToken = TestUsers.registerUser(mockMvc, objectMapper, "cat_user@test.com");
     }
 

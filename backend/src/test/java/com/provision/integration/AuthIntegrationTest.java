@@ -63,14 +63,19 @@ class AuthIntegrationTest {
     private ObjectMapper objectMapper;
 
     @Autowired
-    private UserRepository userRepository;
+    private org.springframework.jdbc.core.JdbcTemplate jdbc;
+
+    @Autowired
+    private org.flywaydb.core.Flyway flyway;
 
     private static final String TEST_EMAIL = "auth_test@example.com";
     private static final String TEST_PASSWORD = "password123";
 
     @BeforeEach
     void setUp() {
-        userRepository.deleteAll();
+        // FIX: deleteAll() не давал изоляции каталога (V3-сид) и падал на FK RESTRICT.
+        // Полная пересборка схемы из миграций — детерминированное состояние перед каждым тестом.
+        TestDataIsolation.reset(jdbc, flyway);
     }
 
     @Test

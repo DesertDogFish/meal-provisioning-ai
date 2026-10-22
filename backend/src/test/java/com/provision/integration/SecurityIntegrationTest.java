@@ -65,7 +65,10 @@ class SecurityIntegrationTest {
     private ObjectMapper objectMapper;
 
     @Autowired
-    private UserRepository userRepository;
+    private org.springframework.jdbc.core.JdbcTemplate jdbc;
+
+    @Autowired
+    private org.flywaydb.core.Flyway flyway;
 
     private String userToken;
     private String adminToken;
@@ -73,13 +76,14 @@ class SecurityIntegrationTest {
 
     @BeforeEach
     void setUp() throws Exception {
-        userRepository.deleteAll();
+        // FIX: вместо userRepository.deleteAll() — полная пересборка схемы из миграций.
+        TestDataIsolation.reset(jdbc, flyway);
 
         // Create USER (пароль хэшируется реальным PasswordEncoder через /auth/register)
         userToken = TestUsers.registerUser(mockMvc, objectMapper, "user@test.com");
 
         // Create ADMIN (раньше был захардкожен чужой BCrypt-хэш, не соответствующий паролю -> логин 401)
-        adminToken = TestUsers.createAdmin(mockMvc, objectMapper, userRepository, "admin@test.com");
+        adminToken = TestUsers.createAdmin(mockMvc, objectMapper, jdbc, "admin@test.com");
 
         // Create trip for user
         TripRequest tripRequest = new TripRequest(

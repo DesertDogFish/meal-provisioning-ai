@@ -68,19 +68,24 @@ class ConflictIntegrationTest {
     private ObjectMapper objectMapper;
 
     @Autowired
-    private UserRepository userRepository;
+    private org.springframework.jdbc.core.JdbcTemplate jdbc;
+
+    @Autowired
+    private org.flywaydb.core.Flyway flyway;
 
     private String adminToken;
     private String userToken;
 
     @BeforeEach
     void setUp() throws Exception {
-        userRepository.deleteAll();
+        // FIX: вместо userRepository.deleteAll() — полная пересборка схемы из миграций.
+        // Раньше сид V3 (рецепты/ингредиенты) оставался в базе, и создание "Гречка" давало 409.
+        TestDataIsolation.reset(jdbc, flyway);
 
         // FIX: раньше ADMIN заводился с захардкоженным BCrypt-хэшем из чужих доков,
         // который НЕ соответствует паролю "password123" -> логин давал 401 и весь класс падал.
         // TestUsers создаёт пользователей с корректным хэшем через реальный PasswordEncoder.
-        adminToken = TestUsers.createAdmin(mockMvc, objectMapper, userRepository, "admin@test.com");
+        adminToken = TestUsers.createAdmin(mockMvc, objectMapper, jdbc, "admin@test.com");
         userToken = TestUsers.registerUser(mockMvc, objectMapper, "user@test.com");
     }
 

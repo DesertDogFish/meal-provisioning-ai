@@ -3,8 +3,6 @@ package com.provision.integration;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.provision.dto.auth.LoginRequest;
 import com.provision.dto.auth.RegisterRequest;
-import com.provision.entity.User;
-import com.provision.entity.UserRole;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
@@ -60,21 +58,26 @@ public final class TestUsers {
         return (String) tokens.get("accessToken");
     }
 
-    /** Создаёт ADMIN напрямую в БД с корректным хэшем PASSWORD и возвращает accessToken. */
+    /**
+     * Создаёт ADMIN напрямую в БД (register-API не даёт задать роль) и логинит его.
+     * FIX: вместо UserRepository.save(entity) — raw SQL с проверкой существования:
+     * после пересборки схемы (TestDataIsolation.reset) id стартуют заново, и вставка
+     * через JPA-сущность с кэшированным identity конфликтовала; INSERT ... SELECT WHERE
+     * NOT EXISTS идемпотентен на любом состоянии таблицы.
+     */
     public static String createAdmin(MockMvc mockMvc, ObjectMapper om,
-                                     com.provision.repository.UserRepository userRepository,
+                                     org.springframework.jdbc.core.JdbcTemplate jdbc,
                                      String email) {
         try {
             var encoder = new org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder();
-            User admin = User.builder()
-                    .email(email)
-                    .passwordHash(encoder.encode(PASSWORD))
-                    .firstName("Admin")
-                    .lastName("Test")
-                    .role(UserRole.ADMIN)
-                    .build();
-            if (!userRepository.findByEmail(email).isPresent()) {
-                userRepository.save(admin);
+            Integer exists = jdbc.queryForObject(
+                    "SELECT count(*) FROM users WHERE email = ?", Integer.class, email);
+            if (exists == null || exists == 0) {
+                jdbc.update("""
+                        INSERT INTO users (email, password_hash, first_name, last_name, role, created_at, updated_at)
+                        VALUES (?, ?, 'Admin', 'Test', 'ADMIN', now(), now())
+                        """,
+                        email, encoder.encode(PASSWORD));
             }
             return login(mockMvc, om, email, PASSWORD);
         } catch (Exception e) {
