@@ -15,6 +15,11 @@
 > Фикс: MetaControllerTest и DockerStackSmokeTest переведены на `@ContainerSuite` (fallback LocalPgFallback, как у Integration*); в ci.yml — Java 17 + шаг установки postgresql-15 для fallback + env `JWT_SECRET` для mvn; `docker compose config -q` проверен локально (compose использует `${JWT_SECRET:-…}` дефолт, падение CI — артефакт старого workflow-файла на другой ветке; если повторится — добавить тот же env в docker-job).
 > Гейт: `mvn -B -ntp test` = **Tests run: 54, Failures: 0, Errors: 0, Skipped: 3** (skipped — только @Disabled агрегационный баг-тест с TODO PLAN.md), BUILD SUCCESS.
 
+> **CI FIX 2026-10-23(2): шаг `Install PostgreSQL 15` падал с `exit code 100`.**
+> Диагноз: `ubuntu-latest` переведён на Ubuntu 24.04 (noble), в стандартных репах которого нет пакета `postgresql-15` (только 16/17) → apt «Unable to locate package» → код 100.
+> Фикс в ci.yml: проверка доступности `postgresql-15`; при отсутствии — подключение официального PGDG-репозитория (ключ ACCC4CF8 + `$(VERSION_CODENAME)-pgdg`) и повторная установка; если и PGDG недоступен — установка дефолтного пакета `postgresql` с `::warning::` (безопасно: `LocalPgFallback.detectPgBin()` сам выбирает максимальный установленный мажор).
+> Гейт: YAML workflow валиден, bash-скрипт шага — `bash -n` OK, логика веток проверена локально (Debian 12: pg15 доступен → первая ветка).
+
 Предыдущие фазы:
 - ✅ Фаза 1: Core Features (CRUD продуктов, рецептов, походов)
 - ✅ Фаза 2: CR-1..CR-5 (калорийность, единицы, даты, API клиент)
@@ -159,6 +164,7 @@
 - [x] `CatalogIntegrationTest` — 403→`permitAll` на публичные GET + миграции V12/V13 (досид ингредиентов рецептов, чинит поиск «тушенка») + UTF-8 фикс MockMvcUtf8PostProcessor (ручной парсинг query без двойного декодирования) — 7/7 passed
 - [x] `ConflictIntegrationTest` / `SecurityIntegrationTest` — login в setUp (хелпер TestUsers), уникальные имена фикстур, сброс схемы (TestDataIsolation) — 3/3 и 6/6 passed
 - [x] Testcontainers с fallback: ContainerSuite → Docker недоступен ⇒ LocalPgFallback поднимает PostgreSQL 15 через initdb/pg_ctl (без демона). Java снижена до 17 (README обновлён)
+- [x] FIX (2026-10-22): V13__seed_price_history падал на CI с SQL 23505 (`ingredient_prices_ingredient_id_effective_from_key`, ключ (11, 2026-01-01)) — generate_series(1,23) включал дату базового сида из V3. Правка только в V13 (V1/V3 не трогаем — правка применённых миграций ломает checksum Flyway): generate_series(1,24), фильтр `WHERE NOT EXISTS` по существующим датам, `ON CONFLICT DO NOTHING` как страховка. Проверено на локальном PostgreSQL 15: старый V13 воспроизводит 23505, новый вставляет 1380 строк, повторный запуск = 0 строк (идемпотентно), дублей нет, окно 2024-10-01…2026-09-01
 - [x] Гейт: `mvn -B -ntp test` зелёный локально ✅ (2026-10-22: Tests run: 48, Failures: 0, Errors: 0, Skipped: 3 — skipped только @Disabled агрегационный баг-тест с TODO PLAN.md; surefire-exclude для Integration* снят)
 
 ### P2 — после миграции Батча 3
