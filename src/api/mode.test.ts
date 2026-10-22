@@ -34,9 +34,9 @@ function installFetchMock() {
  * localStorage/env. Через класс, а не через singleton `api`, чтобы тесты
  * MODE-01..05/08 не зависели от общего состояния модуля.
  */
-async function freshClient() {
+async function freshClient(env?: Record<string, string | undefined>) {
   const mod = await import('./client');
-  return new mod.ApiClient();
+  return new mod.ApiClient(env);
 }
 
 /**
@@ -297,13 +297,13 @@ describe('MODE-06: Watchdog → события при падении/восст�
 
       fetchShouldFail = true; // API «упал»
       await vi.advanceTimersByTimeAsync(1000); // пинг по интервалу — fail
-      expect(events.at(-1)?.[0]).toBe(false);
-      expect(events.at(-1)?.[2]).toBeTruthy();
+      expect(events[events.length - 1]?.[0]).toBe(false);
+      expect(events[events.length - 1]?.[2]).toBeTruthy();
       expect(wd.getLastAvailability()).toBe(false);
 
       fetchShouldFail = false; // API «восстановился»
       await vi.advanceTimersByTimeAsync(1000);
-      expect(events.at(-1)?.[0]).toBe(true);
+      expect(events[events.length - 1]?.[0]).toBe(true);
       expect(wd.getLastAvailability()).toBe(true);
     } finally {
       wd.stopWatchdog();
@@ -372,8 +372,10 @@ describe('MODE-06: Watchdog → события при падении/восст�
 describe('MODE-07: Сканирование импортов — AppContext/mockData только внутри src/api', () => {
   it('ни один файл вне src/api не импортирует mockData/AppContext', async () => {
     const { execSync } = await import('child_process');
+    const SQ = String.fromCharCode(39); // одинарная кавычка
+    const BS = String.fromCharCode(92); // обратный слэш
     const out = execSync(
-      `grep -rlE "from ['\\\"].*(data/mockData|AppContext)" src --include="*.ts" --include="*.tsx" ` +
+      `grep -rlE "from [${SQ}${BS}].*(data/mockData|AppContext)" src --include="*.ts" --include="*.tsx" ` +
       `| grep -v "^src/api/" || true`,
       { encoding: 'utf8' }
     ).trim();
@@ -398,30 +400,20 @@ describe('MODE-08: Перезагрузка страницы → режим со
   });
 
   it('VITE_API_MODE задаёт режим по умолчанию, если localStorage пуст', async () => {
-    (import.meta as any).env.VITE_API_MODE = 'real';
-    try {
-      const api = await freshClient();
-      expect(api.getMode()).toBe('real'); // env применён сразу
-      expect(api.isResolved()).toBe(true); // без лишнего авторызрешения/пинга
-      expect(fetchCalls.filter(c => c.url.endsWith('/meta'))).toHaveLength(0);
-    } finally {
-      delete (import.meta as any).env.VITE_API_MODE;
-    }
+    const api = await freshClient({ VITE_API_MODE: 'real' });
+    expect(api.getMode()).toBe('real'); // env применён сразу
+    expect(api.isResolved()).toBe(true); // без лишнего авторызрешения/пинга
+    expect(fetchCalls.filter(c => c.url.endsWith('/meta'))).toHaveLength(0);
   });
 
   it('выбор пользователя из UI приоритетнее VITE_API_MODE на следующем запуске', async () => {
-    (import.meta as any).env.VITE_API_MODE = 'mock';
-    try {
-      const api1 = await freshClient(); // env: mock
-      api1.setMode('real');            // пользователь переключился в UI
-      expect(localStorage.getItem('apiMode')).toBe('real');
+    const api1 = await freshClient({ VITE_API_MODE: 'mock' }); // env: mock
+    api1.setMode('real');            // пользователь переключился в UI
+    expect(localStorage.getItem('apiMode')).toBe('real');
 
-      const api2 = await freshClient(); // «перезагрузка»
-      expect(api2.getMode()).toBe('real'); // localStorage победил env
-      expect(api2.isResolved()).toBe(true);
-    } finally {
-      delete (import.meta as any).env.VITE_API_MODE;
-    }
+    const api2 = await freshClient({ VITE_API_MODE: 'mock' }); // «перезагрузка»
+    expect(api2.getMode()).toBe('real'); // localStorage победил env
+    expect(api2.isResolved()).toBe(true);
   });
 
   it('неизвестное значение в localStorage игнорируется → авторызрешение', async () => {
