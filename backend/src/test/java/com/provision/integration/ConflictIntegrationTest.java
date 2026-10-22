@@ -96,7 +96,7 @@ class ConflictIntegrationTest {
         // Create ingredient
         IngredientRequest ingredientRequest = new IngredientRequest(
                 null,  // code
-                "Гречка",
+                "Гречка тестовая ING-" + System.nanoTime(),
                 UnitOfMeasure.KG,
                 "Крупы",
                 null,  // kcalPer100g
@@ -115,7 +115,7 @@ class ConflictIntegrationTest {
 
         // Create recipe with this ingredient
         RecipeRequest recipeRequest = new RecipeRequest(
-                "Гречка с тушенкой",
+                "Гречка тестовая REC-" + System.nanoTime(),
                 MealType.LUNCH,
                 null,  // category
                 null,  // cookMinutes
@@ -144,7 +144,7 @@ class ConflictIntegrationTest {
         // Create ingredient
         IngredientRequest ingredientRequest = new IngredientRequest(
                 null,  // code
-                "Гречка",
+                "Гречка тестовая ING-" + System.nanoTime(),
                 UnitOfMeasure.KG,
                 "Крупы",
                 null,  // kcalPer100g
@@ -163,7 +163,7 @@ class ConflictIntegrationTest {
 
         // Create recipe with this ingredient
         RecipeRequest recipeRequest = new RecipeRequest(
-                "Гречка с тушенкой",
+                "Гречка тестовая REC-" + System.nanoTime(),
                 MealType.LUNCH,
                 null,  // category
                 null,  // cookMinutes
@@ -201,7 +201,7 @@ class ConflictIntegrationTest {
         // Create ingredient
         IngredientRequest ingredientRequest = new IngredientRequest(
                 null,  // code
-                "Гречка",
+                "Гречка тестовая ING-" + System.nanoTime(),
                 UnitOfMeasure.KG,
                 "Крупы",
                 null,  // kcalPer100g
@@ -220,7 +220,7 @@ class ConflictIntegrationTest {
 
         // Create recipe
         RecipeRequest recipeRequest = new RecipeRequest(
-                "Гречка с тушенкой",
+                "Гречка тестовая REC-" + System.nanoTime(),
                 MealType.LUNCH,
                 null,  // category
                 null,  // cookMinutes

@@ -4,8 +4,8 @@ import jakarta.persistence.*;
 import lombok.*;
 
 import java.time.LocalDate;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.LinkedHashSet;
+import java.util.Set;
 
 @Entity
 @Table(name = "trip_days", uniqueConstraints = {
@@ -34,5 +34,5 @@ public class TripDay {
     @OneToMany(mappedBy = "tripDay", cascade = CascadeType.ALL, orphanRemoval = true)
     @OrderBy("sortOrder ASC")
     @Builder.Default
-    private List<TripMeal> meals = new ArrayList<>();
+    private Set<TripMeal> meals = new LinkedHashSet<>();
 }

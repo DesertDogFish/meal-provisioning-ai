@@ -103,7 +103,7 @@ class ShoppingListCostAggregationBugTest {
                 .recipe(recipe)
                 .peopleOverride(null)
                 .build();
-        day1.setMeals(Arrays.asList(meal1));
+        day1.setMeals(new java.util.LinkedHashSet<>(Arrays.asList(meal1)));
 
         // День 2: 1 порция на 4 человека = 0.4 KG
         TripDay day2 = TripDay.builder()
@@ -118,12 +118,12 @@ class ShoppingListCostAggregationBugTest {
                 .recipe(recipe)
                 .peopleOverride(null)
                 .build();
-        day2.setMeals(Arrays.asList(meal2));
+        day2.setMeals(new java.util.LinkedHashSet<>(Arrays.asList(meal2)));
 
-        trip.setDays(Arrays.asList(day1, day2));
+        trip.setDays(new java.util.LinkedHashSet<>(Arrays.asList(day1, day2)));
 
         // Настройка моков
-        when(tripRepository.findByIdWithDaysAndMeals(1L, 1L)).thenReturn(trip);
+        when(tripRepository.findByIdWithDaysAndMeals(1L, 1L)).thenReturn(java.util.Optional.of(trip));
         when(priceRepository.findEffectivePrice(1L, LocalDate.of(2026, 10, 21)))
                 .thenReturn(Optional.of(price));
         when(priceRepository.findEffectivePrice(1L, LocalDate.of(2026, 10, 22)))
@@ -248,7 +248,7 @@ class ShoppingListCostAggregationBugTest {
                 .recipe(recipe)
                 .peopleOverride(null)
                 .build();
-        day1.setMeals(Arrays.asList(meal1));
+        day1.setMeals(new java.util.LinkedHashSet<>(Arrays.asList(meal1)));
 
         // День 2: 4 человека
         TripDay day2 = TripDay.builder()
@@ -263,11 +263,11 @@ class ShoppingListCostAggregationBugTest {
                 .recipe(recipe)
                 .peopleOverride(null)
                 .build();
-        day2.setMeals(Arrays.asList(meal2));
+        day2.setMeals(new java.util.LinkedHashSet<>(Arrays.asList(meal2)));
 
-        trip.setDays(Arrays.asList(day1, day2));
+        trip.setDays(new java.util.LinkedHashSet<>(Arrays.asList(day1, day2)));
 
-        when(tripRepository.findByIdWithDaysAndMeals(1L, 1L)).thenReturn(trip);
+        when(tripRepository.findByIdWithDaysAndMeals(1L, 1L)).thenReturn(java.util.Optional.of(trip));
         when(priceRepository.findEffectivePrice(1L, LocalDate.of(2026, 10, 21)))
                 .thenReturn(Optional.of(priceDay1));
         when(priceRepository.findEffectivePrice(1L, LocalDate.of(2026, 10, 22)))
@@ -393,7 +393,7 @@ class ShoppingListCostAggregationBugTest {
                 .recipe(recipe)
                 .peopleOverride(null)
                 .build();
-        day1.setMeals(Arrays.asList(meal1));
+        day1.setMeals(new java.util.LinkedHashSet<>(Arrays.asList(meal1)));
 
         // День 2: 4 человека
         TripDay day2 = TripDay.builder()
@@ -408,11 +408,11 @@ class ShoppingListCostAggregationBugTest {
                 .recipe(recipe)
                 .peopleOverride(null)
                 .build();
-        day2.setMeals(Arrays.asList(meal2));
+        day2.setMeals(new java.util.LinkedHashSet<>(Arrays.asList(meal2)));
 
-        trip.setDays(Arrays.asList(day1, day2));
+        trip.setDays(new java.util.LinkedHashSet<>(Arrays.asList(day1, day2)));
 
-        when(tripRepository.findByIdWithDaysAndMeals(1L, 1L)).thenReturn(trip);
+        when(tripRepository.findByIdWithDaysAndMeals(1L, 1L)).thenReturn(java.util.Optional.of(trip));
         when(priceRepository.findEffectivePrice(1L, LocalDate.of(2026, 10, 21)))
                 .thenReturn(Optional.of(priceDay1));
         when(priceRepository.findEffectivePrice(1L, LocalDate.of(2026, 10, 22)))

@@ -34,10 +34,8 @@ public class TripService {
 
     @Transactional(readOnly = true)
     public TripResponse getTrip(Long tripId, Long userId) {
-        Trip trip = tripRepository.findByIdWithDaysAndMeals(tripId, userId);
-        if (trip == null) {
-            throw new NotFoundException("Trip not found or access denied");
-        }
+        Trip trip = tripRepository.findByIdWithDaysAndMeals(tripId, userId)
+                .orElseThrow(() -> new NotFoundException("Trip not found or access denied"));
         return toResponse(trip);
     }
 
@@ -53,7 +51,7 @@ public class TripService {
                 .endDate(request.endDate())
                 .defaultPeople(request.defaultPeople())
                 .notes(request.notes())
-                .days(new ArrayList<>())
+                .days(new java.util.LinkedHashSet<>())
                 .build();
 
         trip = tripRepository.save(trip);
@@ -64,7 +62,7 @@ public class TripService {
             TripDay day = TripDay.builder()
                     .trip(trip)
                     .dayDate(currentDate)
-                    .meals(new ArrayList<>())
+                    .meals(new java.util.LinkedHashSet<>())
                     .build();
             trip.getDays().add(day);
             currentDate = currentDate.plusDays(1);
@@ -77,10 +75,8 @@ public class TripService {
 
     @Transactional
     public TripResponse updateTrip(Long tripId, TripRequest request, Long userId) {
-        Trip trip = tripRepository.findByIdWithDaysAndMeals(tripId, userId);
-        if (trip == null) {
-            throw new NotFoundException("Trip not found or access denied");
-        }
+        Trip trip = tripRepository.findByIdWithDaysAndMeals(tripId, userId)
+                .orElseThrow(() -> new NotFoundException("Trip not found or access denied"));
 
         // Нельзя менять даты
         if (!trip.getStartDate().equals(request.startDate()) || !trip.getEndDate().equals(request.endDate())) {
@@ -98,10 +94,8 @@ public class TripService {
 
     @Transactional
     public void deleteTrip(Long tripId, Long userId) {
-        Trip trip = tripRepository.findByIdWithDaysAndMeals(tripId, userId);
-        if (trip == null) {
-            throw new NotFoundException("Trip not found or access denied");
-        }
+        Trip trip = tripRepository.findByIdWithDaysAndMeals(tripId, userId)
+                .orElseThrow(() -> new NotFoundException("Trip not found or access denied"));
 
         tripRepository.deleteById(tripId);
         log.info("Deleted trip: {}", trip.getName());
@@ -109,10 +103,8 @@ public class TripService {
 
     @Transactional
     public TripDayResponse updateDay(Long tripId, Long dayId, TripDayUpdateRequest request, Long userId) {
-        Trip trip = tripRepository.findByIdWithDaysAndMeals(tripId, userId);
-        if (trip == null) {
-            throw new NotFoundException("Trip not found or access denied");
-        }
+        Trip trip = tripRepository.findByIdWithDaysAndMeals(tripId, userId)
+                .orElseThrow(() -> new NotFoundException("Trip not found or access denied"));
 
         TripDay day = trip.getDays().stream()
                 .filter(d -> d.getId().equals(dayId))
@@ -127,10 +119,8 @@ public class TripService {
 
     @Transactional
     public TripMealResponse addMeal(Long tripId, Long dayId, TripMealRequest request, Long userId) {
-        Trip trip = tripRepository.findByIdWithDaysAndMeals(tripId, userId);
-        if (trip == null) {
-            throw new NotFoundException("Trip not found or access denied");
-        }
+        Trip trip = tripRepository.findByIdWithDaysAndMeals(tripId, userId)
+                .orElseThrow(() -> new NotFoundException("Trip not found or access denied"));
 
         TripDay day = trip.getDays().stream()
                 .filter(d -> d.getId().equals(dayId))
@@ -155,10 +145,8 @@ public class TripService {
 
     @Transactional
     public TripMealResponse updateMeal(Long tripId, Long dayId, Long mealId, TripMealRequest request, Long userId) {
-        Trip trip = tripRepository.findByIdWithDaysAndMeals(tripId, userId);
-        if (trip == null) {
-            throw new NotFoundException("Trip not found or access denied");
-        }
+        Trip trip = tripRepository.findByIdWithDaysAndMeals(tripId, userId)
+                .orElseThrow(() -> new NotFoundException("Trip not found or access denied"));
 
         TripMeal meal = tripMealRepository.findById(mealId)
                 .orElseThrow(() -> new NotFoundException("Meal not found"));
@@ -177,10 +165,8 @@ public class TripService {
 
     @Transactional
     public void deleteMeal(Long tripId, Long dayId, Long mealId, Long userId) {
-        Trip trip = tripRepository.findByIdWithDaysAndMeals(tripId, userId);
-        if (trip == null) {
-            throw new NotFoundException("Trip not found or access denied");
-        }
+        Trip trip = tripRepository.findByIdWithDaysAndMeals(tripId, userId)
+                .orElseThrow(() -> new NotFoundException("Trip not found or access denied"));
 
         tripMealRepository.deleteById(mealId);
     }
