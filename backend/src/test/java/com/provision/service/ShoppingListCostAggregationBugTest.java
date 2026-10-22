@@ -20,6 +20,8 @@ import static org.mockito.Mockito.when;
 /**
  * Тест для демонстрации бага агрегации стоимости в общей закупке.
  */
+// TODO PLAN.md: Фаза 10 п.7 — баг исправлен на фронтенде (findPriceForDate по каждому дню),
+// бэкенд-фикс SummaryService = отдельный тикет; после него снять @Disabled.
 @Disabled("Legacy bug-demo test: документирует баг агрегации стоимости по endDate. Не regression. См. отдельный тикет на фикс SummaryService.")
 @DisplayName("БАГ: Агрегация стоимости не суммируется правильно")
 class ShoppingListCostAggregationBugTest {

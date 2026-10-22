@@ -37,6 +37,16 @@ public class RecipeService {
             Integer cookMinutes,
             String search
     ) {
+        // FIX (интеграционные тесты CAT-01/02): при всех фильтрах == null JPQL-запрос
+        // findWithFilters содержит LOWER(CONCAT('%', :search, '%')) с не типизированным
+        // NULL-параметром -> PostgreSQL выводит lower(bytea) и падает (500 на GET /recipes
+        // без query-параметров). Без фильтров идём в готовый findAllWithIngredients.
+        if (mealType == null && category == null && cookMinutes == null
+                && (search == null || search.isBlank())) {
+            return recipeRepository.findAllWithIngredients().stream()
+                    .map(this::toResponse)
+                    .toList();
+        }
         return recipeRepository.findWithFilters(mealType, category, cookMinutes, search).stream()
                 .map(this::toResponse)
                 .toList();

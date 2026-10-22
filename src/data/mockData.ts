@@ -29,7 +29,7 @@ export const mockIngredients: Ingredient[] = [
   { id: 'ing3', name: 'Овсяные хлопья', unit: 'KG', category: 'Крупы', kcalPer100g: 350, createdAt: '2024-01-01' },
   { id: 'ing4', name: 'Вода', unit: 'L', category: 'Жидкости', kcalPer100g: 0, createdAt: '2024-01-01' },
   { id: 'ing5', name: 'Масло подсолнечное', unit: 'L', category: 'Масла', kcalPer100g: 884, createdAt: '2024-01-01' },
-  { id: 'ing6', name: 'Тушёнка говяжья', unit: 'PCS', category: 'Консервы', kcalPer100g: 250, pieceWeightG: 325, createdAt: '2024-01-01' },
+  { id: 'ing6', name: 'Тушёнка говяжья', unit: 'PCS', category: 'Консервы', kcalPer100g: 250, pieceWeightG: 325, packSize: 8, roundToPacks: true, createdAt: '2024-01-01' }, // CONTRACT-P1: образец упаковки
   { id: 'ing7', name: 'Хлеб', unit: 'PCS', category: 'Хлеб', kcalPer100g: 250, pieceWeightG: 400, createdAt: '2024-01-01' },
   { id: 'ing8', name: 'Сыр твёрдый', unit: 'KG', category: 'Молочные', kcalPer100g: 350, createdAt: '2024-01-01' },
   { id: 'ing9', name: 'Колбаса варёная', unit: 'KG', category: 'Мясо', kcalPer100g: 260, createdAt: '2024-01-01' },
@@ -70,7 +70,8 @@ export const mockRecipes: Recipe[] = [
     id: 'rec1', name: 'Гречка с тушёнкой', mealType: 'LUNCH', category: 'ВТОРОЕ', cookMinutes: 25, baseServings: 4, caloriesPerServing: 450, source: 'MANUAL',
     ingredients: [
       { ingredientId: 'ing1', amount: 0.4 },
-      { ingredientId: 'ing6', amount: 1 },
+      // CONTRACT-P1 (PLAN.md Backlog п.1): ing6 замещает отсутствующий 'ing99' (образец substitutedFrom)
+      { ingredientId: 'ing6', amount: 1, substitutedFrom: 'ing99' },
       { ingredientId: 'ing4', amount: 0.8 },
       { ingredientId: 'ing14', amount: 0.1 },
       { ingredientId: 'ing12', amount: 0.01 },

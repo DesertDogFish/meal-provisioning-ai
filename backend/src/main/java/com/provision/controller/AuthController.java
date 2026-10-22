@@ -18,7 +18,8 @@ public class AuthController {
 
     @PostMapping("/register")
     @ResponseStatus(HttpStatus.CREATED)
-    public UserResponse register(@Valid @RequestBody RegisterRequest request) {
+    public AuthService.AuthResponseWithUser register(@Valid @RequestBody RegisterRequest request) {
+        // P1 AUTH-01: регистрация сразу выдаёт пару токенов (+ поля пользователя).
         return authService.register(request);
     }
 
@@ -39,6 +40,11 @@ public class AuthController {
 
     @GetMapping("/me")
     public UserResponse getCurrentUser(@AuthenticationPrincipal User user) {
+        // FIX: без валидного JWT Spring не подставляет principal -> user == null.
+        // Раньше это давало NullPointerException (500 вместо 401).
+        if (user == null) {
+            throw new com.provision.exception.UnauthorizedException("Not authenticated");
+        }
         return authService.getCurrentUser(user.getId());
     }
 }

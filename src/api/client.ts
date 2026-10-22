@@ -45,7 +45,7 @@ export class ApiClient {
     this.baseUrl = env.VITE_API_URL || 'http://localhost:8080/api/v1';
     
     const storedMode = localStorage.getItem(LS_MODE_KEY) as ApiMode | null;
-    const envMode = env.VITE_API_MODE as ApiMode | undefined;
+    const envMode = e.VITE_API_MODE as ApiMode | undefined;
     
     if (storedMode === 'mock' || storedMode === 'real') {
       this.mode = storedMode;

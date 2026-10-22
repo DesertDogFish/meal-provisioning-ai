@@ -30,22 +30,30 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
-@Testcontainers
+@ContainerSuite
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 @DisplayName("Authentication Integration Tests")
 class AuthIntegrationTest {
 
-    @Container
-    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:15-alpine")
-            .withDatabaseName("provision_test")
+    /** Docker есть -> Testcontainers; нет -> локальный PG-fallback (LocalPgFallback). */
+    private static final boolean LOCAL_PG = !com.provision.integration.LocalPgFallback.dockerAvailable();
+
+    static PostgreSQLContainer<?> postgres = LOCAL_PG ? null : new PostgreSQLContainer<>("postgres:15-alpine")
+            .withDatabaseName("provision_test_auth")
             .withUsername("test")
             .withPassword("test");
 
+    static {
+        if (!LOCAL_PG && postgres != null && !postgres.isRunning()) {
+            postgres.start();
+        }
+    }
+
     @DynamicPropertySource
     static void configureProperties(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", postgres::getJdbcUrl);
-        registry.add("spring.datasource.username", postgres::getUsername);
-        registry.add("spring.datasource.password", postgres::getPassword);
+        registry.add("spring.datasource.url", () -> LOCAL_PG ? com.provision.integration.LocalPgFallback.jdbcUrl("provision_test_auth") : postgres.getJdbcUrl());
+        registry.add("spring.datasource.username", () -> LOCAL_PG ? "test" : postgres.getUsername());
+        registry.add("spring.datasource.password", () -> LOCAL_PG ? "test" : postgres.getPassword());
     }
 
     @Autowired
@@ -55,14 +63,19 @@ class AuthIntegrationTest {
     private ObjectMapper objectMapper;
 
     @Autowired
-    private UserRepository userRepository;
+    private org.springframework.jdbc.core.JdbcTemplate jdbc;
+
+    @Autowired
+    private org.flywaydb.core.Flyway flyway;
 
     private static final String TEST_EMAIL = "auth_test@example.com";
     private static final String TEST_PASSWORD = "password123";
 
     @BeforeEach
     void setUp() {
-        userRepository.deleteAll();
+        // FIX: deleteAll() не давал изоляции каталога (V3-сид) и падал на FK RESTRICT.
+        // Полная пересборка схемы из миграций — детерминированное состояние перед каждым тестом.
+        TestDataIsolation.reset(jdbc, flyway);
     }
 
     @Test

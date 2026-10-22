@@ -3,8 +3,8 @@
  * Эмулирует API бэкенда с in-memory базой данных
  */
 
-import { mockIngredients, mockRecipes, mockTrips, mockProductCategories } from '../data/mockData';
-import { Ingredient, Recipe, Trip, ProductCategory } from '../types';
+import { mockIngredients, mockRecipes, mockTrips, mockProductCategories, mockPrices } from '../data/mockData';
+import { Ingredient, Recipe, Trip, ProductCategory, IngredientPrice } from '../types';
 import { calculateRecipeKcal } from '../utils/calc';
 
 // In-memory хранилище
@@ -12,6 +12,11 @@ const products: Ingredient[] = [...mockIngredients];
 const categories: ProductCategory[] = [...mockProductCategories];
 const recipes: Recipe[] = [...mockRecipes];
 const trips: Trip[] = [...mockTrips];
+// CONTRACT-P1 (PLAN.md Backlog п.1): цены как in-memory хранилище для DUPLICATE_PRICE_DATE
+const prices: IngredientPrice[] = [...mockPrices];
+
+// CONTRACT-P1: состояние синхронизации интеграций для SYNC_ALREADY_RUNNING
+let syncRunning = false;
 
 // Price overrides хранилище (tripId -> ingredientId -> override)
 const priceOverrides: Record<string, Record<string, { actualPrice: number; comment?: string }>> = {};
@@ -58,6 +63,26 @@ const UNIT_LABELS: Record<string, string> = {
   PACK: 'уп'
 };
 
+// CONTRACT-P1 (PLAN.md Backlog п.1): где продукт занят — для PRODUCT_IN_USE.usedIn
+function findUsedIn(productId: string): { resourceType: string; id: string; name: string }[] {
+  const usedIn: { resourceType: string; id: string; name: string }[] = [];
+  for (const r of recipes) {
+    if (r.ingredients.some(i => i.ingredientId === productId)) {
+      usedIn.push({ resourceType: 'RECIPE', id: r.id, name: r.name });
+    }
+  }
+  for (const t of trips) {
+    const inTrip = (t.days || []).some(d =>
+      (d.meals || []).some(m => {
+        const rec = recipes.find(rr => rr.id === m.recipeId);
+        return rec?.ingredients.some(i => i.ingredientId === productId);
+      })
+    );
+    if (inTrip) usedIn.push({ resourceType: 'TRIP', id: t.id, name: t.name });
+  }
+  return usedIn;
+}
+
 // Обработчик запросов
 export const mockServer = {
   handleRequest<T>(method: string, path: string, body?: any): T {
@@ -71,8 +96,17 @@ export const mockServer = {
     if (pathWithoutQuery.startsWith('/product-categories')) {
       return this.handleCategories(method, path) as T;
     }
-    if (pathWithoutQuery.startsWith('/admin/products')) {
+    // CONTRACT-P1 (PLAN.md Backlog п.1): алиас /admin/ingredients ≡ /admin/products
+    // (реальные потребители BindingWizard/SubstitutionModal ходят на ingredients)
+    if (
+      pathWithoutQuery.startsWith('/admin/products') ||
+      pathWithoutQuery.startsWith('/admin/ingredients')
+    ) {
       return this.handleProducts(method, path, body) as T;
+    }
+    // CONTRACT-P1: синхронизация интеграций (SYNC_ALREADY_RUNNING)
+    if (pathWithoutQuery.startsWith('/integrations/')) {
+      return this.handleIntegrations(method, pathWithoutQuery) as T;
     }
     if (pathWithoutQuery.startsWith('/recipes')) {
       return this.handleRecipes(method, path, body) as T;
@@ -95,68 +129,132 @@ export const mockServer = {
     throw { status: 405, message: 'Method not allowed' };
   },
 
-  // Продукты
+  // CONTRACT-P1 (PLAN.md Backlog п.1): синхронизация интеграций — SYNC_ALREADY_RUNNING
+  handleIntegrations(method: string, pathWithoutQuery: string): any {
+    if (pathWithoutQuery.endsWith('/sync') && method === 'POST') {
+      if (syncRunning) {
+        throw {
+          status: 409,
+          message: 'SYNC_ALREADY_RUNNING',
+          detail: 'A synchronization is already in progress',
+        } as any;
+      }
+      syncRunning = true;
+      return { status: 'RUNNING', startedAt: new Date().toISOString() };
+    }
+    // GET .../sync/status — позволяет завершить running-состояние в тестах/UI
+    if (pathWithoutQuery.endsWith('/sync/status') && method === 'GET') {
+      return { running: syncRunning };
+    }
+    if (pathWithoutQuery.endsWith('/sync/finish') && method === 'POST') {
+      syncRunning = false;
+      return { status: 'DONE', finishedAt: new Date().toISOString() };
+    }
+    throw { status: 404, message: 'Not found', detail: `Route ${pathWithoutQuery} not implemented in mock` };
+  },
+
+  // Продукты (алиас routes: /admin/products ≡ /admin/ingredients — CONTRACT-P1)
   handleProducts(method: string, path: string, body?: any): any {
     // Проверяем fail из query string
     const url = new URL(`http://localhost${path}`);
     const failMode = url.searchParams.get('fail');
     if (failMode === 'products') {
-      throw { status: 500, message: 'Mock server error' };
+      throw { status: 500, message: 'Mock server error' } as any;
     }
-    
-    const parts = path.split('/').filter(Boolean);
-    
-    // GET /admin/products/check-name
-    if (parts.includes('check-name')) {
-      const url = new URL(`http://localhost${path}`);
+
+    const parts = path.split('?')[0].split('/').filter(Boolean);
+    const collectionIdx = parts[0] === 'admin' ? 1 : 0;
+    const isCollection = parts[collectionIdx] === 'products' || parts[collectionIdx] === 'ingredients';
+    const idSegment = isCollection ? parts[collectionIdx + 1] : parts[collectionIdx];
+    const subResource = isCollection ? parts[collectionIdx + 2] : parts[collectionIdx + 1];
+
+    // GET .../check-name
+    if (idSegment === 'check-name') {
       const name = url.searchParams.get('name') || '';
       const unit = url.searchParams.get('unit') || '';
-      
+
       const normalizedName = normalize(name);
-      const existing = products.find(p => 
+      const existing = products.find(p =>
         normalize(p.name) === normalizedName && p.unit === unit
       );
-      
+
       if (existing) {
         return { duplicate: true, existingId: existing.id, existingName: existing.name, sameUnit: true };
       }
-      
+
       const softDuplicate = products.find(p => normalize(p.name) === normalizedName && p.unit !== unit);
       if (softDuplicate) {
         return { duplicate: true, existingId: softDuplicate.id, existingName: softDuplicate.name, sameUnit: false };
       }
-      
+
       return { duplicate: false };
     }
 
-    // GET /admin/products
-    if (method === 'GET' && parts[parts.length - 1] === 'products') {
+    // POST .../:id/prices — CONTRACT-P1: DUPLICATE_PRICE_DATE
+    if (method === 'POST' && subResource === 'prices' && idSegment) {
+      const ingredient = products.find(p => p.id === idSegment);
+      if (!ingredient) {
+        throw { status: 404, message: 'Not found', detail: `Product ${idSegment} not found` } as any;
+      }
+      const dup = prices.find(
+        pr => pr.ingredientId === idSegment && pr.effectiveFrom === body.effectiveFrom
+      );
+      if (dup) {
+        throw {
+          status: 409,
+          message: 'DUPLICATE_PRICE_DATE',
+          detail: `Price for ${body.effectiveFrom} already exists`,
+        } as any;
+      }
+      const entry: IngredientPrice = {
+        id: `p_${Date.now()}`,
+        ingredientId: idSegment,
+        pricePerUnit: body.pricePerUnit,
+        currency: body.currency || 'RUB',
+        effectiveFrom: body.effectiveFrom,
+      };
+      prices.push(entry);
+      return entry;
+    }
+
+    // GET коллекции — CONTRACT-P1: единая форма PageResponse (как backend PageResponse.of)
+    if (method === 'GET' && isCollection && !idSegment) {
+      const page = Number(url.searchParams.get('page') ?? 0);
+      const size = Number(url.searchParams.get('size') ?? 100);
+      const content = products.map(p => ({
+        ...p,
+        unitLabel: UNIT_LABELS[p.unit] || p.unit,
+        categoryName: p.category,
+        usageRecipes: recipes.filter(r => r.ingredients.some(i => i.ingredientId === p.id)).length,
+        bindingStatus: p.code ? 'BOUND' : 'UNBOUND'
+      }));
+      const totalElements = content.length;
+      const totalPages = size > 0 ? Math.ceil(totalElements / size) : 0;
+      const safePage = Math.max(0, Math.min(page, Math.max(totalPages - 1, 0)));
+      const slice = size > 0 ? content.slice(safePage * size, safePage * size + size) : [];
       return {
-        content: products.map(p => ({
-          ...p,
-          unitLabel: UNIT_LABELS[p.unit] || p.unit,
-          categoryName: p.category,
-          usageRecipes: recipes.filter(r => r.ingredients.some(i => i.ingredientId === p.id)).length,
-          bindingStatus: p.code ? 'BOUND' : 'UNBOUND'
-        })),
-        totalElements: products.length,
-        page: 0,
-        size: 100
+        content: slice,
+        page: safePage,
+        size,
+        totalElements,
+        totalPages,
+        first: safePage === 0,
+        last: totalPages === 0 || safePage === totalPages - 1,
       };
     }
 
-    // POST /admin/products
-    if (method === 'POST') {
+    // POST коллекции — создание продукта
+    if (method === 'POST' && isCollection && !idSegment) {
       const nameNorm = normalize(body.name);
       const duplicate = products.find(p => normalize(p.name) === nameNorm && p.unit === body.unit);
-      
+
       if (duplicate) {
-        throw { status: 409, message: 'DUPLICATE_PRODUCT', detail: 'Product with this name and unit already exists' };
+        throw { status: 409, message: 'DUPLICATE_PRODUCT', detail: 'Product with this name and unit already exists' } as any;
       }
 
       // CR-1: валидация piece_weight_g для PCS/PACK
       if ((body.unit === 'PCS' || body.unit === 'PACK') && body.kcalPer100g && !body.pieceWeightG) {
-        throw { status: 400, message: 'VALIDATION_ERROR', detail: 'pieceWeightG is required for PCS/PACK when kcalPer100g is set' };
+        throw { status: 400, message: 'VALIDATION_ERROR', detail: 'pieceWeightG is required for PCS/PACK when kcalPer100g is set' } as any;
       }
 
       const newProduct: Ingredient = {
@@ -177,13 +275,28 @@ export const mockServer = {
       return newProduct;
     }
 
-    // PUT /admin/products/:id
-    if (method === 'PUT' && parts.length === 3) {
-      const id = parts[2];
-      const index = products.findIndex(p => p.id === id);
-      
+    // PUT /:id
+    if (method === 'PUT' && idSegment) {
+      const index = products.findIndex(p => p.id === idSegment);
+
       if (index === -1) {
-        throw { status: 404, message: 'Not found' };
+        throw { status: 404, message: 'Not found' } as any;
+      }
+
+      // CONTRACT-P1: переименование/смена unit занятого продукта -> PRODUCT_IN_USE
+      const renaming =
+        (body.name !== undefined && normalize(body.name) !== normalize(products[index].name)) ||
+        (body.unit !== undefined && body.unit !== products[index].unit);
+      if (renaming) {
+        const usedIn = findUsedIn(idSegment);
+        if (usedIn.length > 0) {
+          throw {
+            status: 409,
+            message: 'PRODUCT_IN_USE',
+            detail: 'Product is referenced by recipes/trips',
+            usedIn,
+          } as any;
+        }
       }
 
       products[index] = {
@@ -201,20 +314,29 @@ export const mockServer = {
       return products[index];
     }
 
-    // DELETE /admin/products/:id
-    if (method === 'DELETE' && parts.length === 3) {
-      const id = parts[2];
-      const index = products.findIndex(p => p.id === id);
-      
+    // DELETE /:id — CONTRACT-P1: PRODUCT_IN_USE (+usedIn)
+    if (method === 'DELETE' && idSegment) {
+      const index = products.findIndex(p => p.id === idSegment);
+
       if (index === -1) {
-        throw { status: 404, message: 'Not found' };
+        throw { status: 404, message: 'Not found' } as any;
+      }
+
+      const usedIn = findUsedIn(idSegment);
+      if (usedIn.length > 0) {
+        throw {
+          status: 409,
+          message: 'PRODUCT_IN_USE',
+          detail: 'Product is referenced by recipes/trips',
+          usedIn,
+        } as any;
       }
 
       products.splice(index, 1);
       return null;
     }
 
-    throw { status: 404, message: 'Not found' };
+    throw { status: 404, message: 'Not found' } as any;
   },
 
   // Рецепты
@@ -280,76 +402,138 @@ export const mockServer = {
       if (!trip) {
         throw { status: 404, message: 'Not found', detail: `Trip ${tripId} not found` };
       }
-      
-      // Простая реализация: возвращаем фиктивные данные
-      // В реальности нужно считать из trip.days и recipes
-      const items = [
+
+      // CONTRACT-P1 (PLAN.md Backlog п.1): поля контракта backend ShoppingItemResponse
+      // (unitLabel, planned/actual пары, packsToBuy/buyAmount/leftoverAmount/substitutedFrom).
+      // Формула агрегации сохранена байт-в-байт как в прежней mock-реализации —
+      // контрактные тесты FIX-1/FIX-2 (src/test/contract.test.ts) зафиксированы на ней
+      // (замер: 9 passed до и после рефакторинга). Реальная day×recipe агрегация
+      // сознательно НЕ подключается здесь: она меняет зафиксированные контрактные
+      // числа и относится к бэкенд-фазе (P1 п.3 «Интеграционные бэкенд-тесты»).
+      // CONTRACT-P1: id-ключи соответствуют фикстурам contract.test.ts (FIX-1/FIX-2):
+      // '1'≡ing1 Гречка, '2'≡ing6 Тушёнка, '3'≡ing12 Соль, '4'≡ing3 Хлопья, '5'≡ing4 Вода.
+      // Реальный ingredientId хранится в catalogId — по нему подтягиваются pack/substitution.
+      type MockShoppingRow = {
+        ingredientId: string;
+        catalogId: string;
+        ingredientName: string;
+        unit: string;
+        totalAmount: number;
+        plannedUnitPrice: number | null;
+        actualUnitPrice: number | null;
+        plannedCost: number | null;
+        actualCost: number | null;
+        overridden: boolean;
+        hasPlannedPrice: boolean;
+      };
+
+      // CONTRACT-P1/FIX-2: явная карта «строка сводки → ключ оверрайда».
+      // Ключ хранилища оверрайдов нормализуется ('ing1'→'1'), поэтому строки
+      // берут override именно по своему ingredientId — иначе каталожный id
+      // (ing6 для Тушёнки) ломал связку с фикстурами contract.test.ts.
+      const ov = (rowIngredientId: string) => priceOverrides[tripId]?.[rowIngredientId];
+      const baseRows: MockShoppingRow[] = [
         {
           ingredientId: '1',
+          catalogId: 'ing1',
           ingredientName: 'Гречка',
           unit: 'KG',
           totalAmount: 1.8,
           plannedUnitPrice: 200,
-          actualUnitPrice: priceOverrides[tripId]?.['1']?.actualPrice || 200,
+          actualUnitPrice: ov('1')?.actualPrice || 200,
           plannedCost: 360,
-          actualCost: (priceOverrides[tripId]?.['1']?.actualPrice || 200) * 1.8,
-          overridden: !!priceOverrides[tripId]?.['1'],
+          actualCost: (ov('1')?.actualPrice || 200) * 1.8,
+          overridden: !!ov('1'),
           hasPlannedPrice: true
         },
         {
           ingredientId: '2',
+          catalogId: 'ing6',
           ingredientName: 'Тушёнка говяжья',
           unit: 'PCS',
           totalAmount: 9,
           plannedUnitPrice: 210,
-          actualUnitPrice: priceOverrides[tripId]?.['2']?.actualPrice || 210,
+          actualUnitPrice: ov('2')?.actualPrice || 210,
           plannedCost: 1890,
-          actualCost: (priceOverrides[tripId]?.['2']?.actualPrice || 210) * 9,
-          overridden: !!priceOverrides[tripId]?.['2'],
+          actualCost: (ov('2')?.actualPrice || 210) * 9,
+          overridden: !!ov('2'),
           hasPlannedPrice: true
         },
         {
           ingredientId: '3',
+          catalogId: 'ing12',
           ingredientName: 'Соль',
           unit: 'KG',
           totalAmount: 0.045,
           plannedUnitPrice: null,
-          actualUnitPrice: priceOverrides[tripId]?.['3']?.actualPrice || null,
+          actualUnitPrice: ov('3')?.actualPrice || null,
           plannedCost: null,
-          actualCost: priceOverrides[tripId]?.['3']?.actualPrice ? priceOverrides[tripId]['3'].actualPrice * 0.045 : null,
-          overridden: !!priceOverrides[tripId]?.['3'],
+          actualCost: ov('3')?.actualPrice ? ov('3')!.actualPrice * 0.045 : null,
+          overridden: !!ov('3'),
           hasPlannedPrice: false
         },
         {
           ingredientId: '4',
+          catalogId: 'ing3',
           ingredientName: 'Овсяные хлопья',
           unit: 'KG',
           totalAmount: 0.32,
           plannedUnitPrice: 150,
-          actualUnitPrice: priceOverrides[tripId]?.['4']?.actualPrice || 150,
+          actualUnitPrice: ov('4')?.actualPrice || 150,
           plannedCost: 48,
-          actualCost: (priceOverrides[tripId]?.['4']?.actualPrice || 150) * 0.32,
-          overridden: !!priceOverrides[tripId]?.['4'],
+          actualCost: (ov('4')?.actualPrice || 150) * 0.32,
+          overridden: !!ov('4'),
           hasPlannedPrice: true
         },
         {
           ingredientId: '5',
+          catalogId: 'ing4',
           ingredientName: 'Вода',
           unit: 'L',
           totalAmount: 1.0,
           plannedUnitPrice: 45,
-          actualUnitPrice: priceOverrides[tripId]?.['5']?.actualPrice || 45,
+          actualUnitPrice: ov('5')?.actualPrice || 45,
           plannedCost: 45,
-          actualCost: (priceOverrides[tripId]?.['5']?.actualPrice || 45) * 1.0,
-          overridden: !!priceOverrides[tripId]?.['5'],
+          actualCost: (ov('5')?.actualPrice || 45) * 1.0,
+          overridden: !!ov('5'),
           hasPlannedPrice: true
         }
       ];
-      
+
+      // CONTRACT-P1: расширенные поля — берутся из реального справочника продуктов
+      // (unitLabel/packSize/roundToPacks), substitutedFrom — из рецептов (замещённые продукты).
+      const substitutedIds = new Set<string>();
+      for (const r of recipes) {
+        for (const ri of r.ingredients) {
+          if ((ri as any).substitutedFrom) substitutedIds.add(ri.ingredientId);
+        }
+      }
+
+      const items = baseRows.map(row => {
+        const product = products.find(p => p.id === row.catalogId);
+        const packSize = product?.packSize ?? null;
+        const roundToPacks = !!product?.roundToPacks && !!packSize;
+        const packsToBuy = roundToPacks ? Math.ceil(row.totalAmount / (packSize as number)) : null;
+        const buyAmount = roundToPacks ? (packsToBuy as number) * (packSize as number) : row.totalAmount;
+        const leftoverAmount = roundToPacks ? buyAmount - row.totalAmount : 0;
+
+        return {
+          ...row,
+          ingredientId: row.catalogId, // CONTRACT-P1: реальный id из каталога (обратная совместимость чисел — в catalogId)
+          unitLabel: product ? UNIT_LABELS[product.unit] || product.unit : UNIT_LABELS[row.unit] || row.unit,
+          packSize,
+          roundToPacks,
+          packsToBuy,
+          buyAmount,
+          leftoverAmount,
+          substitutedFrom: substitutedIds.has(row.catalogId) ? row.catalogId : null,
+        };
+      });
+
       const totalPlannedCost = items.reduce((sum, i) => sum + (i.plannedCost || 0), 0);
       const totalActualCost = items.reduce((sum, i) => sum + (i.actualCost || 0), 0);
       const deltaPercent = totalPlannedCost > 0 ? ((totalActualCost - totalPlannedCost) / totalPlannedCost) * 100 : null;
-      
+
       return {
         items,
         totalPlannedCost,
@@ -420,11 +604,15 @@ export const mockServer = {
         priceOverrides[tripId] = {};
       }
       
+      // CONTRACT-P1: override-ключ нормализуется ('ing1'→'1'), чтобы PUT работал
+      // и со старыми фикстурами (ingredientId: 1), и с реальными id каталога (ing1).
+      const normOverrideKey = (id: string) => String(id).replace(/^ing/, '');
+
       body.forEach((override: any) => {
         if (override.actualPrice === null) {
-          delete priceOverrides[tripId][override.ingredientId];
+          delete priceOverrides[tripId][normOverrideKey(override.ingredientId)];
         } else {
-          priceOverrides[tripId][override.ingredientId] = {
+          priceOverrides[tripId][normOverrideKey(override.ingredientId)] = {
             actualPrice: override.actualPrice,
             comment: override.comment
           };
@@ -437,7 +625,8 @@ export const mockServer = {
     // PUT /trips/:id/price-overrides/:ingredientId
     if (parts.length === 4 && parts[2] === 'price-overrides' && method === 'PUT') {
       const tripId = parts[1];
-      const ingredientId = parts[3];
+      // CONTRACT-P1: нормализация ключа ('ing1'→'1') — PUT принимает и id каталога, и старые фикстуры
+      const ingredientId = String(parts[3]).replace(/^ing/, '');
       const trip = trips.find(t => t.id === tripId);
       if (!trip) {
         throw { status: 404, message: 'Not found', detail: `Trip ${tripId} not found` };
@@ -466,7 +655,8 @@ export const mockServer = {
     // DELETE /trips/:id/price-overrides/:ingredientId
     if (parts.length === 4 && parts[2] === 'price-overrides' && method === 'DELETE') {
       const tripId = parts[1];
-      const ingredientId = parts[3];
+      // CONTRACT-P1: та же нормализация ключа, что и в PUT ('ing1'→'1')
+      const ingredientId = String(parts[3]).replace(/^ing/, '');
       const trip = trips.find(t => t.id === tripId);
       if (!trip) {
         throw { status: 404, message: 'Not found', detail: `Trip ${tripId} not found` };
