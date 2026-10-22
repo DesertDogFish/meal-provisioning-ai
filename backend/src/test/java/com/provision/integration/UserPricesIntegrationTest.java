@@ -141,8 +141,7 @@ class UserPricesIntegrationTest {
                         .param("asOf", "2026-03-15")
                         .header("Authorization", "Bearer " + userToken))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].pricePerUnit").value(org.hamcrest.Matchers.closeTo(new BigDecimal("80.00"), org.hamcrest.Matchers.both(
-                        org.hamcrest.Matchers.equalTo(0.0), org.hamcrest.Matchers.equalTo(0.0)))))
+                .andExpect(jsonPath("$[0].pricePerUnit").value(org.hamcrest.Matchers.comparesEqualTo(new BigDecimal("80.00"))))
                 .andExpect(jsonPath("$[0].effectiveFrom").value("2026-02-01"));
     }
 

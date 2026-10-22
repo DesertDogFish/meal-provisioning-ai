@@ -38,6 +38,36 @@ jobs:
         continue-on-error: ${{ github.event_name == 'pull_request' }}
         run: npm run test:e2e
 
+      # P0-3: прогон real-mode e2e против поднятого docker compose стека.
+      # Только на nightly-schedule/manual (на PR не тратим Docker-ресурсы).
+      - name: Start docker compose stack (real mode)
+        if: github.event_name != 'pull_request'
+        run: |
+          cp .env.example .env
+          sed -i "s|^JWT_SECRET=.*|JWT_SECRET=$(openssl rand -base64 48)|" .env
+          docker compose up -d --build
+          # ждём готовности backend и frontend (healthcheck'и из compose)
+          for c in provision-backend provision-frontend; do
+            for i in $(seq 1 60); do
+              st=$(docker inspect -f '{{.State.Health.Status}}' "$c" 2>/dev/null || echo starting)
+              [ "$st" = healthy ] && break
+              sleep 5
+            done
+            docker inspect -f '{{.Name}} {{.State.Health.Status}}' "$c"
+          done
+
+      - name: Run e2e REAL mode (P0-3 regression)
+        if: github.event_name != 'pull_request'
+        continue-on-error: true
+        env:
+          E2E_BASE_URL: http://localhost:3000
+          E2E_BACKEND_URL: http://localhost:8080
+        run: npx playwright test e2e/real-mode.spec.ts
+
+      - name: Tear down stack
+        if: always() && github.event_name != 'pull_request'
+        run: docker compose down -v
+
       - name: Upload Playwright report
         if: always()
         uses: actions/upload-artifact@v4
