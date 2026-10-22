@@ -16,4 +16,5 @@ FROM (
     CROSS JOIN generate_series(1, 23) AS n
 ) p
 JOIN ingredient_prices q ON q.ingredient_id = p.ingredient_id
-GROUP BY p.ingredient_id, p.effective_from;
+GROUP BY p.ingredient_id, p.effective_from
+ON CONFLICT (ingredient_id, effective_from) DO NOTHING;
