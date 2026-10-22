@@ -33,7 +33,8 @@ export default function ProtectedRoute({ children, adminOnly = false }: { childr
       setCurrentUser(user);
       setIsAuthenticated(true);
     } catch (error) {
-      // Токен невалиден, очищаем
+      // P0.5#1: api.get сам попытается обновить пару токенов; сюда попадаем,
+      // только если refresh не помог (refreshToken отозван/истёк) или запроса токена нет.
       localStorage.removeItem('accessToken');
       localStorage.removeItem('refreshToken');
       setIsAuthenticated(false);
@@ -41,6 +42,12 @@ export default function ProtectedRoute({ children, adminOnly = false }: { childr
       setLoading(false);
     }
   };
+
+  // P0.5#1: если сессия потеряна во время работы (refresh не помог) — редирект на /login
+  useEffect(() => {
+    const unsubscribe = api.onSessionLost(() => setIsAuthenticated(false));
+    return unsubscribe;
+  }, []);
 
   if (loading) {
     return <div style={{ padding: '20px', color: 'var(--muted)' }}>Загрузка...</div>;

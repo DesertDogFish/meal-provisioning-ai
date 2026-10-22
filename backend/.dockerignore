@@ -1,0 +1,5 @@
+target
+.mvn/settings.xml
+*.log
+Dockerfile
+.dockerignore

@@ -103,6 +103,29 @@
 
 ## Backlog
 
+### P0.5 — ревью 2026-10-23: безопасность и корректность (повышено из бэклога)
+
+#### 1. Refresh token не используется фронтендом → тихий logout через 1 час ✅ ИСПРАВЛЕНО 2026-10-23 (в рабочем дереве, до коммита)
+- [x] `src/api/client.ts`: при 401 на не-`/auth/*` запросе — одна попытка `POST /auth/refresh`, сохранение новой пары токенов (бэкенд ротирует refresh), повтор исходного запроса
+- [x] Single-flight lock: параллельные 401 ждут один общий refresh (нет гонки ротации); `/auth/*` не ретраятся (нет рекурсии)
+- [x] При неудачном refresh — очистка токенов + событие `auth:session-lost`; `ProtectedRoute` подписан через `api.onSessionLost()` → редирект на /login вместо тихой смерти посреди работы
+- [x] Тесты: `src/api/refresh.test.ts` — 5 сценариев (retry после refresh, очистка сессии, отсутствие рекурсии, single-flight, отсутствие refresh-токена), все зелёные (`npx vitest run src/api/refresh.test.ts`)
+- [ ] Гейт: ручной прогон в поднятом стеке (пользователь)
+
+#### 2. Секреты по умолчанию в docker-compose.yml ✅ ЧАСТИЧНО ИСПРАВЛЕНО (проверено в HEAD)
+- [x] `JWT_SECRET` — fail-fast `${JWT_SECRET:?...}` в compose + `@PostConstruct validate()` в JwtProperties (пустой/короткий секрет роняет старт); `.env.example` с инструкцией генерации; dev.ps1 генерирует секрет
+- [x] Порт 5432 привязан к `127.0.0.1` (не доступен из сети)
+- [ ] Осталось: `POSTGRES_PASSWORD` по-прежнему дефолтится `provision123` (`${POSTGRES_PASSWORD:-provision123}`) — для чисто локального степа приемлемо, но можно тоже сделать fail-fast вместе с JWT_SECRET
+- [ ] Гейт пройден частично: `docker compose config` без warnings требует проверки пользователем
+
+#### 3. CORS полностью отсутствует на бэкенде ✅ ИСПРАВЛЕНО (проверено в HEAD)
+- [x] SecurityConfig содержит `.cors(...)` с `CorsConfigurationSource`, allowlist из env `CORS_ALLOWED_ORIGINS` (дефолт: localhost:3000/5173), см. SecurityConfig.java строки 38–77
+
+#### 4. Миграция V9 отсутствует в истории (дыра в нумерации) — ВЫЯСНЕНО
+- Проверено `git log --all -- '*V9*'`: файла V9 никогда не было ни в одном коммите/ветке истории. Это не потерянная миграция, а просто пропущенный номер при создании V10.
+- На чистых БД Flyway это проходит (пропуск версии не ошибка). Оставлять как есть; новые миграции продолжать с V12.
+- [ ] Опционально: зафиксировать факт в ARCHITECTURE.md, чтобы никто не «восстанавливал» несуществующую V9
+
 ### P1 — следующий спринт
 
 #### 1. Contract расширить (mock, локально) ✅ ЗАКРЫТО (2026-10-22)
@@ -141,6 +164,59 @@
 - [ ] spring-release (401), flyway-repo (DNS/не browseable), flyway-community-db-support (401)
 - [ ] Шум в логах, маскирует реальные падения
 - [ ] Отдельный тикет, не в тестовой фазе
+
+### P3 — бэклог v2: инфраструктура и наблюдаемость (обновлено повторным аудитом 2026-10-23)
+
+Статусы ниже сверены с фактическим HEAD `7c2f8dd`. Из «девятки» бэклога закрыт только пункт про V9 (задокументирован); **все 8 инфраструктурных пунктов из предыдущего отчёта о выполнении работ фактически НЕ применены в коде** (проверено: нет `.dockerignore`, нет Bucket4j/rate-limit, нет actuator, нет scripts/backup, нет compose-профилей, MetaController по-прежнему хардкодит `"db":"ok"`, CI содержит только `docker build`, без compose-up job; backend/Dockerfile без go-offline слоя). Заявление о выполнении этих правок было ошибочным — кодизменений в истории нет.
+
+#### 1. Нет production-профиля / ориентации на деплой ⚠️ ОТКЛОЖЕННЫЙ FIX (был заявлен выполненным)
+- [ ] application.yml: `logging.level.com.provision: DEBUG` и `org.springframework.security: DEBUG` без разделения по профилям (проверено, строки 61–63) — в проде утечка деталей фильтров в логи
+- [ ] Нужны профили dev/prod (compose `SPRING_PROFILES_ACTIVE` + `application-prod.yml` с INFO/WARN, отключённый swagger-ui)
+
+#### 2. Нет rate limiting на auth-эндпоинтах ⚠️ ОТКЛОЖЕННЫЙ FIX
+- [ ] Проверено: bucket4j отсутствует в backend/pom.xml, RateLimit*-классов в src/main нет. `/api/v1/auth/register|login` без ограничений → перебор паролей
+- [ ] Добавить Bucket4j (spring-boot-starter ratelimit) или nginx `limit_req` на `/api/v1/auth/`
+
+#### 3. Нет backup-процедуры ⚠️ ОТКЛОЖЕННЫЙ FIX
+- [ ] Проверено: каталога scripts/ нет, файлов *backup* в репозитории нет. Volume postgres_data — единственный экземпляр данных
+- [ ] Скрипт `scripts/backup-db.sh` (docker exec pg_dump → файл с датой) + раздел в ARCHITECTURE (не в README, чтобы не раздувать)
+
+#### 4. Backend Dockerfile без кеша зависимостей ⚠️ ОТКЛОЖЕННЫЙ FIX
+- [ ] Проверено: backend/Dockerfile = `COPY pom.xml . && COPY src ./src && RUN mvn clean package -DskipTests` — промежуточного слоя `mvn dependency:go-offline` нет
+- [ ] Добавить слой go-offline между COPY pom.xml и COPY src — ускорит пользовательский `--build`
+
+#### 5. Healthcheck `/api/v1/meta` — заглушка, не проверяет БД ✅ ИСПРАВЛЕНО 2026-10-23 (в рабочем дереве)
+- [x] MetaController теперь реально проверяет БД: `DataSource.getConnection()` + `connection.isValid(2)`; при недоступной БД — HTTP 503 с `"db":"down"` (healthcheck контейнера это ловит), при доступной — 200 `"db":"ok"`
+- [x] Существующие тесты (`MetaControllerTest`, SMOKE-01) ожидаются зелёными: в них БД доступна → 200+`"db":"ok"` (проверка невозможна локально: нет JDK 21/Docker — гейт `mvn test`)
+- [ ] Гейт: `mvn test -Dtest=MetaControllerTest,DockerStackSmokeTest` пользователем
+
+#### 6. Healthcheck фронта проверяет только index.html, не прокси ⚠️ ОСОЗНАННО ОСТАВЛЕНО
+- [ ] Проверено: compose test = wget `http://localhost:80` (статика). Не подтверждает связность nginx→backend
+- [ ] Решение отложено сознательно: проверка `http://localhost/api/v1/meta` сделает frontend unhealthy при штатном рестарте backend — лишний шум для «одной кнопки»; связность прокси теперь доказана отдельным шагом в CI job docker-stack.yml (п.7)
+
+#### 7. В CI нет compose-up job («одна кнопка» недоказана) ✅ ИСПРАВЛЕНО 2026-10-23 (в рабочем дереве)
+- [x] Новый workflow `.github/workflows/docker-stack.yml`: build → `compose up -d` → ожидание healthy всех сервисов (до 5 мин, при таймауте — логи) → smoke: `/api/v1/meta` напрямую (проверка `"db":"ok"`), через nginx :3000, индекс фронта, register→login→`/auth/me` против живого стека
+- [x] JWT_SECRET генерируется в job (`openssl rand -base64 48`) — учтён fail-fast compose; YAML проверен парсером
+- [ ] Гейт: первый зелёный прогон job'а на GitHub (локально Docker недоступен)
+
+#### 8. .dockerignore отсутствует ✅ ИСПРАВЛЕНО 2026-10-23 (в рабочем дереве)
+- [x] Создан корневой `.dockerignore` (node_modules, dist, coverage, .git, .github, backend, target, *.log, .env) и `backend/.dockerignore` (target, *.log, Dockerfile, .dockerignore, .mvn/settings.xml)
+- [x] Контекст сборки фронта больше не включает node_modules/backend/.git; секреты (.env) исключены из контекста
+
+#### 9. Терминология режимов ✅ РЕШЕНО ДОКУМЕНТАЦИЕЙ
+- [x] README использует корректные `auto / api / mock` (проверено, строка 90); в PLAN остаётся старая нотация FORCE_API/FORCE_MOCK в исторических разделах Batch-тестов — не трогать (история решений), новые пункты писать в терминах кода
+
+#### 10. НОВЫЕ находки повторного аудита 2026-10-23
+- [ ] `POSTGRES_PASSWORD` остался с дефолтом `provision123`, тогда как JWT_SECRET сделан fail-fast — непоследовательно; привести к одному подходу (или документировать, что локальный дефолт осознанный)
+- [ ] README строка 66 обещает «вернёт JSON с `"db":"ok"`» — завязан на заглушку из п.5; при переходе на actuator обновить README/ARCHITECTURE/healthcheck одновременно
+- [ ] nginx.conf: `location /api` без завершающего слэша + `proxy_pass http://backend:8080` (без URI) — работает корректно (путь пробрасывается как есть), но зафиксировать комментарием, чтобы при «улучшении» не сломали
+- [ ] LoginPage кладёт accessToken/refreshToken в localStorage — XSS-вектор; долгосрочно — httpOnly cookie для refresh. Записать в P4 как архитектурное решение, не сейчас
+
+### P4 — продуктовые идеи на расширение (не обязательства)
+- [ ] Пагинация/фильтрация на сервере для продуктов (ProductService.getProducts игнорирует параметр query — «упрощённая реализация», найдено при починке smoke-теста; при росте каталога потребуется нормальный поиск)
+- [ ] Soft-delete / архивация trips вместо физического удаления (если сейчас удаляется физически — проверить перед реализацией)
+- [ ] i18n: UI частично русско-английский — привести к одному языку или вынести строки
+- [ ] Экспорт shopping list (PDF/CSV) — частый запрос для походов
 
 ### Задача 3: Усиление Mock-сервера и контрактных тестов
 
