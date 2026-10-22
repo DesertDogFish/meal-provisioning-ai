@@ -41,14 +41,14 @@
 - [x] Гейт: `npm run test` зелёный, coverage на этих файлах ≥80% ✅ (10 files, 107 passed, 0 failed)
 
 #### 3. MODE-сьют 01..08 (режимы/watchdog/фолбэк/персист)
-- [ ] MODE-01: AUTO, API доступен → бейдж зелёный, запросы в сеть
-- [ ] MODE-02: AUTO, API недоступен → бейдж янтарный, баннер, данные из сида
-- [ ] MODE-03: FORCE_API, API недоступен → error-состояние, ретрай
-- [ ] MODE-04: FORCE_MOCK, API доступен → ноль запросов к API
-- [ ] MODE-05: Смена режима → кеш очищен, refetch
-- [ ] MODE-06: Watchdog → фолбэк+баннер, восстановление
-- [ ] MODE-07: Сканер импортов → нет AppContext/mockData вне src/api
-- [ ] MODE-08: Перезагрузка → режим сохраняется
+- [x] MODE-01: AUTO, API доступен → бейдж зелёный, запросы в сеть ✅ (src/api/mode.test.ts)
+- [x] MODE-02: AUTO, API недоступен → бейдж янтарный, баннер, данные из сида ✅ (mode.test.ts + ApiModeBadge.test.tsx)
+- [x] MODE-03: FORCE_API, API недоступен → error-состояние, ретрай ✅
+- [x] MODE-04: FORCE_MOCK, API доступен → ноль запросов к API ✅
+- [x] MODE-05: Смена режима → кеш очищен, refetch ✅ (+ UI-тесты переключения в ApiModeBadge.test.tsx)
+- [x] MODE-06: Watchdog → фолбэк+баннер, восстановление ✅
+- [x] MODE-07: Сканер импортов → нет AppContext/mockData вне src/api ✅
+- [x] MODE-08: Перезагрузка → режим сохраняется ✅ (env-инъекция в ApiClient для тестируемости)
 
 #### 4. Страж R4 (grep @Disabled/it.skip без TODO)
 - [ ] Прогонять локально перед пушем: `grep -rnE "@Disabled|it\.skip|test\.skip|@Ignore" src backend/src`
@@ -76,7 +76,7 @@
 
 ### Следующие задачи (приоритет по порядку):
 1. ~~Создать component-тесты для `ProductTable`, `TripForm`~~ ✅ ГОТОВО (рефакторинг + 32 теста, гейт зелёный)
-2. Реализовать MODE-сьют 01..08
+2. ~~Реализовать MODE-сьют 01..08~~ ✅ DONE (src/api/mode.test.ts, 27 тестов; ApiClient принимает env-инъекцию)
 3. Включить coverage-гейт R5 в vitest.config
 4. Запустить `npm run test` и убедиться, что все тесты проходят
 
