@@ -1,46 +1,23 @@
 // MODE-сьют 01..08 (PLAN.md Фаза 10, P0 п.3)
-// Интеграционные тесты машины состояний режимов: client.ts + watchdog.ts + mode.ts
+// Интеграционные тесты машины состояний режимов: client.ts + watchdog.ts
 //
 // Реальные сетевые запросы подменяются моком global.fetch, чтобы проверить,
-// в какую именно "сеть" уходят запросы в каждом режиме.
+// в какую именно «сеть» уходят запросы в каждом режиме (real fetch vs mockServer).
 //
-// Важно: модуль apiMode переиспользуется между тестами через vi.resetModules()
-// + динамический import, чтобы каждый кейд стартует с чистого singleton-клиента.
+// Важно: singleton-клиент пересоздаётся между кейсами через vi.resetModules()
+// + динамический import — каждый тест стартует с чистого состояния.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-
-// Общие переключаемые стабы для мока ./client (используются в MODE-06).
-// Объявлены на верхнем уровне, т.к. hoisted-вызов vi.mock не видит const внутри describe.
-const clientStub = {
-  mode: 'auto' as string,
-  getImpl: async (_p: string): Promise<any> => ({ ok: true }),
-};
-
-vi.mock('./client', async () => {
-  const actual = await vi.importActual<typeof import('./client')>('./client');
-  return {
-    ...actual,
-    api: {
-      getMode: () => clientStub.mode as any,
-      get: (path: string) => clientStub.getImpl(path),
-    },
-  };
-});
 
 type FetchCall = { url: string; method: string };
 
 let fetchCalls: FetchCall[] = [];
 let fetchShouldFail = false; // имитация недоступного бэкенда
-let fetchDelayMs = 0;
 
 function installFetchMock() {
   fetchCalls = [];
   fetchShouldFail = false;
-  fetchDelayMs = 0;
-  vi.stubGlobal('fetch', vi.fn(async (url: string, init?: { method?: string; signal?: AbortSignal }) => {
+  vi.stubGlobal('fetch', vi.fn(async (url: string, init?: { method?: string }) => {
     fetchCalls.push({ url: String(url), method: init?.method ?? 'GET' });
-    if (fetchDelayMs > 0) {
-      await new Promise(r => setTimeout(r, fetchDelayMs));
-    }
     if (fetchShouldFail) {
       throw new TypeError('Failed to fetch'); // как браузер при connection refused
     }
@@ -52,11 +29,42 @@ function installFetchMock() {
   }));
 }
 
-/** Свежая копия клиента (singleton пересоздаётся после resetModules). */
+/**
+ * Свежая копия клиента («начало страницы»): конструктор заново читает
+ * localStorage/env. Через класс, а не через singleton `api`, чтобы тесты
+ * MODE-01..05/08 не зависели от общего состояния модуля.
+ */
 async function freshClient() {
-  vi.resetModules();
   const mod = await import('./client');
-  return mod.api;
+  return new mod.ApiClient();
+}
+
+/**
+ * Клиент, к которому подключён watchdog (пингует именно singleton `api`).
+ * NOTE: vi.resetModules() не пере-собирает ./client при наличии статической
+ * ссылки из графа тестового файла (Vitest 1.x), поэтому для watchdog-тестов
+ * работаем с реальным singleton и восстанавливаем его состояние после теста.
+ */
+async function freshWatchdogSetup(mode: 'real' | 'mock') {
+  const [{ api }, wd] = await Promise.all([import('./client'), import('./watchdog')]);
+  wd.stopWatchdog(); // страховка: интервал из предыдущего теста
+  api.setMode(mode);
+  return { api, wd };
+}
+
+/** Прогон промиса mock-задержки (200-400мс): крутим таймеры до готовности. */
+async function runMockRequest<T>(p: Promise<T>): Promise<T> {
+  vi.useFakeTimers();
+  try {
+    let settled = false;
+    p.then(() => { settled = true; }).catch(() => { settled = true; });
+    while (!settled) {
+      await vi.advanceTimersByTimeAsync(50);
+    }
+    return await p;
+  } finally {
+    vi.useRealTimers();
+  }
 }
 
 beforeEach(() => {
@@ -72,7 +80,7 @@ afterEach(() => {
 
 describe('MODE-01: AUTO, API доступен → клиент резолвится в real, запросы уходят в сеть', () => {
   it('resolveMode пингует /meta и выбирает real', async () => {
-    const api = await freshClient(); // localStorage пуст → не разрешён → auto-пинг
+    const api = await freshClient(); // localStorage пуст → не разрешён
     expect(api.isResolved()).toBe(false);
 
     const mode = await api.resolveMode();
@@ -97,6 +105,14 @@ describe('MODE-01: AUTO, API доступен → клиент резолвит�
     await api.resolveMode();
     expect(fetchCalls.length).toBe(n);
   });
+
+  it('первый get() без явного resolveMode запускает авто-резолв', async () => {
+    const api = await freshClient();
+    await api.get('/recipes'); // request() должен сам резолвить режим
+    expect(api.getMode()).toBe('real');
+    expect(fetchCalls.filter(c => c.url.endsWith('/meta')).length).toBe(1);
+    expect(fetchCalls.filter(c => c.url.endsWith('/recipes')).length).toBe(1);
+  });
 });
 
 describe('MODE-02: AUTO, API недоступен → фолбэк в mock, данные из сида', () => {
@@ -114,11 +130,7 @@ describe('MODE-02: AUTO, API недоступен → фолбэк в mock, да
     await api.resolveMode();
     const nAfterResolve = fetchCalls.length;
 
-    vi.useFakeTimers();
-    const p = api.get<any[]>('/recipes');
-    await vi.runAllTimersAsync(); // mock-задержка 200-400мс
-    const recipes = await p;
-    vi.useRealTimers();
+    const recipes = await runMockRequest(api.get<any[]>('/recipes'));
 
     expect(fetchCalls.length).toBe(nAfterResolve); // ни одного запроса в сеть
     expect(Array.isArray(recipes)).toBe(true);     // данные из сида
@@ -131,27 +143,21 @@ describe('MODE-02: AUTO, API недоступен → фолбэк в mock, да
     await api1.resolveMode();
     expect(localStorage.getItem('apiMode')).toBe('mock');
 
-    const api2 = await freshClient(); // "перезагрузка"
+    const api2 = await freshClient(); // «перезагрузка»
     expect(api2.isResolved()).toBe(true);
     expect(api2.getMode()).toBe('mock');
   });
 });
 
 describe('MODE-03: FORCE_API (mode=real), API недоступен → ошибка, ретрай возможен', () => {
-  it('real-режим НЕ молча фолбэчится: get бросает ApiClientError', async () => {
+  it('real-режим НЕ молча фолбэчится: сетевая ошибка проброшена наружу', async () => {
     const api = await freshClient();
     api.setMode('real');
     fetchShouldFail = true;
 
-    const { ApiClientError } = await import('./client');
-    let caught: unknown;
-    try {
-      await api.get('/recipes');
-    } catch (e) {
-      caught = e;
-    }
-    expect(caught).toBeInstanceOf(TypeError); // сетевая ошибка проброшена наружу
-    void ApiClientError;
+    await expect(api.get('/recipes')).rejects.toBeInstanceOf(TypeError);
+    // и режим остался real — никакого тихого переключения на mock
+    expect(api.getMode()).toBe('real');
   });
 
   it('HTTP 500 в real-режиме → ApiClientError с ProblemDetail', async () => {
@@ -165,7 +171,15 @@ describe('MODE-03: FORCE_API (mode=real), API недоступен → ошиб�
     })));
 
     const { ApiClientError } = await import('./client');
-    await expect(api.get('/recipes')).rejects.toBeInstanceOf(ApiClientError);
+    let caught: InstanceType<typeof ApiClientError> | undefined;
+    try {
+      await api.get('/recipes');
+    } catch (e) {
+      caught = e as InstanceType<typeof ApiClientError>;
+    }
+    expect(caught).toBeInstanceOf(ApiClientError);
+    expect(caught?.error.status).toBe(500);
+    expect(caught?.error.detail).toBe('db down');
   });
 
   it('ретрай после восстановления API успешен', async () => {
@@ -174,7 +188,7 @@ describe('MODE-03: FORCE_API (mode=real), API недоступен → ошиб�
     fetchShouldFail = true;
     await expect(api.get('/meta')).rejects.toThrow();
 
-    fetchShouldFail = false; // API "починили"
+    fetchShouldFail = false; // API «починили»
     const meta = await api.get('/meta');
     expect(meta).toEqual({ version: 'test', db: 'postgres' });
   });
@@ -185,18 +199,11 @@ describe('MODE-04: FORCE_MOCK, API доступен → ноль запросо�
     const api = await freshClient();
     api.setMode('mock'); // force mock, хотя fetch бы работал
 
-    vi.useFakeTimers();
-    const p1 = api.get('/recipes');
-    await vi.runAllTimersAsync();
-    const recipes = await p1;
-
-    const p2 = api.get('/meta');
-    await vi.runAllTimersAsync();
-    await p2;
-    vi.useRealTimers();
+    const recipes = await runMockRequest(api.get<any[]>('/recipes'));
 
     expect(fetchCalls).toHaveLength(0);
     expect(Array.isArray(recipes)).toBe(true);
+    expect(recipes.length).toBeGreaterThan(0);
   });
 
   it('force-mock переживает перезагрузку (persist в localStorage)', async () => {
@@ -218,11 +225,7 @@ describe('MODE-05: Смена режима → состояние обновле
     expect(fetchCalls.length).toBe(1);
 
     api.setMode('mock');
-    vi.useFakeTimers();
-    const p = api.get('/recipes');
-    await vi.runAllTimersAsync();
-    await p;
-    vi.useRealTimers();
+    await runMockRequest(api.get('/recipes'));
 
     expect(fetchCalls.length).toBe(1); // новых сетевых запросов нет
     expect(localStorage.getItem('apiMode')).toBe('mock');
@@ -246,36 +249,13 @@ describe('MODE-05: Смена режима → состояние обновле
   });
 });
 
-describe('MODE-06: Watchdog → фолбэк+событие при падении, восстановление', () => {
-  /**
-   * В watchdog пинги идут через api.get('/meta').
-   * Мокнем ./client через vi.mock с переключаемым поведением (без doMock —
-   * чтобы mock не «прилипал» к последующим resetModules в других сюитах).
-   */
-  const stub = { mode: 'auto' as string, getImpl: async (_p: string): Promise<any> => ({ ok: true }) };
-  vi.mock('./client', async () => {
-    const actual = await vi.importActual<typeof import('./client')>('./client');
-    return {
-      ...actual,
-      api: {
-        getMode: () => stub.mode as any,
-        get: (path: string) => stub.getImpl(path),
-      },
-    };
-  });
-
-  beforeEach(() => {
-    stub.mode = 'auto';
-    stub.getImpl = async () => ({ ok: true });
-  });
-
-  async function freshWatchdog() {
-    vi.resetModules();
-    return await import('./watchdog');
-  }
+describe('MODE-06: Watchdog → события при падении/восстановлении, тишина в mock', () => {
+  // Пинги watchdog идут через api.get('/meta') и api.getMode() реального клиента,
+  // поэтому управляем доступностью через fetch-мок, а режимом — через setMode().
 
   it('первый пинг при старте: available=true → callback с латентностью', async () => {
-    const wd = await freshWatchdog();
+    const { wd } = await freshWatchdogSetup('real');
+
     const events: Array<[boolean, number | null, string | null]> = [];
     wd.onWatchdogChange((a, l, e) => events.push([a, l, e]));
 
@@ -283,12 +263,14 @@ describe('MODE-06: Watchdog → фолбэк+событие при падени�
     await vi.waitFor(() => expect(events.length).toBe(1));
     expect(events[0][0]).toBe(true);
     expect(typeof events[0][1]).toBe('number');
+    expect(wd.getLastAvailability()).toBe(true);
     wd.stopWatchdog();
   });
 
-  it('API упал → callback(available=false, error) на fail-пине', async () => {
-    stub.getImpl = async () => { throw new Error('Connection refused'); };
-    const wd = await freshWatchdog();
+  it('API упал → callback(available=false, error), lastAvailable=false', async () => {
+    const { wd } = await freshWatchdogSetup('real');
+    fetchShouldFail = true;
+
     const events: Array<[boolean, number | null, string | null]> = [];
     wd.onWatchdogChange((a, l, e) => events.push([a, l, e]));
 
@@ -296,73 +278,94 @@ describe('MODE-06: Watchdog → фолбэк+событие при падени�
     await vi.waitFor(() => expect(events.length).toBe(1));
     expect(events[0][0]).toBe(false);
     expect(events[0][1]).toBeNull();
-    expect(events[0][2]).toContain('Connection refused');
+    expect(events[0][2]).toMatch(/Failed to fetch|abort/i);
     expect(wd.getLastAvailability()).toBe(false);
     wd.stopWatchdog();
   });
 
   it('полный цикл: up → down → up генерирует события с корректными флагами', async () => {
-    let online = true;
-    stub.getImpl = async () => {
-      if (!online) throw new Error('Connection refused');
-      return { ok: true };
-    };
-    const wd = await freshWatchdog();
+    const { wd } = await freshWatchdogSetup('real');
+
     const events: Array<[boolean, number | null, string | null]> = [];
     wd.onWatchdogChange((a, l, e) => events.push([a, l, e]));
 
     vi.useFakeTimers();
-    wd.startWatchdog(1000);
-    await vi.advanceTimersByTimeAsync(0); // первоначальный пинг
-    expect(wd.getLastAvailability()).toBe(true);
+    try {
+      wd.startWatchdog(1000);
+      await vi.advanceTimersByTimeAsync(0); // первоначальный пинг
+      expect(wd.getLastAvailability()).toBe(true);
 
-    online = false;
-    await vi.advanceTimersByTimeAsync(1000); // пинг по интервалу — fail
-    expect(events.at(-1)?.[0]).toBe(false);
-    expect(events.at(-1)?.[2]).toContain('Connection refused');
-    expect(wd.getLastAvailability()).toBe(false);
+      fetchShouldFail = true; // API «упал»
+      await vi.advanceTimersByTimeAsync(1000); // пинг по интервалу — fail
+      expect(events.at(-1)?.[0]).toBe(false);
+      expect(events.at(-1)?.[2]).toBeTruthy();
+      expect(wd.getLastAvailability()).toBe(false);
 
-    online = true;
-    await vi.advanceTimersByTimeAsync(1000); // восстановление
-    expect(events.at(-1)?.[0]).toBe(true);
-    expect(wd.getLastAvailability()).toBe(true);
-
-    wd.stopWatchdog();
-    vi.useRealTimers();
+      fetchShouldFail = false; // API «восстановился»
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(events.at(-1)?.[0]).toBe(true);
+      expect(wd.getLastAvailability()).toBe(true);
+    } finally {
+      wd.stopWatchdog();
+      vi.useRealTimers();
+    }
   });
 
-  it('в mock-режиме watchdog не пингует (get не вызывается)', async () => {
-    const getSpy = vi.fn(async () => ({ ok: true }));
-    stub.mode = 'mock';
-    stub.getImpl = getSpy;
-    const wd = await freshWatchdog();
+  it('в mock-режиме watchdog не пингует (0 запросов, 0 событий)', async () => {
+    const { wd } = await freshWatchdogSetup('mock');
 
-    wd.startWatchdog(500);
-    await Promise.resolve();
-    await Promise.resolve();
+    const events: boolean[] = [];
+    wd.onWatchdogChange((a) => events.push(a));
+
+    wd.startWatchdog(100);
+    await new Promise(r => setTimeout(r, 60));
+    expect(fetchCalls).toHaveLength(0);
+    expect(events).toHaveLength(0);
     wd.stopWatchdog();
-    expect(getSpy).not.toHaveBeenCalled();
   });
 
   it('stopWatchdog останавливает интервал, unsubscribe убирает callback', async () => {
-    let online = true;
-    stub.getImpl = async () => {
-      if (!online) throw new Error('down');
-      return { ok: true };
-    };
-    const wd = await freshWatchdog();
+    const { wd } = await freshWatchdogSetup('real');
+
     const events: boolean[] = [];
     const unsub = wd.onWatchdogChange((a) => events.push(a));
 
     vi.useFakeTimers();
-    wd.startWatchdog(1000);
-    await vi.advanceTimersByTimeAsync(0);
-    unsub();
-    online = false;
-    await vi.advanceTimersByTimeAsync(3000);
-    expect(events).toEqual([true]); // больше ничего не пришло после отписки
-    wd.stopWatchdog();
-    vi.useRealTimers();
+    try {
+      wd.startWatchdog(1000);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(events).toEqual([true]);
+
+      unsub();
+      fetchShouldFail = true;
+      await vi.advanceTimersByTimeAsync(3000); // пинги идут, но слушателей нет
+      expect(events).toEqual([true]);
+
+      wd.stopWatchdog();
+      const nBefore = fetchCalls.length;
+      await vi.advanceTimersByTimeAsync(5000);
+      expect(fetchCalls.length).toBe(nBefore); // интервал действительно остановлен
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('startWatchdog идемпотентен: повторный вызов не создаёт второго интервала', async () => {
+    const { wd } = await freshWatchdogSetup('real');
+
+    vi.useFakeTimers();
+    try {
+      wd.startWatchdog(1000);
+      wd.startWatchdog(1000); // второй вызов — no-op
+      await vi.advanceTimersByTimeAsync(0);
+      const nAfterInitial = fetchCalls.length; // 1 пинг /meta
+
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(fetchCalls.length).toBe(nAfterInitial + 1); // ровно один пинг за тик
+    } finally {
+      wd.stopWatchdog();
+      vi.useRealTimers();
+    }
   });
 });
 
@@ -394,19 +397,38 @@ describe('MODE-08: Перезагрузка страницы → режим со
     expect(api.isResolved()).toBe(true);
   });
 
-  it('VITE_API_MODE используется как fallback, если localStorage пуст', async () => {
-    (import.meta as any).env.VITE_API_MODE = 'mock';
-    const api = await freshClient();
-    expect(api.getMode()).toBe('mock');
-    expect(api.isResolved()).toBe(true);
-    delete (import.meta as any).env.VITE_API_MODE;
+  it('VITE_API_MODE задаёт режим по умолчанию, если localStorage пуст', async () => {
+    (import.meta as any).env.VITE_API_MODE = 'real';
+    try {
+      const api = await freshClient();
+      expect(api.getMode()).toBe('real'); // env применён сразу
+      expect(api.isResolved()).toBe(true); // без лишнего авторызрешения/пинга
+      expect(fetchCalls.filter(c => c.url.endsWith('/meta'))).toHaveLength(0);
+    } finally {
+      delete (import.meta as any).env.VITE_API_MODE;
+    }
   });
 
-  it('localStorage приоритетнее VITE_API_MODE', async () => {
+  it('выбор пользователя из UI приоритетнее VITE_API_MODE на следующем запуске', async () => {
     (import.meta as any).env.VITE_API_MODE = 'mock';
-    localStorage.setItem('apiMode', 'real');
+    try {
+      const api1 = await freshClient(); // env: mock
+      api1.setMode('real');            // пользователь переключился в UI
+      expect(localStorage.getItem('apiMode')).toBe('real');
+
+      const api2 = await freshClient(); // «перезагрузка»
+      expect(api2.getMode()).toBe('real'); // localStorage победил env
+      expect(api2.isResolved()).toBe(true);
+    } finally {
+      delete (import.meta as any).env.VITE_API_MODE;
+    }
+  });
+
+  it('неизвестное значение в localStorage игнорируется → авторызрешение', async () => {
+    localStorage.setItem('apiMode', 'banana');
     const api = await freshClient();
-    expect(api.getMode()).toBe('real');
-    delete (import.meta as any).env.VITE_API_MODE;
+    expect(api.isResolved()).toBe(false);
+    const mode = await api.resolveMode();
+    expect(mode).toBe('real'); // fetch смокан и работает
   });
 });

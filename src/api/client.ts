@@ -29,7 +29,7 @@ const SEED_VERSION = '1.0.0';
 const LS_MODE_KEY = 'apiMode';
 const LS_SEED_KEY = 'seedVersion';
 
-class ApiClient {
+export class ApiClient {
   private mode: ApiMode = 'mock';
   private baseUrl: string;
   private modeResolved = false;
