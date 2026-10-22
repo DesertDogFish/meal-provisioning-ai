@@ -4,7 +4,7 @@
 
 ## Технологический стек
 
-- Java 21
+- Java 17 (LTS; target компиляции — см. pom.xml <java.version>)
 - Spring Boot 3.2.5
 - Spring Data JPA
 - Spring Security (JWT)

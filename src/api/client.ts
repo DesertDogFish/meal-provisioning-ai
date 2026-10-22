@@ -53,13 +53,17 @@ export class ApiClient {
     // NOTE: window['meta'] — намеренно нестатический доступ: Vite заменяет статическое
     // обращение import.meta.env.* на литералы при сборке, из-за чего тестовые подмены
     // (vi.stubEnv / присваивание) не применяются. В браузере window.meta пуст → fallback.
-    const env =
-      (window as unknown as { meta?: Record<string, string> }).meta ??
+    // window.meta.env — канал подмены env в тестах; сам объект meta может быть
+    // задан без вложенного env, поэтому берём env из meta с fallback.
+    const injectedMeta = (window as unknown as { meta?: { env?: Record<string, string> } }).meta;
+    const env: Record<string, string> =
+      injectedMeta?.env ??
+      injectedMeta ??
       ((import.meta as any).env || {});
     this.baseUrl = env.VITE_API_URL || 'http://localhost:8080/api/v1';
     
     const storedMode = localStorage.getItem(LS_MODE_KEY) as ApiMode | null;
-    const envMode = e.VITE_API_MODE as ApiMode | undefined;
+    const envMode = env.VITE_API_MODE as ApiMode | undefined;
     
     if (storedMode === 'mock' || storedMode === 'real') {
       this.mode = storedMode;

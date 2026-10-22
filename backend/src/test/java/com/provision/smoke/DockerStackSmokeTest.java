@@ -13,9 +13,9 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import com.provision.integration.ContainerSuite;
+import com.provision.integration.LocalPgFallback;
 import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.util.Map;
 import java.util.Optional;
@@ -39,22 +39,29 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
-@Testcontainers
+@ContainerSuite
 @ActiveProfiles("test")
 @DisplayName("Docker stack smoke tests")
 class DockerStackSmokeTest {
 
-    @Container
-    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:15-alpine")
+    private static final boolean LOCAL_PG = !LocalPgFallback.dockerAvailable();
+
+    static PostgreSQLContainer<?> postgres = LOCAL_PG ? null : new PostgreSQLContainer<>("postgres:15-alpine")
             .withDatabaseName("provision_smoke")
             .withUsername("test")
             .withPassword("test");
 
+    static {
+        if (!LOCAL_PG && postgres != null && !postgres.isRunning()) {
+            postgres.start();
+        }
+    }
+
     @DynamicPropertySource
     static void configureProperties(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", postgres::getJdbcUrl);
-        registry.add("spring.datasource.username", postgres::getUsername);
-        registry.add("spring.datasource.password", postgres::getPassword);
+        registry.add("spring.datasource.url", () -> LOCAL_PG ? LocalPgFallback.jdbcUrl("provision_smoke") : postgres.getJdbcUrl());
+        registry.add("spring.datasource.username", () -> LOCAL_PG ? "test" : postgres.getUsername());
+        registry.add("spring.datasource.password", () -> LOCAL_PG ? "test" : postgres.getPassword());
     }
 
     @Autowired

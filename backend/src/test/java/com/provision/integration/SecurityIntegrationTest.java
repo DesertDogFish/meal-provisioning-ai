@@ -1,4 +1,5 @@
 package com.provision.integration;
+import java.nio.charset.StandardCharsets;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.provision.dto.auth.LoginRequest;
@@ -101,7 +102,7 @@ class SecurityIntegrationTest {
                 .andReturn();
 
         Map<String, Object> tripData = objectMapper.readValue(
-                tripResult.getResponse().getContentAsString(), Map.class);
+                tripResult.getResponse().getContentAsString(StandardCharsets.UTF_8), Map.class);
         userTripId = ((Number) tripData.get("id")).longValue();
     }
 

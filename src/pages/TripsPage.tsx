@@ -155,7 +155,7 @@ export default function TripsPage() {
               style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
             >
               <div className="flex items-center justify-between">
-                <div className="flex-1 cursor-pointer" onClick={() => navigate(`/trips/${trip.id}`)}>
+                <div data-testid={`trip-card-${trip.id}`} className="flex-1 cursor-pointer" onClick={() => navigate(`/trips/${trip.id}`)}>
                   <h3 className="font-bold text-lg" style={{ color: 'var(--text)' }}>{trip.name}</h3>
                   <div className="flex flex-wrap items-center gap-4 mt-2 text-sm" style={{ color: 'var(--muted)' }}>
                     <span className="flex items-center gap-1">
