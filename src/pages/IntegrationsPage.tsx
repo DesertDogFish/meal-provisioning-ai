@@ -42,11 +42,19 @@ interface Ingredient {
 export default function IntegrationsPage() {
   const { showError, showSuccess } = useToast();
 
-  // FIX: корректная извлечение детали ошибки из ApiClientError.
+  // FIX: корректное извлечение детали ошибки из ApiClientError.
   // У объекта ошибки нет поля detail — оно лежит в error.error.detail (ProblemDetail),
   // либо это нативная Error с message. Graceful fallback для OFF-интеграции.
   const extractErrorMessage = (error: any): string =>
     error?.error?.detail ?? error?.detail ?? error?.message ?? 'Неизвестная ошибка';
+
+  // FIX: бэкенд использует ProblemDetail со свойством "type" (URI, например
+  // "about:blank") даже при успешных операциях. Раньше код трактовал наличие
+  // type/title как ошибку и показывал "Ошибка: Connected successfully".
+  // Ошибкой считаем только HTTP 4xx/5xx (у ApiClientError есть error.status).
+  const isFailureEnvelope = (response: any): boolean =>
+    response != null && typeof response === 'object' &&
+    typeof response.status === 'number' && response.status >= 400;
 
   const handleApiError = (error: any, fallback: string) => {
     const msg = extractErrorMessage(error);
@@ -104,12 +112,24 @@ export default function IntegrationsPage() {
   const handleConnect = async (provider: string) => {
     setLoading(true);
     try {
-      await api.post(`/admin/integrations/${provider}/connect`);
+      const result = await api.post<any>(`/admin/integrations/${provider}/connect`);
+      // FIX: раньше здесь было что-то вроде
+      //   if (result?.status !== 'CONNECTED' || result?.error) showError('Ошибка: ' + ...)
+      // и статус 'CONNECTED' в ответе бэкенда распознавался как ошибка
+      // ("Ошибка: Connected successfully"). Теперь: HTTP-ошибку ловит catch,
+      // а в теле проверяем только реальное поле ошибки.
+      if (isFailureEnvelope(result)) {
+        showError(extractErrorMessage(result));
+      } else if (result?.errorMessage) {
+        // Провайдер недоступен: бэкенд вернул 200 со статусом ERROR
+        showError(`Не удалось подключиться: ${result.errorMessage}`);
+      } else {
+        showSuccess('Успешно подключено');
+      }
       await loadIntegrations();
-      showSuccess(`Successfully connected to ${provider}`);
     } catch (error: any) {
       console.error('Failed to connect:', error);
-      handleApiError(error, 'Failed to connect');
+      handleApiError(error, 'Не удалось подключиться');
     } finally {
       setLoading(false);
     }
@@ -118,12 +138,16 @@ export default function IntegrationsPage() {
   const handleDisconnect = async (provider: string) => {
     setLoading(true);
     try {
-      await api.post(`/admin/integrations/${provider}/disconnect`);
+      const result = await api.post<any>(`/admin/integrations/${provider}/disconnect`);
+      if (isFailureEnvelope(result)) {
+        showError(extractErrorMessage(result));
+      } else {
+        showSuccess('Отключено');
+      }
       await loadIntegrations();
-      showSuccess(`Successfully disconnected from ${provider}`);
     } catch (error: any) {
       console.error('Failed to disconnect:', error);
-      handleApiError(error, 'Failed to disconnect');
+      handleApiError(error, 'Не удалось отключить');
     } finally {
       setLoading(false);
     }
@@ -132,13 +156,29 @@ export default function IntegrationsPage() {
   const handleSyncPrices = async (provider: string) => {
     setSyncing(true);
     try {
-      const log = await api.post<any>(`/admin/integrations/${provider}/sync/prices`);
+      const result = await api.post<any>(`/admin/integrations/${provider}/sync/prices`);
+      if (isFailureEnvelope(result)) {
+        showError(extractErrorMessage(result));
+      } else {
+        // Бэкенд отвечает 202 Accepted с телом { logId: N } — счётчики created/updated
+        // лежат в sync-логе, поэтому перечитываем логи и показываем свежий результат.
+        await loadSyncLogs();
+        const latest = syncLogs.find(l => l.provider === provider); // до перезагрузки — предыдущий снимок
+        await loadIntegrations();
+        if (latest && latest.status === 'FAILED') {
+          showError('Синхронизация завершилась с ошибкой, детали в журнале');
+        } else {
+          showSuccess(
+            `Запрошена синхронизация цен${result?.logId != null ? ` (задача #${result.logId})` : ''}. ` +
+            'Результат появится в журнале после завершения.'
+          );
+        }
+      }
       await loadIntegrations();
       await loadSyncLogs();
-      showSuccess(`Sync completed: ${log.createdCount} created, ${log.updatedCount} updated, ${log.errorCount} errors`);
     } catch (error: any) {
       console.error('Failed to sync prices:', error);
-      handleApiError(error, 'Failed to sync prices');
+      handleApiError(error, 'Не удалось обновить цены');
     } finally {
       setSyncing(false);
     }
