@@ -32,22 +32,30 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
-@Testcontainers
+@ContainerSuite
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 @DisplayName("Security Integration Tests")
 class SecurityIntegrationTest {
 
-    @Container
-    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:15-alpine")
+    /** Docker есть -> Testcontainers; нет -> локальный PG-fallback (LocalPgFallback). */
+    private static final boolean LOCAL_PG = !com.provision.integration.LocalPgFallback.dockerAvailable();
+
+    static PostgreSQLContainer<?> postgres = LOCAL_PG ? null : new PostgreSQLContainer<>("postgres:15-alpine")
             .withDatabaseName("provision_test_sec")
             .withUsername("test")
             .withPassword("test");
 
+    static {
+        if (!LOCAL_PG && postgres != null && !postgres.isRunning()) {
+            postgres.start();
+        }
+    }
+
     @DynamicPropertySource
     static void configureProperties(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", postgres::getJdbcUrl);
-        registry.add("spring.datasource.username", postgres::getUsername);
-        registry.add("spring.datasource.password", postgres::getPassword);
+        registry.add("spring.datasource.url", () -> LOCAL_PG ? com.provision.integration.LocalPgFallback.jdbcUrl("provision_test_sec") : postgres.getJdbcUrl());
+        registry.add("spring.datasource.username", () -> LOCAL_PG ? "test" : postgres.getUsername());
+        registry.add("spring.datasource.password", () -> LOCAL_PG ? "test" : postgres.getPassword());
     }
 
     @Autowired
@@ -67,49 +75,11 @@ class SecurityIntegrationTest {
     void setUp() throws Exception {
         userRepository.deleteAll();
 
-        // Create USER
-        RegisterRequest userRequest = new RegisterRequest(
-                "user@test.com",
-                "password123",
-                "User",
-                "Test"
-        );
-        mockMvc.perform(post("/api/v1/auth/register")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(userRequest)))
-                .andExpect(status().isCreated());
+        // Create USER (пароль хэшируется реальным PasswordEncoder через /auth/register)
+        userToken = TestUsers.registerUser(mockMvc, objectMapper, "user@test.com");
 
-        LoginRequest userLogin = new LoginRequest("user@test.com", "password123");
-        MvcResult userResult = mockMvc.perform(post("/api/v1/auth/login")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(userLogin)))
-                .andExpect(status().isOk())
-                .andReturn();
-
-        Map<String, Object> userTokens = objectMapper.readValue(
-                userResult.getResponse().getContentAsString(), Map.class);
-        userToken = (String) userTokens.get("accessToken");
-
-        // Create ADMIN
-        User admin = User.builder()
-                .email("admin@test.com")
-                .passwordHash("$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy") // password123
-                .firstName("Admin")
-                .lastName("Test")
-                .role(UserRole.ADMIN)
-                .build();
-        userRepository.save(admin);
-
-        LoginRequest adminLogin = new LoginRequest("admin@test.com", "password123");
-        MvcResult adminResult = mockMvc.perform(post("/api/v1/auth/login")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(adminLogin)))
-                .andExpect(status().isOk())
-                .andReturn();
-
-        Map<String, Object> adminTokens = objectMapper.readValue(
-                adminResult.getResponse().getContentAsString(), Map.class);
-        adminToken = (String) adminTokens.get("accessToken");
+        // Create ADMIN (раньше был захардкожен чужой BCrypt-хэш, не соответствующий паролю -> логин 401)
+        adminToken = TestUsers.createAdmin(mockMvc, objectMapper, userRepository, "admin@test.com");
 
         // Create trip for user
         TripRequest tripRequest = new TripRequest(
@@ -147,27 +117,7 @@ class SecurityIntegrationTest {
     @DisplayName("SEC-02: USER cannot access other user's trips")
     void sec02_userCannotAccessOtherTrips() throws Exception {
         // Create second user
-        RegisterRequest user2Request = new RegisterRequest(
-                "user2@test.com",
-                "password123",
-                "User2",
-                "Test"
-        );
-        mockMvc.perform(post("/api/v1/auth/register")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(user2Request)))
-                .andExpect(status().isCreated());
-
-        LoginRequest user2Login = new LoginRequest("user2@test.com", "password123");
-        MvcResult user2Result = mockMvc.perform(post("/api/v1/auth/login")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(user2Login)))
-                .andExpect(status().isOk())
-                .andReturn();
-
-        Map<String, Object> user2Tokens = objectMapper.readValue(
-                user2Result.getResponse().getContentAsString(), Map.class);
-        String user2Token = (String) user2Tokens.get("accessToken");
+        String user2Token = TestUsers.registerUser(mockMvc, objectMapper, "user2@test.com");
 
         // Try to access user1's trip
         mockMvc.perform(get("/api/v1/trips/" + userTripId)
@@ -180,27 +130,7 @@ class SecurityIntegrationTest {
     @DisplayName("SEC-03: USER cannot delete other user's trips")
     void sec03_userCannotDeleteOtherTrips() throws Exception {
         // Create second user
-        RegisterRequest user2Request = new RegisterRequest(
-                "user2@test.com",
-                "password123",
-                "User2",
-                "Test"
-        );
-        mockMvc.perform(post("/api/v1/auth/register")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(user2Request)))
-                .andExpect(status().isCreated());
-
-        LoginRequest user2Login = new LoginRequest("user2@test.com", "password123");
-        MvcResult user2Result = mockMvc.perform(post("/api/v1/auth/login")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(user2Login)))
-                .andExpect(status().isOk())
-                .andReturn();
-
-        Map<String, Object> user2Tokens = objectMapper.readValue(
-                user2Result.getResponse().getContentAsString(), Map.class);
-        String user2Token = (String) user2Tokens.get("accessToken");
+        String user2Token = TestUsers.registerUser(mockMvc, objectMapper, "user2@test.com");
 
         // Try to delete user1's trip
         mockMvc.perform(delete("/api/v1/trips/" + userTripId)
@@ -218,27 +148,7 @@ class SecurityIntegrationTest {
     @DisplayName("SEC-04: USER cannot modify other user's trip days/meals")
     void sec04_userCannotModifyOtherTrips() throws Exception {
         // Create second user
-        RegisterRequest user2Request = new RegisterRequest(
-                "user2@test.com",
-                "password123",
-                "User2",
-                "Test"
-        );
-        mockMvc.perform(post("/api/v1/auth/register")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(user2Request)))
-                .andExpect(status().isCreated());
-
-        LoginRequest user2Login = new LoginRequest("user2@test.com", "password123");
-        MvcResult user2Result = mockMvc.perform(post("/api/v1/auth/login")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(user2Login)))
-                .andExpect(status().isOk())
-                .andReturn();
-
-        Map<String, Object> user2Tokens = objectMapper.readValue(
-                user2Result.getResponse().getContentAsString(), Map.class);
-        String user2Token = (String) user2Tokens.get("accessToken");
+        String user2Token = TestUsers.registerUser(mockMvc, objectMapper, "user2@test.com");
 
         // Try to update day
         mockMvc.perform(put("/api/v1/trips/" + userTripId + "/days/1")
