@@ -33,7 +33,7 @@ public class AuthService {
     private final JwtService jwtService;
 
     @Transactional
-    public UserResponse register(RegisterRequest request) {
+    public AuthResponseWithUser register(RegisterRequest request) {
         if (userRepository.existsByEmail(request.email())) {
             throw new ConflictException("Email already registered: " + request.email());
         }
@@ -49,7 +49,24 @@ public class AuthService {
         user = userRepository.save(user);
         log.info("Registered new user: {}", user.getEmail());
 
-        return toUserResponse(user);
+        // Расширение контракта (P1, AUTH-01): регистрация сразу выдаёт пару токенов —
+        // клиенту не нужен второй round-trip на /login. Тело содержит поля пользователя
+        // (id/email/firstName/lastName/role) + accessToken/refreshToken/tokenType.
+        String accessToken = jwtService.generateAccessToken(user);
+        String refreshToken = generateRefreshToken();
+        saveRefreshToken(user, refreshToken);
+        return new AuthResponseWithUser(toUserResponse(user), accessToken, refreshToken);
+    }
+
+    /** AuthResponse + поля пользователя (обратная совместимость формы ответа). */
+    public record AuthResponseWithUser(
+            Long id, String email, String firstName, String lastName, String role,
+            String accessToken, String refreshToken, String tokenType
+    ) {
+        AuthResponseWithUser(UserResponse u, String accessToken, String refreshToken) {
+            this(u.id(), u.email(), u.firstName(), u.lastName(),
+                    u.role() != null ? u.role().name() : null, accessToken, refreshToken, "Bearer");
+        }
     }
 
     @Transactional

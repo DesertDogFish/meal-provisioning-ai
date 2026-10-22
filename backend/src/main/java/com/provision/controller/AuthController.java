@@ -18,7 +18,8 @@ public class AuthController {
 
     @PostMapping("/register")
     @ResponseStatus(HttpStatus.CREATED)
-    public UserResponse register(@Valid @RequestBody RegisterRequest request) {
+    public AuthService.AuthResponseWithUser register(@Valid @RequestBody RegisterRequest request) {
+        // P1 AUTH-01: регистрация сразу выдаёт пару токенов (+ поля пользователя).
         return authService.register(request);
     }
 
