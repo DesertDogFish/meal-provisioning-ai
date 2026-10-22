@@ -42,13 +42,15 @@ export function BindingWizard({ onClose }: Props) {
     loadUnboundIngredients();
   }, []);
 
+  const curId = cur?.id;
+
   useEffect(() => {
-    if (cur) {
-      loadSuggestions(cur.id);
+    if (curId) {
+      loadSuggestions(curId);
       setPack(null);
       setManual('');
     }
-  }, [cur?.id]);
+  }, [curId]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
