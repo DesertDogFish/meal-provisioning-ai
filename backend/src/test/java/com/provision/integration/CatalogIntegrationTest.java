@@ -1,4 +1,5 @@
 package com.provision.integration;
+import java.nio.charset.StandardCharsets;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.provision.dto.recipe.RecipeResponse;
@@ -83,23 +84,17 @@ class CatalogIntegrationTest {
                 .with(MockMvcUtf8PostProcessor.utf8Query());
     }
 
-    private static String lastResponseBody(org.springframework.test.web.servlet.MvcResult r) throws Exception {
-        String body = r.getResponse().getContentAsString();
-        System.err.println("CAT response: " + (body.length() > 800 ? body.substring(0, 800) : body));
-        return body;
-    }
-
     @Test
     @Order(1)
     @DisplayName("CAT-01: After migrations GET /recipes returns ≥ 50 dishes; each has non-empty ingredients")
     void cat01_recipesCatalogHasAtLeast50Dishes() throws Exception {
         MvcResult result = mockMvc.perform(authGet("/api/v1/recipes"))
-                .andDo(r -> { if (r.getResponse().getStatus() != 200) System.err.println("CAT-ERR " + r.getRequest().getRequestURI() + " -> " + r.getResponse().getStatus() + " body=" + r.getResponse().getContentAsString()); })
+                .andDo(r -> { if (r.getResponse().getStatus() != 200) System.err.println("CAT-ERR " + r.getRequest().getRequestURI() + " -> " + r.getResponse().getStatus() + " body=" + r.getResponse().getContentAsString(StandardCharsets.UTF_8)); })
                 .andExpect(status().isOk())
                 .andReturn();
 
         List<RecipeResponse> recipes = objectMapper.readValue(
-                result.getResponse().getContentAsString(),
+                result.getResponse().getContentAsString(StandardCharsets.UTF_8),
                 objectMapper.getTypeFactory().constructCollectionType(List.class, RecipeResponse.class)
         );
 
@@ -121,7 +116,7 @@ class CatalogIntegrationTest {
                 .andReturn();
 
         List<RecipeResponse> breakfastRecipes = objectMapper.readValue(
-                breakfastResult.getResponse().getContentAsString(),
+                breakfastResult.getResponse().getContentAsString(StandardCharsets.UTF_8),
                 objectMapper.getTypeFactory().constructCollectionType(List.class, RecipeResponse.class)
         );
 
@@ -133,7 +128,7 @@ class CatalogIntegrationTest {
                 .andReturn();
 
         List<RecipeResponse> snackRecipes = objectMapper.readValue(
-                snackResult.getResponse().getContentAsString(),
+                snackResult.getResponse().getContentAsString(StandardCharsets.UTF_8),
                 objectMapper.getTypeFactory().constructCollectionType(List.class, RecipeResponse.class)
         );
 
@@ -149,7 +144,7 @@ class CatalogIntegrationTest {
                 .andReturn();
 
         List<RecipeResponse> recipes = objectMapper.readValue(
-                result.getResponse().getContentAsString(),
+                result.getResponse().getContentAsString(StandardCharsets.UTF_8),
                 objectMapper.getTypeFactory().constructCollectionType(List.class, RecipeResponse.class)
         );
 
@@ -172,7 +167,7 @@ class CatalogIntegrationTest {
                 .andReturn();
 
         List<RecipeResponse> recipes = objectMapper.readValue(
-                result.getResponse().getContentAsString(),
+                result.getResponse().getContentAsString(StandardCharsets.UTF_8),
                 objectMapper.getTypeFactory().constructCollectionType(List.class, RecipeResponse.class)
         );
 
@@ -190,12 +185,12 @@ class CatalogIntegrationTest {
     @DisplayName("CAT-05: costPerServing in response is calculated by current date prices")
     void cat05_costPerServingCalculation() throws Exception {
         // Get a specific recipe with known ingredients
-        MvcResult result = mockMvc.perform(authGet("/api/v1/recipes?search=Гречка+с+тушенкой+и+луком"))
+        MvcResult result = mockMvc.perform(authGet("/api/v1/recipes?search=Гречка с тушенкой и луком"))
                 .andExpect(status().isOk())
                 .andReturn();
 
         List<RecipeResponse> recipes = objectMapper.readValue(
-                result.getResponse().getContentAsString(),
+                result.getResponse().getContentAsString(StandardCharsets.UTF_8),
                 objectMapper.getTypeFactory().constructCollectionType(List.class, RecipeResponse.class)
         );
 
@@ -220,7 +215,7 @@ class CatalogIntegrationTest {
                 .andReturn();
 
         List<RecipeResponse> recipes = objectMapper.readValue(
-                result.getResponse().getContentAsString(),
+                result.getResponse().getContentAsString(StandardCharsets.UTF_8),
                 objectMapper.getTypeFactory().constructCollectionType(List.class, RecipeResponse.class)
         );
 
@@ -242,7 +237,7 @@ class CatalogIntegrationTest {
                 .andReturn();
 
         List<RecipeResponse> recipes = objectMapper.readValue(
-                result.getResponse().getContentAsString(),
+                result.getResponse().getContentAsString(StandardCharsets.UTF_8),
                 objectMapper.getTypeFactory().constructCollectionType(List.class, RecipeResponse.class)
         );
 

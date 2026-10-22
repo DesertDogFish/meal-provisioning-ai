@@ -1,4 +1,5 @@
 package com.provision.integration;
+import java.nio.charset.StandardCharsets;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.provision.dto.auth.LoginRequest;
@@ -38,7 +39,7 @@ public final class TestUsers {
                 .andReturn();
         int status = result.getResponse().getStatus();
         if (status != 201 && status != 409) {
-            throw new IllegalStateException("register failed, status=" + status + ", body=" + result.getResponse().getContentAsString());
+            throw new IllegalStateException("register failed, status=" + status + ", body=" + result.getResponse().getContentAsString(StandardCharsets.UTF_8));
         }
         return login(mockMvc, om, request.email(), request.password());
     }
@@ -52,9 +53,9 @@ public final class TestUsers {
                 .andReturn();
         if (result.getResponse().getStatus() != 200) {
             throw new IllegalStateException("login failed for " + email + ", status=" + result.getResponse().getStatus()
-                    + ", body=" + result.getResponse().getContentAsString());
+                    + ", body=" + result.getResponse().getContentAsString(StandardCharsets.UTF_8));
         }
-        Map<?, ?> tokens = om.readValue(result.getResponse().getContentAsString(), Map.class);
+        Map<?, ?> tokens = om.readValue(result.getResponse().getContentAsString(StandardCharsets.UTF_8), Map.class);
         return (String) tokens.get("accessToken");
     }
 

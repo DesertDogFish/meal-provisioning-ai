@@ -1,4 +1,5 @@
 package com.provision.integration;
+import java.nio.charset.StandardCharsets;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.provision.dto.auth.LoginRequest;
@@ -99,7 +100,7 @@ class AuthIntegrationTest {
                 .andExpect(jsonPath("$.role").value("USER"))
                 .andReturn();
 
-        String response = result.getResponse().getContentAsString();
+        String response = result.getResponse().getContentAsString(StandardCharsets.UTF_8);
         assertThat(response).contains("accessToken");
         assertThat(response).contains("refreshToken");
     }
@@ -230,7 +231,7 @@ class AuthIntegrationTest {
                 .andExpect(status().isOk())
                 .andReturn();
 
-        String response = loginResult.getResponse().getContentAsString();
+        String response = loginResult.getResponse().getContentAsString(StandardCharsets.UTF_8);
         Map<String, Object> tokens = objectMapper.readValue(response, Map.class);
         String accessToken = (String) tokens.get("accessToken");
 
@@ -266,7 +267,7 @@ class AuthIntegrationTest {
                 .andExpect(status().isOk())
                 .andReturn();
 
-        String response = loginResult.getResponse().getContentAsString();
+        String response = loginResult.getResponse().getContentAsString(StandardCharsets.UTF_8);
         Map<String, Object> tokens = objectMapper.readValue(response, Map.class);
         String refreshToken = (String) tokens.get("refreshToken");
 
@@ -302,7 +303,7 @@ class AuthIntegrationTest {
                 .andExpect(status().isOk())
                 .andReturn();
 
-        String response = loginResult.getResponse().getContentAsString();
+        String response = loginResult.getResponse().getContentAsString(StandardCharsets.UTF_8);
         Map<String, Object> tokens = objectMapper.readValue(response, Map.class);
         String refreshToken = (String) tokens.get("refreshToken");
 

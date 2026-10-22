@@ -51,7 +51,7 @@ docker-compose up -d
 ## 🛠 Технологический стек
 
 ### Backend
-- **Java 21** + **Spring Boot 3.2.5**
+- **Java 17** + **Spring Boot 3.2.5**
 - **PostgreSQL 15** + **Flyway** (миграции V1-V11)
 - **Spring Security** + **JWT** (access + refresh tokens)
 - **Spring Data JPA** + **Hibernate**

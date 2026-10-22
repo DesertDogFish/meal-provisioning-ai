@@ -5,16 +5,22 @@ import org.springframework.test.web.servlet.request.RequestPostProcessor;
 
 import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 
 /**
- * FIX (кодировка query-параметров в MockMvc): в unit-окружении нет Tomcat-коннектора,
- * и MockHttpServletRequest парсит query-строку в charset по умолчанию JVM — кириллица
- * из URL превращается в mojibake ("КАШИ" -> "ÐÐ¨Ð"), фильтры каталога не матчатся
- * (падения CAT-03/05/07 на локальном PG без Docker).
+ * FIX (двойная декодировка query-параметров в MockMvc, падения CAT-03/05).
  *
- * В реальном HTTP Spring Boot использует UTF-8 для URI по умолчанию, поэтому постпроцессор
- * воспроизводит боевое поведение: перекодирует query строку через Latin-1 round-trip.
+ * Корень проблемы: MockHttpServletRequestBuilder#buildRequest сам разбирает query-строку
+ * и ДЕКОДИРУЕТ ключи/значения через UriUtils.decode(..., UTF-8) (проверено по байткоду
+ * spring-test 6.1.6: lambda$addRequestParams$5). Предыдущая версия постпроцессора
+ * ПОВТОРНО декодировала query через URLDecoder(UTF-8) и звала request.addParameter(...) —
+ * но addParameter аппендит значение к уже существующему параметру, а не заменяет его.
+ * В итоге search получал два значения ("тушенка" + мусор от двойного decode), контроллер
+ * брал некорректное, SQL LIKE не матчался -> пустая выборка (CAT-03/05).
+ *
+ * Решение: нормализуем запрос одним проходом — пересобираем query из УЖЕ корректно
+ * декодированного parameterMap в каноничный percent-encoded вид и перезаписываем
+ * параметры setParameter() (по одному значению на ключ). Идемпотентно; повторного
+ * URLDecoder нет — именно он и был багом.
  */
 public final class MockMvcUtf8PostProcessor implements RequestPostProcessor {
 
@@ -26,66 +32,28 @@ public final class MockMvcUtf8PostProcessor implements RequestPostProcessor {
 
     @Override
     public MockHttpServletRequest postProcessRequest(MockHttpServletRequest request) {
-        // FIX (ключ): в unit-окружении параметры query НЕ парсятся автоматически
-        // (в отличие от Tomcat) — parameterMap пуст, и контроллер получает search=null,
-        // возвращая весь каталог вместо фильтрации. Парсим query вручную как Tomcat.
-        if (request.getParameterMap().isEmpty() && request.getQueryString() != null) {
-            for (String pair : request.getQueryString().split("&")) {
-                int eq = pair.indexOf('=');
-                if (eq > 0) {
-                    try {
-                        String k = java.net.URLDecoder.decode(pair.substring(0, eq), "UTF-8");
-                        String v = java.net.URLDecoder.decode(pair.substring(eq + 1), "UTF-8");
-                        request.addParameter(k, v);
-                    } catch (UnsupportedEncodingException ignored) {
-                    }
+        String qs = request.getQueryString();
+        if (qs == null || qs.isEmpty()) {
+            return request;
+        }
+        java.util.Map<String, String[]> snapshot = new java.util.LinkedHashMap<>(request.getParameterMap());
+        request.removeAllParameters();
+        StringBuilder sb = new StringBuilder();
+        try {
+            for (java.util.Map.Entry<String, String[]> e : snapshot.entrySet()) {
+                for (String v : e.getValue()) {
+                    if (sb.length() > 0) sb.append('&');
+                    sb.append(URLEncoder.encode(e.getKey(), "UTF-8"))
+                      .append('=').append(URLEncoder.encode(v, "UTF-8"));
+                    request.setParameter(e.getKey(), v);
                 }
             }
+        } catch (UnsupportedEncodingException ignored) {
+            // UTF-8 гарантирован в любой JVM
         }
-        // Значения query-параметров (search/category и т.п.) могли быть прогнаны через
-        // default-charset JVM — чиним mojibake round-trip'ом Latin-1 -> UTF-8.
-        for (java.util.Map.Entry<String, String[]> e : request.getParameterMap().entrySet()) {
-            String[] repaired = repairArray(e.getValue());
-            if (!java.util.Arrays.equals(repaired, e.getValue())) {
-                request.addParameter(e.getKey(), repaired);
-            }
-        }
-
-        // Query-строку пересобираем в UTF-8 как в Tomcat.
-        String query = request.getQueryString();
-        if (query != null && !query.isEmpty()) {
-            try {
-                StringBuilder sb = new StringBuilder();
-                for (java.util.Map.Entry<String, String[]> e : request.getParameterMap().entrySet()) {
-                    for (String v : e.getValue()) {
-                        if (sb.length() > 0) sb.append('&');
-                        sb.append(URLEncoder.encode(e.getKey(), "UTF-8"))
-                          .append('=').append(URLEncoder.encode(v, "UTF-8"));
-                    }
-                }
-                request.setQueryString(sb.toString());
-            } catch (UnsupportedEncodingException ignored) {
-                // UTF-8 гарантирован в любой JVM
-            }
+        if (sb.length() > 0) {
+            request.setQueryString(sb.toString());
         }
         return request;
-    }
-
-    private static String[] repairArray(String[] values) {
-        String[] out = new String[values.length];
-        for (int i = 0; i < values.length; i++) out[i] = repair(values[i]);
-        return out;
-    }
-
-    /**
-     * Round-trip Latin-1 -> UTF-8: чинит mojibake, если строка была раскодирована не в UTF-8.
-     * Если строка уже корректная кириллица/латиница — round-trip её не меняет либо мы
-     * сознательно оставляем оригинал (проверка: после репара результат матчается с сидами).
-     */
-    private static String repair(String s) {
-        if (s == null || s.isEmpty()) return s;
-        byte[] raw = s.getBytes(StandardCharsets.ISO_8859_1);
-        String candidate = new String(raw, StandardCharsets.UTF_8);
-        return candidate;
     }
 }
