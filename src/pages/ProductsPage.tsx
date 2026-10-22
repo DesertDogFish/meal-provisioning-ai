@@ -390,11 +390,6 @@ export default function ProductsPage() {
                     </button>
                   ))}
                 </div>
-                {(formUnit === 'PCS' || formUnit === 'PACK') && (
-                  <p className="text-xs mt-1" style={{ color: 'var(--muted)' }}>
-                    {formUnit === 'PACK' ? 'уп — редко: коробки, блоки' : ''}
-                  </p>
-                )}
               </div>
 
               <div>
@@ -408,9 +403,6 @@ export default function ProductsPage() {
                   onCommit={v => setFormCalories(v)}
                   placeholder="как на упаковке"
                 />
-                <p className="text-xs mt-1" style={{ color: 'var(--muted)' }}>
-                  Всегда на 100 — не на порцию и не на упаковку
-                </p>
               </div>
 
               {(formUnit === 'PCS' || formUnit === 'PACK') && formCalories && (

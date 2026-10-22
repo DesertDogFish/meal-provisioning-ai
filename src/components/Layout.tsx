@@ -30,7 +30,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const isAdmin = currentUser?.role === 'ADMIN';
+  // FIX: нормализация роли — бэкенд отдаёт 'ADMIN', но защита от регистра-расхождений
+  const isAdmin = currentUser?.role?.toUpperCase() === 'ADMIN';
 
   const handleLogout = async () => {
     try {

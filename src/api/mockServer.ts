@@ -384,6 +384,56 @@ export const mockServer = {
   // Походы
   handleTrips(method: string, path: string, body?: any): any {
     const parts = path.split('/').filter(Boolean);
+
+    // CONTRACT-P1 (E2E): POST/DELETE /trips/:id/days/:dayId/meals — раньше роута не
+    // было, TripDetailPage ловил 405 и добавленный приём пищи не появлялся в списке.
+    if (parts.length === 5 && parts[2] === 'days' && parts[4] === 'meals') {
+      const tripId = parts[1];
+      const dayId = parts[3];
+      const trip = trips.find(t => t.id === tripId);
+      if (!trip) {
+        throw { status: 404, message: 'Not found', detail: `Trip ${tripId} not found` };
+      }
+      const day = (trip.days || []).find(d => d.id === dayId);
+      if (!day) {
+        throw { status: 404, message: 'Not found', detail: `Trip day ${dayId} not found` };
+      }
+      if (!day.meals) day.meals = [];
+
+      if (method === 'POST') {
+        if (!body?.recipeId) {
+          throw { status: 400, message: 'Bad request', detail: 'recipeId is required' };
+        }
+        const meal = {
+          id: `m-${Date.now()}`,
+          tripDayId: dayId,
+          mealType: body.mealType ?? 'LUNCH',
+          recipeId: body.recipeId,
+          peopleOverride: body.peopleOverride,
+          sortOrder: body.sortOrder ?? day.meals.length + 1,
+        };
+        day.meals.push(meal);
+        return meal; // mock трактует отсутствие status как успешный ответ (200)
+      }
+      if (method === 'GET') {
+        return day.meals;
+      }
+    }
+
+    // DELETE /trips/:id/days/:dayId/meals/:mealId
+    if (parts.length === 6 && parts[2] === 'days' && parts[4] === 'meals' && method === 'DELETE') {
+      const trip = trips.find(t => t.id === parts[1]);
+      const day = trip?.days?.find(d => d.id === parts[3]);
+      if (!trip || !day) {
+        throw { status: 404, message: 'Not found', detail: `Trip day ${parts[3]} not found` };
+      }
+      const idx = (day.meals || []).findIndex(m => m.id === parts[5]);
+      if (idx === -1) {
+        throw { status: 404, message: 'Not found', detail: `Meal ${parts[5]} not found` };
+      }
+      day.meals!.splice(idx, 1);
+      return null;
+    }
     
     // GET /trips
     if (parts.length === 1 && method === 'GET') {
