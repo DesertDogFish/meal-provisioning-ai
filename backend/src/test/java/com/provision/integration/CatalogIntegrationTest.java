@@ -49,7 +49,10 @@ class CatalogIntegrationTest {
 
     @DynamicPropertySource
     static void configureProperties(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", () -> LOCAL_PG ? com.provision.integration.LocalPgFallback.jdbcUrl("provision_test_catalog") : "jdbc:postgresql://localhost:5432/na");
+        // FIX (CI 2026-10-23): раньше в Docker-ветке был заглушечный URL "jdbc:postgresql://localhost:5432/na"
+        // вместо postgres.getJdbcUrl() — Flyway подключался к несуществующей БД, контекст не стартовал,
+        // все CAT-тесты падали с "ApplicationContext failure threshold (1) exceeded".
+        registry.add("spring.datasource.url", () -> LOCAL_PG ? com.provision.integration.LocalPgFallback.jdbcUrl("provision_test_catalog") : postgres.getJdbcUrl());
         registry.add("spring.datasource.username", () -> LOCAL_PG ? "test" : postgres.getUsername());
         registry.add("spring.datasource.password", () -> LOCAL_PG ? "test" : postgres.getPassword());
     }
