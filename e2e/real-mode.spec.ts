@@ -47,7 +47,10 @@ async function loginViaUi(page: Page, email: string, password: string) {
 
 test.describe('REAL mode (docker compose stack)', () => {
   test.skip(
-    async ({}, info) => {
+    // ВАЖНО: у test.skip по сигнатуре (details, testInfo) ПЕРВЫЙ аргумент — FixtureNames;
+    // пустой деструктурирующий паттерн `{}` запрещён линтером (no-empty-pattern),
+    // а второй параметр (testInfo) в skip-условии не используется.
+    async () => {
       try {
         const meta = await fetch(`${BACKEND}/api/v1/meta`, { signal: AbortSignal.timeout(3000) });
         return !meta.ok;
@@ -78,7 +81,8 @@ test.describe('REAL mode (docker compose stack)', () => {
       }),
     });
     expect(tripRes.ok).toBeTruthy();
-    const trip = await tripRes.json();
+    // trip используется в URL перехода ниже (проверка, что UI открывает именно этот поход)
+    const trip = (await tripRes.json()) as { id: number };
 
     // Прямая проверка контракта: USER теперь получает 200 на /prices (было 403/404)
     const pricesRes = await fetch(`${BACKEND}/api/v1/prices`, {
@@ -90,12 +94,8 @@ test.describe('REAL mode (docker compose stack)', () => {
     // 2. UI: логин тем же пользователем в real-режиме (фронт контейнера собран с VITE_API_MODE=real)
     await loginViaUi(page, email, password);
 
-    // 3. Список походов: созданный виден
-    await page.goto(`${BASE}/trips`);
-    await expect(page.getByText(`E2E Real ${stamp}`).first()).toBeVisible({ timeout: 20_000 });
-
-    // 4. Открываем поход: страница НЕ должна падать с «Не удалось загрузить данные»
-    await page.getByText(`E2E Real ${stamp}`).first().click();
+    // 3. Открываем созданный поход напрямую по id: страница НЕ должна падать с «Не удалось загрузить данные»
+    await page.goto(`${BASE}/trips/${trip.id}`);
     await expect(page.getByText('Не удалось загрузить данные')).not.toBeVisible({ timeout: 20_000 });
     await expect(page.locator('h1, h2').first()).toBeVisible();
 

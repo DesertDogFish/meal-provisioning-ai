@@ -112,16 +112,23 @@ class UserPricesIntegrationTest {
     @Order(2)
     @DisplayName("PRICES-02: обычный USER видит цены (регрессия P0-3)")
     void prices02_userCanReadPrices() throws Exception {
+        // ВАЖНО: /prices возвращает ПОСЛЕДНИЙ действующий срез на КАЖДЫЙ ингредиент каталога —
+        // в чистом тестовом БД их больше одного (seed-ингредиенты из V3/V13). Это ожидаемое
+        // поведение эндпоинта, поэтому проверяем «содержит», а не «размер == 1».
         MvcResult r = mockMvc.perform(get("/api/v1/prices")
                         .header("Authorization", "Bearer " + userToken))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$", org.hamcrest.Matchers.hasSize(1)))
-                .andExpect(jsonPath("$[0].ingredientId").value(ingredientId))
                 .andReturn();
-        // цена должна быть актуальной (июльский срез), а не февральский
-        Assertions.assertEquals(0, new BigDecimal("95.50").compareTo(
-                new BigDecimal(objectMapper.readTree(r.getResponse().getContentAsString(StandardCharsets.UTF_8))
-                        .get(0).get("pricePerUnit").asText())));
+        // среди ответов должен быть наш ингредиент с актуальной (июльской) ценой, а не февральской
+        java.util.List<String> priceTexts = new java.util.ArrayList<>();
+        for (var node : objectMapper.readTree(r.getResponse().getContentAsString(StandardCharsets.UTF_8))) {
+            if (node.get("ingredientId").asLong() == ingredientId) {
+                priceTexts.add(node.get("pricePerUnit").asText());
+            }
+        }
+        Assertions.assertEquals(1, priceTexts.size(), "ровно один актуальный срез на ингредиент");
+        Assertions.assertEquals(0, new BigDecimal("95.50").compareTo(new BigDecimal(priceTexts.get(0))),
+                "должна вернуться июльская цена 95.50 (последний срез до today)");
     }
 
     @Test
@@ -137,12 +144,25 @@ class UserPricesIntegrationTest {
     @Order(4)
     @DisplayName("PRICES-05: asOf отдаёт срез на указанную дату (февраль -> 80.00)")
     void prices05_asOfReturnsHistoricalSlice() throws Exception {
-        mockMvc.perform(get("/api/v1/prices")
+        // Ответ /prices отсортирован по ingredientId, но наш ингредиент не обязательно нулевой
+        // (в чистом тестовом БД есть seed-цены V3/V13) — находим его запись в JSON-массиве вручную.
+        MvcResult r = mockMvc.perform(get("/api/v1/prices")
                         .param("asOf", "2026-03-15")
                         .header("Authorization", "Bearer " + userToken))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].pricePerUnit").value(org.hamcrest.Matchers.comparesEqualTo(new BigDecimal("80.00"))))
-                .andExpect(jsonPath("$[0].effectiveFrom").value("2026-02-01"));
+                .andReturn();
+        var root = objectMapper.readTree(r.getResponse().getContentAsString(StandardCharsets.UTF_8));
+        Assertions.assertTrue(root.isArray(), "ответ должен быть массивом");
+        com.fasterxml.jackson.databind.JsonNode ours = null;
+        for (var node : root) {
+            if (node.get("ingredientId").asLong() == ingredientId) { ours = node; break; }
+        }
+        Assertions.assertNotNull(ours, "наш ингредиент должен присутствовать в ответе");
+        // как и в PRICES-02: сравнение BigDecimal по compareTo (scale-insensitive), т.к.
+        // PostgreSQL NUMERIC приходит в JSON как число с дробным хвостом
+        Assertions.assertEquals(0, new BigDecimal("80.00").compareTo(new BigDecimal(ours.get("pricePerUnit").asText())),
+                "на 2026-03-15 действует февральский срез 80.00");
+        Assertions.assertEquals("2026-02-01", ours.get("effectiveFrom").asText());
     }
 
     @Test

@@ -42,6 +42,15 @@ public class SecurityConfig {
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
                 .csrf(AbstractHttpConfigurer::disable)
+                // JWT stateless API: при отсутствии/невалидности токена отдаём 401 Unauthorized,
+                // а не дефолтный 403 Forbidden (Spring Security без authenticationEntryPoint
+                // трактует анонимный запрос как "аутентифицирован, но не авторизован" -> 403).
+                // Это контрактное ожидание всех интеграционных тестов (PRICES-01 и др.).
+                // ВАЖНО: различаем anonymous (нет токена -> 401) и authenticated-but-wrong-role
+                // (токен есть, прав не хватает -> 403, ср. SEC-01/SEC-05 в SecurityIntegrationTest).
+                .exceptionHandling(ex -> ex.authenticationEntryPoint(
+                        new org.springframework.security.web.authentication.HttpStatusEntryPoint(
+                                org.springframework.http.HttpStatus.UNAUTHORIZED)))
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
