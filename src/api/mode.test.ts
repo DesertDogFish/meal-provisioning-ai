@@ -39,10 +39,13 @@ async function freshClient(envOverrides?: Record<string, string>) {
   // поэтому ни vi.stubEnv, ни присваивание в (import.meta as any).env не действуют.
   // Обход: нестатический доступ через window['meta'] (Vite его не трансформирует) —
   // см. src/api/client.ts. Подменяем значения на время создания клиента.
-  const meta = ((window as any).meta ??= {});
+  // NOTE: window.meta.env может отсутствовать (в браузере window.meta пуст),
+  // поэтому инициализируем вложенный объект env явно.
+  const meta = ((window as any).meta ??= {}) as { env?: Record<string, string> };
+  meta.env ??= {};
   const saved: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(envOverrides ?? {})) {
-    saved[k] = meta.env?.[k];
+    saved[k] = meta.env[k];
     meta.env[k] = v;
   }
   vi.resetModules();
@@ -50,7 +53,7 @@ async function freshClient(envOverrides?: Record<string, string>) {
   const client = new mod.ApiClient();
   for (const [k, v] of Object.entries(saved)) {
     if (v === undefined) delete meta.env[k];
-    else meta.env[k] = v;
+    else meta.env[k] = v as string;
   }
   return client;
 }
@@ -387,15 +390,23 @@ describe('MODE-06: Watchdog → события при падении/восст�
 
 describe('MODE-07: Сканирование импортов — AppContext/mockData только внутри src/api', () => {
   it('ни один файл вне src/api не импортирует mockData/AppContext', async () => {
-    const { execSync } = await import('child_process');
-    const SQ = String.fromCharCode(39); // одинарная кавычка
-    const BS = String.fromCharCode(92); // обратный слэш
-    const out = execSync(
-      `grep -rlE "from ['\\\"]+.*(data/mockData|AppContext)" src --include="*.ts" --include="*.tsx" ` +
-      `| grep -v "^src/api/" || true`,
-      { encoding: 'utf8' }
-    ).trim();
-    expect(out).toBe('');
+    const { readdirSync, readFileSync } = await import('fs');
+    const { join } = await import('path');
+    // Сканируем дерево src/ рекурсивно (без shell — стабильно на любой ОС).
+    const forbidden = /(from\s+['"][^'"]*(data\/mockData|AppContext))/;
+    const offenders: string[] = [];
+    const walk = (dir: string) => {
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        const full = join(dir, entry.name);
+        if (entry.isDirectory()) { walk(full); continue; }
+        if (!/\.(ts|tsx)$/.test(entry.name)) continue;
+        if (full.startsWith(join('src', 'api'))) continue; // разрешённая зона
+        if (entry.name.endsWith('.test.ts') || entry.name.endsWith('.test.tsx')) continue; // тесты могут ссылаться
+        if (forbidden.test(readFileSync(full, 'utf8'))) offenders.push(full);
+      }
+    };
+    walk('src');
+    expect(offenders).toEqual([]);
   });
 });
 

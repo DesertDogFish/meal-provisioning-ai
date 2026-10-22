@@ -4,6 +4,11 @@
 
 **✅ Фаза 10 закрыта (2026-10-22). Бэклог P1 п.1 «Contract расширить» закрыт (2026-10-22). В работе: P1 п.3 — интеграционные бэкенд-тесты локально (следующий по приоритету).**
 
+> **HOTFIX 2026-10-23: `ReferenceError: e is not defined` на старте продакшен-билда.**
+> Причина: в `src/api/client.ts` (конструктор `ApiClient`, строка чтения env) при правке канала инъекции `VITE_API_MODE` (`window.meta`-обход для тестов) опечатка `e.VITE_API_MODE` вместо `env.VITE_API_MODE`. Vite/esbuild не резолвят идентификаторы — в минифицированном бандле остаётся голодная `e`, ReferenceError при создании синглтона `api` (модуль грузится на старте). Dockerfile.frontend (ARG/ENV VITE_API_URL/VITE_API_MODE) — ни при чём; `mode.ts`, `main.tsx`, `App.tsx` проверены, чисто.
+> Фикс: (1) `e.` → `env.`; (2) укрепление канала инъекции: клиент читает `window.meta.env ?? window.meta ?? import.meta.env` (раньше тестовый хелпер падал с `Cannot set properties of undefined`, т.к. `window.meta` создавался без вложенного `env`); (3) MODE-07 grep-страж переписан с shell-строки (ломкий экранинг + sh-синтаксис) на fs-рекурсию.
+> Доказательство: red — до фикса `npm run test` давал 2 failed (MODE-08), в `dist/assets/index-*.js` присутствовал паттерн `e.VITE_API_MODE`; green — после: 194/194 passed, `grep -c 'e\.VITE_API_MODE' dist = 0`, lint 0 errors, typecheck OK, build SUCCESS, preview отдаёт бандл 200.
+
 Предыдущие фазы:
 - ✅ Фаза 1: Core Features (CRUD продуктов, рецептов, походов)
 - ✅ Фаза 2: CR-1..CR-5 (калорийность, единицы, даты, API клиент)
