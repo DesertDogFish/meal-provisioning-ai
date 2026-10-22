@@ -167,6 +167,6 @@ postgres:15-alpine ──(pg_isready)──▶ backend (Spring Boot, Flyway ми
 ```
 
 - **postgres** — volume `postgres_data` для персистентности; порт проброшен только на `127.0.0.1:5432`; БД и каталог создаются миграциями Flyway (V1–V11, сид каталога — V3). Миграции V9 никогда не существовало (проверено по всей git-истории) — это пропущенный номер, а не потерянный файл; новые миграции начинаются с V12.
-- **backend** — ждёт `service_healthy` у postgres; сам healthy по `GET /api/v1/meta` (эндпоинт доступен без авторизации); JPA `ddl-auto=validate`.
+- **backend** — ждёт `service_healthy` у postgres; сам healthy по `GET /api/v1/meta` (доступен без авторизации; реально проверяет соединение с БД через `DataSource.isValid`, отдаёт 503 при её недоступности); JPA `ddl-auto=validate`.
 - **frontend** — ждёт `service_healthy` у backend; nginx раздаёт статику и проксирует `/api/` на `http://backend:8080/api/`, поэтому браузер работает в same-origin и CORS не требуется.
 - Адрес API зашивается в бандл при сборке через build-args `VITE_API_URL`/`VITE_API_MODE` (runtime-переменные окружения для Vite не работают).

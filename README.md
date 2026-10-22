@@ -63,7 +63,7 @@
 
 5. Откройте в браузере:
    - **Приложение:** http://localhost:3000
-   - **Health-check API:** http://localhost:8080/api/v1/meta (вернёт JSON с `"db":"ok"`)
+   - **Health-check API:** http://localhost:8080/api/v1/meta (вернёт JSON с `"db":"ok"`; при недоступной БД — HTTP 503)
 
 ### Первый запуск и создание пользователя
 

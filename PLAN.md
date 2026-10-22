@@ -99,12 +99,12 @@
 
 ### P0.5 — ревью 2026-10-23: безопасность и корректность (повышено из бэклога)
 
-#### 1. Refresh token не используется фронтендом → тихий logout через 1 час ⚠️ ПРОВЕРЕНО 2026-10-23: НЕ ИСПРАВЛЕНО
-- [ ] Повторная проверка HEAD (grep): в `src/api/client.ts` нет ни обработчика 401, ни вызова `/auth/refresh`; файла `src/api/refresh.test.ts` нет в репозитории. LoginPage сохраняет `refreshToken` в localStorage, но он никогда не читается → доступный ресурс простаивает, logout через 1 час актуален
-- [ ] Предыдущее заявление «исправлено» не подтверждено фактическим состоянием кода — правка потерялась (не была закоммичена/затёрта)
-- [ ] Фронт: при 401 → одна попытка refresh → повтор запроса; при неудаче — редирект на /login с понятным сообщением
-- [ ] Тест: mock-истечение access token → пользователь не выкинут из сессии
-- [ ] Гейт: `npm run test` + ручной прогон в поднятом стеке
+#### 1. Refresh token не используется фронтендом → тихий logout через 1 час ✅ ИСПРАВЛЕНО 2026-10-23 (в рабочем дереве, до коммита)
+- [x] `src/api/client.ts`: при 401 на не-`/auth/*` запросе — одна попытка `POST /auth/refresh`, сохранение новой пары токенов (бэкенд ротирует refresh), повтор исходного запроса
+- [x] Single-flight lock: параллельные 401 ждут один общий refresh (нет гонки ротации); `/auth/*` не ретраятся (нет рекурсии)
+- [x] При неудачном refresh — очистка токенов + событие `auth:session-lost`; `ProtectedRoute` подписан через `api.onSessionLost()` → редирект на /login вместо тихой смерти посреди работы
+- [x] Тесты: `src/api/refresh.test.ts` — 5 сценариев (retry после refresh, очистка сессии, отсутствие рекурсии, single-flight, отсутствие refresh-токена), все зелёные (`npx vitest run src/api/refresh.test.ts`)
+- [ ] Гейт: ручной прогон в поднятом стеке (пользователь)
 
 #### 2. Секреты по умолчанию в docker-compose.yml ✅ ЧАСТИЧНО ИСПРАВЛЕНО (проверено в HEAD)
 - [x] `JWT_SECRET` — fail-fast `${JWT_SECRET:?...}` в compose + `@PostConstruct validate()` в JwtProperties (пустой/короткий секрет роняет старт); `.env.example` с инструкцией генерации; dev.ps1 генерирует секрет
@@ -178,23 +178,23 @@
 - [ ] Проверено: backend/Dockerfile = `COPY pom.xml . && COPY src ./src && RUN mvn clean package -DskipTests` — промежуточного слоя `mvn dependency:go-offline` нет
 - [ ] Добавить слой go-offline между COPY pom.xml и COPY src — ускорит пользовательский `--build`
 
-#### 5. Healthcheck `/api/v1/meta` — заглушка, не проверяет БД ⚠️ ОТКЛОЖЕННЫЙ FIX
-- [ ] Проверено: MetaController.getMeta() возвращает захардкоженный `"db": "ok"`; actuator в pom.xml отсутствует
-- [ ] Реализовать честную проверку (DataSource.getConnection isValid) ИЛИ добавить spring-boot-starter-actuator и перевести healthcheck compose на `/actuator/health`; синхронно permitAll
-- [ ] Важно для ТЗ: критерий «БД готова до старта бэкенда» формально покрыт depends_on, но healthcheck бэкенда живость БД не подтверждает
+#### 5. Healthcheck `/api/v1/meta` — заглушка, не проверяет БД ✅ ИСПРАВЛЕНО 2026-10-23 (в рабочем дереве)
+- [x] MetaController теперь реально проверяет БД: `DataSource.getConnection()` + `connection.isValid(2)`; при недоступной БД — HTTP 503 с `"db":"down"` (healthcheck контейнера это ловит), при доступной — 200 `"db":"ok"`
+- [x] Существующие тесты (`MetaControllerTest`, SMOKE-01) ожидаются зелёными: в них БД доступна → 200+`"db":"ok"` (проверка невозможна локально: нет JDK 21/Docker — гейт `mvn test`)
+- [ ] Гейт: `mvn test -Dtest=MetaControllerTest,DockerStackSmokeTest` пользователем
 
-#### 6. Healthcheck фронта проверяет только index.html, не прокси ⚠️ ОТКЛОЖЕННЫЙ FIX
+#### 6. Healthcheck фронта проверяет только index.html, не прокси ⚠️ ОСОЗНАННО ОСТАВЛЕНО
 - [ ] Проверено: compose test = wget `http://localhost:80` (статика). Не подтверждает связность nginx→backend
-- [ ] Осмысленнее проверять `http://localhost/api/v1/meta`; побочный эффект — frontend станет unhealthy при падении backend (принять решение явно)
+- [ ] Решение отложено сознательно: проверка `http://localhost/api/v1/meta` сделает frontend unhealthy при штатном рестарте backend — лишний шум для «одной кнопки»; связность прокси теперь доказана отдельным шагом в CI job docker-stack.yml (п.7)
 
-#### 7. В CI нет compose-up job («одна кнопка» недоказана) ⚠️ ОТКЛОЖЕННЫЙ FIX
-- [ ] Проверено: ci.yml job `docker` выполняет только `compose config -q` и два `docker build`; запуска стека и curl-проверок нет
-- [ ] Добавить job: `docker compose up --build -d` → ожидание healthy → curl `/`, `/api/v1/meta`, `/api/v1/meta` через :3000 → `down -v`
-- [ ] Учесть: job должен задать JWT_SECRET (compose теперь fail-fast без него) — например, сгенерировать в step'е
+#### 7. В CI нет compose-up job («одна кнопка» недоказана) ✅ ИСПРАВЛЕНО 2026-10-23 (в рабочем дереве)
+- [x] Новый workflow `.github/workflows/docker-stack.yml`: build → `compose up -d` → ожидание healthy всех сервисов (до 5 мин, при таймауте — логи) → smoke: `/api/v1/meta` напрямую (проверка `"db":"ok"`), через nginx :3000, индекс фронта, register→login→`/auth/me` против живого стека
+- [x] JWT_SECRET генерируется в job (`openssl rand -base64 48`) — учтён fail-fast compose; YAML проверен парсером
+- [ ] Гейт: первый зелёный прогон job'а на GitHub (локально Docker недоступен)
 
-#### 8. .dockerignore отсутствует ⚠️ ОТКЛОЖЕННЫЙ FIX
-- [ ] Проверено: ни /.dockerignore, ни /backend/.dockerignore нет. `context: .` + `COPY . .` тянет в контекст node_modules (сотни МБ), backend/, .git
-- [ ] Создать оба файла (node_modules, dist, .git, backend для корневой; target/, .m2 для backend)
+#### 8. .dockerignore отсутствует ✅ ИСПРАВЛЕНО 2026-10-23 (в рабочем дереве)
+- [x] Создан корневой `.dockerignore` (node_modules, dist, coverage, .git, .github, backend, target, *.log, .env) и `backend/.dockerignore` (target, *.log, Dockerfile, .dockerignore, .mvn/settings.xml)
+- [x] Контекст сборки фронта больше не включает node_modules/backend/.git; секреты (.env) исключены из контекста
 
 #### 9. Терминология режимов ✅ РЕШЕНО ДОКУМЕНТАЦИЕЙ
 - [x] README использует корректные `auto / api / mock` (проверено, строка 90); в PLAN остаётся старая нотация FORCE_API/FORCE_MOCK в исторических разделах Batch-тестов — не трогать (история решений), новые пункты писать в терминах кода
