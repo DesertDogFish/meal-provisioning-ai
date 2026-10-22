@@ -77,6 +77,7 @@
 ### Следующие задачи (приоритет по порядку):
 1. ~~Создать component-тесты для `ProductTable`, `TripForm`~~ ✅ ГОТОВО (рефакторинг + 32 теста, гейт зелёный)
 2. ~~Реализовать MODE-сьют 01..08~~ ✅ DONE (src/api/mode.test.ts, 27 тестов; ApiClient принимает env-инъекцию)
+   - ✅ CI lint fix (2026-10-22): в GitHub Actions `npm run lint` падал с ошибкой `no-useless-escape` (mode.test.ts:376 — комментарий `// \\`). Исправлено (комментарии заменены на текстовые). Локально: lint 0 errors, mode.test.ts 27/27 passed. Осталось 1 предсуществующее предупреждение react-hooks/exhaustive-deps в BindingWizard.tsx:51 (не блокирует гейт).
 3. Включить coverage-гейт R5 в vitest.config
 4. Запустить `npm run test` и убедиться, что все тесты проходят
 

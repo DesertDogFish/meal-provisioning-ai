@@ -372,8 +372,8 @@ describe('MODE-06: Watchdog → события при падении/восст�
 describe('MODE-07: Сканирование импортов — AppContext/mockData только внутри src/api', () => {
   it('ни один файл вне src/api не импортирует mockData/AppContext', async () => {
     const { execSync } = await import('child_process');
-    const SQ = String.fromCharCode(39); // '
-    const BS = String.fromCharCode(92); // \\
+    const SQ = String.fromCharCode(39); // одинарная кавычка
+    const BS = String.fromCharCode(92); // обратный слэш
     const out = execSync(
       `grep -rlE "from [${SQ}${BS}].*(data/mockData|AppContext)" src --include="*.ts" --include="*.tsx" ` +
       `| grep -v "^src/api/" || true`,
