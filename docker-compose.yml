@@ -7,7 +7,9 @@ services:
       POSTGRES_USER: provision
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-provision123}
     ports:
-      - "5432:5432"
+      # Привязка к 127.0.0.1: порт БД доступен только с локальной машины,
+      # а не всем в локальной сети/интернету (если у вас публичный IP).
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -32,7 +34,10 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-provision123}
       SPRING_JPA_HIBERNATE_DDL_AUTO: validate
       SPRING_FLYWAY_ENABLED: "true"
-      JWT_SECRET: ${JWT_SECRET:-your-256-bit-secret-key-for-jwt-tokens-change-in-production-environment-please}
+      # Секрет обязателен: без него compose упадёт с понятным сообщением,
+      # вместо тихо работающего сервера на публичном секрете из .env.example.
+      # Сгенерировать: openssl rand -base64 48
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env (copy .env.example to .env and replace the secret)}
     ports:
       - "8080:8080"
     healthcheck:

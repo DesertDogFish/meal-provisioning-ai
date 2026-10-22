@@ -43,10 +43,13 @@
    cd meal-provisioning-ai
    ```
 
-2. Скопируйте пример окружения:
+2. Скопируйте пример окружения и задайте JWT-секрет (обязательно — без него бэкенд не стартует):
    ```bash
    cp .env.example .env
+   # в .env замените JWT_SECRET на собственный, например:
+   echo "JWT_SECRET=$(openssl rand -base64 48)" >> .env
    ```
+   (Windows PowerShell: `$s=[Convert]::ToBase64String((1..48|ForEach-Object{Get-Random -Max 256})); Add-Content .env "JWT_SECRET=$s"`)
 
 3. Запустите стек одной командой:
    ```bash
@@ -80,10 +83,13 @@ API-документация доступна после запуска: http://
 
 | Переменная | По умолчанию | Назначение |
 |---|---|---|
-| `POSTGRES_PASSWORD` | `provision123` | Пароль БД |
-| `JWT_SECRET` | тестовый секрет | Подпись JWT-токенов (**обязательно смените**) |
+| `POSTGRES_PASSWORD` | `provision123` | Пароль БД (для локальной разработки допустимо, для публичного хоста — смените) |
+| `JWT_SECRET` | **обязательна**, значения по умолчанию нет | Подпись JWT-токенов. Без неё compose/бэкенд упадут с понятной ошибкой (fail-fast). Минимум 32 символа; генерация: `openssl rand -base64 48` |
+| `CORS_ALLOWED_ORIGINS` | `http://localhost:5173,http://localhost:3000` | Разрешённые origins для прямых запросов к API (разработка без nginx-прокси). В Docker-стеке не требуется |
 | `VITE_API_URL` | `/api/v1` в Docker-сборке | Адрес API; подставляется **при сборке** фронта (build-arg), не в рантайме |
 | `VITE_API_MODE` | `real` в Docker-сборке | Режим фронтенда: `auto` / `api` / `mock` |
+
+Порт PostgreSQL проброшен только на `127.0.0.1:5432` — из локальной сети база недоступна.
 
 В Docker-стеке фронт обращается к API через nginx-прокси (`/api/` → backend), поэтому браузер работает без CORS. Приоритет выбора режима: переключатель в UI (localStorage) → `VITE_API_MODE` → авто-пинг `GET /api/v1/meta`.
 
