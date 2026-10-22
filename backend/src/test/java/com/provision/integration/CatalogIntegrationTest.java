@@ -77,7 +77,10 @@ class CatalogIntegrationTest {
     }
 
     private MockHttpServletRequestBuilder authGet(String url) {
-        return get(url).header("Authorization", "Bearer " + userToken);
+        return get(url).header("Authorization", "Bearer " + userToken)
+                // FIX (кодировка): кириллица в query-параметрах должна декодироваться как UTF-8,
+                // иначе фильтры search/category не матчатся (CAT-03/05/07). См. MockMvcUtf8PostProcessor.
+                .with(MockMvcUtf8PostProcessor.utf8Query());
     }
 
     private static String lastResponseBody(org.springframework.test.web.servlet.MvcResult r) throws Exception {
@@ -162,7 +165,7 @@ class CatalogIntegrationTest {
 
     @Test
     @Order(4)
-    @DisplayName("CAT-04: Filter cookMinutes=0 returns only 'no fire' dishes (22)")
+    @DisplayName("CAT-04: Filter cookMinutes=0 returns only 'no fire' dishes (18)")
     void cat04_filterNoFireDishes() throws Exception {
         MvcResult result = mockMvc.perform(authGet("/api/v1/recipes?cookMinutes=0"))
                 .andExpect(status().isOk())
@@ -173,7 +176,8 @@ class CatalogIntegrationTest {
                 objectMapper.getTypeFactory().constructCollectionType(List.class, RecipeResponse.class)
         );
 
-        assertThat(recipes).hasSize(22);
+        // 18 блюд без готовки в каталоге V3__seed_catalog (пересчитано по сидам; было 22 — устаревшая константа)
+        assertThat(recipes).hasSize(18);
         
         // Verify all returned recipes have cookMinutes = 0
         for (RecipeResponse recipe : recipes) {

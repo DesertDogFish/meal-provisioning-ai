@@ -53,27 +53,34 @@ public final class LocalPgFallback {
     public static String jdbcUrl(String dbname) {
         try {
             ensureClusterUp();
-            ensureDatabase(dbname);
-            // FIX: initdb без --locale=C поднимает кластер с encoding='SQL_ASCII' (в минимальных
-            // контейнерах LANG не задан). Тогда JDBC-драйвер отдаёт строки как bytea и запросы
-            // вида lower(r.name) падают с "ERROR: function lower(bytea) does not exist".
-            // Приводим тестовую БД к UTF8, как в реальном postgres:15-alpine.
-            fixEncodingIfNeeded(dbname);
-            return "jdbc:postgresql://localhost:" + PORT + "/" + dbname;
+            ensureDatabaseUtf8(dbname);
+            return "jdbc:postgresql://localhost:" + PORT + "/" + dbname + "?characterEncoding=UTF-8";
         } catch (Exception e) {
             throw new RuntimeException("Local PostgreSQL fallback failed for db '" + dbname + "'", e);
         }
     }
 
-    private static void fixEncodingIfNeeded(String dbname) throws Exception {
+    /**
+     * FIX (кодировка): initdb в минимальных контейнерах без LANG поднимает кластер SQL_ASCII.
+     * Тогда JDBC-драйвер при round-trip кириллицы отдаёт строки как bytea, lower(r.name)
+     * падает с 500, а CAT-тесты видят "ÐÐ¨Ð" вместо "КАШИ". Реально повреждённые байты
+     * могли остаться и в существующей БД после ALTER-патча поверх SQL_ASCII.
+     * Поэтому: если encoding != UTF8 — пересоздаём тестовую БД заново с UTF8/C.UTF-8
+     * (данные тестов не нужны — Flyway накатит миграции поверх пустой схемы).
+     */
+    private static void ensureDatabaseUtf8(String dbname) throws Exception {
         try (Connection c = DriverManager.getConnection(
                 "jdbc:postgresql://localhost:" + PORT + "/postgres", SUPERUSER, "");
              Statement st = c.createStatement()) {
             var rs = st.executeQuery("SELECT pg_encoding_to_char(encoding) FROM pg_database WHERE datname='" + dbname + "'");
-            if (rs.next() && !"UTF8".equals(rs.getString(1))) {
-                st.execute("UPDATE pg_database SET datcollate='C.UTF-8', datctype='C.UTF-8' WHERE datname='" + dbname + "'");
-                st.execute("ALTER DATABASE \"" + dbname + "\" REFRESH COLLATION VERSION");
-                st.execute("ALTER DATABASE \"" + dbname + "\" WITH encoding='UTF8' lc_collate='C.UTF-8' lc_ctype='C.UTF-8' template=template0");
+            boolean exists = rs.next();
+            boolean utf8 = exists && "UTF8".equals(rs.getString(1));
+            if (exists && !utf8) {
+                st.execute("DROP DATABASE \"" + dbname + "\" WITH (FORCE)");
+                exists = false;
+            }
+            if (!exists) {
+                st.execute("CREATE DATABASE \"" + dbname + "\" WITH encoding='UTF8' lc_collate='C.UTF-8' lc_ctype='C.UTF-8' template=template0");
             }
         }
     }
