@@ -24,6 +24,8 @@
         <springdoc.version>2.5.0</springdoc.version>
         <flyway.version>10.10.0</flyway.version>
         <mockito.version>5.14.2</mockito.version>
+        <!-- Явная версия Testcontainers: 1.19.7 иногда отдаёт 502 на Maven Central (битый кэш артефакта) -->
+        <testcontainers.version>1.20.4</testcontainers.version>
     </properties>
 
     <dependencies>
