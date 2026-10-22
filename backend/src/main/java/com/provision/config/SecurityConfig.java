@@ -42,12 +42,26 @@ public class SecurityConfig {
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
                 .csrf(AbstractHttpConfigurer::disable)
+                // JWT stateless API: при отсутствии/невалидности токена отдаём 401 Unauthorized,
+                // а не дефолтный 403 Forbidden (Spring Security без authenticationEntryPoint
+                // трактует анонимный запрос как "аутентифицирован, но не авторизован" -> 403).
+                // Это контрактное ожидание всех интеграционных тестов (PRICES-01 и др.).
+                // ВАЖНО: различаем anonymous (нет токена -> 401) и authenticated-but-wrong-role
+                // (токен есть, прав не хватает -> 403, ср. SEC-01/SEC-05 в SecurityIntegrationTest).
+                .exceptionHandling(ex -> ex.authenticationEntryPoint(
+                        new org.springframework.security.web.authentication.HttpStatusEntryPoint(
+                                org.springframework.http.HttpStatus.UNAUTHORIZED)))
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/v1/auth/**").permitAll()
                         .requestMatchers("/api/v1/meta").permitAll()
                         .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
+                        // P0-3: GET /api/v1/prices** — чтение цен для ВСЕХ аутентифицированных
+                        // (страницы походов обычного USER). Эндпоинт лежит вне /api/v1/admin/**,
+                        // поэтому его открывает любое из правил ниже + anyRequest().authenticated();
+                        // явное правило добавлено для читаемости и защиты от будущих правок.
+                        .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/v1/prices", "/api/v1/prices/**").authenticated()
                         .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
                         .anyRequest().authenticated()
                 )

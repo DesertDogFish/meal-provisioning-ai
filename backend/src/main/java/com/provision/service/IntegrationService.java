@@ -123,7 +123,7 @@ public class IntegrationService {
 
         // Проверяем, существует ли уже маппинг для этого ингредиента и провайдера
         Optional<IngredientMapping> existing = mappingRepository.findByInternalIngredientIdAndSource(
-                ingredientId, RecipeSource.valueOf(request.provider()));
+                ingredientId, parseProviderSource(request.provider()));
 
         if (existing.isPresent()) {
             throw new IllegalStateException("Mapping already exists for this ingredient and provider");
@@ -145,7 +145,7 @@ public class IntegrationService {
 
         IngredientMapping mapping = IngredientMapping.builder()
                 .externalName(ingredient.getName())
-                .source(RecipeSource.valueOf(request.provider()))
+                .source(parseProviderSource(request.provider()))
                 .internalIngredient(ingredient)
                 .externalCode(request.externalCode())
                 .externalProduct(externalProduct)
@@ -158,7 +158,7 @@ public class IntegrationService {
     @Transactional
     public void deleteMapping(Long ingredientId, String providerCode) {
         IngredientMapping mapping = mappingRepository.findByInternalIngredientIdAndSource(
-                ingredientId, RecipeSource.valueOf(providerCode))
+                ingredientId, parseProviderSource(providerCode))
                 .orElseThrow(() -> new NotFoundException("Mapping not found"));
 
         mappingRepository.delete(mapping);
@@ -201,11 +201,18 @@ public class IntegrationService {
         PriceProvider provider = providers.get(providerCode);
         
         try {
-            // Получаем все маппинги для этого провайдера с внешним кодом
-            List<IngredientMapping> mappings = mappingRepository.findBySource(RecipeSource.valueOf(providerCode))
-                    .stream()
-                    .filter(m -> m.getExternalCode() != null)
-                    .toList();
+            // Получаем все маппинги для этого провайдера с внешним кодом.
+            // FIX (P0): RecipeSource.valueOf("OFF") падал с
+            // "No enum constant com.provision.entity.RecipeSource.OFF" —
+            // значение OFF теперь есть в enum, но парсим безопасно на случай
+            // провайдеров, не являющихся источниками рецептов.
+            RecipeSource mappingSource = parseMappingSource(providerCode);
+            List<IngredientMapping> mappings = mappingSource == null
+                    ? List.of()
+                    : mappingRepository.findBySource(mappingSource)
+                            .stream()
+                            .filter(m -> m.getExternalCode() != null)
+                            .toList();
 
             int created = 0;
             int updated = 0;
@@ -309,6 +316,31 @@ public class IntegrationService {
         return logs.stream()
                 .map(this::toSyncLogDto)
                 .toList();
+    }
+
+    /**
+     * Парсит код провайдера в RecipeSource с понятной ошибкой вместо
+     * "No enum constant ..." (IllegalArgumentException из valueOf).
+     */
+    private RecipeSource parseProviderSource(String providerCode) {
+        try {
+            return RecipeSource.valueOf(providerCode);
+        } catch (IllegalArgumentException e) {
+            throw new NotFoundException("Неизвестный источник/провайдер: " + providerCode);
+        }
+    }
+
+    /**
+     * Безопасная версия для синхронизации цен: если код провайдера не является
+     * источником рецептов — возвращаем null (маппингов для него нет, синхронизируем 0).
+     */
+    private RecipeSource parseMappingSource(String providerCode) {
+        try {
+            return RecipeSource.valueOf(providerCode);
+        } catch (IllegalArgumentException e) {
+            log.warn("Provider {} is not a RecipeSource; nothing to sync", providerCode);
+            return null;
+        }
     }
 
     /**

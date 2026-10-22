@@ -169,7 +169,7 @@ describe('ProductTable (рендер и взаимодействия)', () => {
   it('колонка «Упаковка»: packSize или «развес»; чип упаковки у названия только с packSize', () => {
     renderTable();
     expect(screen.getAllByText('развес')).toHaveLength(3);
-    expect(screen.getByText('уп. 5 PACK')).toBeTruthy();
+    expect(screen.getByText('уп. 5 уп')).toBeTruthy(); // P0-1: единицы локализованы (humanizeUnit)
     // чипов уп. у названия — ровно один (только у Лапши)
     expect(screen.getAllByText(/уп\. \d+/)).toHaveLength(1);
   });

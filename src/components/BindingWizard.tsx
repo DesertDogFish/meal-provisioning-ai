@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useToast } from './ToastProvider';
 import { NumberField } from './NumberField';
 import { api } from '../api/client';
+import { humanizeUnit } from '../utils/text';
 
 interface Candidate {
   code: string;
@@ -178,7 +179,7 @@ export function BindingWizard({ onClose }: Props) {
         {/* Текущий компонент */}
         <div className="rounded-xl p-4 mb-4" style={{ background: 'var(--elev)', border: '1px solid var(--border)' }}>
           <b style={{ color: 'var(--text)' }}>{cur.name}</b>
-          <span className="chip-delta dim" style={{ marginLeft: '8px' }}>{cur.unit}</span>
+          <span className="chip-delta dim" style={{ marginLeft: '8px' }}>{humanizeUnit(cur.unit)}</span>
           <p style={{ color: 'var(--muted)', fontSize: '12px', marginTop: '4px' }}>
             в рецептах: {cur.usageRecipes} · доля денег походов: {cur.moneyWeight}%
           </p>
@@ -226,7 +227,7 @@ export function BindingWizard({ onClose }: Props) {
             onCommit={v => setPack(p => ({ amount: v, unit: p?.unit ?? 'KG' }))}
             testId="pack-amount"
           />
-          <span className="chip-delta dim">{pack?.unit ?? cur.unit}</span>
+          <span className="chip-delta dim">{humanizeUnit(pack?.unit ?? cur.unit)}</span>
           <label className="flex items-center gap-2 cursor-pointer" style={{ color: 'var(--muted)', fontSize: '12px' }}>
             <input
               type="checkbox"

@@ -4,6 +4,7 @@ import { UnitOfMeasure, MealType } from '../types';
 import { ConflictError, ValidationError } from '../utils/errors';
 import { validateRecipe } from '../utils/validation';
 import { useToast } from '../components/ToastProvider';
+import { servingsWord, ingredientsWord } from '../utils/text';
 import { api } from '../api/client';
 
 type AdminTab = 'prices' | 'recipes' | 'import';
@@ -84,7 +85,8 @@ export default function AdminPage() {
       const [ingredientsData, recipesData, pricesData, stagingData] = await Promise.all([
         api.get<any>('/admin/products'),
         api.get<Recipe[]>('/recipes'),
-        api.get<Price[]>('/admin/prices'),
+        // P0-3: чтение цен — общий GET /prices (доступен и ADMIN); запись осталась на админском пути
+        api.get<Price[]>('/prices'),
         api.get<StagingRecipe[]>('/admin/staging')
       ]);
       
@@ -115,7 +117,7 @@ export default function AdminPage() {
     if (!priceForm.ingredientId || !priceForm.pricePerUnit || !priceForm.effectiveFrom) return;
     
     try {
-      await api.post('/admin/prices', {
+      await api.post('/admin/ingredient-prices', {
         ingredientId: priceForm.ingredientId,
         pricePerUnit: parseFloat(priceForm.pricePerUnit),
         currency: priceForm.currency,
@@ -401,7 +403,7 @@ export default function AdminPage() {
                       <span className="px-2 py-0.5 text-xs rounded-full" style={{ background: 'var(--elev)', color: 'var(--muted)' }}>{mealTypeLabels[recipe.mealType]}</span>
                       <span className="px-2 py-0.5 text-xs rounded-full" style={{ background: 'var(--elev)', color: 'var(--muted)' }}>{recipe.source}</span>
                     </div>
-                    <p className="text-sm mt-1" style={{ color: 'var(--muted)' }}>{recipe.baseServings} порций • {recipe.ingredients.length} ингр.</p>
+                    <p className="text-sm mt-1" style={{ color: 'var(--muted)' }}>{recipe.baseServings} {servingsWord(recipe.baseServings)} • {recipe.ingredients.length} {ingredientsWord(recipe.ingredients.length)}</p>
                   </div>
                   <div className="flex items-center gap-1">
                     <button onClick={() => handleDeleteRecipe(recipe.id)} className="p-1.5 rounded" style={{ color: 'var(--muted)' }}><Trash2 size={14} /></button>

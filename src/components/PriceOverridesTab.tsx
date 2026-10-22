@@ -101,7 +101,8 @@ export default function PriceOverridesTab({ tripId }: Props) {
       const [tripData, recipesData, pricesData] = await Promise.all([
         api.get<Trip>(`/trips/${tripId}`),
         api.get<Recipe[]>('/recipes'),
-        api.get<Price[]>('/admin/prices')
+        // P0-3: чтение цен — общий эндпоинт для всех ролей (см. UserPriceController)
+        api.get<Price[]>('/prices')
       ]);
       
       setTrip(tripData);

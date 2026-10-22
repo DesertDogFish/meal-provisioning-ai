@@ -111,10 +111,37 @@ export const mockServer = {
     if (pathWithoutQuery.startsWith('/recipes')) {
       return this.handleRecipes(method, path, body) as T;
     }
-    // CONTRACT-P1: цены — GET /admin/prices ≡ POST /admin/:id/prices (E2E-05:
-    // TripDetailPage/AdminPage/PriceOverridesTab грузили список цен и ловили 404)
+    // P0-3: чтение цен — GET /prices ≡ POST /admin/ingredient-prices (реальный путь бэкенда).
+    // (E2E-05: TripDetailPage/AdminPage/PriceOverridesTab грузили список цен и ловили 404)
+    if (pathWithoutQuery === '/prices' && method === 'GET') {
+      return [...prices] as T;
+    }
+    // Обратная совместимость со старыми тестами/кодом на /admin/prices (только чтение)
     if (pathWithoutQuery === '/admin/prices' && method === 'GET') {
       return [...prices] as T;
+    }
+    // P0-3: POST /admin/ingredient-prices (плоский путь реального бэкенда) —
+    // эквивалентен legacy POST /admin/products/:id/prices, контракт DUPLICATE_PRICE_DATE тот же.
+    if (pathWithoutQuery.startsWith('/admin/ingredient-prices') && method === 'POST') {
+      const dup = prices.find(
+        pr => String(pr.ingredientId) === String(body.ingredientId) && pr.effectiveFrom === body.effectiveFrom
+      );
+      if (dup) {
+        throw {
+          status: 409,
+          message: 'DUPLICATE_PRICE_DATE',
+          detail: `Price for ${body.effectiveFrom} already exists`,
+        } as any;
+      }
+      const entry: IngredientPrice = {
+        id: `p_${Date.now()}`,
+        ingredientId: String(body.ingredientId),
+        pricePerUnit: body.pricePerUnit,
+        currency: body.currency || 'RUB',
+        effectiveFrom: body.effectiveFrom,
+      };
+      prices.push(entry);
+      return entry as T;
     }
     if (pathWithoutQuery.startsWith('/trips')) {
       return this.handleTrips(method, path, body) as T;

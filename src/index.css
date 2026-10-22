@@ -5,6 +5,7 @@
   --bg: #0B0F17;
   --surface: #121826;
   --elev: #1A2233;
+  --surface-2: #334155;
   --border: rgba(255, 255, 255, 0.08);
   --text: #E6EDF7;
   --muted: #8B98AC;
@@ -12,6 +13,8 @@
   --w2: #38BDF8;
   --fire: #F59E0B;
   --ok: #34D399;
+  /* ФИКС 4: все нативные элементы браузера (календарь, select, скроллбары) — в тёмной теме */
+  color-scheme: dark;
 }
 
 * {
@@ -317,12 +320,27 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   cursor: pointer;
 }
 
-/* Fix Autofill background */
+/* Fix Autofill background: переопределяем нативный жёлтый/белый фон и ЧЁРНЫЙ текст автозаполнения */
+/* ФИКС 1: box-shadow накрывает фон целиком (1000px вместо 30px), цвета — из переменных темы */
 input:-webkit-autofill,
 input:-webkit-autofill:hover,
 input:-webkit-autofill:focus,
 input:-webkit-autofill:active {
-  -webkit-box-shadow: 0 0 0 30px transparent inset !important;
-  -webkit-text-fill-color: inherit !important;
+  -webkit-text-fill-color: var(--text, #e2e8f0) !important;
+  caret-color: var(--text, #e2e8f0) !important;
+  -webkit-box-shadow: 0 0 0 1000px var(--surface, #1e293b) inset !important;
+  border-radius: inherit;
   transition: background-color 5000s ease-in-out 0s;
+}
+
+/* ФИКС 2: аккуратный бейдж категории блюда (без КАПСА) */
+.recipe-category-badge {
+  display: inline-block;
+  padding: 2px 10px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--muted, #94a3b8);
+  background: var(--surface-2, #334155);
+  border-radius: 12px;
+  text-transform: none; /* явно убираем КАПС, если где-то остался */
 }

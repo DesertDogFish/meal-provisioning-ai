@@ -5,6 +5,7 @@ import { NumberField } from '../components/NumberField';
 import { ProductTable, type ProductRow } from '../components/ProductTable';
 import { api } from '../api/client';
 import type { UnitOfMeasure, ProductCategory } from '../types';
+import { humanizeUnit, recipesWord } from '../utils/text';
 
 type Product = ProductRow;
 
@@ -95,12 +96,12 @@ export default function ProductsPage() {
         if (response.sameUnit) {
           setDuplicateWarning({
             type: 'hard',
-            message: `Жёсткий дубль: продукт «${response.existingName}» в ${unit} уже существует.`
+            message: `Продукт «${response.existingName}» (${humanizeUnit(unit)}) уже существует.`
           });
         } else {
           setDuplicateWarning({
             type: 'soft',
-            message: `Есть «${response.existingName}» в другой единице. Создаёте отдельный продукт в ${unit}?`
+            message: `Есть «${response.existingName}» в другой единице. Создаёте отдельный продукт (${humanizeUnit(unit)})?`
           });
         }
       } else {
@@ -151,13 +152,19 @@ export default function ProductsPage() {
       resetForm();
       await loadData();
     } catch (error: any) {
-      showError(error.detail || error.message || 'Ошибка сохранения');
+      // P0-4: перехватываем машиночитаемый код DUPLICATE_PRODUCT и показываем понятный текст без KG/PCS/ID
+      const raw = String(error?.message ?? '') + ' ' + String(error?.error?.detail ?? error?.detail ?? '');
+      if (raw.includes('DUPLICATE_PRODUCT') || /already exists/i.test(raw)) {
+        showError('Продукт с таким названием и единицей измерения уже существует.');
+      } else {
+        showError(error.error?.detail || error.detail || error.message || 'Ошибка сохранения');
+      }
     }
   };
 
   const handleDelete = async (product: Product) => {
     if (product.usageRecipes > 0) {
-      showError(`Продукт используется в ${product.usageRecipes} рецептах и не может быть удалён`);
+      showError(`Продукт используется в ${product.usageRecipes} ${recipesWord(product.usageRecipes)} и не может быть удалён`);
       return;
     }
 

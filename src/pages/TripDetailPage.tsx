@@ -4,6 +4,7 @@ import { calculateMenuByDays, calculateShoppingList, calculateDayShopping, calcu
 import { ArrowLeft, Plus, Trash2, Users, ShoppingCart, BookOpen, TrendingUp, Calendar, ChevronDown, ChevronRight } from 'lucide-react';
 import { MealType } from '../types';
 import PriceOverridesTab from '../components/PriceOverridesTab';
+import { servingsWord } from '../utils/text';
 import { api } from '../api/client';
 
 interface Trip {
@@ -97,7 +98,9 @@ export default function TripDetailPage() {
       const [tripData, recipesData, pricesData] = await Promise.all([
         api.get<Trip>(`/trips/${id}`),
         api.get<Recipe[]>('/recipes'),
-        api.get<Price[]>('/admin/prices')
+        // P0-3: GET /admin/prices не существовало на бэкенде; цены доступны всем
+        // аутентифицированным пользователям на GET /prices (UserPriceController)
+        api.get<Price[]>('/prices')
       ]);
       setTrip(tripData);
       setRecipes(recipesData);
@@ -332,7 +335,7 @@ export default function TripDetailPage() {
                               {mealTypeLabels[meal.mealType]}
                             </span>
                             <span className="font-medium" style={{ color: 'var(--text)' }}>{meal.recipeName}</span>
-                            <span className="text-xs" style={{ color: 'var(--muted)' }}>({meal.servings} порц.)</span>
+                            <span className="text-xs" style={{ color: 'var(--muted)' }}>({meal.servings} {servingsWord(meal.servings)})</span>
                           </div>
                           <button
                             onClick={() => tripMeal && handleDeleteMeal(tripDay.id, tripMeal.id)}
