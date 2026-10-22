@@ -99,20 +99,21 @@
 
 ### P0.5 — ревью 2026-10-23: безопасность и корректность (повышено из бэклога)
 
-#### 1. Refresh token не используется фронтендом → тихий logout через 1 час
-- [ ] БЭКЕНД отдаёт `refreshToken` (AuthController `/auth/refresh` существует, AuthService реализован), но `src/api/client.ts` НЕ имеет обработчика 401 и никогда не вызывает `/auth/refresh` (проверено grep: в client.ts нет ни "401", ни "refresh")
-- [ ] Фронт: при 401 → один попытка refresh → повтор запроса; при неудаче — редирект на /login с понятным сообщением
+#### 1. Refresh token не используется фронтендом → тихий logout через 1 час ⚠️ ПРОВЕРЕНО 2026-10-23: НЕ ИСПРАВЛЕНО
+- [ ] Повторная проверка HEAD (grep): в `src/api/client.ts` нет ни обработчика 401, ни вызова `/auth/refresh`; файла `src/api/refresh.test.ts` нет в репозитории. LoginPage сохраняет `refreshToken` в localStorage, но он никогда не читается → доступный ресурс простаивает, logout через 1 час актуален
+- [ ] Предыдущее заявление «исправлено» не подтверждено фактическим состоянием кода — правка потерялась (не была закоммичена/затёрта)
+- [ ] Фронт: при 401 → одна попытка refresh → повтор запроса; при неудаче — редирект на /login с понятным сообщением
 - [ ] Тест: mock-истечение access token → пользователь не выкинут из сессии
 - [ ] Гейт: `npm run test` + ручной прогон в поднятом стеке
 
-#### 2. Секреты по умолчанию в docker-compose.yml
-- [ ] `JWT_SECRET` дефолтится значением из .env.example — токен подписывается публичным секретом, если пользователь не создал .env (compose читает `${JWT_SECRET:-...}`). Минимум: backend падает на старте при значении по умолчанию вне профиля dev; либо генерировать секрет при первом запуске
-- [ ] POSTGRES_PASSWORD по умолчанию `provision123` + проброшенный наружу порт 5432 — для «одной кнопки» приемлемо локально, но убрать публикацию порта (только internal network) или оставить хосту opt-in (`127.0.0.1:5432`)
-- [ ] Гейт: `docker compose config` без warnings, README предупреждает про .env
+#### 2. Секреты по умолчанию в docker-compose.yml ✅ ЧАСТИЧНО ИСПРАВЛЕНО (проверено в HEAD)
+- [x] `JWT_SECRET` — fail-fast `${JWT_SECRET:?...}` в compose + `@PostConstruct validate()` в JwtProperties (пустой/короткий секрет роняет старт); `.env.example` с инструкцией генерации; dev.ps1 генерирует секрет
+- [x] Порт 5432 привязан к `127.0.0.1` (не доступен из сети)
+- [ ] Осталось: `POSTGRES_PASSWORD` по-прежнему дефолтится `provision123` (`${POSTGRES_PASSWORD:-provision123}`) — для чисто локального степа приемлемо, но можно тоже сделать fail-fast вместе с JWT_SECRET
+- [ ] Гейт пройден частично: `docker compose config` без warnings требует проверки пользователем
 
-#### 3. CORS полностью отсутствует на бэкенде
-- [ ] SecurityConfig.java не содержит `.cors()` вообще (проверено grep). Сейчас спасает same-origin через nginx-прокси, но режим разработки (vite :3000 → backend :8080 напрямую) будет ловить CORS-ошибки при любом нестандартном setup
-- [ ] Добавить конфигурацию CORS с allowlist из env (dev: localhost:3000), прод: пусто/свой домен
+#### 3. CORS полностью отсутствует на бэкенде ✅ ИСПРАВЛЕНО (проверено в HEAD)
+- [x] SecurityConfig содержит `.cors(...)` с `CorsConfigurationSource`, allowlist из env `CORS_ALLOWED_ORIGINS` (дефолт: localhost:3000/5173), см. SecurityConfig.java строки 38–77
 
 #### 4. Миграция V9 отсутствует в истории (дыра в нумерации) — ВЫЯСНЕНО
 - Проверено `git log --all -- '*V9*'`: файла V9 никогда не было ни в одном коммите/ветке истории. Это не потерянная миграция, а просто пропущенный номер при создании V10.
@@ -157,38 +158,52 @@
 - [ ] Шум в логах, маскирует реальные падения
 - [ ] Отдельный тикет, не в тестовой фазе
 
-### P3 — бэклог v2: инфраструктура и наблюдаемость (добавлено по итогам ревью 2026-10-23)
+### P3 — бэклог v2: инфраструктура и наблюдаемость (обновлено повторным аудитом 2026-10-23)
 
-#### 1. Нет production-профиля / ориентации на деплой
-- [ ] application.yml зашивает localhost:5432 и секреты-дефолты прямо в конфиг; нет профилей dev/prod
-- [ ] Нужен профиль prod: обязательные env-переменные без дефолтов (fail-fast), отключённый swagger-ui, `logging.level` INFO вместо DEBUG (сейчас security DEBUG — утечка деталей фильтров в логи)
+Статусы ниже сверены с фактическим HEAD `7c2f8dd`. Из «девятки» бэклога закрыт только пункт про V9 (задокументирован); **все 8 инфраструктурных пунктов из предыдущего отчёта о выполнении работ фактически НЕ применены в коде** (проверено: нет `.dockerignore`, нет Bucket4j/rate-limit, нет actuator, нет scripts/backup, нет compose-профилей, MetaController по-прежнему хардкодит `"db":"ok"`, CI содержит только `docker build`, без compose-up job; backend/Dockerfile без go-offline слоя). Заявление о выполнении этих правок было ошибочным — кодизменений в истории нет.
 
-#### 2. Нет rate limiting на auth-эндпоинтах
-- [ ] `/api/v1/auth/register|login` без ограничений → перебор паролей. Добавить Bucket4j или nginx `limit_req` на `/api/v1/auth/`
+#### 1. Нет production-профиля / ориентации на деплой ⚠️ ОТКЛОЖЕННЫЙ FIX (был заявлен выполненным)
+- [ ] application.yml: `logging.level.com.provision: DEBUG` и `org.springframework.security: DEBUG` без разделения по профилям (проверено, строки 61–63) — в проде утечка деталей фильтров в логи
+- [ ] Нужны профили dev/prod (compose `SPRING_PROFILES_ACTIVE` + `application-prod.yml` с INFO/WARN, отключённый swagger-ui)
 
-#### 3. Нет миграции данных при изменении схем + нет backup-процедуры
-- [ ] volume postgres_data — единственный экземпляр данных; задокументировать `pg_dump` в README/ARCHITECTURE (раздел про прод)
+#### 2. Нет rate limiting на auth-эндпоинтах ⚠️ ОТКЛОЖЕННЫЙ FIX
+- [ ] Проверено: bucket4j отсутствует в backend/pom.xml, RateLimit*-классов в src/main нет. `/api/v1/auth/register|login` без ограничений → перебор паролей
+- [ ] Добавить Bucket4j (spring-boot-starter ratelimit) или nginx `limit_req` на `/api/v1/auth/`
 
-#### 4. Backend Dockerfile пересобирает всё без кеша зависимостей
-- [ ] `COPY pom.xml . && COPY src ./src && RUN mvn package` — каждый билд скачивает зависимости заново? Проверить: слой pom отдельный, но `mvn dependency:go-offline` не выполняется до копирования src → при изменении любого кода зависимости реально кешируются только docker-layer-cache'ом сборки CI. Добавить промежуточный слой go-offline — ускорит `--build` для пользователя с ~минут до секунд
-- [ ] Тесты пропускаются (`-DskipTests`) — приемлемо, но значит «собралось ≠ работает»; smoke-тесты против собранного образа были бы полезнее (см. P2 Playwright)
+#### 3. Нет backup-процедуры ⚠️ ОТКЛОЖЕННЫЙ FIX
+- [ ] Проверено: каталога scripts/ нет, файлов *backup* в репозитории нет. Volume postgres_data — единственный экземпляр данных
+- [ ] Скрипт `scripts/backup-db.sh` (docker exec pg_dump → файл с датой) + раздел в ARCHITECTURE (не в README, чтобы не раздувать)
 
-#### 5. Healthcheck-эндпоинт `/api/v1/meta` — временная заглушка
-- [ ] MetaController возвращает захардкоженный `"db":"ok"` и `LocalDateTime.now()` как "build" — это НЕ проверка живости БД. Заменить на `/actuator/health` (добавив spring-boot-starter-actuator) либо реализовать честную проверку DataSource; иначе backend может стать healthy при мёртвой connection pool после старта
-- [ ] Синхронно обновить healthcheck в compose и permitAll в SecurityConfig
+#### 4. Backend Dockerfile без кеша зависимостей ⚠️ ОТКЛОЖЕННЫЙ FIX
+- [ ] Проверено: backend/Dockerfile = `COPY pom.xml . && COPY src ./src && RUN mvn clean package -DskipTests` — промежуточного слоя `mvn dependency:go-offline` нет
+- [ ] Добавить слой go-offline между COPY pom.xml и COPY src — ускорит пользовательский `--build`
 
-#### 6. Фронт-зависимость от «healthy» статичного nginx формальна
-- [ ] healthcheck фронта проверяет только отдачу index.html, а не прокси; осмысленнее проверять `http://localhost/api/v1/meta` (подтверждает и nginx→backend связность). Осторожно: тогда frontend станет unhealthy при падении backend — принять решение явно
+#### 5. Healthcheck `/api/v1/meta` — заглушка, не проверяет БД ⚠️ ОТКЛОЖЕННЫЙ FIX
+- [ ] Проверено: MetaController.getMeta() возвращает захардкоженный `"db": "ok"`; actuator в pom.xml отсутствует
+- [ ] Реализовать честную проверку (DataSource.getConnection isValid) ИЛИ добавить spring-boot-starter-actuator и перевести healthcheck compose на `/actuator/health`; синхронно permitAll
+- [ ] Важно для ТЗ: критерий «БД готова до старта бэкенда» формально покрыт depends_on, но healthcheck бэкенда живость БД не подтверждает
 
-#### 7. Нет e2e против поднятого docker-стека
-- [ ] Текущий DockerStackSmokeTest поднимает свой контекст Spring+Testcontainers, а НЕ собранные образы. Добавить в CI job: `docker compose up --build -d` → curl-проверки трёх URL → `down -v` (доказывает именно «одну кнопку», а не только юнит-слой)
+#### 6. Healthcheck фронта проверяет только index.html, не прокси ⚠️ ОТКЛОЖЕННЫЙ FIX
+- [ ] Проверено: compose test = wget `http://localhost:80` (статика). Не подтверждает связность nginx→backend
+- [ ] Осмысленнее проверять `http://localhost/api/v1/meta`; побочный эффект — frontend станет unhealthy при падении backend (принять решение явно)
 
-#### 8. Frontend build context = весь репозиторий, .dockerignore отсутствует
-- [ ] Проверено: ни /.dockerignore, ни /backend/.dockerignore нет (ls → "No such file"). `context: .` + `COPY . .` в Dockerfile.frontend тянет в контекст сборки node_modules (сотни МБ), backend/, .git — медленный build context upload и риск протечки бэкенд-кода в образ
-- [ ] Создать .dockerignore: node_modules, .git, backend, dist, *.md, proviant-products-v3.html; аналогично backend/.dockerignore (target/)
+#### 7. В CI нет compose-up job («одна кнопка» недоказана) ⚠️ ОТКЛОЖЕННЫЙ FIX
+- [ ] Проверено: ci.yml job `docker` выполняет только `compose config -q` и два `docker build`; запуска стека и curl-проверок нет
+- [ ] Добавить job: `docker compose up --build -d` → ожидание healthy → curl `/`, `/api/v1/meta`, `/api/v1/meta` через :3000 → `down -v`
+- [ ] Учесть: job должен задать JWT_SECRET (compose теперь fail-fast без него) — например, сгенерировать в step'е
 
-#### 9. Разброс нумерации тестовых сьютов и «стражи»
-- [ ] MODE-03/MODE-04 в PLAN используют названия режимов FORCE_API/FORCE_MOCK, в коде режимы называются `api`/`mock` (src/api/mode.ts) — унифицировать терминологию, чтобы тесты-стражи не ловили ложные позитивы
+#### 8. .dockerignore отсутствует ⚠️ ОТКЛОЖЕННЫЙ FIX
+- [ ] Проверено: ни /.dockerignore, ни /backend/.dockerignore нет. `context: .` + `COPY . .` тянет в контекст node_modules (сотни МБ), backend/, .git
+- [ ] Создать оба файла (node_modules, dist, .git, backend для корневой; target/, .m2 для backend)
+
+#### 9. Терминология режимов ✅ РЕШЕНО ДОКУМЕНТАЦИЕЙ
+- [x] README использует корректные `auto / api / mock` (проверено, строка 90); в PLAN остаётся старая нотация FORCE_API/FORCE_MOCK в исторических разделах Batch-тестов — не трогать (история решений), новые пункты писать в терминах кода
+
+#### 10. НОВЫЕ находки повторного аудита 2026-10-23
+- [ ] `POSTGRES_PASSWORD` остался с дефолтом `provision123`, тогда как JWT_SECRET сделан fail-fast — непоследовательно; привести к одному подходу (или документировать, что локальный дефолт осознанный)
+- [ ] README строка 66 обещает «вернёт JSON с `"db":"ok"`» — завязан на заглушку из п.5; при переходе на actuator обновить README/ARCHITECTURE/healthcheck одновременно
+- [ ] nginx.conf: `location /api` без завершающего слэша + `proxy_pass http://backend:8080` (без URI) — работает корректно (путь пробрасывается как есть), но зафиксировать комментарием, чтобы при «улучшении» не сломали
+- [ ] LoginPage кладёт accessToken/refreshToken в localStorage — XSS-вектор; долгосрочно — httpOnly cookie для refresh. Записать в P4 как архитектурное решение, не сейчас
 
 ### P4 — продуктовые идеи на расширение (не обязательства)
 - [ ] Пагинация/фильтрация на сервере для продуктов (ProductService.getProducts игнорирует параметр query — «упрощённая реализация», найдено при починке smoke-теста; при росте каталога потребуется нормальный поиск)
