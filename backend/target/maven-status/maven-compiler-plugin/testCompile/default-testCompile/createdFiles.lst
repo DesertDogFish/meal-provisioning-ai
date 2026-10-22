@@ -1,0 +1,14 @@
+com/provision/integration/LocalPgFallback.class
+com/provision/integration/TestUsers.class
+com/provision/service/DetailedShoppingCalculationTest.class
+com/provision/integration/ConflictIntegrationTest.class
+com/provision/service/ShoppingListCostAggregationBugTest.class
+com/provision/integration/CatalogIntegrationTest.class
+com/provision/integration/ContainerSuiteExtension.class
+com/provision/integration/AuthIntegrationTest.class
+com/provision/service/SummaryServiceFixtureTest.class
+com/provision/service/PriceOverrideTest.class
+com/provision/integration/SecurityIntegrationTest.class
+com/provision/integration/TestDataIsolation.class
+com/provision/integration/ContainerSuite.class
+com/provision/service/SummaryServiceTest.class

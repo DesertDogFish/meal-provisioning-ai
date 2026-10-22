@@ -684,6 +684,23 @@ export const mockServer = {
       }));
     }
 
+    // POST /trips — создание похода (E2E-04/05: раньше роут отсутствовал,
+    // TripsPage получал 405 и поход не появлялся в списке)
+    if (parts.length === 1 && method === 'POST') {
+      const newTrip: Trip = {
+        id: `trip-${Date.now()}`,
+        userId: body?.userId ?? users[0].id,
+        name: body.name,
+        startDate: body.startDate,
+        endDate: body.endDate,
+        defaultPeople: body.defaultPeople ?? 1,
+        notes: body.notes,
+        createdAt: new Date().toISOString(),
+      };
+      trips.push(newTrip);
+      return newTrip;
+    }
+
     throw { status: 405, message: 'Method not allowed' };
   },
 
@@ -733,9 +750,11 @@ export const mockServer = {
     }
     
     if (path === '/auth/me' && method === 'GET') {
-      // В реальном приложении здесь будет проверка токена
-      // Для мока возвращаем первого пользователя
-      const user = users[0];
+      // E2E: токен несёт id пользователя ('mock-access-token-<id>') — по нему
+      // возвращаем конкретного юзера, чтобы TripsPage фильтровал myTrips корректно.
+      const token = localStorage.getItem('accessToken') || '';
+      const m = token.match(/mock-access-token-(\d+)$/);
+      const user = (m && users.find(u => u.id === m[1])) || users[0];
       return {
         id: user.id,
         email: user.email,
