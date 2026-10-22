@@ -1,0 +1,80 @@
+name: Docker Stack Smoke
+
+# P3#7: единственная проверка, доказывающая критерий ТЗ «запуск одной кнопкой»:
+# поднимает реальный compose-стек из собранных образов и бьёт по живым эндпоинтам.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: docker-stack-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  stack:
+    name: Compose up + smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # compose теперь fail-fast без JWT_SECRET — генерируем уникальный на job
+      - name: Prepare .env
+        run: |
+          cp .env.example .env
+          SECRET=$(openssl rand -base64 48)
+          sed -i "s|^JWT_SECRET=.*|JWT_SECRET=${SECRET}|" .env
+          grep -q "^JWT_SECRET=[A-Za-z0-9+/=]\{32,\}" .env && echo "JWT_SECRET set"
+
+      - name: Build images
+        run: docker compose build --parallel
+
+      - name: Up (detached)
+        run: docker compose up -d
+
+      - name: Wait for all services healthy (max ~5 min)
+        run: |
+          deadline=$((SECONDS+300))
+          while [ $SECONDS -lt $deadline ]; do
+            unhealthy=$(docker compose ps --format '{{.Name}} {{.Status}}' \
+              | grep -v 'healthy' || true)
+            if [ -z "$unhealthy" ]; then
+              echo "All services healthy"; exit 0
+            fi
+            echo "Waiting... not healthy yet:"; echo "$unhealthy"
+            sleep 10
+          done
+          echo "::error::Stack did not become healthy in time"
+          docker compose logs --tail=100 backend postgres frontend
+          exit 1
+
+      - name: Smoke — direct backend healthcheck endpoint
+        run: |
+          curl -fsS http://localhost:8080/api/v1/meta | tee meta.json
+          grep -q '"db":"ok"' meta.json   # P3#5: честная проверка — БД реально доступна
+
+      - name: Smoke — nginx proxy through frontend (same-origin path)
+        run: curl -fsS http://localhost:3000/api/v1/meta
+
+      - name: Smoke — frontend index
+        run: curl -fsS http://localhost:3000/ | grep -qi '<div id="root">'
+
+      - name: Smoke — register/login roundtrip against the stack
+        run: |
+          EMAIL="ci-smoke-$GITHUB_RUN_ID@test.local"
+          curl -fsS -X POST http://localhost:8080/api/v1/auth/register \
+            -H 'Content-Type: application/json' \
+            -d "{\"email\":\"$EMAIL\",\"password\":\"password123\",\"firstName\":\"CI\",\"lastName\":\"Smoke\"}"
+          TOKEN=$(curl -fsS -X POST http://localhost:8080/api/v1/auth/login \
+            -H 'Content-Type: application/json' \
+            -d "{\"email\":\"$EMAIL\",\"password\":\"password123\"}" \
+            | python3 -c 'import sys,json;print(json.load(sys.stdin)["accessToken"])')
+          curl -fsS http://localhost:8080/api/v1/auth/me \
+            -H "Authorization: Bearer $TOKEN" | grep -q "$EMAIL"
+
+      - name: Always show stack status on failure
+        if: failure()
+        run: docker compose ps -a

@@ -134,10 +134,12 @@ delta = (actualCost - plannedCost) / plannedCost × 100
 ## Security
 
 - JWT токены для аутентификации
-- Refresh tokens хранятся в БД (SHA-256 hash)
+- Refresh tokens хранятся в БД (SHA-256 hash); фронтенд автоматически обновляет access-токен при 401 (`src/api/client.ts`)
 - BCrypt для хеширования паролей
 - ROLE-based access control (USER/ADMIN)
 - Проверка владельца похода перед любыми действиями
+- `JWT_SECRET` обязателен: docker-compose падает без него (`${JWT_SECRET:?...}`), бэкенд дополнительно делает fail-fast при старте (`JwtProperties.validate()`, минимум 32 байта для HS256)
+- CORS настраивается через `CORS_ALLOWED_ORIGINS` (по умолчанию localhost:3000/5173 — только для разработки напрямую; в Docker-стеке не используется)
 
 ## Database
 
@@ -164,7 +166,7 @@ postgres:15-alpine ──(pg_isready)──▶ backend (Spring Boot, Flyway ми
    5432                                    8080                                                              3000 → 80
 ```
 
-- **postgres** — volume `postgres_data` для персистентности; БД и каталог создаются миграциями Flyway (V1–V11, сид каталога — V3).
-- **backend** — ждёт `service_healthy` у postgres; сам healthy по `GET /api/v1/meta` (эндпоинт доступен без авторизации); JPA `ddl-auto=validate`.
+- **postgres** — volume `postgres_data` для персистентности; порт проброшен только на `127.0.0.1:5432`; БД и каталог создаются миграциями Flyway (V1–V11, сид каталога — V3). Миграции V9 никогда не существовало (проверено по всей git-истории) — это пропущенный номер, а не потерянный файл; новые миграции начинаются с V12.
+- **backend** — ждёт `service_healthy` у postgres; сам healthy по `GET /api/v1/meta` (доступен без авторизации; реально проверяет соединение с БД через `DataSource.isValid`, отдаёт 503 при её недоступности); JPA `ddl-auto=validate`.
 - **frontend** — ждёт `service_healthy` у backend; nginx раздаёт статику и проксирует `/api/` на `http://backend:8080/api/`, поэтому браузер работает в same-origin и CORS не требуется.
 - Адрес API зашивается в бандл при сборке через build-args `VITE_API_URL`/`VITE_API_MODE` (runtime-переменные окружения для Vite не работают).

@@ -28,6 +28,20 @@ export type ApiMode = 'mock' | 'real';
 const SEED_VERSION = '1.0.0';
 const LS_MODE_KEY = 'apiMode';
 const LS_SEED_KEY = 'seedVersion';
+const LS_ACCESS_KEY = 'accessToken';
+const LS_REFRESH_KEY = 'refreshToken';
+
+interface AuthTokens {
+  accessToken: string;
+  refreshToken?: string;
+}
+
+/** Вызывается при безвозвратной потере сессии (refresh не помог) */
+type SessionLostHandler = () => void;
+
+function emitSessionLost() {
+  window.dispatchEvent(new Event('auth:session-lost'));
+}
 
 export class ApiClient {
   private mode: ApiMode = 'mock';
@@ -39,13 +53,17 @@ export class ApiClient {
     // NOTE: window['meta'] — намеренно нестатический доступ: Vite заменяет статическое
     // обращение import.meta.env.* на литералы при сборке, из-за чего тестовые подмены
     // (vi.stubEnv / присваивание) не применяются. В браузере window.meta пуст → fallback.
-    const env =
-      (window as unknown as { meta?: Record<string, string> }).meta ??
+    // window.meta.env — канал подмены env в тестах; сам объект meta может быть
+    // задан без вложенного env, поэтому берём env из meta с fallback.
+    const injectedMeta = (window as unknown as { meta?: { env?: Record<string, string> } }).meta;
+    const env: Record<string, string> =
+      injectedMeta?.env ??
+      injectedMeta ??
       ((import.meta as any).env || {});
     this.baseUrl = env.VITE_API_URL || 'http://localhost:8080/api/v1';
     
     const storedMode = localStorage.getItem(LS_MODE_KEY) as ApiMode | null;
-    const envMode = e.VITE_API_MODE as ApiMode | undefined;
+    const envMode = env.VITE_API_MODE as ApiMode | undefined;
     
     if (storedMode === 'mock' || storedMode === 'real') {
       this.mode = storedMode;
@@ -116,7 +134,76 @@ export class ApiClient {
   }
 
   private getToken(): string | null {
-    return localStorage.getItem('accessToken');
+    return localStorage.getItem(LS_ACCESS_KEY);
+  }
+
+  /**
+   * P0.5#1: обновление access-токена по refresh-токену.
+   * Single-flight: параллельные 401 ждут один общий refresh,
+   * чтобы не устроить гонку ротации refresh-токенов на бэкенде.
+   */
+  private refreshPromise: Promise<boolean> | null = null;
+
+  private refreshTokens(): Promise<boolean> {
+    if (this.refreshPromise) return this.refreshPromise;
+
+    this.refreshPromise = (async () => {
+      const refreshToken = localStorage.getItem(LS_REFRESH_KEY);
+      if (!refreshToken) return false;
+      try {
+        // fetch напрямую: этот вызов сам не должен попадать в retry-цикл
+        const response = await fetch(`${this.baseUrl}/auth/refresh`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refreshToken })
+        });
+        if (!response.ok) return false;
+        const data = (await response.json()) as AuthTokens;
+        if (!data.accessToken) return false;
+        localStorage.setItem(LS_ACCESS_KEY, data.accessToken);
+        // Бэкенд ротирует refresh-токен (старый удаляется) — сохраняем новый
+        if (data.refreshToken) {
+          localStorage.setItem(LS_REFRESH_KEY, data.refreshToken);
+        }
+        return true;
+      } catch {
+        return false;
+      } finally {
+        // сбрасываем lock асинхронно, чтобы все дождавшиеся уже получили результат
+        const p = this.refreshPromise;
+        this.refreshPromise = null;
+        void p;
+      }
+    })();
+
+    return this.refreshPromise;
+  }
+
+  private clearSession() {
+    localStorage.removeItem(LS_ACCESS_KEY);
+    localStorage.removeItem(LS_REFRESH_KEY);
+  }
+
+  /** Подписка на событие безвозвратной потери сессии (для ProtectedRoute/Layout) */
+  onSessionLost(handler: SessionLostHandler): () => void {
+    window.addEventListener('auth:session-lost', handler);
+    return () => window.removeEventListener('auth:session-lost', handler);
+  }
+
+  private async sendAuthHeader(
+    method: string,
+    url: string,
+    body?: unknown
+  ): Promise<Response> {
+    const token = this.getToken();
+    return fetch(url, {
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token && { Authorization: `Bearer ${token}` })
+      },
+      body: body ? JSON.stringify(body) : undefined
+    });
   }
 
   private async request<T>(
@@ -155,16 +242,25 @@ export class ApiClient {
 
     // Real API
     const url = `${this.baseUrl}${fullPath}`;
-    const token = this.getToken();
-    
-    const response = await fetch(url, {
-      method,
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token && { Authorization: `Bearer ${token}` })
-      },
-      body: body ? JSON.stringify(body) : undefined
-    });
+
+    let response = await this.sendAuthHeader(method, url, body);
+
+    // P0.5#1: 401 от protected-эндпоинта → один refresh + повтор исходного запроса.
+    // Запросы к /auth/* не ретраим (иначе гонка ротации и рекурсия).
+    if (
+      response.status === 401 &&
+      !path.startsWith('/auth/') &&
+      this.getToken() &&
+      localStorage.getItem(LS_REFRESH_KEY)
+    ) {
+      const refreshed = await this.refreshTokens();
+      if (refreshed) {
+        response = await this.sendAuthHeader(method, url, body);
+      } else {
+        this.clearSession();
+        emitSessionLost();
+      }
+    }
 
     if (!response.ok) {
       let errorData: ApiError;

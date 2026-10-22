@@ -41,6 +41,7 @@ jobs:
           SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/provision_test
           SPRING_DATASOURCE_USERNAME: provision
           SPRING_DATASOURCE_PASSWORD: provision123
+          JWT_SECRET: ci-only-secret-key-not-for-production-0123456789abcdef
         run: |
           nohup mvn -B -ntp spring-boot:run > /tmp/backend.log 2>&1 &
           for i in $(seq 1 60); do

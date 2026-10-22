@@ -1,0 +1,47 @@
+name: E2E (Playwright) nightly
+
+# Ночной полный прогон Playwright e2e как отдельная таска.
+# Тот же workflow запускается на PR, но НЕ блокирует его (continue-on-error):
+# падение e2e видно как красный шаг/аннотация, но required-гейт CI не валит.
+
+on:
+  schedule:
+    - cron: '30 3 * * *'  # Каждый день в 3:30 UTC (после contract-nightly в 3:00)
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    name: Playwright e2e
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Run e2e (blocking on schedule/dispatch, non-blocking on PR)
+        # На расписании/ручном запуске падение валит job; на PR — только предупреждение.
+        continue-on-error: ${{ github.event_name == 'pull_request' }}
+        run: npm run test:e2e
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7

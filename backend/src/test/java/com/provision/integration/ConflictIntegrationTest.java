@@ -1,4 +1,5 @@
 package com.provision.integration;
+import java.nio.charset.StandardCharsets;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.provision.dto.ingredient.IngredientRequest;
@@ -110,7 +111,7 @@ class ConflictIntegrationTest {
                 .andReturn();
 
         Map<String, Object> ingredientData = objectMapper.readValue(
-                ingredientResult.getResponse().getContentAsString(), Map.class);
+                ingredientResult.getResponse().getContentAsString(StandardCharsets.UTF_8), Map.class);
         Long ingredientId = ((Number) ingredientData.get("id")).longValue();
 
         // Create recipe with this ingredient
@@ -158,7 +159,7 @@ class ConflictIntegrationTest {
                 .andReturn();
 
         Map<String, Object> ingredientData = objectMapper.readValue(
-                ingredientResult.getResponse().getContentAsString(), Map.class);
+                ingredientResult.getResponse().getContentAsString(StandardCharsets.UTF_8), Map.class);
         Long ingredientId = ((Number) ingredientData.get("id")).longValue();
 
         // Create recipe with this ingredient
@@ -215,7 +216,7 @@ class ConflictIntegrationTest {
                 .andReturn();
 
         Map<String, Object> ingredientData = objectMapper.readValue(
-                ingredientResult.getResponse().getContentAsString(), Map.class);
+                ingredientResult.getResponse().getContentAsString(StandardCharsets.UTF_8), Map.class);
         Long ingredientId = ((Number) ingredientData.get("id")).longValue();
 
         // Create recipe
@@ -236,7 +237,7 @@ class ConflictIntegrationTest {
                 .andReturn();
 
         Map<String, Object> recipeData = objectMapper.readValue(
-                recipeResult.getResponse().getContentAsString(), Map.class);
+                recipeResult.getResponse().getContentAsString(StandardCharsets.UTF_8), Map.class);
         Long recipeId = ((Number) recipeData.get("id")).longValue();
 
         // Create trip
@@ -255,7 +256,7 @@ class ConflictIntegrationTest {
                 .andReturn();
 
         Map<String, Object> tripData = objectMapper.readValue(
-                tripResult.getResponse().getContentAsString(), Map.class);
+                tripResult.getResponse().getContentAsString(StandardCharsets.UTF_8), Map.class);
         Long tripId = ((Number) tripData.get("id")).longValue();
 
         // Get first day ID

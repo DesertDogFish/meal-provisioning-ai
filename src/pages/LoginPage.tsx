@@ -54,18 +54,17 @@ export default function LoginPage() {
           return;
         }
         
-        // Регистрация
-        await api.post('/auth/register', {
+        // Регистрация: контракт расширён (AUTH-01) — ответ содержит пару токенов,
+        // отдельный round-trip на /login после регистрации больше не нужен.
+        const regResponse = await api.post<AuthResponse>('/auth/register', {
           email,
           password,
           firstName,
           lastName
         });
-        
-        // Вход после регистрации
-        const loginResponse = await api.post<AuthResponse>('/auth/login', { email, password });
-        localStorage.setItem('accessToken', loginResponse.accessToken);
-        localStorage.setItem('refreshToken', loginResponse.refreshToken);
+
+        localStorage.setItem('accessToken', regResponse.accessToken);
+        localStorage.setItem('refreshToken', regResponse.refreshToken);
         setIsAuthenticated(true);
         navigate('/dashboard');
       } else {

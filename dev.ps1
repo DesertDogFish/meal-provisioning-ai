@@ -35,11 +35,14 @@ function Start-Services {
     if (-not (Test-Path .env)) {
         Write-Status "Creating .env from .env.example..."
         Copy-Item .env.example .env
+        $secret = [Convert]::ToBase64String((1..48 | ForEach-Object { Get-Random -Maximum 256 }))
+        ((Get-Content .env) -replace '^JWT_SECRET=.*', "JWT_SECRET=$secret") | Set-Content .env
+        Write-Success "Generated a random JWT_SECRET in .env"
     }
     
     # Start Docker Compose
     Write-Status "Starting Docker containers..."
-    docker-compose up -d
+    docker compose up -d --build
     
     if ($LASTEXITCODE -eq 0) {
         Write-Success "Services started successfully!"
@@ -53,7 +56,7 @@ function Start-Services {
 
 function Stop-Services {
     Write-Status "Stopping Provision services..."
-    docker-compose down
+    docker compose down
     Write-Success "Services stopped"
 }
 
@@ -116,7 +119,7 @@ function Show-Status {
     }
     
     # Check containers
-    $containers = docker-compose ps
+    $containers = docker compose ps
     Write-Host $containers
     
     # Check frontend
