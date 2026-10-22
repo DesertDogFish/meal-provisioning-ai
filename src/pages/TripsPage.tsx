@@ -55,7 +55,13 @@ export default function TripsPage() {
     }
   };
 
-  const myTrips = trips.filter(t => t.userId === currentUser?.id);
+  // FIX: TripResponse бэкенда (/api/v1/trips) уже отфильтрован по текущему
+  // пользователю и НЕ содержит поля userId — из-за строгого сравнения
+  // undefined !== id список всегда оказывался пустым. Фильтруем только
+  // когда userId реально присутствует в ответе (mock-режим).
+  const myTrips = trips.some(t => t.userId != null)
+    ? trips.filter(t => String(t.userId) === String(currentUser?.id))
+    : trips;
 
   const handleCreate = async (formData: TripFormData) => {
     try {

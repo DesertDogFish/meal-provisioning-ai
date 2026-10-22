@@ -48,11 +48,26 @@ export default function ProductsPage() {
       setError(null);
       
       const [productsData, categoriesData] = await Promise.all([
-        api.get<any>('/admin/products'),
+        api.get<any>('/admin/products?size=1000'),
         api.get<ProductCategory[]>('/product-categories')
       ]);
-      
-      setProducts(productsData.content || productsData);
+
+      // FIX: бэкенд (/api/v1/admin/products) возвращает Spring Page (список в content),
+      // mock-сервер — обычный массив. Нормализуем оба варианта.
+      const rawList: any[] = Array.isArray(productsData)
+        ? productsData
+        : (productsData?.content ?? []);
+
+      // FIX: маппинг ProductResponse (бэкенд) -> ProductRow (фронтенд):
+      // category у бэкенда — объект {name}, id — число, а не строка.
+      setProducts(
+        rawList.map(p => ({
+          ...p,
+          id: String(p.id),
+          categoryName: p.categoryName ?? p.category?.name ?? '',
+          categoryId: p.categoryId ?? (p.category != null ? String(p.category.id ?? '') : undefined)
+        }))
+      );
       setCategories(categoriesData);
     } catch (err) {
       console.error('Failed to load data:', err);
