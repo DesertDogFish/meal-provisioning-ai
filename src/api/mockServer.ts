@@ -730,9 +730,15 @@ export const mockServer = {
         createdAt: new Date().toISOString()
       };
       users.push(newUser);
-      
-      // Возвращаем токены
+
+      // Расширение контракта (P1, AUTH-01): register сразу выдаёт пару токенов +
+      // поля пользователя — форма ответа идентична бэкенду (AuthService.AuthResponseWithUser).
       return {
+        id: newUser.id,
+        email: newUser.email,
+        firstName: newUser.firstName,
+        lastName: newUser.lastName,
+        role: newUser.role,
         accessToken: `mock-access-token-${newUser.id}`,
         refreshToken: `mock-refresh-token-${newUser.id}`,
         tokenType: 'Bearer'
