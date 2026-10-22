@@ -111,6 +111,11 @@ export const mockServer = {
     if (pathWithoutQuery.startsWith('/recipes')) {
       return this.handleRecipes(method, path, body) as T;
     }
+    // CONTRACT-P1: цены — GET /admin/prices ≡ POST /admin/:id/prices (E2E-05:
+    // TripDetailPage/AdminPage/PriceOverridesTab грузили список цен и ловили 404)
+    if (pathWithoutQuery === '/admin/prices' && method === 'GET') {
+      return [...prices] as T;
+    }
     if (pathWithoutQuery.startsWith('/trips')) {
       return this.handleTrips(method, path, body) as T;
     }

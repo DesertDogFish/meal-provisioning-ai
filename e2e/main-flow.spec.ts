@@ -77,7 +77,12 @@ test('E2E-05 сводка поездки: закупки/стоимость/ка
   const card = page.locator('[data-testid^="trip-card-"]').first();
   await card.click();
   await expect(page).toHaveURL(/\/trips\/trip-/, { timeout: 15_000 });
+  // Вновь созданный поход без дней: «Список закупок» рендерится только на вкладке
+  // shopping; «Сводка»/«Калории/приём» — на вкладке person. Проверяем обе вкладки.
+  await page.getByRole('button', { name: 'Закупка на поход' }).click();
   await expect(page.getByText('Список закупок на весь поход')).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText(/Итого:/)).toBeVisible();
+  await page.getByRole('button', { name: 'На человека' }).click();
   await expect(page.getByText('Сводка')).toBeVisible();
   await expect(page.getByText('Калории/приём')).toBeVisible();
   await expect(page.getByText(/₽/).first()).toBeVisible();
