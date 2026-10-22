@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { Search, Utensils, X } from 'lucide-react';
 import { MealType } from '../types';
 import { formatAmount } from '../utils/calculations';
+import { humanizeCategory, servingsWord } from '../utils/text';
 import { api } from '../api/client';
 
 interface Recipe {
@@ -275,8 +276,8 @@ export default function RecipesPage() {
                 <h3 className="font-bold mb-2" style={{ color: 'var(--text)' }}>{recipe.name}</h3>
                 <div className="flex flex-wrap gap-2 mb-3">
                   {recipe.category && (
-                    <span className="px-2 py-0.5 text-xs font-bold rounded-full" style={{ background: 'rgba(56, 189, 248, 0.14)', color: '#9BD8F5' }}>
-                      {recipe.category}
+                    <span className="px-2 py-0.5 text-xs font-medium rounded-full capitalize" style={{ background: 'rgba(56, 189, 248, 0.14)', color: '#9BD8F5' }}>
+                      {humanizeCategory(recipe.category)}
                     </span>
                   )}
                   {recipe.cookMinutes === 0 ? (
@@ -343,9 +344,9 @@ export default function RecipesPage() {
                   <span className="px-2 py-0.5 text-xs font-medium rounded-full" style={{ background: 'rgba(56, 189, 248, 0.14)', color: '#9BD8F5' }}>
                     {mealTypeLabels[selected.mealType]}
                   </span>
-                  {selected.category && <span>{selected.category}</span>}
-                  <span>{selected.baseServings} порций</span>
-                  {selected.caloriesPerServing && <span>{Math.round(selected.caloriesPerServing)} ккал/порция · рассчитано из продуктов</span>}
+                  {selected.category && <span className="capitalize">{humanizeCategory(selected.category)}</span>}
+                  <span>{selected.baseServings} {servingsWord(selected.baseServings)}</span>
+                  {selected.caloriesPerServing && <span>{Math.round(selected.caloriesPerServing)} ккал/{servingsWord(1)} · рассчитано из продуктов</span>}
                 </div>
               </div>
               <span className="px-2 py-0.5 text-xs rounded-full" style={{ background: 'var(--elev)', color: 'var(--muted)' }}>

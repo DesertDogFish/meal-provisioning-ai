@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Edit2, Trash2 } from 'lucide-react';
 import type { UnitOfMeasure } from '../types';
+import { humanizeUnit } from '../utils/text';
 
 export interface ProductRow {
   id: string;
@@ -219,7 +220,7 @@ export function ProductTable({ products, filters, onEdit, onDelete, onResetFilte
                 <b style={{ color: 'var(--text)' }}>{product.name}</b>
                 {product.packSize && (
                   <span className="chip-delta dim" style={{ marginLeft: '8px' }}>
-                    уп. {product.packSize} {product.unit}
+                    уп. {product.packSize} {humanizeUnit(product.unit)}
                   </span>
                 )}
               </td>
@@ -228,7 +229,7 @@ export function ProductTable({ products, filters, onEdit, onDelete, onResetFilte
                   {product.categoryName}
                 </span>
               </td>
-              <td className="px-4 py-3" style={{ color: 'var(--muted)' }}>{product.unit}</td>
+              <td className="px-4 py-3" style={{ color: 'var(--muted)' }}>{humanizeUnit(product.unit)}</td>
               <td className="px-4 py-3" style={{ color: 'var(--muted)' }}>
                 {product.packSize || 'развес'}
               </td>
