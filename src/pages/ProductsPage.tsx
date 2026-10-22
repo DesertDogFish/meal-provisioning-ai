@@ -1,30 +1,12 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { useToast } from '../components/ToastProvider';
-import { Plus, Edit2, Trash2, Search, X } from 'lucide-react';
+import { Plus, Search, X } from 'lucide-react';
 import { NumberField } from '../components/NumberField';
+import { ProductTable, type ProductRow } from '../components/ProductTable';
 import { api } from '../api/client';
 import type { UnitOfMeasure, ProductCategory } from '../types';
 
-interface Product {
-  id: string;
-  name: string;
-  unit: UnitOfMeasure;
-  category: string;
-  categoryId?: string;
-  code?: string;
-  packSize?: number;
-  roundToPacks?: boolean;
-  kcalPer100g?: number;
-  pieceWeightG?: number;
-  categoryName: string;
-  currentPrice?: {
-    value: number;
-    currency: string;
-    source: string;
-  };
-  usageRecipes: number;
-  bindingStatus: string;
-}
+type Product = ProductRow;
 
 export default function ProductsPage() {
   const { showError, showSuccess } = useToast();
@@ -43,9 +25,6 @@ export default function ProductsPage() {
   const [bindingStatus, setBindingStatus] = useState('');
   const [usageStatus, setUsageStatus] = useState('');
   
-  // Sorting
-  const [sortKey, setSortKey] = useState<'name' | 'category' | 'unit' | 'price' | 'usage'>('name');
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   
   // Form
   const [formName, setFormName] = useState('');
@@ -84,82 +63,6 @@ export default function ProductsPage() {
     }
   };
 
-  // Фильтрация и сортировка
-  const filteredProducts = useMemo(() => {
-    let result = [...products];
-
-    // Поиск
-    if (query) {
-      const q = query.toLowerCase();
-      result = result.filter(p => 
-        p.name.toLowerCase().includes(q) ||
-        (p.code && p.code.toLowerCase().includes(q))
-      );
-    }
-
-    // Фильтр по категории
-    if (selectedCategories.length > 0) {
-      result = result.filter(p => selectedCategories.includes(p.categoryName));
-    }
-
-    // Фильтр по единице
-    if (selectedUnit) {
-      result = result.filter(p => p.unit === selectedUnit);
-    }
-
-    // Фильтр по цене
-    if (priceStatus === 'HAS_PRICE') {
-      result = result.filter(p => p.currentPrice);
-    } else if (priceStatus === 'NO_PRICE') {
-      result = result.filter(p => !p.currentPrice);
-    }
-
-    // Фильтр по привязке
-    if (bindingStatus === 'BOUND') {
-      result = result.filter(p => p.bindingStatus === 'BOUND');
-    } else if (bindingStatus === 'UNBOUND') {
-      result = result.filter(p => p.bindingStatus === 'UNBOUND');
-    }
-
-    // Фильтр по использованию
-    if (usageStatus === 'USED') {
-      result = result.filter(p => p.usageRecipes > 0);
-    } else if (usageStatus === 'UNUSED') {
-      result = result.filter(p => p.usageRecipes === 0);
-    }
-
-    // Сортировка
-    result.sort((a, b) => {
-      let aVal: any, bVal: any;
-      switch (sortKey) {
-        case 'name':
-          aVal = a.name;
-          bVal = b.name;
-          break;
-        case 'category':
-          aVal = a.categoryName;
-          bVal = b.categoryName;
-          break;
-        case 'unit':
-          aVal = a.unit;
-          bVal = b.unit;
-          break;
-        case 'price':
-          aVal = a.currentPrice?.value || 0;
-          bVal = b.currentPrice?.value || 0;
-          break;
-        case 'usage':
-          aVal = a.usageRecipes;
-          bVal = b.usageRecipes;
-          break;
-      }
-      if (aVal < bVal) return sortDir === 'asc' ? -1 : 1;
-      if (aVal > bVal) return sortDir === 'asc' ? 1 : -1;
-      return 0;
-    });
-
-    return result;
-  }, [products, query, selectedCategories, selectedUnit, priceStatus, bindingStatus, usageStatus, sortKey, sortDir]);
 
   // Проверка дубликата
   const checkDuplicate = async (name: string, unit: UnitOfMeasure) => {
@@ -287,26 +190,7 @@ export default function ProductsPage() {
     setUsageStatus('');
   };
 
-  const handleSort = (key: typeof sortKey) => {
-    if (sortKey === key) {
-      setSortDir(sortDir === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortKey(key);
-      setSortDir('asc');
-    }
-  };
 
-  const formatPrice = (price?: { value: number; currency: string; source: string }) => {
-    if (!price) return <span className="chip-delta fire">нет цены</span>;
-    return (
-      <span style={{ color: 'var(--text)' }}>
-        {price.value.toLocaleString('ru-RU')} {price.currency}
-        <span className="chip-delta dim" style={{ marginLeft: '8px' }}>
-          {price.source === 'OFF' ? 'OFF' : 'ручная'}
-        </span>
-      </span>
-    );
-  };
 
   if (loading) {
     return (
@@ -408,101 +292,13 @@ export default function ProductsPage() {
       </div>
 
       {/* Table */}
-      <div className="rounded-xl overflow-hidden" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
-        {filteredProducts.length === 0 ? (
-          <div className="p-12 text-center">
-            <p style={{ color: 'var(--muted)' }}>Ничего не найдено</p>
-            <button onClick={resetFilters} className="ghost-btn mt-4">Сбросить фильтры</button>
-          </div>
-        ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr style={{ background: 'var(--elev)' }}>
-                <th 
-                  className="text-left px-4 py-3 font-bold cursor-pointer" 
-                  style={{ color: 'var(--muted)', fontSize: '11px' }}
-                  onClick={() => handleSort('name')}
-                >
-                  Продукт {sortKey === 'name' && (sortDir === 'asc' ? '↑' : '↓')}
-                </th>
-                <th 
-                  className="text-left px-4 py-3 font-bold cursor-pointer" 
-                  style={{ color: 'var(--muted)', fontSize: '11px' }}
-                  onClick={() => handleSort('category')}
-                >
-                  Категория {sortKey === 'category' && (sortDir === 'asc' ? '↑' : '↓')}
-                </th>
-                <th className="text-left px-4 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: '11px' }}>Ед.</th>
-                <th className="text-left px-4 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: '11px' }}>Упаковка</th>
-                <th 
-                  className="text-left px-4 py-3 font-bold cursor-pointer" 
-                  style={{ color: 'var(--muted)', fontSize: '11px' }}
-                  onClick={() => handleSort('price')}
-                >
-                  Цена {sortKey === 'price' && (sortDir === 'asc' ? '↑' : '↓')}
-                </th>
-                <th 
-                  className="text-right px-4 py-3 font-bold cursor-pointer" 
-                  style={{ color: 'var(--muted)', fontSize: '11px' }}
-                  onClick={() => handleSort('usage')}
-                >
-                  В рецептах {sortKey === 'usage' && (sortDir === 'asc' ? '↑' : '↓')}
-                </th>
-                <th className="text-right px-4 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: '11px' }}>Действия</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredProducts.map(product => (
-                <tr key={product.id} style={{ borderTop: '1px solid var(--border)' }}>
-                  <td className="px-4 py-3">
-                    <b style={{ color: 'var(--text)' }}>{product.name}</b>
-                    {product.packSize && (
-                      <span className="chip-delta dim" style={{ marginLeft: '8px' }}>
-                        уп. {product.packSize} {product.unit}
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className="chip-delta" style={{ background: 'rgba(56, 189, 248, 0.14)', color: '#9BD8F5' }}>
-                      {product.categoryName}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3" style={{ color: 'var(--muted)' }}>{product.unit}</td>
-                  <td className="px-4 py-3" style={{ color: 'var(--muted)' }}>
-                    {product.packSize || 'развес'}
-                  </td>
-                  <td className="px-4 py-3">
-                    {formatPrice(product.currentPrice)}
-                  </td>
-                  <td className="px-4 py-3 text-right" style={{ color: 'var(--text)' }}>
-                    {product.usageRecipes}
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <div className="flex items-center justify-end gap-1">
-                      <button
-                        onClick={() => openEditModal(product)}
-                        className="p-1.5 rounded transition-colors"
-                        style={{ color: 'var(--muted)' }}
-                        title="Правка"
-                      >
-                        <Edit2 size={14} />
-                      </button>
-                      <button
-                        onClick={() => handleDelete(product)}
-                        className="p-1.5 rounded transition-colors"
-                        style={{ color: 'var(--muted)' }}
-                        title="Удалить"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
+      <ProductTable
+        products={products}
+        filters={{ query, categories: selectedCategories, unit: selectedUnit, priceStatus, bindingStatus, usageStatus }}
+        onEdit={openEditModal}
+        onDelete={handleDelete}
+        onResetFilters={resetFilters}
+      />
 
       {/* Modal */}
       {showModal && (
