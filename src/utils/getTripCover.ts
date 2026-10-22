@@ -27,7 +27,7 @@ export function getTripCoverKeyword(tripName: string): string {
  */
 export function getTripCover(tripName: string): string {
   const keyword = getTripCoverKeyword(tripName);
-  return `https://source.unsplash.com/800x400/?${keyword}`;
+  return `https://loremflickr.com/800/400/${keyword}?random=${Date.now()}`;
 }
 
 export default getTripCover;
