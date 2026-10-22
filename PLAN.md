@@ -35,10 +35,10 @@
 #### 2. Component-тесты по R2 (каждый red-green)
 - [x] `DateRange` (CR-3) — спаренные даты, min/max, автоподтягивание ✅ ТЕСТЫ СОЗДАНЫ
 - [x] `NumberField` — адаптивный шаг, клавиатурная навигация, валидация ✅ ТЕСТЫ СОЗДАНЫ
-- [ ] `ApiModeBadge` — переключение режимов, очистка кеша
-- [ ] `ProductTable` — сортировка, фильтр, empty state, дубликаты
-- [ ] `TripForm` — даты + humanize единиц
-- [ ] Гейт: `npm run test` зелёный, coverage на этих файлах ≥80%
+- [x] `ApiModeBadge` — переключение режимов, очистка кеша ✅ ТЕСТЫ СОЗДАНЫ (14 тестов, red-green доказан, coverage lines 100%)
+- [x] `ProductTable` — сортировка, фильтр, empty state, дубликаты ✅ ТЕСТЫ СОЗДАНЫ (20 тестов, coverage lines 97.75%)
+- [x] `TripForm` — даты + humanize единиц ✅ ТЕСТЫ СОЗДАНЫ (12 тестов, coverage lines 100%)
+- [x] Гейт: `npm run test` зелёный, coverage на этих файлах ≥80% ✅ (10 files, 107 passed, 0 failed)
 
 #### 3. MODE-сьют 01..08 (режимы/watchdog/фолбэк/персист)
 - [ ] MODE-01: AUTO, API доступен → бейдж зелёный, запросы в сеть
@@ -75,7 +75,7 @@
 - [x] `AGENTS.md` — обновлён правилами R1-R7 и системным подходом (п.10)
 
 ### Следующие задачи (приоритет по порядку):
-1. Создать component-тесты для `ApiModeBadge`, `ProductTable`, `TripForm`
+1. ~~Создать component-тесты для `ProductTable`, `TripForm`~~ ✅ ГОТОВО (рефакторинг + 32 теста, гейт зелёный)
 2. Реализовать MODE-сьют 01..08
 3. Включить coverage-гейт R5 в vitest.config
 4. Запустить `npm run test` и убедиться, что все тесты проходят
