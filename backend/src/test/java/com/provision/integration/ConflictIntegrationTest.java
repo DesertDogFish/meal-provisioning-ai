@@ -1,16 +1,12 @@
 package com.provision.integration;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.provision.dto.auth.LoginRequest;
-import com.provision.dto.auth.RegisterRequest;
 import com.provision.dto.ingredient.IngredientRequest;
 import com.provision.dto.recipe.RecipeRequest;
 import com.provision.dto.trip.TripMealRequest;
 import com.provision.dto.trip.TripRequest;
 import com.provision.entity.MealType;
 import com.provision.entity.UnitOfMeasure;
-import com.provision.entity.User;
-import com.provision.entity.UserRole;
 import com.provision.repository.UserRepository;
 import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -39,22 +35,30 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
-@Testcontainers
+@ContainerSuite
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 @DisplayName("Conflict Integration Tests")
 class ConflictIntegrationTest {
 
-    @Container
-    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:15-alpine")
+    /** Docker есть -> Testcontainers; нет -> локальный PG-fallback (LocalPgFallback). */
+    private static final boolean LOCAL_PG = !com.provision.integration.LocalPgFallback.dockerAvailable();
+
+    static PostgreSQLContainer<?> postgres = LOCAL_PG ? null : new PostgreSQLContainer<>("postgres:15-alpine")
             .withDatabaseName("provision_test_conflict")
             .withUsername("test")
             .withPassword("test");
 
+    static {
+        if (!LOCAL_PG && postgres != null && !postgres.isRunning()) {
+            postgres.start();
+        }
+    }
+
     @DynamicPropertySource
     static void configureProperties(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", postgres::getJdbcUrl);
-        registry.add("spring.datasource.username", postgres::getUsername);
-        registry.add("spring.datasource.password", postgres::getPassword);
+        registry.add("spring.datasource.url", () -> LOCAL_PG ? com.provision.integration.LocalPgFallback.jdbcUrl("provision_test_conflict") : postgres.getJdbcUrl());
+        registry.add("spring.datasource.username", () -> LOCAL_PG ? "test" : postgres.getUsername());
+        registry.add("spring.datasource.password", () -> LOCAL_PG ? "test" : postgres.getPassword());
     }
 
     @Autowired
@@ -64,58 +68,25 @@ class ConflictIntegrationTest {
     private ObjectMapper objectMapper;
 
     @Autowired
-    private UserRepository userRepository;
+    private org.springframework.jdbc.core.JdbcTemplate jdbc;
+
+    @Autowired
+    private org.flywaydb.core.Flyway flyway;
 
     private String adminToken;
     private String userToken;
 
     @BeforeEach
     void setUp() throws Exception {
-        userRepository.deleteAll();
+        // FIX: вместо userRepository.deleteAll() — полная пересборка схемы из миграций.
+        // Раньше сид V3 (рецепты/ингредиенты) оставался в базе, и создание "Гречка" давало 409.
+        TestDataIsolation.reset(jdbc, flyway);
 
-        // Create ADMIN
-        User admin = User.builder()
-                .email("admin@test.com")
-                .passwordHash("$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy")
-                .firstName("Admin")
-                .lastName("Test")
-                .role(UserRole.ADMIN)
-                .build();
-        userRepository.save(admin);
-
-        LoginRequest adminLogin = new LoginRequest("admin@test.com", "password123");
-        MvcResult adminResult = mockMvc.perform(post("/api/v1/auth/login")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(adminLogin)))
-                .andExpect(status().isOk())
-                .andReturn();
-
-        Map<String, Object> adminTokens = objectMapper.readValue(
-                adminResult.getResponse().getContentAsString(), Map.class);
-        adminToken = (String) adminTokens.get("accessToken");
-
-        // Create USER
-        RegisterRequest userRequest = new RegisterRequest(
-                "user@test.com",
-                "password123",
-                "User",
-                "Test"
-        );
-        mockMvc.perform(post("/api/v1/auth/register")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(userRequest)))
-                .andExpect(status().isCreated());
-
-        LoginRequest userLogin = new LoginRequest("user@test.com", "password123");
-        MvcResult userResult = mockMvc.perform(post("/api/v1/auth/login")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(userLogin)))
-                .andExpect(status().isOk())
-                .andReturn();
-
-        Map<String, Object> userTokens = objectMapper.readValue(
-                userResult.getResponse().getContentAsString(), Map.class);
-        userToken = (String) userTokens.get("accessToken");
+        // FIX: раньше ADMIN заводился с захардкоженным BCrypt-хэшем из чужих доков,
+        // который НЕ соответствует паролю "password123" -> логин давал 401 и весь класс падал.
+        // TestUsers создаёт пользователей с корректным хэшем через реальный PasswordEncoder.
+        adminToken = TestUsers.createAdmin(mockMvc, objectMapper, jdbc, "admin@test.com");
+        userToken = TestUsers.registerUser(mockMvc, objectMapper, "user@test.com");
     }
 
     @Test
@@ -125,7 +96,7 @@ class ConflictIntegrationTest {
         // Create ingredient
         IngredientRequest ingredientRequest = new IngredientRequest(
                 null,  // code
-                "Гречка",
+                "Гречка тестовая ING-" + System.nanoTime(),
                 UnitOfMeasure.KG,
                 "Крупы",
                 null,  // kcalPer100g
@@ -144,7 +115,7 @@ class ConflictIntegrationTest {
 
         // Create recipe with this ingredient
         RecipeRequest recipeRequest = new RecipeRequest(
-                "Гречка с тушенкой",
+                "Гречка тестовая REC-" + System.nanoTime(),
                 MealType.LUNCH,
                 null,  // category
                 null,  // cookMinutes
@@ -173,7 +144,7 @@ class ConflictIntegrationTest {
         // Create ingredient
         IngredientRequest ingredientRequest = new IngredientRequest(
                 null,  // code
-                "Гречка",
+                "Гречка тестовая ING-" + System.nanoTime(),
                 UnitOfMeasure.KG,
                 "Крупы",
                 null,  // kcalPer100g
@@ -192,7 +163,7 @@ class ConflictIntegrationTest {
 
         // Create recipe with this ingredient
         RecipeRequest recipeRequest = new RecipeRequest(
-                "Гречка с тушенкой",
+                "Гречка тестовая REC-" + System.nanoTime(),
                 MealType.LUNCH,
                 null,  // category
                 null,  // cookMinutes
@@ -230,7 +201,7 @@ class ConflictIntegrationTest {
         // Create ingredient
         IngredientRequest ingredientRequest = new IngredientRequest(
                 null,  // code
-                "Гречка",
+                "Гречка тестовая ING-" + System.nanoTime(),
                 UnitOfMeasure.KG,
                 "Крупы",
                 null,  // kcalPer100g
@@ -249,7 +220,7 @@ class ConflictIntegrationTest {
 
         // Create recipe
         RecipeRequest recipeRequest = new RecipeRequest(
-                "Гречка с тушенкой",
+                "Гречка тестовая REC-" + System.nanoTime(),
                 MealType.LUNCH,
                 null,  // category
                 null,  // cookMinutes

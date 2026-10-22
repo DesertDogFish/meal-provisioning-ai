@@ -14,8 +14,8 @@ public interface TripRepository extends JpaRepository<Trip, Long> {
     List<Trip> findByUserId(@Param("userId") Long userId);
     
     @Query("SELECT t FROM Trip t LEFT JOIN FETCH t.days WHERE t.id = :id AND t.user.id = :userId")
-    Trip findByIdAndUserId(@Param("id") Long id, @Param("userId") Long userId);
+    java.util.Optional<Trip> findByIdAndUserId(@Param("id") Long id, @Param("userId") Long userId);
     
     @Query("SELECT t FROM Trip t LEFT JOIN FETCH t.days td LEFT JOIN FETCH td.meals tm LEFT JOIN FETCH tm.recipe WHERE t.id = :id AND t.user.id = :userId")
-    Trip findByIdWithDaysAndMeals(@Param("id") Long id, @Param("userId") Long userId);
+    java.util.Optional<Trip> findByIdWithDaysAndMeals(@Param("id") Long id, @Param("userId") Long userId);
 }

@@ -1,10 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Mountain, Calendar, Users, Trash2, Edit2 } from 'lucide-react';
-import { validateTrip } from '../utils/validation';
-import { ValidationError } from '../utils/errors';
 import { useToast } from '../components/ToastProvider';
-import { DateRange } from '../components/DateRange';
+import { TripForm, type TripFormData } from '../components/TripForm';
 import { api } from '../api/client';
 
 interface Trip {
@@ -30,8 +28,6 @@ export default function TripsPage() {
   const navigate = useNavigate();
   const { showError, showSuccess } = useToast();
   const [showCreate, setShowCreate] = useState(false);
-  const [newTrip, setNewTrip] = useState({ name: '', startDate: '', endDate: '', defaultPeople: 4, notes: '' });
-  const [formErrors, setFormErrors] = useState<{ field: string; message: string }[]>([]);
   const [trips, setTrips] = useState<Trip[]>([]);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -61,27 +57,16 @@ export default function TripsPage() {
 
   const myTrips = trips.filter(t => t.userId === currentUser?.id);
 
-  const handleCreate = async () => {
-    // Validate trip data
-    const errors = validateTrip(newTrip);
-    if (errors.length > 0) {
-      setFormErrors(errors);
-      const validationError = new ValidationError(errors, 'Не удалось создать поход');
-      showError(validationError.toProblemDetail());
-      return;
-    }
-    setFormErrors([]);
-    
+  const handleCreate = async (formData: TripFormData) => {
     try {
       await api.post('/trips', {
-        name: newTrip.name,
-        startDate: newTrip.startDate,
-        endDate: newTrip.endDate,
-        defaultPeople: newTrip.defaultPeople,
-        notes: newTrip.notes || undefined
+        name: formData.name,
+        startDate: formData.startDate,
+        endDate: formData.endDate,
+        defaultPeople: formData.defaultPeople,
+        notes: formData.notes || undefined
       });
       setShowCreate(false);
-      setNewTrip({ name: '', startDate: '', endDate: '', defaultPeople: 4, notes: '' });
       showSuccess('Поход успешно создан');
       await loadData();
     } catch (err: any) {
@@ -143,93 +128,10 @@ export default function TripsPage() {
 
       {/* Create modal */}
       {showCreate && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="rounded-2xl shadow-xl w-full max-w-md p-6" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
-            <h2 className="text-xl font-bold mb-4" style={{ color: 'var(--text)' }}>Новый поход</h2>
-            
-            {formErrors.length > 0 && (
-              <div className="mb-4 space-y-1">
-                {formErrors.map((err, idx) => (
-                  <p key={idx} className="text-sm" style={{ color: '#FCA5A5' }}>
-                    <span className="font-medium">{err.field}:</span> {err.message}
-                  </p>
-                ))}
-              </div>
-            )}
-            
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium mb-1" style={{ color: 'var(--muted)' }}>Название</label>
-                <input
-                  type="text"
-                  value={newTrip.name}
-                  onChange={e => { setNewTrip({ ...newTrip, name: e.target.value }); setFormErrors([]); }}
-                  className="w-full px-3 py-2.5 rounded-lg outline-none"
-                  style={{ 
-                    background: 'var(--elev)', 
-                    border: formErrors.find(e => e.field === 'name') ? '1px solid #FCA5A5' : '1px solid var(--border)',
-                    color: 'var(--text)'
-                  }}
-                  placeholder="Поход на Алтай"
-                />
-              </div>
-              <DateRange
-                startDate={newTrip.startDate}
-                endDate={newTrip.endDate}
-                onStartDateChange={date => { setNewTrip({ ...newTrip, startDate: date }); setFormErrors([]); }}
-                onEndDateChange={date => { setNewTrip({ ...newTrip, endDate: date }); setFormErrors([]); }}
-                startLabel="Дата начала"
-                endLabel="Дата окончания"
-              />
-              <div>
-                <label className="block text-sm font-medium mb-1" style={{ color: 'var(--muted)' }}>Количество человек</label>
-                <input
-                  type="number"
-                  min={1}
-                  value={newTrip.defaultPeople}
-                  onChange={e => { setNewTrip({ ...newTrip, defaultPeople: parseInt(e.target.value) || 1 }); setFormErrors([]); }}
-                  className="w-full px-3 py-2.5 rounded-lg outline-none"
-                  style={{ 
-                    background: 'var(--elev)', 
-                    border: formErrors.find(e => e.field === 'defaultPeople') ? '1px solid #FCA5A5' : '1px solid var(--border)',
-                    color: 'var(--text)'
-                  }}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1" style={{ color: 'var(--muted)' }}>Заметки</label>
-                <textarea
-                  value={newTrip.notes}
-                  onChange={e => setNewTrip({ ...newTrip, notes: e.target.value })}
-                  className="w-full px-3 py-2.5 rounded-lg outline-none"
-                  style={{ 
-                    background: 'var(--elev)', 
-                    border: '1px solid var(--border)',
-                    color: 'var(--text)'
-                  }}
-                  rows={2}
-                  placeholder="Особенности похода..."
-                />
-              </div>
-            </div>
-            <div className="flex gap-3 mt-6">
-              <button
-                onClick={() => setShowCreate(false)}
-                className="flex-1 px-4 py-2.5 rounded-full transition-colors"
-                style={{ border: '1px solid var(--border)', color: 'var(--text)' }}
-              >
-                Отмена
-              </button>
-              <button
-                onClick={handleCreate}
-                className="flex-1 px-4 py-2.5 rounded-full transition-colors"
-                style={{ background: 'linear-gradient(90deg, var(--w1), var(--w2))', color: '#04121A' }}
-              >
-                Создать
-              </button>
-            </div>
-          </div>
-        </div>
+        <TripForm
+          onSubmit={handleCreate}
+          onCancel={() => setShowCreate(false)}
+        />
       )}
 
       {/* Trips list */}

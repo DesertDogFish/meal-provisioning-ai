@@ -29,18 +29,23 @@ const SEED_VERSION = '1.0.0';
 const LS_MODE_KEY = 'apiMode';
 const LS_SEED_KEY = 'seedVersion';
 
-class ApiClient {
+export class ApiClient {
   private mode: ApiMode = 'mock';
   private baseUrl: string;
   private modeResolved = false;
   private resolvePromise: Promise<void> | null = null;
 
   constructor() {
-    const env = (import.meta as any).env || {};
+    // NOTE: window['meta'] — намеренно нестатический доступ: Vite заменяет статическое
+    // обращение import.meta.env.* на литералы при сборке, из-за чего тестовые подмены
+    // (vi.stubEnv / присваивание) не применяются. В браузере window.meta пуст → fallback.
+    const env =
+      (window as unknown as { meta?: Record<string, string> }).meta ??
+      ((import.meta as any).env || {});
     this.baseUrl = env.VITE_API_URL || 'http://localhost:8080/api/v1';
     
     const storedMode = localStorage.getItem(LS_MODE_KEY) as ApiMode | null;
-    const envMode = env.VITE_API_MODE as ApiMode | undefined;
+    const envMode = e.VITE_API_MODE as ApiMode | undefined;
     
     if (storedMode === 'mock' || storedMode === 'real') {
       this.mode = storedMode;

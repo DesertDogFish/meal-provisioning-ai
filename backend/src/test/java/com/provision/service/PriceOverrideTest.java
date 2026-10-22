@@ -95,7 +95,7 @@ class PriceOverrideTest {
                 .recipe(recipe)
                 .peopleOverride(null)
                 .build();
-        day1.setMeals(Arrays.asList(meal1));
+        day1.setMeals(new java.util.LinkedHashSet<>(Arrays.asList(meal1)));
 
         TripDay day2 = TripDay.builder()
                 .id(2L)
@@ -109,7 +109,7 @@ class PriceOverrideTest {
                 .recipe(recipe)
                 .peopleOverride(null)
                 .build();
-        day2.setMeals(Arrays.asList(meal2));
+        day2.setMeals(new java.util.LinkedHashSet<>(Arrays.asList(meal2)));
 
         TripDay day3 = TripDay.builder()
                 .id(3L)
@@ -123,16 +123,16 @@ class PriceOverrideTest {
                 .recipe(recipe)
                 .peopleOverride(2)
                 .build();
-        day3.setMeals(Arrays.asList(meal3));
+        day3.setMeals(new java.util.LinkedHashSet<>(Arrays.asList(meal3)));
 
-        trip.setDays(Arrays.asList(day1, day2, day3));
+        trip.setDays(new java.util.LinkedHashSet<>(Arrays.asList(day1, day2, day3)));
     }
 
     @Test
     @DisplayName("ADJ-01: Без оверрайдов actualCost == plannedCost")
     void testNoOverrides() {
         // Given: нет оверрайдов
-        when(tripRepository.findByIdWithDaysAndMeals(1L, 1L)).thenReturn(trip);
+        when(tripRepository.findByIdWithDaysAndMeals(1L, 1L)).thenReturn(java.util.Optional.of(trip));
         when(overrideRepository.findByTripId(1L)).thenReturn(Arrays.asList());
         
         // Плановые цены
@@ -164,7 +164,7 @@ class PriceOverrideTest {
     @DisplayName("ADJ-02: Оверрайд гречки 250 вместо 200")
     void testOverrideGrechka() {
         // Given: оверрайд для гречки
-        when(tripRepository.findByIdWithDaysAndMeals(1L, 1L)).thenReturn(trip);
+        when(tripRepository.findByIdWithDaysAndMeals(1L, 1L)).thenReturn(java.util.Optional.of(trip));
         
         TripPriceOverride override = TripPriceOverride.builder()
                 .trip(trip)
@@ -206,7 +206,7 @@ class PriceOverrideTest {
     @DisplayName("ADJ-05: Итоги с несколькими оверрайдами")
     void testMultipleOverrides() {
         // Given: оверрайды для гречки (250), тушёнки (190), соли (30)
-        when(tripRepository.findByIdWithDaysAndMeals(1L, 1L)).thenReturn(trip);
+        when(tripRepository.findByIdWithDaysAndMeals(1L, 1L)).thenReturn(java.util.Optional.of(trip));
         
         TripPriceOverride override1 = TripPriceOverride.builder()
                 .trip(trip)
