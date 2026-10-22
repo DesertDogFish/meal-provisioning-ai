@@ -66,6 +66,9 @@ class DockerStackSmokeTest {
     @Autowired
     private com.provision.repository.UserRepository userRepository;
 
+    @Autowired
+    private com.provision.repository.IngredientRepository ingredientRepository;
+
     private static final String EMAIL = "smoke-" + System.nanoTime() + "@test.local";
     private static final String PASSWORD = "password123";
 
@@ -134,31 +137,42 @@ class DockerStackSmokeTest {
         long categoryId = categories.get(0).get("id").asLong();
 
         // 3. Создание продукта
+        // CR-1: для PCS/PACK при kcalPer100g обязателен pieceWeightG — указываем его.
         String uniqueName = "Smoke Product " + System.nanoTime();
         String productBody = objectMapper.writeValueAsString(Map.of(
                 "name", uniqueName,
                 "categoryId", categoryId,
                 "unit", "PCS",
                 "packSize", 1,
-                "kcalPer100g", 350
+                "kcalPer100g", 350,
+                "pieceWeightG", 60
         ));
 
-        mockMvc.perform(post("/api/v1/admin/products")
+        MvcResult createResult = mockMvc.perform(post("/api/v1/admin/products")
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(productBody))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.name").value(uniqueName));
+                .andExpect(jsonPath("$.name").value(uniqueName))
+                .andReturn();
+        long productId = objectMapper.readTree(createResult.getResponse().getContentAsString())
+                .get("id").asLong();
 
         // 4. Продукт сохранился — виден в списке (данные переживают запрос)
         MvcResult listResult = mockMvc.perform(get("/api/v1/admin/products")
-                        .param("query", uniqueName)
+                        .param("page", "0")
+                        .param("size", "1000")
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
                 .andReturn();
         JsonNode page = objectMapper.readTree(listResult.getResponse().getContentAsString());
-        String content = page.get("content").toString();
-        assertThat(content).contains(uniqueName);
+        assertThat(page.get("content").toString()).contains(uniqueName);
+
+        // Проверка персистентности напрямую через репозиторий (GET /{id} в контроллере отсутствует)
+        Optional<com.provision.entity.Ingredient> saved =
+                ingredientRepository.findById(productId);
+        assertThat(saved).isPresent();
+        assertThat(saved.get().getName()).isEqualTo(uniqueName);
     }
 
     @Test
