@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useToast } from './ToastProvider';
 import { Download } from 'lucide-react';
-import { formatAmount } from '../utils/calculations';
+import { formatAmount, toBaseUnits } from '../utils/calculations';
 import { formatRub } from '../utils/formatRub'; // Фаза 13 (п.3): итоги — целые рубли везде
 import { mealsWord } from '../utils/text';
 import { NumberField } from './NumberField';
@@ -268,16 +268,20 @@ export default function PriceOverridesTab({ tripId }: Props) {
     for (const [ingredientId, data] of ingredientTotals.entries()) {
       const price = pricesData.find(p => p.ingredientId === ingredientId);
       const unitPrice = price?.pricePerUnit;
+      const unit = data.ingredient?.unit || 'PCS';
+      // BUGFIX (расчёт): цена задаётся в ₽/кг (₽/л), а количество для KG/L — в г/мл.
+      // Стоимость позиции = базовые единицы × цена за базовую единицу (см. toBaseUnits).
+      const baseQty = toBaseUnits(data.amount, unit);
       
       items.push({
         ingredientId,
         ingredientName: data.ingredient?.name || 'Unknown',
-        unit: data.ingredient?.unit || 'PCS',
+        unit,
         totalAmount: data.amount,
         plannedUnitPrice: unitPrice,
         actualUnitPrice: unitPrice,
-        plannedCost: unitPrice ? data.amount * unitPrice : undefined,
-        actualCost: unitPrice ? data.amount * unitPrice : undefined,
+        plannedCost: unitPrice ? baseQty * unitPrice : undefined,
+        actualCost: unitPrice ? baseQty * unitPrice : undefined,
         overridden: false,
         hasPlannedPrice: !!unitPrice
       });
@@ -302,7 +306,8 @@ export default function PriceOverridesTab({ tripId }: Props) {
               const amount = (ri.amount / recipe.baseServings) * people;
               const price = pricesData.find(p => p.ingredientId === ri.ingredientId);
               if (price) {
-                dayCost += amount * price.pricePerUnit;
+                // BUGFIX: г/мл против ₽/кг — стоимость в базовых единицах
+                dayCost += toBaseUnits(amount, ri.ingredient?.unit || 'PCS') * price.pricePerUnit;
               }
             }
           }
