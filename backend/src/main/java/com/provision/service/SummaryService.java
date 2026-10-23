@@ -3,7 +3,13 @@ package com.provision.service;
 import com.provision.dto.summary.*;
 import com.provision.entity.*;
 import com.provision.repository.*;
-import lombok.RequiredArgsConstructor;
+import jakarta.persistence.EntityManager;
+import org.hibernate.engine.internal.BatchFetchQueue;
+import org.hibernate.engine.spi.SharedSessionContractImplementor;
+import org.hibernate.metamodel.mapping.EntityMappingType;
+import org.hibernate.proxy.HibernateProxy;
+import org.hibernate.proxy.LazyInitializer;
+import org.hibernate.SessionFactory;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -15,7 +21,6 @@ import java.time.LocalDate;
 import java.util.*;
 
 @Service
-@RequiredArgsConstructor
 @Slf4j
 @Transactional(readOnly = true)
 public class SummaryService {
@@ -26,6 +31,87 @@ public class SummaryService {
     private final PriceResolutionService priceResolutionService;
     private final TripIngredientSubstitutionRepository substitutionRepository;
     private final TripIngredientEditService tripIngredientEditService; // Фаза 14 (N3)
+    private final EntityManager entityManager; // FIX N+1: пакетная инициализация LAZY-проксей category
+
+    public SummaryService(TripRepository tripRepository,
+                          IngredientPriceRepository priceRepository,
+                          RecipeRepository recipeRepository,
+                          PriceResolutionService priceResolutionService,
+                          TripIngredientSubstitutionRepository substitutionRepository,
+                          TripIngredientEditService tripIngredientEditService) {
+        this(tripRepository, priceRepository, recipeRepository, priceResolutionService,
+                substitutionRepository, tripIngredientEditService, null);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public SummaryService(TripRepository tripRepository,
+                          IngredientPriceRepository priceRepository,
+                          RecipeRepository recipeRepository,
+                          PriceResolutionService priceResolutionService,
+                          TripIngredientSubstitutionRepository substitutionRepository,
+                          TripIngredientEditService tripIngredientEditService,
+                          EntityManager entityManager) {
+        this.tripRepository = tripRepository;
+        this.priceRepository = priceRepository;
+        this.recipeRepository = recipeRepository;
+        this.priceResolutionService = priceResolutionService;
+        this.substitutionRepository = substitutionRepository;
+        this.tripIngredientEditService = tripIngredientEditService;
+        this.entityManager = entityManager;
+    }
+
+    /**
+     * FIX (скрытый N+1 «Initializing proxy: [Ingredient#...]» + отдельный
+     * «select ... from ingredients where id=?» на каждый ингредиент):
+     * ingredient.category — LAZY @ManyToOne. В расчёте закупки категория не нужна,
+     * но любое обращение к прокси Hibernate инициирует её по одному запросу.
+     * Здесь все distinct-прокси категорий регистрируются в BatchFetchQueue сессии
+     * и инициируются батчем: Hibernate группирует id до
+     * hibernate.default_batch_fetch_size («where category_id in (?, ?, ...)») —
+     * один запрос вместо K (числа уникальных категорий). Если EntityManager недоступен
+     * (unit-тесты с моками) или прокси нет — no-op.
+     */
+    private void initializeCategoryProxies(java.util.Collection<Recipe> recipes) {
+        if (recipes == null || recipes.isEmpty() || entityManager == null) {
+            return;
+        }
+        Set<Object> proxies = new LinkedHashSet<>();
+        for (Recipe r : recipes) {
+            if (r == null || r.getIngredients() == null) {
+                continue;
+            }
+            for (RecipeIngredient ri : r.getIngredients()) {
+                Ingredient ing = ri != null ? ri.getIngredient() : null;
+                Object cat = ing != null ? ing.getCategory() : null;
+                if (cat instanceof HibernateProxy hp
+                        && hp.getHibernateLazyInitializer().isUninitialized()) {
+                    proxies.add(hp);
+                }
+            }
+        }
+        if (proxies.isEmpty()) {
+            return;
+        }
+        try {
+            SharedSessionContractImplementor spi =
+                    entityManager.unwrap(org.hibernate.Session.class).getSession();
+            BatchFetchQueue queue = spi.getBatchFetchQueue();
+            for (Object proxyObj : proxies) {
+                LazyInitializer li = ((HibernateProxy) proxyObj).getHibernateLazyInitializer();
+                li.setSession(spi);
+                queue.addBatchEntityToQueue(BatchFetchQueue.ObjectKey.EntityKey.of(
+                        li.getPersistentClass().getName(), li.getIdentifier()));
+            }
+            // Первый initialize() вытаскивает из очереди батч id (до batch-size) одним
+            // запросом «in (...)»; остальные прокси резолвятся из уже загруженного пула.
+            for (Object proxyObj : proxies) {
+                ((HibernateProxy) proxyObj).getHibernateLazyInitializer().initialize();
+            }
+        } catch (RuntimeException | Error e) {
+            // Не критично: fallback — обычная ленивая инициализация по одному запросу.
+            log.debug("Batch category proxy init skipped: {}", e.getMessage());
+        }
+    }
 
     public int calculateEffectivePeople(Trip trip, TripDay day, TripMeal meal) {
         if (meal != null && meal.getPeopleOverride() != null) {
@@ -124,6 +210,9 @@ public class SummaryService {
             }
         }
         ensureIngredientsLoaded(trip, recipesById);
+        // FIX (скрытый N+1): пакетная инициализация LAZY-проксей ingredient.category
+        // одним батч-запросом вместо «select ... where id=?» на каждую категорию.
+        initializeCategoryProxies(recipesById.values());
         TripIngredientEditService.TripEditBundle edits =
                 tripIngredientEditService.bundleForTrip(trip.getId());
         return new TripCalculationContext(recipesById, edits);

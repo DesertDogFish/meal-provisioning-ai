@@ -20,23 +20,27 @@ public interface RecipeRepository extends JpaRepository<Recipe, Long> {
     @Query("SELECT r FROM Recipe r ORDER BY r.name")
     List<Recipe> findAllOrderByName();
     
-    @Query("SELECT r FROM Recipe r LEFT JOIN FETCH r.ingredients ri LEFT JOIN FETCH ri.ingredient WHERE r.id = :id")
+    // FIX (скрытый N+1): ingredient.category — LAZY @ManyToOne; при сериализации DTO
+    // каждая категория догружалась отдельным «select ... from product_categories».
+    // Догружаем категории одним fetch-join вместе с составом рецепта.
+    @Query("SELECT r FROM Recipe r LEFT JOIN FETCH r.ingredients ri LEFT JOIN FETCH ri.ingredient i " +
+           "LEFT JOIN FETCH i.category WHERE r.id = :id")
     Recipe findByIdWithIngredients(@Param("id") Long id);
 
     /**
-     * FIX P1 («дикая загрузка сервера при открытии похода»): пакетная загрузка
-     * рецептов с составом (ingredients + ingredient) одним запросом — для
-     * SummaryService, который обходит все блюда похода. При open-in-view:false
-     * ленивые recipe.ingredients/ri.ingredient иначе грузятся по одному запросу
-     * на каждый рецепт/ингредиент (N+1). Дубли рецептов (раздувание от join)
-     * устраняет Hibernate при именованном fetch-join; distinct не используется,
-     * т.к. Hibernate не поддерживает DISTINCT + FETCH.
+     * FIX (скрытый N+1 на Ingredient#...): ingredient.category — LAZY @ManyToOne.
+     * Для расчёта закупки категория не читается, поэтому вместо fetch-join категории
+     * во ВСЕХ запросах списка (раздувание строк на каждый состав рецепта) — пакетная
+     * инициализация прокси категорий ОДНИМ запросом «where id IN (...)» в
+     * SummaryService.loadCalculationContext. Сериализующие пути (RecipeService/ProductService)
+     * используют методы выше с LEFT JOIN FETCH i.category.
      */
     @Query("SELECT r FROM Recipe r LEFT JOIN FETCH r.ingredients ri LEFT JOIN FETCH ri.ingredient " +
            "WHERE r.id IN :ids")
     List<Recipe> findAllWithIngredientsByIds(@Param("ids") java.util.Collection<Long> ids);
     
-    @Query("SELECT r FROM Recipe r LEFT JOIN FETCH r.ingredients ri LEFT JOIN FETCH ri.ingredient ORDER BY r.name")
+    @Query("SELECT r FROM Recipe r LEFT JOIN FETCH r.ingredients ri LEFT JOIN FETCH ri.ingredient i " +
+           "LEFT JOIN FETCH i.category ORDER BY r.name")
     List<Recipe> findAllWithIngredients();
     
     // NOTE: DISTINCT здесь нельзя — Hibernate не умеет DISTINCT + FETCH (ошибка кеша Second Level).
@@ -48,7 +52,8 @@ public interface RecipeRepository extends JpaRepository<Recipe, Long> {
     
     // NOTE: CAST(:search AS string) типизирует параметр — при search == null PostgreSQL
     // иначе выводит lower(bytea) на не типизированном NULL и падает (500).
-    @Query("SELECT r FROM Recipe r LEFT JOIN FETCH r.ingredients ri LEFT JOIN FETCH ri.ingredient " +
+    @Query("SELECT r FROM Recipe r LEFT JOIN FETCH r.ingredients ri LEFT JOIN FETCH ri.ingredient i " +
+           "LEFT JOIN FETCH i.category " +
            "WHERE (:mealType IS NULL OR r.mealType = :mealType) " +
            "AND (:category IS NULL OR r.category = :category) " +
            "AND (:cookMinutes IS NULL OR r.cookMinutes = :cookMinutes) " +

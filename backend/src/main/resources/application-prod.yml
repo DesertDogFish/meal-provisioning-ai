@@ -5,9 +5,12 @@ logging:
   level:
     root: WARN
     com.provision: INFO
-    org.springframework.security: WARN
+    org.hibernate: WARN
     org.hibernate.SQL: WARN
-    org.hibernate.type.descriptor.sql.BasicBinder: WARN
+    org.hibernate.orm.results: WARN
+    org.hibernate.type.descriptor.sql: WARN
+    org.springframework: WARN
+    org.springframework.security: WARN
 
 management:
   endpoints:

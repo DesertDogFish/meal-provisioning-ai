@@ -1,13 +1,19 @@
 # Development profile settings
 # Activated via SPRING_PROFILES_ACTIVE=dev
 
+# FIX (шум в логах): раньше root=DEBUG тянул DEBUG-логирование org.hibernate.orm.results
+# (каждый «Extracted JDBC value» — тысячи строк на запрос). Теперь: DEBUG только для
+# нашего кода и SQL, всё остальное Hibernate/Spring — WARN/INFO.
 logging:
   level:
-    root: DEBUG
-    com.provision: DEBUG
-    org.springframework.security: DEBUG
-    org.hibernate.SQL: DEBUG
-    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+    root: INFO
+    com.provision: DEBUG              # наш код — можно DEBUG в dev
+    org.hibernate: WARN               # ← ГЛАВНОЕ: убиваем шум orm.results
+    org.hibernate.SQL: DEBUG          # SQL-запросы оставляем DEBUG (диагностика N+1)
+    org.hibernate.orm.results: WARN   # конкретно этот логгер — источник шума
+    org.hibernate.type.descriptor.sql: WARN
+    org.springframework: INFO
+    org.springframework.security: WARN
 
 springdoc:
   api-docs:
