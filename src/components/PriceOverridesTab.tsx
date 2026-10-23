@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useToast } from './ToastProvider';
 import { Download } from 'lucide-react';
 import { formatAmount } from '../utils/calculations';
@@ -109,6 +109,16 @@ export default function PriceOverridesTab({ tripId }: Props) {
   const [draftOverrides, setDraftOverrides] = useState<Record<string, ActualPriceDraft>>({});
   const [shoppingExcluded, setShoppingExcluded] = useState<Set<string>>(new Set());
 
+  // Серверные оверрайды (GET /trips/:id/price-overrides) — как фолбэк, если
+  // локальный стейдж пуст (например, чек ввели в другой сессии на сервере).
+  const serverOverridesRef = useRef<Record<string, ActualPriceDraft>>({});
+  // Зеркала state в ref — чтобы пересчёты вне render видели актуальные данные.
+  const shoppingItemsRef = useRef<ShoppingItem[]>([]);
+  const shoppingExcludedRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => { shoppingItemsRef.current = shoppingItems; }, [shoppingItems]);
+  useEffect(() => { shoppingExcludedRef.current = shoppingExcluded; }, [shoppingExcluded]);
+
   const syncStage = () => {
     setDraftOverrides(loadActualPrices(tripId));
     setShoppingExcluded(loadExcluded(tripId));
@@ -120,30 +130,56 @@ export default function PriceOverridesTab({ tripId }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tripId]);
 
-  /** Запись фактической цены: persist + мгновенный пересчёт позиции/дня. */
-  const commitActualPrice = (item: ShoppingItem, v: number | null) => {
+  /** Фаза 13 (п.6): «Закупка и чеки» тоже пишет оверрайды на сервер —
+   * после коммита локальную строку пересчитываем из ОБОЩЁННОГО стейджа
+   * (localStorage + серверные price-overrides), а не дельтой от старого факта. */
+  const commitActualPrice = async (item: ShoppingItem, v: number | null) => {
     if (v == null || Number.isNaN(v)) {
       saveActualPrice(tripId, item.ingredientId, null);
     } else {
       saveActualPrice(tripId, item.ingredientId, { price: v, total: v * item.totalAmount });
     }
+    // Синхронизируем серверное хранилище оверрайдов (best effort: mock/офлайн не ломают UI)
+    try {
+      await api.put(`/trips/${tripId}/price-overrides/${item.ingredientId}`, {
+        actualPrice: v,
+        comment: v == null ? undefined : 'чек',
+      });
+    } catch { /* нет роута/прав — локальный стейдж уже сохранён */ }
+
+    const stage = effectiveOverrides();
     setShoppingItems(prev => prev.map(i => {
-      if (i.ingredientId !== item.ingredientId) return i;
-      const actualUnitPrice = v ?? i.plannedUnitPrice ?? undefined;
+      const ov = stage[i.ingredientId]?.price;
+      const actualUnitPrice = ov ?? i.plannedUnitPrice ?? undefined;
       return {
         ...i,
         actualUnitPrice,
         actualCost: actualUnitPrice != null ? i.totalAmount * actualUnitPrice : undefined,
-        overridden: v != null,
+        overridden: ov != null,
       };
     }));
-    setDayShopping(prev => prev.map(d => ({
-      ...d,
-      actualCost: d.actualCost - (item.actualCost || 0) +
-        (v != null && item.plannedUnitPrice != null
-          ? (v - item.plannedUnitPrice) * item.totalAmount
-          : 0),
-    })));
+    recomputeDayActuals();
+  };
+
+  /** Фактические цены: общий стейдж (инлайн-поле + модалка) поверх серверных оверрайдов. */
+  const effectiveOverrides = (): Record<string, ActualPriceDraft> => ({
+    ...(serverOverridesRef.current || {}),
+    ...draftOverrides,
+  });
+
+  /** Дней-факт = базовый план дня + Σ (факт−план)×кол-во по включённым позициям. */
+  const recomputeDayActuals = () => {
+    const stage = effectiveOverrides();
+    setDayShopping(prev => prev.map(d => {
+      let delta = 0;
+      for (const item of shoppingItemsRef.current) {
+        const ov = stage[item.ingredientId];
+        if (ov && item.plannedUnitPrice != null && !shoppingExcludedRef.current.has(item.ingredientId)) {
+          delta += (ov.price - item.plannedUnitPrice) * item.totalAmount;
+        }
+      }
+      return { ...d, actualCost: d.plannedCost + delta };
+    }));
   };
 
   /** Фаза 13 (п.5): soft-disable позиции из расчёта прямо во вкладке «Закупка». */
@@ -153,6 +189,8 @@ export default function PriceOverridesTab({ tripId }: Props) {
     else next.add(ingredientId);
     persistExcluded(tripId, next);
     setShoppingExcluded(next);
+    shoppingExcludedRef.current = next;
+    recomputeDayActuals();
   };
 
   // Загрузка данных через API
@@ -165,16 +203,24 @@ export default function PriceOverridesTab({ tripId }: Props) {
     try {
       setLoading(true);
       setError(null);
-      
+
+      // Фаза 13 (п.6): серверные price-overrides — фолбэк-источник фактических цен
+      const serverOvs = await api
+        .get<Array<{ ingredientId: string; actualPrice: number }>>(`/trips/${tripId}/price-overrides`)
+        .catch(() => [] as Array<{ ingredientId: string; actualPrice: number }>);
+      serverOverridesRef.current = Object.fromEntries(
+        (serverOvs || []).map(o => [String(o.ingredientId), { price: o.actualPrice, total: 0 } as ActualPriceDraft])
+      );
+
       const [tripData, recipesData, pricesData] = await Promise.all([
         api.get<Trip>(`/trips/${tripId}`),
         getRecipes(),
         // P0-3: чтение цен — общий эндпоинт для всех ролей (см. UserPriceController)
         api.get<Price[]>('/prices')
       ]);
-      
+
       setTrip(tripData);
-      
+
       // Расчёт списка закупок
       calculateShoppingData(tripData, recipesData, pricesData);
     } catch (err) {
@@ -294,11 +340,11 @@ export default function PriceOverridesTab({ tripId }: Props) {
   const totalPlanned = shoppingItems
     .filter(item => !shoppingExcluded.has(item.ingredientId))
     .reduce((sum, item) => sum + (item.plannedCost || 0), 0);
-  // Фаза 13 (п.4): факт считается из ОБЩЕГО стейджа цен (draftOverrides) —
-  // инлайн-поле «Закупки» на главной вкладке и модалка «Ввести чек» здесь дают
-  // одинаковый результат и мгновенно попадают в «По дням»/«На человека».
+  // Фаза 13 (п.4): факт считается из ОБЩЕГО стейджа цен (draftOverrides + серверные
+  // оверрайды) — инлайн-поле «Закупки» на главной вкладке и модалка «Ввести чек»
+  // здесь дают одинаковый результат и мгновенно попадают в «По дням»/«На человека».
   const actualUnitOf = (item: ShoppingItem): number | undefined =>
-    draftOverrides[item.ingredientId]?.price ?? item.actualUnitPrice;
+    effectiveOverrides()[item.ingredientId]?.price ?? item.actualUnitPrice;
   const totalActual = shoppingItems
     .filter(item => !shoppingExcluded.has(item.ingredientId))
     .reduce((sum, item) => {
@@ -311,16 +357,21 @@ export default function PriceOverridesTab({ tripId }: Props) {
   const dayShoppingView = dayShopping.map(d => {
     let delta = 0;
     for (const item of shoppingItems) {
-      const ov = draftOverrides[item.ingredientId];
+      const ov = effectiveOverrides()[item.ingredientId];
       if (ov && item.plannedUnitPrice != null && !shoppingExcluded.has(item.ingredientId)) {
         delta += (ov.price - item.plannedUnitPrice) * item.totalAmount;
       }
     }
-    return { ...d, actualCost: d.actualCost + delta };
+    return { ...d, actualCost: d.plannedCost + delta };
   });
 
-  const filteredItems = onlyDiff 
-    ? shoppingItems.filter(item => item.overridden && item.actualUnitPrice !== item.plannedUnitPrice)
+  // FIX: «только расхождения» учитывает стейдж-оверрайды (факт из общего стейджа),
+  // а не только флаг overridden из начального расчёта.
+  const filteredItems = onlyDiff
+    ? shoppingItems.filter(item => {
+        const u = actualUnitOf(item);
+        return item.overridden || (u != null && item.plannedUnitPrice != null && u !== item.plannedUnitPrice);
+      })
     : shoppingItems;
 
   if (loading) {
