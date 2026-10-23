@@ -332,7 +332,7 @@ export default function TripDetailPage() {
       {/* Header */}
       <div className="flex items-center gap-4">
         <button onClick={() => navigate('/trips')} className="p-2 rounded-lg transition-colors" style={{ color: 'var(--muted)' }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(148,199,214,0.06)'; }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = 'color-mix(in srgb, var(--line-strong) 22%, transparent)'; }}
           onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}>
           <ArrowLeft size={20} />
         </button>
@@ -391,7 +391,7 @@ export default function TripDetailPage() {
                 <div
                   className="flex items-center justify-between p-4 cursor-pointer transition-colors"
                   onClick={() => toggleDay(tripDay.id)}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(148,199,214,0.03)'; }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = 'color-mix(in srgb, var(--line-strong) 12%, transparent)'; }}
                   onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
                 >
                   <div className="flex items-center gap-3">
@@ -405,7 +405,7 @@ export default function TripDetailPage() {
                   </div>
                   <div className="flex items-center gap-2">
                     {tripDay.peopleOverride && (
-                      <span className="px-2 py-0.5 text-xs rounded-full" style={{ background: 'rgba(87, 199, 184, 0.14)', color: 'var(--wave-300)' }}>
+                      <span className="px-2 py-0.5 text-xs rounded-full" style={{ background: 'color-mix(in srgb, var(--wave-400) 14%, transparent)', color: 'var(--wave-300)' }}>
                         {tripDay.peopleOverride} чел.
                       </span>
                     )}
@@ -413,7 +413,7 @@ export default function TripDetailPage() {
                       onClick={(e) => { e.stopPropagation(); setEditingDay(tripDay.id); setDayPeopleOverride(tripDay.peopleOverride?.toString() || ''); }}
                       className="p-1.5 rounded transition-colors"
                       style={{ color: 'var(--muted)' }}
-                      onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--w1)'; e.currentTarget.style.background = 'rgba(87, 199, 184, 0.1)'; }}
+                      onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--w1)'; e.currentTarget.style.background = 'color-mix(in srgb, var(--wave-400) 10%, transparent)'; }}
                       onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--muted)'; e.currentTarget.style.background = 'transparent'; }}
                       title="Изменить количество людей"
                     >
@@ -423,7 +423,7 @@ export default function TripDetailPage() {
                       onClick={(e) => { e.stopPropagation(); setShowAddMeal({ dayId: tripDay.id }); setNewMeal({ mealType: 'LUNCH', recipeId: '', peopleOverride: '' }); }}
                       className="p-1.5 rounded transition-colors"
                       style={{ color: 'var(--muted)' }}
-                      onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--w1)'; e.currentTarget.style.background = 'rgba(87, 199, 184, 0.1)'; }}
+                      onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--w1)'; e.currentTarget.style.background = 'color-mix(in srgb, var(--wave-400) 10%, transparent)'; }}
                       onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--muted)'; e.currentTarget.style.background = 'transparent'; }}
                       title="Добавить приём пищи"
                     >
@@ -445,7 +445,7 @@ export default function TripDetailPage() {
                       style={{ background: 'var(--elev)', border: '1px solid var(--border)', color: 'var(--text)' }}
                       placeholder={trip.defaultPeople.toString()}
                     />
-                    <button onClick={() => handleUpdateDayPeople(tripDay.id)} className="px-3 py-1 text-sm rounded" style={{ background: 'var(--grad-brand)', color: '#221204' }}>OK</button>
+                    <button onClick={() => handleUpdateDayPeople(tripDay.id)} className="px-3 py-1 text-sm rounded grad-btn">OK</button>
                     <button onClick={() => setEditingDay(null)} className="px-3 py-1 text-sm" style={{ color: 'var(--muted)' }}>Отмена</button>
                   </div>
                 )}
@@ -469,7 +469,7 @@ export default function TripDetailPage() {
                             onClick={() => tripMeal && handleDeleteMeal(tripDay.id, tripMeal.id)}
                             className="p-1 rounded transition-colors"
                             style={{ color: 'var(--muted)' }}
-                            onMouseEnter={(e) => { e.currentTarget.style.color = '#FFB4A2'; }}
+                            onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--danger)'; }}
                             onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--muted)'; }}
                           >
                             <Trash2 size={14} />
@@ -650,7 +650,7 @@ export default function TripDetailPage() {
 
       {/* Add meal modal */}
       {showAddMeal && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+        <div className="modal-overlay flex items-center justify-center p-4">
           <div className="rounded-2xl shadow-xl w-full max-w-md p-6" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
             <h2 className="text-xl font-bold mb-4" style={{ color: 'var(--text)' }}>Добавить приём пищи</h2>
             <div className="space-y-4">
@@ -693,7 +693,7 @@ export default function TripDetailPage() {
               <button onClick={() => setShowAddMeal(null)} className="flex-1 px-4 py-2.5 rounded-full transition-colors" style={{ border: '1px solid var(--border)', color: 'var(--text)' }}>
                 Отмена
               </button>
-              <button onClick={handleAddMeal} className="flex-1 px-4 py-2.5 rounded-full transition-colors" style={{ background: 'var(--grad-brand)', color: '#221204' }}>
+              <button onClick={handleAddMeal} className="flex-1 px-4 py-2.5 rounded-full transition-colors grad-btn">
                 Добавить
               </button>
             </div>

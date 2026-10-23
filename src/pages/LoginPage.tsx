@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import { Mail, Lock, User, Eye, EyeOff } from 'lucide-react';
+import BrandMark from '../components/BrandMark';
 
 interface AuthResponse {
   accessToken: string;
@@ -89,18 +90,17 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4" style={{
-      background: 'radial-gradient(1100px 500px at 85% -10%, rgba(87, 199, 184, 0.09), transparent), radial-gradient(900px 500px at -10% 30%, rgba(87, 199, 184, 0.07), transparent), var(--bg)'
+      background: 'radial-gradient(1100px 500px at 85% -10%, color-mix(in srgb, var(--wave-400) 9%, transparent), transparent), radial-gradient(900px 500px at -10% 30%, color-mix(in srgb, var(--wave-400) 7%, transparent), transparent), var(--bg)'
     }}>
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-4" style={{
-            background: 'linear-gradient(135deg, var(--w1), var(--w2))',
-            boxShadow: '0 8px 30px rgba(87, 199, 184, 0.35)'
+          {/* DESIGN_MIGRATION 4.1/4.3: знак только из design-pack assets/ (BrandMark),
+              инлайн-перерисовка убрана; подложка — брендовый градиент пакета, без перекраски знака */}
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-[var(--r-lg)] mb-4" style={{
+            background: 'var(--grad-brand)',
+            boxShadow: 'var(--shadow-glow)'
           }}>
-            <svg width="32" height="32" viewBox="0 0 96 96">
-              <path d="M48 18 L70 70 H26 Z" fill="#fff"/>
-              <path d="M18 80 q8 -6 15 0 t15 0 t15 0 t15 0" stroke="#04121A" strokeWidth="5" fill="none"/>
-            </svg>
+            <BrandMark size={40} />
           </div>
           <h1 className="text-3xl font-bold mb-2" style={{ fontFamily: 'Unbounded', color: 'var(--text)' }}>Провиант</h1>
           <p style={{ color: 'var(--muted)' }}>Планировщик питания для походов и яхт</p>
@@ -112,7 +112,7 @@ export default function LoginPage() {
           </h2>
 
           {error && (
-            <div className="px-4 py-3 rounded-lg mb-4 text-sm" style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)', color: '#FFB4A2' }}>
+            <div className="px-4 py-3 rounded-lg mb-4 text-sm" style={{ background: 'color-mix(in srgb, var(--danger) 10%, transparent)', border: '1px solid color-mix(in srgb, var(--danger) 30%, transparent)', color: 'var(--danger)' }}>
               {error}
             </div>
           )}
@@ -192,10 +192,9 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-3 font-semibold rounded-full transition-all"
+              className="grad-btn w-full py-3 font-semibold"
               style={{ 
-                background: 'var(--grad-brand)', 
-                color: '#221204',
+                
                 opacity: loading ? 0.6 : 1,
                 cursor: loading ? 'not-allowed' : 'pointer'
               }}

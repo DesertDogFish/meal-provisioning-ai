@@ -157,9 +157,9 @@ export default function SyncLogsPage() {
 
   const getStatusChip = (status: string) => {
     const styles = {
-      SUCCESS: { background: 'rgba(87, 199, 184, 0.16)', color: 'var(--wave-300)' },
-      FAILED: { background: 'rgba(248, 113, 113, 0.16)', color: '#FFB4A2' },
-      RUNNING: { background: 'rgba(87, 199, 184, 0.14)', color: 'var(--wave-300)' }
+      SUCCESS: { background: 'var(--success-soft)', color: 'var(--wave-300)' },
+      FAILED: { background: 'var(--danger-soft)', color: 'var(--danger)' },
+      RUNNING: { background: 'color-mix(in srgb, var(--wave-400) 14%, transparent)', color: 'var(--wave-300)' }
     };
     return (
       <span className="chip-delta" style={styles[status as keyof typeof styles]}>
@@ -170,11 +170,11 @@ export default function SyncLogsPage() {
 
   const getActionChip = (action: string) => {
     const styles: Record<string, { background: string; color: string }> = {
-      UPDATED: { background: 'rgba(87, 199, 184, 0.14)', color: 'var(--wave-300)' },
-      CREATED: { background: 'rgba(87, 199, 184, 0.16)', color: 'var(--wave-300)' },
-      SKIPPED_MANUAL: { background: 'rgba(87, 199, 184, 0.14)', color: 'var(--wave-300)' },
-      SKIPPED_CURRENCY: { background: 'rgba(148, 199, 214, 0.08)', color: 'var(--muted)' },
-      ERROR: { background: 'rgba(248, 113, 113, 0.16)', color: '#FFB4A2' }
+      UPDATED: { background: 'color-mix(in srgb, var(--wave-400) 14%, transparent)', color: 'var(--wave-300)' },
+      CREATED: { background: 'var(--success-soft)', color: 'var(--wave-300)' },
+      SKIPPED_MANUAL: { background: 'color-mix(in srgb, var(--wave-400) 14%, transparent)', color: 'var(--wave-300)' },
+      SKIPPED_CURRENCY: { background: 'color-mix(in srgb, var(--line-strong) 28%, transparent)', color: 'var(--muted)' },
+      ERROR: { background: 'var(--danger-soft)', color: 'var(--danger)' }
     };
     return (
       <span className="chip-delta" style={styles[action]}>
@@ -223,10 +223,10 @@ export default function SyncLogsPage() {
           <div className="chip-delta dim">
             запусков за 7 дней: {kpi.totalRuns}
           </div>
-          <div className="chip-delta" style={{ background: 'rgba(87, 199, 184, 0.16)', color: 'var(--wave-300)' }}>
+          <div className="chip-delta" style={{ background: 'var(--success-soft)', color: 'var(--wave-300)' }}>
             успешность: {kpi.successRate.toFixed(0)}%
           </div>
-          <div className="chip-delta" style={{ background: 'rgba(87, 199, 184, 0.14)', color: 'var(--wave-300)' }}>
+          <div className="chip-delta" style={{ background: 'color-mix(in srgb, var(--wave-400) 14%, transparent)', color: 'var(--wave-300)' }}>
             обновлено строк: {kpi.totalUpdated}
           </div>
           <div className="chip-delta fire">
@@ -270,8 +270,8 @@ export default function SyncLogsPage() {
       {/* Error Banner */}
       {lastFailed && (
         <div className="rounded-xl p-4 flex items-center gap-3" style={{
-          background: 'rgba(255, 158, 44, 0.12)',
-          border: '1px solid rgba(255, 158, 44, 0.4)'
+          background: 'color-mix(in srgb, var(--amber-500) 12%, transparent)',
+          border: '1px solid color-mix(in srgb, var(--amber-500) 40%, transparent)'
         }}>
           <AlertCircle size={20} style={{ color: 'var(--amber-300)' }} />
           <span style={{ color: 'var(--amber-300)', fontSize: '13px' }}>
@@ -319,7 +319,7 @@ export default function SyncLogsPage() {
                   </td>
                   <td className="px-4 py-3">
                     <span className="chip-delta" style={{
-                      background: log.type === 'PRICES' ? 'rgba(87, 199, 184, 0.14)' : 'rgba(148, 199, 214, 0.08)',
+                      background: log.type === 'PRICES' ? 'color-mix(in srgb, var(--wave-400) 14%, transparent)' : 'color-mix(in srgb, var(--line-strong) 28%, transparent)',
                       color: log.type === 'PRICES' ? 'var(--wave-300)' : 'var(--muted)'
                     }}>
                       {log.type}
@@ -362,7 +362,7 @@ export default function SyncLogsPage() {
 
       {/* Drawer */}
       {selectedLog && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex justify-end" onClick={() => setSelectedLog(null)}>
+        <div className="modal-overlay flex justify-end" onClick={() => setSelectedLog(null)}>
           <div
             className="w-full max-w-2xl h-full overflow-auto p-6"
             style={{ background: 'var(--surface)', borderLeft: '1px solid var(--border)' }}
@@ -408,7 +408,7 @@ export default function SyncLogsPage() {
                           <>
                             {item.oldPrice.toFixed(2)}
                             <span style={{ color: 'var(--muted)', padding: '0 6px' }}>→</span>
-                            <b style={{ color: item.newPrice > item.oldPrice ? '#FFB4A2' : 'var(--wave-300)' }}>
+                            <b style={{ color: item.newPrice > item.oldPrice ? 'var(--danger)' : 'var(--wave-300)' }}>
                               {item.newPrice.toFixed(2)}
                             </b>
                           </>

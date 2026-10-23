@@ -62,7 +62,7 @@ export function TripForm({ onSubmit, onCancel, externalErrors = [], submitLabel 
     formErrors.find(e => e.field === field) || externalErrors.find(e => e.field === field);
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={onCancel}>
+    <div className="modal-overlay flex items-center justify-center p-4" onClick={onCancel}>
       <div
         className="rounded-2xl shadow-xl w-full max-w-md p-6"
         style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
@@ -73,7 +73,7 @@ export function TripForm({ onSubmit, onCancel, externalErrors = [], submitLabel 
         {(formErrors.length > 0 || externalErrors.length > 0) && (
           <div className="mb-4 space-y-1" role="alert">
             {(formErrors.length > 0 ? formErrors : externalErrors).map((err, idx) => (
-              <p key={idx} className="text-sm" style={{ color: '#FFB4A2' }}>
+              <p key={idx} className="text-sm" style={{ color: 'var(--danger)' }}>
                 <span className="font-medium">{err.field}:</span> {err.message}
               </p>
             ))}
@@ -92,9 +92,9 @@ export function TripForm({ onSubmit, onCancel, externalErrors = [], submitLabel 
               onChange={e => patch({ name: e.target.value })}
               className="w-full px-3 py-2.5 rounded-lg outline-none"
               style={{
-                background: 'rgba(11,20,27,.7)',
+                background: 'color-mix(in srgb, var(--bg-0) 70%, transparent)',
                 
-                border: errorFor('name') ? '1px solid #FCA5A5' : '1px solid var(--border)',
+                border: errorFor('name') ? '1px solid var(--danger)' : '1px solid var(--border)',
                 color: 'var(--text)'
               }}
               placeholder="Поход на Алтай"
@@ -122,9 +122,9 @@ export function TripForm({ onSubmit, onCancel, externalErrors = [], submitLabel 
               onChange={e => patch({ defaultPeople: parseInt(e.target.value) || 1 })}
               className="w-full px-3 py-2.5 rounded-lg outline-none"
               style={{
-                background: 'rgba(11,20,27,.7)',
+                background: 'color-mix(in srgb, var(--bg-0) 70%, transparent)',
                 
-                border: errorFor('defaultPeople') ? '1px solid #FCA5A5' : '1px solid var(--border)',
+                border: errorFor('defaultPeople') ? '1px solid var(--danger)' : '1px solid var(--border)',
                 color: 'var(--text)'
               }}
             />
@@ -159,8 +159,7 @@ export function TripForm({ onSubmit, onCancel, externalErrors = [], submitLabel 
             disabled={submitting}
             className="flex-1 px-4 py-2.5 rounded-full transition-colors"
             style={{
-              background: 'var(--grad-brand)',
-              color: '#221204',
+              
               opacity: submitting ? 0.6 : 1
             }}
           >

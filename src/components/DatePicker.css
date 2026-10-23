@@ -1,18 +1,23 @@
-/* react-datepicker — стили под тёмную тему приложения */
+/* react-datepicker — стили по токенам design-pack (обе темы через var(--…)) */
 
 /* --- Поле ввода --- */
 .date-picker-input {
   width: 100%;
   padding: 8px 12px;
-  background-color: rgba(11,20,27,.7);
+  background-color: color-mix(in srgb, var(--bg-0) 70%, transparent);
   color: var(--text-1);
   border: 1px solid var(--line-strong);
   border-radius: var(--r-sm);
   font-size: 0.875rem;
-  font-family: Manrope, system-ui, sans-serif;
-  outline: none;
-  transition: border-color 0.2s, box-shadow 0.2s;
+  font-family: var(--font-body);
   cursor: pointer;
+  transition: border-color var(--t-base) var(--ease), box-shadow var(--t-base) var(--ease);
+}
+
+/* 6.2: outline убирать без замены запрещено — кольцо по стандарту пакета */
+.date-picker-input:focus-visible {
+  outline: 2px solid var(--amber-500);
+  outline-offset: 2px;
 }
 
 /* ФАЗА 13 (UX): поле — input[type=text]; нативный браузерный пикер подавлен
@@ -65,8 +70,8 @@ input::-webkit-calendar-picker-indicator {
 
 .date-picker-input:focus {
   border-color: var(--amber-500);
-  outline: 2px solid rgba(255,158,44,.5);
-  outline-offset: 0;
+  outline: 2px solid var(--amber-500);
+  outline-offset: 2px;
 }
 
 .date-picker-input.error {
@@ -83,7 +88,8 @@ input::-webkit-calendar-picker-indicator {
   background-color: var(--bg-1);
   border: 1px solid var(--line);
   border-radius: var(--r-md);
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
+  box-shadow: var(--shadow-1);
+  z-index: var(--z-pop); /* 3.3: поповер — слой --z-pop */
   font-family: Manrope, system-ui, sans-serif;
   color: var(--text-1);
   padding: 0;
@@ -126,25 +132,25 @@ input::-webkit-calendar-picker-indicator {
   height: 36px;
   line-height: 36px;
   margin: 0;
-  transition: background-color 0.15s, color 0.15s;
+  transition: background-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
 }
 
 .dark-calendar .react-datepicker__day:hover {
-  background-color: rgba(11,20,27,.7);
+  background-color: var(--bg-2);
   color: var(--text-1);
 }
 
 .dark-calendar .react-datepicker__day--selected,
 .dark-calendar .react-datepicker__day--keyboard-selected {
   background-color: var(--amber-500) !important;
-  color: #221204 !important;
+  color: var(--on-fire) !important;
   font-weight: 600;
 }
 
 .dark-calendar .react-datepicker__day--selected:hover,
 .dark-calendar .react-datepicker__day--keyboard-selected:hover {
   background-color: var(--amber-300) !important;
-  color: #221204 !important;
+  color: var(--on-fire) !important;
 }
 
 .dark-calendar .react-datepicker__day--outside-month {

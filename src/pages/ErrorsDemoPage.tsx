@@ -137,7 +137,7 @@ export default function ErrorsDemoPage() {
                 placeholder="test@example.com"
               />
               {validationErrors.find(e => e.field === 'email') && (
-                <p className="text-sm mt-1" style={{ color: '#FFB4A2' }}>{validationErrors.find(e => e.field === 'email')?.message}</p>
+                <p className="text-sm mt-1" style={{ color: 'var(--danger)' }}>{validationErrors.find(e => e.field === 'email')?.message}</p>
               )}
             </div>
 
@@ -152,7 +152,7 @@ export default function ErrorsDemoPage() {
                 placeholder="Иван"
               />
               {validationErrors.find(e => e.field === 'name') && (
-                <p className="text-sm mt-1" style={{ color: '#FFB4A2' }}>{validationErrors.find(e => e.field === 'name')?.message}</p>
+                <p className="text-sm mt-1" style={{ color: 'var(--danger)' }}>{validationErrors.find(e => e.field === 'name')?.message}</p>
               )}
             </div>
 
@@ -167,15 +167,14 @@ export default function ErrorsDemoPage() {
                 placeholder="25"
               />
               {validationErrors.find(e => e.field === 'age') && (
-                <p className="text-sm mt-1" style={{ color: '#FFB4A2' }}>{validationErrors.find(e => e.field === 'age')?.message}</p>
+                <p className="text-sm mt-1" style={{ color: 'var(--danger)' }}>{validationErrors.find(e => e.field === 'age')?.message}</p>
               )}
             </div>
 
             <button
               onClick={handleValidationTest}
               className="px-4 py-2 rounded-full transition-colors"
-              style={{ background: 'var(--grad-brand)', color: '#221204' }}
-            >
+                          >
               Проверить валидацию
             </button>
           </div>
@@ -211,29 +210,29 @@ export default function ErrorsDemoPage() {
           <div>
             <h3 className="font-semibold mb-2" style={{ color: 'var(--text)' }}>Классы ошибок</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
-              <div className="rounded-lg p-3" style={{ background: 'rgba(255, 158, 44, 0.1)', border: '1px solid rgba(255, 158, 44, 0.3)' }}>
+              <div className="rounded-lg p-3" style={{ background: 'color-mix(in srgb, var(--amber-500) 10%, transparent)', border: '1px solid color-mix(in srgb, var(--amber-500) 30%, transparent)' }}>
                 <code className="font-mono" style={{ color: 'var(--amber-300)' }}>ValidationError</code>
                 <p className="text-xs mt-1" style={{ color: 'var(--amber-300)' }}>400 — ошибки валидации полей</p>
               </div>
-              <div className="rounded-lg p-3" style={{ background: 'rgba(249, 115, 22, 0.1)', border: '1px solid rgba(249, 115, 22, 0.3)' }}>
+              <div className="rounded-lg p-3" style={{ background: 'color-mix(in srgb, var(--amber-600) 10%, transparent)', border: '1px solid color-mix(in srgb, var(--amber-600) 30%, transparent)' }}>
                 <code className="font-mono" style={{ color: 'var(--amber-200)' }}>UnauthorizedError</code>
                 <p className="text-xs mt-1" style={{ color: 'var(--amber-200)' }}>401 — требуется авторизация</p>
               </div>
-              <div className="rounded-lg p-3" style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)' }}>
-                <code className="font-mono" style={{ color: '#FFB4A2' }}>ForbiddenError</code>
-                <p className="text-xs mt-1" style={{ color: '#FFB4A2' }}>403 — доступ запрещён</p>
+              <div className="rounded-lg p-3" style={{ background: 'color-mix(in srgb, var(--danger) 10%, transparent)', border: '1px solid color-mix(in srgb, var(--danger) 30%, transparent)' }}>
+                <code className="font-mono" style={{ color: 'var(--danger)' }}>ForbiddenError</code>
+                <p className="text-xs mt-1" style={{ color: 'var(--danger)' }}>403 — доступ запрещён</p>
               </div>
-              <div className="rounded-lg p-3" style={{ background: 'rgba(59, 130, 246, 0.1)', border: '1px solid rgba(59, 130, 246, 0.3)' }}>
+              <div className="rounded-lg p-3" style={{ background: 'color-mix(in srgb, var(--wave-400) 12%, transparent)', border: '1px solid color-mix(in srgb, var(--wave-400) 40%, transparent)' }}>
                 <code className="font-mono" style={{ color: 'var(--wave-300)' }}>NotFoundError</code>
                 <p className="text-xs mt-1" style={{ color: 'var(--wave-300)' }}>404 — ресурс не найден</p>
               </div>
-              <div className="rounded-lg p-3" style={{ background: 'rgba(168, 85, 247, 0.1)', border: '1px solid rgba(168, 85, 247, 0.3)' }}>
+              <div className="rounded-lg p-3" style={{ background: 'color-mix(in srgb, var(--flame-600) 12%, transparent)', border: '1px solid color-mix(in srgb, var(--flame-600) 40%, transparent)' }}>
                 <code className="font-mono" style={{ color: 'var(--amber-200)' }}>ConflictError</code>
                 <p className="text-xs mt-1" style={{ color: 'var(--amber-200)' }}>409 — конфликт данных</p>
               </div>
-              <div className="rounded-lg p-3" style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)' }}>
-                <code className="font-mono" style={{ color: '#FFB4A2' }}>InternalError</code>
-                <p className="text-xs mt-1" style={{ color: '#FFB4A2' }}>500 — внутренняя ошибка</p>
+              <div className="rounded-lg p-3" style={{ background: 'color-mix(in srgb, var(--danger) 10%, transparent)', border: '1px solid color-mix(in srgb, var(--danger) 30%, transparent)' }}>
+                <code className="font-mono" style={{ color: 'var(--danger)' }}>InternalError</code>
+                <p className="text-xs mt-1" style={{ color: 'var(--danger)' }}>500 — внутренняя ошибка</p>
               </div>
             </div>
           </div>
