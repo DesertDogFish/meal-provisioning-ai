@@ -1,0 +1,164 @@
+name: Java Full-Stack Local
+version: 1.0.0
+schema: v1
+
+# =====================================================================
+#  Continue + llama.cpp (Qwen3.6-35B-A3B) на RTX 3060 12GB
+#
+#  ВАЖНО про провайдер:
+#  Не используйте `provider: llama.cpp`. Он обращается к НАТИВНОМУ API
+#  llama.cpp (/completion, /tokenize), где нет нормальной поддержки
+#  tool calling, поэтому Agent mode работать не будет.
+#  Нужен OpenAI-совместимый эндпоинт: `provider: openai` + apiBase с /v1.
+#  Обратите внимание: у `provider: llama.cpp` apiBase указывается БЕЗ /v1,
+#  у `provider: openai` -- ОБЯЗАТЕЛЬНО с /v1. Это частая ошибка.
+# =====================================================================
+
+models:
+
+  # -------------------------------------------------------------------
+  # Основная модель: чат, правки, агент
+  # -------------------------------------------------------------------
+  - name: Qwen3.6-35B-A3B
+    provider: openai
+    # model должен совпадать с тем, что отдаёт /v1/models.
+    # Проверьте:  curl.exe -s http://127.0.0.1:7070/v1/models
+    model: Qwen3.6-35B-A3B-APEX-I-Compact.gguf
+    apiBase: http://127.0.0.1:7070/v1
+    apiKey: not-needed          # llama.cpp ключ не проверяет, но поле не должно быть пустым
+
+    roles:
+      - chat
+      - edit
+      - apply
+
+    # БЕЗ этого Agent mode не включится: для кастомного OpenAI-совместимого
+    # эндпоинта Continue не может автоопределить поддержку инструментов.
+    capabilities:
+      - tool_use
+      - image_input             # модель мультимодальная; уберите, если не качали mmproj.gguf
+
+    defaultCompletionOptions:
+      # ДОЛЖНО совпадать с -c в start-qwen36-3060.bat (там 131072).
+      # Дефолт Continue -- 2048/8192, то есть агент снова начнёт резать проект.
+      contextLength: 131072
+
+      # Совпадает с --n-predict 8192 на сервере.
+      # Ограничивает вырожденную генерацию, из-за которой Cline рвал
+      # соединение по undici bodyTimeout (300 с).
+      maxTokens: 8192
+
+      # Официальный non-thinking набор Qwen3.6.
+      # Совпадает с тем, что задано в .bat, чтобы клиент не переопределил сервер.
+      temperature: 0.7
+      topP: 0.8
+      topK: 20
+
+      # Thinking выключен на сервере (--reasoning off). Дублируем здесь,
+      # чтобы Continue не пытался запрашивать reasoning-блоки.
+      reasoning: false
+
+    requestOptions:
+      # ГЛАВНОЕ для локальной модели. Дефолт Node/undici -- 300 секунд,
+      # и он обрывает запрос во время холодного prefill.
+      # Холодный prefill 45K токенов у вас занимает ~150 с, но при росте
+      # сессии подойдёт к 300 с. Ставим запас.
+      timeout: 900000           # 15 минут
+
+      extraBodyProperties:
+        # presence_penalty ОБЯЗАТЕЛЬНО 0 для агентного редактирования.
+        # Ненулевое значение штрафует токены, уже бывшие в контексте,
+        # а old_text нужно воспроизводить дословно -- то есть именно их.
+        # Замер: 1.5 стоило и качества правок, и -67% скорости.
+        presence_penalty: 0.0
+        repeat_penalty: 1.0
+        min_p: 0.0
+
+    chatOptions:
+      # Короткий системный промпт для Agent mode. Дефолтный у Continue
+      # рассчитан на облачные модели и на локальной съедает лишние токены.
+      baseAgentSystemMessage: |
+        You are an autonomous coding agent for a Java + React project.
+        Stack: Spring Boot 3, Maven, PostgreSQL with Flyway, React + TypeScript.
+
+        Rules:
+        - Read a file before editing it. Never guess its contents.
+        - Prefer minimal targeted edits over rewriting whole files.
+        - For files under ~100 lines, rewriting the whole file is acceptable
+          and more reliable than a diff.
+        - Never use shell commands to read or write files. Use the file tools.
+        - After changing Java code, run: ./mvnw -q -DskipTests compile
+        - After changing frontend code, run: npm run typecheck
+        - Do not add dependencies without asking.
+        - If a tool call fails twice with the same error, stop and report it.
+          Do not retry a third time.
+
+  # -------------------------------------------------------------------
+  # Автодополнение: нужна МАЛЕНЬКАЯ и БЫСТРАЯ модель.
+  # Большая MoE здесь не годится -- 35 tok/s превратит Tab в лаги.
+  #
+  # ВНИМАНИЕ: в прошлой диагностике порт 11434 (Ollama) НЕ слушался.
+  # Значит сейчас autocomplete и embed просто не работают.
+  # Либо запустите Ollama, либо закомментируйте эти два блока.
+  # -------------------------------------------------------------------
+  - name: Qwen2.5-Coder 1.5B
+    provider: ollama
+    model: qwen2.5-coder:1.5b-base
+    roles:
+      - autocomplete
+    autocompleteOptions:
+      debounceDelay: 400        # не дёргать модель на каждый символ
+      maxPromptTokens: 1024     # меньше -- быстрее отклик
+      modelTimeout: 1500        # если модель не ответила за 1.5 с -- пропустить
+      onlyMyCode: true
+      useCache: true
+      useImports: true
+      useRecentlyEdited: false  # экономит токены и время
+    defaultCompletionOptions:
+      temperature: 0.2
+      maxTokens: 256
+      stop:
+        - "\n\n"
+
+  # -------------------------------------------------------------------
+  # Эмбеддинги: нужны для @codebase и семантического поиска.
+  # Тоже через Ollama, тоже требует запущенного Ollama.
+  # -------------------------------------------------------------------
+  - name: Nomic Embed
+    provider: ollama
+    model: nomic-embed-text:latest
+    roles:
+      - embed
+    embedOptions:
+      maxChunkSize: 512
+      maxBatchSize: 64
+
+# ---------------------------------------------------------------------
+# Контекст-провайдеры: что агент может подтягивать в разговор.
+# Держите список коротким -- каждый провайдер добавляет токены.
+# ---------------------------------------------------------------------
+context:
+  - provider: file        # @file -- текущий/указанный файл
+  - provider: code        # @code -- семантический поиск (нужен embed)
+  - provider: diff        # @diff -- текущие изменения
+  - provider: terminal    # @terminal -- вывод терминала
+
+# ---------------------------------------------------------------------
+# ПРАВИЛА. ВАЖНОЕ ОТЛИЧИЕ ОТ CLINE:
+# Continue склеивает ВСЕ правила в системное сообщение для КАЖДОГО запроса.
+# Условных правил по glob-путям (как paths: в .clinerules) здесь НЕТ.
+#
+# Поэтому НЕ копируйте сюда все семь файлов из cline-setup/.clinerules --
+# это ~6600 токенов в каждом запросе без возможности отключить лишнее.
+# Возьмите только 00-universal.md (549 токенов) и, если нужно, 01-file-editing.md.
+# ---------------------------------------------------------------------
+#rules:
+#  - uses: file://.continue/rules/universal.md
+#  - uses: file://.continue/rules/file-editing.md
+
+# ---------------------------------------------------------------------
+# MCP-серверы. НЕ подключайте filesystem-сервер:
+# он дублирует встроенные инструменты Continue, добавляет 2-3K токенов
+# в каждый запрос и падает на конфликте с IntelliJ (safe write).
+# ---------------------------------------------------------------------
+mcpServers: []

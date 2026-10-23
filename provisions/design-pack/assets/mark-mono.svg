@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none" role="img" aria-label="Провиант — монохромный знак">
+  <path fill="currentColor" fill-opacity=".35" d="M187 341 L324 341 L248 413 Z"/>
+  <path fill="currentColor" d="M210 140 Q294 209 348 319 L210 319 Z"/>
+  <path fill="currentColor" d="M209 102 L234 132 L224 126 L216.5 132 L209 126 L201.5 132 L194 126 L184 132 Z"/>
+  <path d="M135 331 C155 325 175 337 195 331 C215 325 235 337 255 331 C275 325 295 337 315 331 C335 325 355 337 375 331" stroke="currentColor" stroke-width="7" stroke-linecap="round"/>
+</svg>

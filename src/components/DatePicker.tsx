@@ -278,6 +278,22 @@ export function DatePicker({
     onChange(iso);
   };
 
+  // Минимальный набор пропсов, которые реально нужны NativeInput. React-clone
+  // передаёт внутреннее состояние react-datepicker в customInput — лишние поля
+  // (onChange onClick и т.п.) растеклись бы DOM-атрибутами или перекрывали наш
+  // обработчик, поэтому явно пробрасываем только нужное. onDateChange — наш
+  // приоритетный колбэк: React-обработчик на <input type="date"> ловит и
+  // synthetic-события RTL/fireEvent, и нативные события браузера.
+  const inputProps: NativeInputProps = {
+    value: value ?? '',
+    min: toISO(minDate),
+    max: toISO(maxDate),
+    disabled,
+    placeholder: placeholder ?? 'Выберите дату',
+    stateClassName: `${error ? 'error' : ''} ${disabled ? 'disabled' : ''}`.trim() || undefined,
+    onDateChange: handleChange,
+  };
+
   return (
     <ReactDatePicker
       selected={selected}
@@ -299,17 +315,7 @@ export function DatePicker({
       calendarClassName="dark-calendar"
       className="date-picker-input dp-text-input"
       wrapperClassName="w-full date-picker-wrapper"
-      customInput={
-        <NativeInput
-          min={toISO(minDate)}
-          max={toISO(maxDate)}
-          stateClassName={`${error ? 'error' : ''} ${disabled ? 'disabled' : ''}`.trim() || undefined}
-          // ФАЗА 13: у text-инпута нет браузерного «явного» очистителя — рисуем
-          // свой крестик и чистим поле напрямую (onChange('') — тот же контракт,
-          // что и пустая строка из нативного input[type=date]).
-          onClear={() => { setPickerOpen(false); onChange(''); }}
-        />
-      }
+      customInput={<NativeInput {...inputProps} />}
     />
   );
 }

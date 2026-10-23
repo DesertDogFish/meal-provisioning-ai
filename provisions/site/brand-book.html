@@ -1,0 +1,970 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Провиант · брендбук и тёмная тема</title>
+<link rel="icon" type="image/svg+xml" href="../logo/favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg-0:#0B141B; --bg-1:#101D27; --bg-2:#162634; --bg-3:#1E3243;
+    --line:rgba(148,199,214,.14); --line-strong:rgba(148,199,214,.26);
+    --text-1:#EDF4F7; --text-2:#A9BEC9; --text-3:#6F8895;
+    --amber-200:#FFD9A0; --amber-300:#FFC46B; --amber-500:#FF9E2C; --amber-600:#F27A12; --flame-600:#E85D1F;
+    --wave-300:#7FD8CC; --wave-400:#57C7B8; --wave-600:#2E9C8E; --snow:#F2F7F5;
+    --grad-brand:linear-gradient(135deg,#FFC46B 0%,#F2842B 55%,#E85D1F 100%);
+    --font-display:"Unbounded","Manrope",system-ui,sans-serif;
+    --font-body:"Manrope",system-ui,sans-serif;
+  }
+  *{box-sizing:border-box} html,body{margin:0}
+  body{
+    background:
+      radial-gradient(1100px 520px at 78% -10%, rgba(255,158,44,.14), transparent 60%),
+      radial-gradient(900px 480px at 8% 108%, rgba(87,199,184,.09), transparent 60%),
+      var(--bg-0);
+    color:var(--text-1); font:400 16px/1.65 var(--font-body);
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{width:min(1080px,92vw);margin:0 auto}
+  section{padding:64px 0 8px}
+  h1,h2,h3{font-family:var(--font-display);line-height:1.15;margin:0 0 .5em;letter-spacing:-.01em}
+  h2{font-size:clamp(22px,3vw,32px)} h3{font-size:17px}
+  p{color:var(--text-2)}
+  .overline{font:700 12px/1 var(--font-body);letter-spacing:.22em;text-transform:uppercase;color:var(--amber-300)}
+  .num{font:700 12px/1 var(--font-body);color:var(--wave-400);letter-spacing:.18em}
+  .lead{max-width:640px}
+  .tile{border:1px solid var(--line);border-radius:20px;background:var(--bg-1);padding:28px;box-shadow:0 12px 32px rgba(3,10,16,.45)}
+  .grid{display:grid;gap:18px}
+  .g2{grid-template-columns:1fr 1fr}.g3{grid-template-columns:repeat(3,1fr)}.g4{grid-template-columns:repeat(4,1fr)}
+  @media(max-width:900px){.g2,.g3,.g4{grid-template-columns:1fr 1fr}}
+  @media(max-width:620px){.g2,.g3,.g4{grid-template-columns:1fr}}
+  .center{display:grid;place-items:center}
+  code,pre{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px}
+  pre{background:#0A1117;border:1px solid var(--line);border-radius:14px;padding:18px;overflow:auto;color:#CFE3EA;line-height:1.55}
+  .tok{color:var(--wave-300)} .val{color:var(--amber-300)}
+
+  /* обложка */
+  .cover{min-height:88vh;display:grid;place-items:center;text-align:center;position:relative}
+  .cover .mark{width:min(300px,52vw)}
+  .cover h1{font-size:clamp(30px,5vw,54px);margin:26px 0 10px;letter-spacing:.06em}
+  .cover p{letter-spacing:.34em;text-transform:uppercase;font:600 12px/1.8 var(--font-body);color:var(--text-3)}
+  .cover .halo{position:absolute;width:min(640px,90vw);aspect-ratio:1;border-radius:50%;
+    background:radial-gradient(closest-side,rgba(255,158,44,.16),transparent 70%);filter:blur(4px)}
+
+  /* палитра */
+  .sw{border-radius:16px;overflow:hidden;border:1px solid var(--line)}
+  .sw .c{height:88px}
+  .sw .m{padding:12px 14px;background:var(--bg-1);font-size:12.5px;color:var(--text-2)}
+  .sw .m b{display:block;color:var(--text-1);font-size:13.5px}
+
+  /* типографика */
+  .type-row{display:flex;align-items:baseline;gap:22px;border-bottom:1px dashed var(--line-strong);padding:16px 4px}
+  .type-row .aa{font-family:var(--font-display);font-size:44px;font-weight:700}
+  .type-row.mn .aa{font-family:var(--font-body);font-weight:800}
+  .type-row small{color:var(--text-3)}
+
+  /* компоненты */
+  .btn{display:inline-flex;align-items:center;gap:10px;padding:13px 22px;border-radius:16px;font:700 15px/1 var(--font-body);border:1px solid transparent;cursor:pointer}
+  .btn-primary{background:var(--grad-brand);color:#221204;box-shadow:0 0 0 1px rgba(255,158,44,.28),0 14px 44px rgba(242,122,18,.22)}
+  .btn-ghost{background:transparent;color:var(--text-1);border-color:var(--line-strong)}
+  .badge{display:inline-flex;align-items:center;gap:8px;padding:6px 12px;border-radius:999px;background:rgba(87,199,184,.12);border:1px solid rgba(87,199,184,.35);color:var(--wave-300);font:600 13px/1 var(--font-body)}
+  .badge-fire{background:rgba(255,158,44,.12);border-color:rgba(255,158,44,.4);color:var(--amber-300)}
+  .input{padding:13px 16px;background:var(--bg-1);color:var(--text-1);border:1px solid var(--line-strong);border-radius:16px;font:500 15px/1.2 var(--font-body);width:240px}
+  .row{display:flex;gap:14px;flex-wrap:wrap;align-items:center}
+
+  /* don'ts */
+  .dont .tile{position:relative;padding:20px}
+  .dont .x{position:absolute;top:12px;right:14px;color:#FF6B57;font:800 14px/1 var(--font-body)}
+  .dont figcaption{font-size:13px;color:var(--text-3);margin-top:12px;text-align:center}
+  figure{margin:0}
+
+  .files td{padding:9px 10px;border-bottom:1px solid var(--line);font-size:14px;color:var(--text-2)}
+  .files td:first-child{color:var(--wave-300);font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px;white-space:nowrap}
+  .files{border-collapse:collapse;width:100%}
+  footer{margin:80px 0 40px;color:var(--text-3);font-size:13.5px;text-align:center}
+
+  /* ================= UI-кит ================= */
+  .kit-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  @media(max-width:880px){.kit-grid{grid-template-columns:1fr}}
+  .kit-row{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
+  .lbl{font:700 11.5px/1 var(--font-body);letter-spacing:.16em;text-transform:uppercase;color:var(--text-3);margin:0 0 10px}
+  .btn-soft{background:var(--bg-2);color:var(--text-1);border-color:var(--line)}
+  .btn-soft:hover{background:var(--bg-3)}
+  .btn-danger{background:rgba(255,107,87,.14);color:#FF8A7A;border-color:rgba(255,107,87,.4)}
+  .btn-danger:hover{background:rgba(255,107,87,.22)}
+  .btn[disabled]{opacity:.45;pointer-events:none}
+  .spin{width:14px;height:14px;border:2.5px solid rgba(34,18,4,.35);border-top-color:#221204;border-radius:50%;animation:rot .8s linear infinite}
+  .spin.lt{border-color:rgba(237,244,247,.3);border-top-color:var(--text-1)}
+  @keyframes rot{to{transform:rotate(360deg)}}
+  .ibtn{width:42px;height:42px;border-radius:14px;display:grid;place-items:center;background:var(--bg-2);border:1px solid var(--line);color:var(--text-2);cursor:pointer}
+  .ibtn:hover{color:var(--text-1);background:var(--bg-3)}
+  .fld{min-width:230px}
+  .inp{width:100%;padding:13px 16px;border-radius:14px;background:var(--bg-0);border:1px solid var(--line-strong);color:var(--text-1);font:600 14.5px/1.2 var(--font-body)}
+  .inp::placeholder{color:var(--text-3)}
+  .inp:focus{outline:none;border-color:var(--amber-500);box-shadow:0 0 0 3px rgba(255,158,44,.16)}
+  .inp.err{border-color:#FF6B57;box-shadow:0 0 0 3px rgba(255,107,87,.14)}
+  .inp.ok{border-color:var(--wave-400);box-shadow:0 0 0 3px rgba(87,199,184,.14)}
+  .hint{font-size:12px;color:var(--text-3);margin-top:7px}
+  .hint.err{color:#FF8A7A}.hint.ok{color:var(--wave-300)}
+  .sel{position:relative;min-width:230px}
+  .sel-btn{width:100%;display:flex;justify-content:space-between;align-items:center;gap:10px;cursor:pointer}
+  .sel-btn svg{transition:transform .2s}
+  .sel.open .sel-btn svg{transform:rotate(180deg)}
+  .sel-pop{position:absolute;top:calc(100% + 6px);left:0;right:0;background:var(--bg-2);border:1px solid var(--line-strong);border-radius:14px;box-shadow:0 18px 50px rgba(3,10,16,.5);padding:6px;display:none;z-index:30}
+  .sel.open .sel-pop{display:block}
+  .sel-opt{padding:10px 12px;border-radius:10px;font:600 14px/1.2 var(--font-body);color:var(--text-2);cursor:pointer}
+  .sel-opt:hover{background:var(--bg-3);color:var(--text-1)}
+  .sel-opt[aria-selected="true"]{color:var(--amber-300)}
+  /* date-range picker */
+  .dp{position:relative;min-width:290px}
+  .dp-pop{position:absolute;top:calc(100% + 8px);left:0;width:304px;background:var(--bg-2);border:1px solid var(--line-strong);border-radius:18px;box-shadow:0 24px 70px rgba(3,10,16,.55);padding:14px;display:none;z-index:40}
+  .dp.open .dp-pop{display:block}
+  .dp-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+  .dp-head b{font:700 14.5px/1 var(--font-display);text-transform:capitalize}
+  .dp-nav{width:32px;height:32px;border-radius:10px;border:1px solid var(--line);background:var(--bg-1);color:var(--text-2);cursor:pointer}
+  .dp-nav:hover{color:var(--text-1);background:var(--bg-3)}
+  .dp-wd{display:grid;grid-template-columns:repeat(7,1fr);font:700 10.5px/1 var(--font-body);letter-spacing:.08em;color:var(--text-3);text-align:center;margin:8px 0 4px}
+  .dp-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px}
+  .dp-d{position:relative;height:36px;border-radius:10px;border:0;background:transparent;color:var(--text-1);font:600 13px/1 var(--font-body);cursor:pointer}
+  .dp-d:hover{background:var(--bg-3)}
+  .dp-d.out{color:var(--text-3);opacity:.45}
+  .dp-d.dis{opacity:.25;pointer-events:none}
+  .dp-d.in{background:rgba(255,158,44,.16);border-radius:0}
+  .dp-d.start,.dp-d.end{background:var(--grad-brand);color:#221204;font-weight:800}
+  .dp-d.start{border-radius:10px 0 0 10px}
+  .dp-d.end{border-radius:0 10px 10px 0}
+  .dp-d.start.end{border-radius:10px}
+  .dp-d.today::after{content:"";position:absolute;left:50%;bottom:4px;width:4px;height:4px;margin-left:-2px;border-radius:50%;background:var(--wave-400)}
+  .dp-presets{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+  /* switch / checkbox / radio */
+  .sw2{width:46px;height:26px;border-radius:99px;background:var(--bg-3);border:1px solid var(--line-strong);position:relative;cursor:pointer;transition:.2s;flex:none}
+  .sw2::after{content:"";position:absolute;top:2px;left:2px;width:20px;height:20px;border-radius:50%;background:var(--text-2);transition:.2s}
+  .sw2.on{background:var(--grad-brand);border-color:transparent}
+  .sw2.on::after{left:22px;background:#221204}
+  .ck{display:flex;gap:10px;align-items:center;cursor:pointer;font:600 14px/1.3 var(--font-body);color:var(--text-2)}
+  .ck input{display:none}
+  .ck .box{width:20px;height:20px;border-radius:7px;border:1.5px solid var(--line-strong);display:grid;place-items:center;transition:.15s;flex:none}
+  .ck input:checked+.box{background:var(--grad-brand);border-color:transparent}
+  .ck .box svg{opacity:0;transform:scale(.4);transition:.15s}
+  .ck input:checked+.box svg{opacity:1;transform:scale(1)}
+  .rd .box{border-radius:50%}
+  .rd .box svg{width:8px;height:8px}
+  /* chips / stepper / slider */
+  .chip2{padding:9px 14px;border-radius:12px;background:var(--bg-2);border:1px solid var(--line);color:var(--text-2);font:600 13px/1 var(--font-body);display:inline-flex;gap:8px;align-items:center;cursor:pointer;transition:.15s}
+  .chip2:hover{border-color:var(--line-strong)}
+  .chip2.on{background:rgba(255,158,44,.14);border-color:rgba(255,158,44,.45);color:var(--amber-300)}
+  .chip2 .x{opacity:.55;font-weight:800}
+  .chip2 .x:hover{opacity:1}
+  .step{display:inline-flex;align-items:center;gap:2px;border:1px solid var(--line-strong);border-radius:999px;padding:4px;background:var(--bg-0)}
+  .step button{width:34px;height:34px;border-radius:50%;border:0;background:transparent;color:var(--text-1);font:800 18px/1 var(--font-body);cursor:pointer}
+  .step button:hover{background:var(--bg-3)}
+  .step b{min-width:36px;text-align:center;font:700 15px/1 var(--font-display)}
+  .rng{-webkit-appearance:none;appearance:none;width:230px;height:6px;border-radius:99px;background:linear-gradient(90deg,var(--amber-500) var(--val,50%),var(--bg-3) var(--val,50%));outline:none}
+  .rng::-webkit-slider-thumb{-webkit-appearance:none;width:20px;height:20px;border-radius:50%;background:var(--grad-brand);box-shadow:0 0 0 4px rgba(255,158,44,.18);cursor:pointer}
+  .rng::-moz-range-thumb{width:20px;height:20px;border:0;border-radius:50%;background:var(--grad-brand);cursor:pointer}
+  /* tabs / accordion */
+  .tabs{display:flex;gap:4px;background:var(--bg-0);border:1px solid var(--line);border-radius:999px;padding:4px;width:max-content;max-width:100%}
+  .tab{border:0;background:transparent;color:var(--text-2);padding:9px 18px;border-radius:999px;font:700 13.5px/1 var(--font-body);cursor:pointer;white-space:nowrap}
+  .tab.on{background:var(--bg-3);color:var(--text-1);box-shadow:inset 0 0 0 1px var(--line-strong)}
+  .tabpane{display:none;padding-top:14px;color:var(--text-2);font-size:14.5px}
+  .tabpane.on{display:block}
+  .acc{border:1px solid var(--line);border-radius:16px;overflow:hidden}
+  .acc+.acc{margin-top:10px}
+  .acc-h{width:100%;display:flex;justify-content:space-between;align-items:center;gap:12px;padding:16px 18px;background:var(--bg-1);border:0;color:var(--text-1);font:700 15px/1.3 var(--font-body);cursor:pointer;text-align:left}
+  .acc-h svg{transition:transform .25s;flex:none}
+  .acc.open .acc-h svg{transform:rotate(180deg)}
+  .acc-b{max-height:0;overflow:hidden;transition:max-height .3s ease;background:var(--bg-1)}
+  .acc.open .acc-b{max-height:220px}
+  .acc-b p{padding:0 18px 16px;margin:0;font-size:14px}
+  /* tooltip / toast / modal */
+  [data-tip]{position:relative}
+  [data-tip]:hover::after,[data-tip]:focus-visible::after{content:attr(data-tip);position:absolute;left:50%;bottom:calc(100% + 8px);transform:translateX(-50%);background:var(--bg-3);border:1px solid var(--line-strong);color:var(--text-1);padding:7px 11px;border-radius:10px;font:600 12px/1.2 var(--font-body);white-space:nowrap;box-shadow:0 10px 30px rgba(3,10,16,.5);z-index:60;pointer-events:none}
+  .toasts{position:fixed;right:18px;bottom:18px;display:flex;flex-direction:column;gap:10px;z-index:100}
+  .toast{display:flex;gap:12px;align-items:flex-start;min-width:250px;max-width:340px;padding:14px 16px;border-radius:16px;background:var(--bg-2);border:1px solid var(--line-strong);box-shadow:0 18px 50px rgba(3,10,16,.55);position:relative;overflow:hidden;animation:tin .3s ease}
+  @keyframes tin{from{transform:translateY(14px);opacity:0}}
+  .toast .ti{flex:none;width:22px;height:22px;border-radius:50%;display:grid;place-items:center}
+  .toast.ok .ti{background:rgba(87,199,184,.18);color:var(--wave-300)}
+  .toast.err .ti{background:rgba(255,107,87,.16);color:#FF8A7A}
+  .toast b{font:700 14px/1.3 var(--font-body);color:var(--text-1);display:block}
+  .toast small{color:var(--text-3);font-size:12.5px}
+  .toast .tbar{position:absolute;left:0;bottom:0;height:3px;background:var(--wave-400);animation:tbar 4s linear forwards}
+  .toast.err .tbar{background:#FF6B57}
+  @keyframes tbar{from{width:100%}to{width:0}}
+  .modal{position:fixed;inset:0;display:none;place-items:center;z-index:90;background:rgba(6,12,17,.62);backdrop-filter:blur(6px)}
+  .modal.open{display:grid}
+  .modal-card{width:min(460px,92vw);background:var(--bg-1);border:1px solid var(--line-strong);border-radius:24px;padding:26px;box-shadow:0 30px 90px rgba(0,0,0,.6);animation:tin .25s ease}
+  /* skeleton / progress / pagination */
+  .skl{border-radius:12px;background:linear-gradient(90deg,var(--bg-2) 25%,var(--bg-3) 50%,var(--bg-2) 75%);background-size:200% 100%;animation:shim 1.4s infinite}
+  @keyframes shim{to{background-position:-200% 0}}
+  .pg{display:flex;gap:6px}
+  .pg button{min-width:36px;height:36px;border-radius:12px;border:1px solid var(--line);background:transparent;color:var(--text-2);font:700 13.5px/1 var(--font-body);cursor:pointer}
+  .pg button:hover{background:var(--bg-2)}
+  .pg button.on{background:var(--grad-brand);color:#221204;border-color:transparent}
+  .crumb{display:flex;gap:8px;align-items:center;font:600 13px/1 var(--font-body);color:var(--text-3);flex-wrap:wrap}
+  .crumb a{color:var(--text-2)}
+  .crumb b{color:var(--text-1)}
+  .ava{width:38px;height:38px;border-radius:50%;display:grid;place-items:center;font:800 13px/1 var(--font-body);color:#221204;border:2px solid var(--bg-1)}
+  .ava+.ava{margin-left:-10px}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <linearGradient id="gSail" x1="210" y1="140" x2="348" y2="319" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFC46B"/><stop offset=".55" stop-color="#F08A2E"/><stop offset="1" stop-color="#E4571B"/>
+    </linearGradient>
+    <linearGradient id="gRefl" x1="248" y1="341" x2="248" y2="413" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#C46A2A" stop-opacity=".5"/><stop offset="1" stop-color="#C46A2A" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="gSailL" x1="210" y1="140" x2="348" y2="319" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#F79A3E"/><stop offset=".55" stop-color="#E8622C"/><stop offset="1" stop-color="#C24E12"/>
+    </linearGradient>
+    <linearGradient id="gReflL" x1="248" y1="341" x2="248" y2="413" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#C24E12" stop-opacity=".35"/><stop offset="1" stop-color="#C24E12" stop-opacity="0"/>
+    </linearGradient>
+    <g id="pv-mark">
+      <path d="M187 341 L324 341 L248 413 Z" fill="url(#gRefl)"/>
+      <path d="M210 140 Q294 209 348 319 L210 319 Z" fill="url(#gSail)" stroke="url(#gSail)" stroke-width="8" stroke-linejoin="round"/>
+      <path d="M209 102 L234 132 L224 126 L216.5 132 L209 126 L201.5 132 L194 126 L184 132 Z" fill="#F5F2EA" stroke="#F5F2EA" stroke-width="5" stroke-linejoin="round"/>
+      <path d="M135 331 C155 325 175 337 195 331 C215 325 235 337 255 331 C275 325 295 337 315 331 C335 325 355 337 375 331" stroke="#F5F2EA" stroke-width="7" stroke-linecap="round" fill="none"/>
+    </g>
+    <g id="pv-mark-mono">
+      <path fill="currentColor" fill-opacity=".35" d="M187 341 L324 341 L248 413 Z"/>
+      <path fill="currentColor" d="M210 140 Q294 209 348 319 L210 319 Z"/>
+      <path fill="currentColor" d="M209 102 L234 132 L224 126 L216.5 132 L209 126 L201.5 132 L194 126 L184 132 Z"/>
+      <path d="M135 331 C155 325 175 337 195 331 C215 325 235 337 255 331 C275 325 295 337 315 331 C335 325 355 337 375 331" stroke="currentColor" stroke-width="7" stroke-linecap="round" fill="none"/>
+    </g>
+    <g id="pv-mark-light">
+      <path d="M187 341 L324 341 L248 413 Z" fill="url(#gReflL)"/>
+      <path d="M210 140 Q294 209 348 319 L210 319 Z" fill="url(#gSailL)" stroke="url(#gSailL)" stroke-width="8" stroke-linejoin="round"/>
+      <path d="M209 102 L234 132 L224 126 L216.5 132 L209 126 L201.5 132 L194 126 L184 132 Z" fill="#10202B" stroke="#10202B" stroke-width="5" stroke-linejoin="round"/>
+      <path d="M135 331 C155 325 175 337 195 331 C215 325 235 337 255 331 C275 325 295 337 315 331 C335 325 355 337 375 331" stroke="#12877A" stroke-width="7" stroke-linecap="round" fill="none"/>
+    </g>
+  </defs>
+</svg>
+
+<div class="wrap">
+
+  <header class="cover">
+    <div class="halo"></div>
+    <svg class="mark" viewBox="0 0 512 512"><use href="#pv-mark"/></svg>
+    <h1>ПРОВИАНТ</h1>
+    <p>айдентика · тёмная тема · ui-кит · версия 1.1</p>
+  </header>
+
+  <section>
+    <span class="num">01</span>
+    <h2>Идея знака</h2>
+    <p class="lead">Знак вырос из одобренного концепта v1 и отполирован до вектора: парус с
+       мягким пузом на гипотенузе, снежный пик, отделённый воздушным зазором (вершина выше
+       линии облаков), тонкая ватерлиния и тающее отражение. Три чтения: парус, гора, яхта на воде.
+       Композиция уравновешена хвостом ватерлинии слева, оптический центр — в центре квадрата.</p>
+    <div class="grid g3" style="margin-top:22px">
+      <div class="tile center"><svg style="width:120px" viewBox="0 0 512 512"><path d="M210 140 Q294 209 348 319 L210 319 Z" fill="url(#gSail)" stroke="url(#gSail)" stroke-width="8" stroke-linejoin="round"/></svg>
+        <p style="margin:14px 0 0;font-size:14px"><b style="color:var(--text-1)">Парус</b> — пузо на гипотенузе, прямая мачтовая кромка</p></div>
+      <div class="tile center"><svg style="width:120px" viewBox="0 0 512 512"><path d="M210 140 Q294 209 348 319 L210 319 Z" fill="url(#gSail)" stroke="url(#gSail)" stroke-width="8" stroke-linejoin="round"/><path d="M209 102 L234 132 L224 126 L216.5 132 L209 126 L201.5 132 L194 126 L184 132 Z" fill="#F5F2EA" stroke="#F5F2EA" stroke-width="5" stroke-linejoin="round"/></svg>
+        <p style="margin:14px 0 0;font-size:14px"><b style="color:var(--text-1)">+ снежный пик</b> — отделён воздушным зазором, парус становится горой</p></div>
+      <div class="tile center"><svg style="width:120px" viewBox="0 0 512 512"><use href="#pv-mark"/></svg>
+        <p style="margin:14px 0 0;font-size:14px"><b style="color:var(--text-1)">+ ватерлиния и отражение</b> — яхта стоит на воде</p></div>
+    </div>
+  </section>
+
+  <section>
+    <span class="num">02</span>
+    <h2>Версии знака</h2>
+    <div class="grid g4" style="margin-top:18px">
+      <figure class="tile center" style="background:linear-gradient(160deg,#152531,#0B141B)">
+        <svg style="width:110px" viewBox="0 0 512 512"><use href="#pv-mark"/></svg>
+        <figcaption style="color:var(--text-3);font-size:13px;margin-top:12px">Основная · на тёмном</figcaption></figure>
+      <figure class="tile center" style="background:#F2F7F5">
+        <svg style="width:110px" viewBox="0 0 512 512"><use href="#pv-mark"/></svg>
+        <figcaption style="color:#5B7686;font-size:13px;margin-top:12px">Основная · на светлом</figcaption></figure>
+      <figure class="tile center" style="background:linear-gradient(160deg,#152531,#0B141B);color:var(--snow)">
+        <svg style="width:110px" viewBox="0 0 512 512"><use href="#pv-mark-mono"/></svg>
+        <figcaption style="color:var(--text-3);font-size:13px;margin-top:12px">Монохром · one color</figcaption></figure>
+      <figure class="tile center" style="background:#F2F7F5;color:#12222E">
+        <svg style="width:110px" viewBox="0 0 512 512"><use href="#pv-mark-mono"/></svg>
+        <figcaption style="color:#5B7686;font-size:13px;margin-top:12px">Монохром · инверсия</figcaption></figure>
+    </div>
+    <div class="grid g3" style="margin-top:18px">
+      <figure class="tile center" style="padding:16px">
+        <svg style="width:100%;max-width:220px" viewBox="0 0 512 512">
+          <rect width="512" height="512" rx="116" fill="#0E1A24"/>
+          <rect width="512" height="512" rx="116" fill="url(#gHalo)"/>
+          <radialGradient id="gHalo" cx="340" cy="140" r="250" gradientUnits="userSpaceOnUse">
+            <stop offset="0" stop-color="#FF9E2C" stop-opacity=".16"/><stop offset="1" stop-color="#FF9E2C" stop-opacity="0"/>
+          </radialGradient>
+          <g transform="translate(-37.2 -38.4) scale(1.15)"><use href="#pv-mark"/></g>
+          <rect x="1" y="1" width="510" height="510" rx="115" stroke="#FFFFFF" stroke-opacity=".07" stroke-width="2" fill="none"/>
+        </svg>
+        <figcaption style="color:var(--text-3);font-size:13px;margin-top:10px">Иконка приложения · app-icon.svg / png 512, 192</figcaption></figure>
+      <figure class="tile center">
+        <div class="row" style="justify-content:center;gap:26px">
+          <span style="display:grid;place-items:center;gap:8px">
+            <svg style="width:32px" viewBox="0 0 64 64"><defs><linearGradient id="sF" x1="210" y1="140" x2="348" y2="319" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#FFC46B"/><stop offset="1" stop-color="#E4571B"/></linearGradient><linearGradient id="bF" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#152531"/><stop offset="1" stop-color="#0B141B"/></linearGradient></defs><rect width="64" height="64" rx="14" fill="url(#bF)"/><g transform="translate(-8.79 -8.97) scale(.16)"><path d="M210 140 Q294 209 348 319 L210 319 Z" fill="url(#sF)" stroke="url(#sF)" stroke-width="14" stroke-linejoin="round"/><path d="M209 100 L234 132 L222 132 L209 116 L196 132 L184 132 Z" fill="#F5F2EA" stroke="#F5F2EA" stroke-width="10" stroke-linejoin="round"/><path d="M135 331 C155 325 175 337 195 331 C215 325 235 337 255 331 C275 325 295 337 315 331 C335 325 355 337 375 331" stroke="#F5F2EA" stroke-width="12" stroke-linecap="round" fill="none"/></g></svg>
+            <small style="color:var(--text-3)">32 px</small></span>
+          <span style="display:grid;place-items:center;gap:8px">
+            <svg style="width:16px" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#0E1A24"/><g transform="translate(-8.79 -8.97) scale(.16)"><path d="M210 140 Q294 209 348 319 L210 319 Z" fill="#F08A2E" stroke="#F08A2E" stroke-width="20" stroke-linejoin="round"/><path d="M209 100 L234 132 L222 132 L209 116 L196 132 L184 132 Z" fill="#F5F2EA" stroke="#F5F2EA" stroke-width="16" stroke-linejoin="round"/><path d="M135 331 C155 325 175 337 195 331 C215 325 235 337 255 331 C275 325 295 337 315 331 C335 325 355 337 375 331" stroke="#F5F2EA" stroke-width="18" stroke-linecap="round" fill="none"/></g></svg>
+            <small style="color:var(--text-3)">16 px</small></span>
+        </div>
+        <figcaption style="color:var(--text-3);font-size:13px;margin-top:10px">Фавиконка · тёмная плитка-подложка, утолщённые штрихи, без отражения</figcaption></figure>
+      <figure class="tile center">
+        <svg style="width:100%;max-width:300px" viewBox="0 0 640 200">
+          <g transform="translate(-33.3 7.85) scale(.36)"><use href="#pv-mark"/></g>
+          <text x="129" y="104" font-family="Unbounded, Manrope, Arial, sans-serif" font-weight="700" font-size="54" letter-spacing="4" fill="#EDF4F7">ПРОВИАНТ</text>
+          <text x="132" y="144" font-family="Manrope, Arial, sans-serif" font-weight="600" font-size="15" letter-spacing="6.4" fill="#8FA6B2">ЕДА ДЛЯ ГОР И МОРЯ</text>
+        </svg>
+        <figcaption style="color:var(--text-3);font-size:13px;margin-top:10px">Горизонтальный логотип · lockup</figcaption></figure>
+    </div>
+  </section>
+
+  <section>
+    <span class="num">03</span>
+    <h2>Охранное поле и минимальные размеры</h2>
+    <div class="grid g2" style="margin-top:18px">
+      <div class="tile center">
+        <svg style="width:230px" viewBox="-70 -70 652 652">
+          <rect x="-52" y="-52" width="616" height="616" fill="none" stroke="#57C7B8" stroke-opacity=".55" stroke-dasharray="10 8" stroke-width="3"/>
+          <use href="#pv-mark"/>
+          <path d="M-52 0 H 0" stroke="#57C7B8" stroke-width="2" stroke-opacity=".8"/>
+          <text x="-46" y="-14" fill="#7FD8CC" font-size="26" font-family="Manrope, sans-serif" font-weight="700">x</text>
+        </svg>
+        <p style="font-size:14px;margin:14px 0 0;text-align:center">Охранное поле — x с каждой стороны, где x ≈ ⅙ ширины знака.
+           Внутри поля нет ни текста, ни других элементов.</p>
+      </div>
+      <div class="tile">
+        <h3>Минимумы</h3>
+        <p style="font-size:14.5px">Знак: <b style="color:var(--text-1)">24 px</b> в интерфейсе, <b style="color:var(--text-1)">12 мм</b> в печати.<br>
+           Горизонтальный логотип: <b style="color:var(--text-1)">120 px</b> по ширине.<br>
+           Ниже 24 px используйте фавикон-версию: без подводной тени и с утолщённой волной — она читается даже в 16 px.</p>
+        <div class="row" style="margin-top:16px">
+          <svg style="width:24px" viewBox="0 0 512 512"><use href="#pv-mark"/></svg>
+          <svg style="width:40px" viewBox="0 0 512 512"><use href="#pv-mark"/></svg>
+          <svg style="width:64px" viewBox="0 0 512 512"><use href="#pv-mark"/></svg>
+          <span style="color:var(--text-3);font-size:13px">24 / 40 / 64 px</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <span class="num">04</span>
+    <h2>Палитра · «сумерки над водой»</h2>
+    <p class="lead">Тёмная база — глубокая вода и предрассветное небо. Огонь костра и заката —
+       только на акцентах: CTA, парус, важные цифры. Бирюза волны — второй, «спокойный» акцент
+       для статусов и метрик.</p>
+    <div class="grid g4" style="margin-top:18px">
+      <div class="sw"><div class="c" style="background:#0B141B"></div><div class="m"><b>bg-0 · #0B141B</b>фон страницы</div></div>
+      <div class="sw"><div class="c" style="background:#101D27"></div><div class="m"><b>bg-1 · #101D27</b>карточки</div></div>
+      <div class="sw"><div class="c" style="background:#162634"></div><div class="m"><b>bg-2 · #162634</b>ховер, плашки</div></div>
+      <div class="sw"><div class="c" style="background:#1E3243"></div><div class="m"><b>bg-3 · #1E3243</b>активные зоны</div></div>
+      <div class="sw"><div class="c" style="background:linear-gradient(135deg,#FFC46B,#F2842B 55%,#E85D1F)"></div><div class="m"><b>brand · #FFC46B → #E85D1F</b>парус, CTA, цифры</div></div>
+      <div class="sw"><div class="c" style="background:#FF9E2C"></div><div class="m"><b>amber-500 · #FF9E2C</b>огонь, ховер акцентов</div></div>
+      <div class="sw"><div class="c" style="background:#57C7B8"></div><div class="m"><b>wave-400 · #57C7B8</b>волна, статусы, метрики</div></div>
+      <div class="sw"><div class="c" style="background:#F2F7F5"></div><div class="m"><b>snow · #F2F7F5</b>снег, текст на огне</div></div>
+      <div class="sw"><div class="c" style="background:#EDF4F7"></div><div class="m"><b>text-1 · #EDF4F7</b>основной текст</div></div>
+      <div class="sw"><div class="c" style="background:#A9BEC9"></div><div class="m"><b>text-2 · #A9BEC9</b>вторичный текст</div></div>
+      <div class="sw"><div class="c" style="background:#6F8895"></div><div class="m"><b>text-3 · #6F8895</b>подписи, дизэйбл</div></div>
+      <div class="sw"><div class="c" style="background:rgba(148,199,214,.14);border-bottom:1px solid var(--line)"></div><div class="m"><b>line · rgba(148,199,214,.14)</b>границы, сетки</div></div>
+    </div>
+  </section>
+
+  <section>
+    <span class="num">05</span>
+    <h2>Типографика</h2>
+    <div class="tile" style="margin-top:18px;padding:10px 26px">
+      <div class="type-row"><span class="aa">Аа</span>
+        <div><b>Unbounded · 700</b> — дисплейный: заголовки, логотип, крупные цифры.<br>
+        <small>Аа Бб Вв Гг 0123456789 · широкие пропорции дают «экспедиционный» характер</small></div></div>
+      <div class="type-row mn"><span class="aa">Аа</span>
+        <div><b>Manrope · 400–800</b> — текстовый: интерфейс, абзацы, подписи.<br>
+        <small>Аа Бб Вв Гг 0123456789 · плотный гротеск с дружелюбной геометрией</small></div></div>
+      <div class="type-row" style="border-bottom:0"><span style="font-family:var(--font-display);font-size:26px;font-weight:700">H1 48–60</span>
+        <span style="font-family:var(--font-display);font-size:20px;font-weight:700;color:var(--text-2)">H2 28–36</span>
+        <span style="font-family:var(--font-display);font-size:16px;font-weight:700;color:var(--text-2)">H3 18–20</span>
+        <span style="font-size:15px;color:var(--text-2)">Body 15–16 / 1.6</span>
+        <span style="font-size:13px;color:var(--text-3)">Caption 12–13 · letter-spacing .22em для overline</span></div>
+    </div>
+  </section>
+
+  <section>
+    <span class="num">06</span>
+    <h2>Тёмная тема · токены и компоненты</h2>
+    <p class="lead">Готовые переменные лежат в <code>site/theme.css</code> — подключайте файл и используйте
+       классы <code>.btn</code>, <code>.card</code>, <code>.badge</code>, <code>.input</code>. Минимальный набор токенов:</p>
+<pre><span class="tok">:root</span> {
+  <span class="tok">--bg-0</span>: <span class="val">#0B141B</span>;  <span class="tok">--bg-1</span>: <span class="val">#101D27</span>;  <span class="tok">--bg-2</span>: <span class="val">#162634</span>;
+  <span class="tok">--line</span>: <span class="val">rgba(148,199,214,.14)</span>;
+  <span class="tok">--text-1</span>: <span class="val">#EDF4F7</span>; <span class="tok">--text-2</span>: <span class="val">#A9BEC9</span>; <span class="tok">--text-3</span>: <span class="val">#6F8895</span>;
+  <span class="tok">--amber-300</span>: <span class="val">#FFC46B</span>; <span class="tok">--amber-500</span>: <span class="val">#FF9E2C</span>; <span class="tok">--flame-600</span>: <span class="val">#E85D1F</span>;
+  <span class="tok">--wave-400</span>: <span class="val">#57C7B8</span>;  <span class="tok">--snow</span>: <span class="val">#F2F7F5</span>;
+  <span class="tok">--grad-brand</span>: <span class="val">linear-gradient(135deg,#FFC46B,#F2842B 55%,#E85D1F)</span>;
+  <span class="tok">--grad-dusk</span>: <span class="val">radial-gradient(1100px 520px at 78% -10%, rgba(255,158,44,.16), transparent 60%),
+                radial-gradient(900px 480px at 8% 108%, rgba(87,199,184,.10), transparent 60%), #0B141B</span>;
+}</pre>
+    <div class="tile" style="margin-top:18px">
+      <div class="row">
+        <button class="btn btn-primary">Собрать раскладку</button>
+        <button class="btn btn-ghost">Смотреть демо</button>
+        <span class="badge-fire badge">ветер 12 м/с</span>
+        <span class="badge">+4° · туман</span>
+        <input class="input" placeholder="Куда идём? Хребет, бухта…">
+      </div>
+      <p style="font-size:13.5px;color:var(--text-3);margin:18px 0 0">
+        Контраст текста text-1 на bg-0 ≈ 15.4:1, text-2 на bg-1 ≈ 7.9:1 — оба выше WCAG AAA.
+        Огонь используем только на крупных элементах: мелкий текст на нём не пишем.</p>
+    </div>
+  </section>
+
+  <section>
+    <span class="num">07</span>
+    <h2>Графика сайта: сумерки и волна</h2>
+    <div class="grid g2" style="margin-top:18px">
+      <div class="tile" style="padding:0;overflow:hidden">
+        <div style="height:150px;background:
+          radial-gradient(600px 260px at 78% -20%, rgba(255,158,44,.22), transparent 65%),
+          radial-gradient(500px 240px at 10% 120%, rgba(87,199,184,.14), transparent 65%),
+          linear-gradient(180deg,#101D27,#0B141B)"></div>
+        <p style="padding:16px 20px;font-size:14px;margin:0">Фон-«сумерки»: два мягких радиальных пятна —
+           тёплое сверху справа (закат) и холодное снизу слева (вода). Без текстур и шума.</p>
+      </div>
+      <div class="tile" style="padding:0;overflow:hidden">
+        <svg style="display:block;width:100%;height:150px" viewBox="0 0 1200 200" preserveAspectRatio="none">
+          <path d="M0 100 C50 84 100 116 150 100 C200 84 250 116 300 100 C350 84 400 116 450 100 C500 84 550 116 600 100 C650 84 700 116 750 100 C800 84 850 116 900 100 C950 84 1000 116 1050 100 C1100 84 1150 116 1200 100" fill="none" stroke="#2E9C8E" stroke-width="2.5" opacity=".8"/>
+          <path d="M0 130 C50 114 100 146 150 130 C200 114 250 146 300 130 C350 114 400 146 450 130 C500 114 550 146 600 130 C650 114 700 146 750 130 C800 114 850 146 900 130 C950 114 1000 146 1050 130 C1100 114 1150 146 1200 130" fill="none" stroke="#2E9C8E" stroke-width="2" opacity=".45"/>
+          <path d="M0 160 C50 144 100 176 150 160 C200 144 250 176 300 160 C350 144 400 176 450 160 C500 144 550 176 600 160 C650 144 700 176 750 160 C800 144 850 176 900 160 C950 144 1000 176 1050 160 C1100 144 1150 176 1200 160" fill="none" stroke="#2E9C8E" stroke-width="1.5" opacity=".25"/>
+        </svg>
+        <p style="padding:16px 20px;font-size:14px;margin:0">Волновой разделитель секций: три линии убывающей
+           плотности. Амплитуда низкая — «штиль», характер марки.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="dont">
+    <span class="num">08</span>
+    <h2>Так не надо</h2>
+    <div class="grid g4" style="margin-top:18px">
+      <figure class="dont tile center"><span class="x">✕</span>
+        <svg style="width:90px" viewBox="0 0 512 512"><g transform="translate(256 256) scale(1.25 .78) translate(-256 -256)"><use href="#pv-mark"/></g></svg>
+        <figcaption>не деформировать пропорции</figcaption></figure>
+      <figure class="dont tile center"><span class="x">✕</span>
+        <svg style="width:90px" viewBox="0 0 512 512"><defs><linearGradient id="gCold" x1="210" y1="140" x2="348" y2="319" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#9FB8C8"/><stop offset="1" stop-color="#5B7686"/></linearGradient></defs><path d="M210 140 Q294 209 348 319 L210 319 Z" fill="url(#gCold)" stroke="url(#gCold)" stroke-width="8" stroke-linejoin="round"/><path d="M209 102 L234 132 L224 126 L216.5 132 L209 126 L201.5 132 L194 126 L184 132 Z" fill="#F2F7F5" stroke="#F2F7F5" stroke-width="5" stroke-linejoin="round"/><path d="M135 331 C155 325 175 337 195 331 C215 325 235 337 255 331 C275 325 295 337 315 331 C335 325 355 337 375 331" stroke="#8FA6B2" stroke-width="7" stroke-linecap="round" fill="none"/></svg>
+        <figcaption>не перекрашивать парус в холодные тона</figcaption></figure>
+      <figure class="dont tile center"><span class="x">✕</span>
+        <svg style="width:90px;filter:drop-shadow(0 6px 14px rgba(255,158,44,.8))" viewBox="0 0 512 512"><use href="#pv-mark"/></svg>
+        <figcaption>не добавлять свечение и обводки</figcaption></figure>
+      <figure class="dont tile center" style="background:linear-gradient(135deg,#2E9C8E,#F27A12 50%,#7FD8CC)"><span class="x">✕</span>
+        <svg style="width:90px" viewBox="0 0 512 512"><use href="#pv-mark"/></svg>
+        <figcaption>не ставить знак на пёстрый фон без подложки</figcaption></figure>
+    </div>
+  </section>
+
+  <section>
+    <span class="num">09</span>
+    <h2>UI-кит · компоненты и состояния</h2>
+    <p class="lead">Живая витрина интерфейсных элементов в тёмной теме: всё кликается и переключается
+       прямо здесь. Те же классы лежат в основе лендинга. Компоненты написаны на ванильном JS,
+       но разметка и состояния один-в-дин переносятся в React-версию (date-range picker, селекты,
+       тосты и модалки ниже — готовые спецификации для портирования).</p>
+
+    <div class="kit-grid" style="margin-top:20px">
+      <div class="tile">
+        <p class="lbl">Кнопки</p>
+        <div class="kit-row">
+          <button class="btn btn-primary">Собрать раскладку</button>
+          <button class="btn btn-ghost">Призрак</button>
+          <button class="btn btn-soft">Мягкая</button>
+          <button class="btn btn-danger">Удалить</button>
+        </div>
+        <div class="kit-row" style="margin-top:12px">
+          <button class="btn btn-primary" disabled>Недоступна</button>
+          <button class="btn btn-primary"><span class="spin"></span>Считаем вес…</button>
+          <button class="btn btn-ghost"><span class="spin lt"></span>Синхронизация</button>
+          <button class="ibtn" data-tip="Экспорт в CSV" aria-label="Экспорт">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3v10m0 0 4-4m-4 4-4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+          </button>
+          <button class="ibtn" data-tip="Поделиться" aria-label="Поделиться">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7M16 6l-4-4-4 4M12 2v13"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="tile">
+        <p class="lbl">Поля ввода</p>
+        <div class="kit-row" style="align-items:flex-start">
+          <div class="fld">
+            <input class="inp" placeholder="Название маршрута" value="Хребет → Бухта">
+            <div class="hint">До 40 символов, виден команде</div>
+          </div>
+          <div class="fld">
+            <input class="inp err" value="0 дней воды">
+            <div class="hint err">Минимум 1 день на экипаж</div>
+          </div>
+          <div class="fld">
+            <input class="inp ok" value="4 человека">
+            <div class="hint ok">Состав сохранён</div>
+          </div>
+        </div>
+        <div class="kit-row" style="margin-top:12px">
+          <div class="fld" style="position:relative">
+            <input class="inp" id="kit-search" placeholder="Поиск продуктов…" style="padding-right:40px">
+            <button class="ibtn" id="kit-clear" aria-label="Очистить" style="position:absolute;right:5px;top:5px;width:34px;height:34px;border:0;background:transparent">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+            </button>
+          </div>
+          <div class="fld"><input class="inp" disabled placeholder="Недоступно"></div>
+        </div>
+      </div>
+
+      <div class="tile">
+        <p class="lbl">Селект и сегменты</p>
+        <div class="kit-row">
+          <div class="sel" id="kit-sel">
+            <button class="inp sel-btn" aria-haspopup="listbox">
+              <span data-val>Профиль: Яхта</span>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="m6 9 6 6 6-6"/></svg>
+            </button>
+            <div class="sel-pop" role="listbox">
+              <div class="sel-opt" aria-selected="true">Профиль: Яхта</div>
+              <div class="sel-opt" aria-selected="false">Профиль: Горы</div>
+              <div class="sel-opt" aria-selected="false">Профиль: Треккинг</div>
+              <div class="sel-opt" aria-selected="false">Профиль: Зима</div>
+            </div>
+          </div>
+        </div>
+        <div class="kit-row" style="margin-top:14px">
+          <div class="tabs" id="kit-seg">
+            <button class="tab on">День</button>
+            <button class="tab">Неделя</button>
+            <button class="tab">Поход</button>
+          </div>
+        </div>
+        <div class="hint" id="kit-seg-hint">Показана раскладка на один день: 3 приёма пищи, 354 г.</div>
+      </div>
+
+      <div class="tile">
+        <p class="lbl">Date-range picker · даты похода</p>
+        <div class="dp" id="kit-dp">
+          <button class="inp sel-btn" data-dp-field>
+            <span data-val>Выберите даты</span>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z"/></svg>
+          </button>
+          <div class="dp-pop">
+            <div class="dp-head">
+              <button class="dp-nav" data-dp-prev aria-label="Предыдущий месяц"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="m15 6-6 6 6 6"/></svg></button>
+              <b data-dp-title></b>
+              <button class="dp-nav" data-dp-next aria-label="Следующий месяц"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="m9 6 6 6-6 6"/></svg></button>
+            </div>
+            <div class="dp-wd"><span>пн</span><span>вт</span><span>ср</span><span>чт</span><span>пт</span><span>сб</span><span>вс</span></div>
+            <div class="dp-grid" data-dp-grid></div>
+            <div class="dp-presets">
+              <button class="chip2" data-dp-preset="2">Выходные</button>
+              <button class="chip2" data-dp-preset="3">3 дня</button>
+              <button class="chip2" data-dp-preset="7">Неделя</button>
+            </div>
+          </div>
+        </div>
+        <div class="hint">Клик — начало диапазона, второй клик — конец. Прошедшие даты недоступны.</div>
+      </div>
+
+      <div class="tile">
+        <p class="lbl">Переключатели, чекбоксы, радио, чипы</p>
+        <div class="kit-row">
+          <span class="sw2 on" role="switch" aria-checked="true" tabindex="0"></span>
+          <span class="sw2" role="switch" aria-checked="false" tabindex="0"></span>
+          <label class="ck"><input type="checkbox" checked><span class="box"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#221204" stroke-width="3.4" stroke-linecap="round"><path d="m5 13 4 4L19 7"/></svg></span>Термобельё</label>
+          <label class="ck"><input type="checkbox"><span class="box"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#221204" stroke-width="3.4" stroke-linecap="round"><path d="m5 13 4 4L19 7"/></svg></span>Горелка</label>
+          <label class="ck rd"><input type="radio" name="kit-r" checked><span class="box"><svg viewBox="0 0 8 8"><circle cx="4" cy="4" r="4" fill="#221204"/></svg></span>Общий котёл</label>
+          <label class="ck rd"><input type="radio" name="kit-r"><span class="box"><svg viewBox="0 0 8 8"><circle cx="4" cy="4" r="4" fill="#221204"/></svg></span>Порционно</label>
+        </div>
+        <div class="kit-row" style="margin-top:14px">
+          <button class="chip2 on">без глютена <span class="x" data-rm>✕</span></button>
+          <button class="chip2">веган</button>
+          <button class="chip2 on">без лактозы <span class="x" data-rm>✕</span></button>
+          <button class="chip2">halal</button>
+          <button class="chip2">+ добавить</button>
+        </div>
+      </div>
+
+      <div class="tile">
+        <p class="lbl">Степпер, слайдер, прогресс</p>
+        <div class="kit-row">
+          <div class="step" id="kit-step">
+            <button aria-label="Меньше">−</button><b>4</b><button aria-label="Больше">+</button>
+          </div>
+          <span class="hint" style="margin:0">человек в экипаже</span>
+        </div>
+        <div class="kit-row" style="margin-top:16px">
+          <input type="range" class="rng" id="kit-rng" min="4" max="14" value="7" step="1">
+          <span class="hint" style="margin:0"><b id="kit-rng-val" style="color:var(--amber-300)">7 дней</b> автономности</span>
+        </div>
+        <div style="margin-top:16px">
+          <div class="bar" style="height:7px;border-radius:99px;background:var(--bg-3);overflow:hidden"><i id="kit-bar" style="display:block;height:100%;width:62%;border-radius:99px;background:var(--grad-brand);transition:width .4s"></i></div>
+          <div class="hint">62 % дневной нормы веса · пересчитывается степпером и слайдером</div>
+        </div>
+        <div class="kit-row" style="margin-top:16px">
+          <div class="skl" style="width:120px;height:16px"></div>
+          <div class="skl" style="width:70px;height:16px"></div>
+          <div class="skl" style="width:38px;height:38px;border-radius:50%"></div>
+          <span class="spin lt" style="width:18px;height:18px"></span>
+        </div>
+      </div>
+
+      <div class="tile">
+        <p class="lbl">Табы и аккордеон</p>
+        <div class="tabs" id="kit-tabs">
+          <button class="tab on" data-tab="t1">Раскладка</button>
+          <button class="tab" data-tab="t2">Закупка</button>
+          <button class="tab" data-tab="t3">Экспорт</button>
+        </div>
+        <div class="tabpane on" data-pane="t1">Таблица приёмов пищи по дням: ккал, граммы, БЖУ и вес на человека.</div>
+        <div class="tabpane" data-pane="t2">Автоматический список покупок, сгруппированный по отделам магазина.</div>
+        <div class="tabpane" data-pane="t3">CSV, PDF, GPX и чек-лист для мессенджера — одной кнопкой.</div>
+        <div style="margin-top:18px">
+          <div class="acc open">
+            <button class="acc-h">Как считается вес раскладки?
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="m6 9 6 6 6-6"/></svg></button>
+            <div class="acc-b"><p>Сухой вес продуктов на человека умножается на дни и нагрузку профиля, плюс 8 % на упаковку.</p></div>
+          </div>
+          <div class="acc">
+            <button class="acc-h">Работает ли без сети?
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="m6 9 6 6 6-6"/></svg></button>
+            <div class="acc-b"><p>Да: раскладка и маршрут кэшируются офлайн, синхронизация — при появлении сети.</p></div>
+          </div>
+          <div class="acc">
+            <button class="acc-h">Можно ли делить на команду?
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="m6 9 6 6 6-6"/></svg></button>
+            <div class="acc-b"><p>Раскладка общая: аллергии, порции и дежурства учитываются персонифицированно.</p></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="tile">
+        <p class="lbl">Тосты, модалка, навигация</p>
+        <div class="kit-row">
+          <button class="btn btn-primary" id="kit-toast-ok">Успех-тост</button>
+          <button class="btn btn-danger" id="kit-toast-err">Ошибка-тост</button>
+          <button class="btn btn-ghost" id="kit-modal-open">Открыть модалку</button>
+        </div>
+        <div class="kit-row" style="margin-top:18px">
+          <nav class="crumb" aria-label="Хлебные крошки">
+            <a href="#">Походы</a><span class="sep">/</span><a href="#">Карелия</a><span class="sep">/</span><b>Хребет → Бухта</b>
+          </nav>
+        </div>
+        <div class="kit-row" style="margin-top:14px">
+          <div class="pg" id="kit-pg">
+            <button aria-label="Назад">‹</button>
+            <button class="on">1</button><button>2</button><button>3</button><button>…</button><button>12</button>
+            <button aria-label="Вперёд">›</button>
+          </div>
+        </div>
+        <div class="kit-row" style="margin-top:16px">
+          <span class="ava" style="background:var(--grad-brand)">АК</span>
+          <span class="ava" style="background:linear-gradient(135deg,#7FD8CC,#2E9C8E)">МЛ</span>
+          <span class="ava" style="background:linear-gradient(135deg,#FFD9A0,#F27A12)">ДС</span>
+          <span class="ava" style="background:var(--bg-3);color:var(--text-2)">+3</span>
+          <span class="badge" style="margin-left:6px">экипаж собран</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <span class="num">10</span>
+    <h2>Светлая тема · «день на марине»</h2>
+    <p class="lead">Тёмная тема — дефолт продукта: приложение живёт в походе, при свете фонарика
+       и ночью в каюте. Светлая — для маркетинговых страниц, печати и дневного чтения.
+       Темы переключаются атрибутом <code>&lt;html data-theme="light"&gt;</code>, все компоненты
+       перекрашиваются токенами без правок разметки.</p>
+    <div class="grid g4" style="margin-top:18px">
+      <div class="sw"><div class="c" style="background:#F5F2EB"></div><div class="m"><b>bg-0 · #F5F2EB</b>бумага с песочным подтоном</div></div>
+      <div class="sw"><div class="c" style="background:#FFFFFF"></div><div class="m"><b>bg-1 · #FFFFFF</b>карточки</div></div>
+      <div class="sw"><div class="c" style="background:#EEEAE1"></div><div class="m"><b>bg-2 · #EEEAE1</b>поверхности</div></div>
+      <div class="sw"><div class="c" style="background:#E2DCCE"></div><div class="m"><b>bg-3 · #E2DCCE</b>ховер</div></div>
+      <div class="sw"><div class="c" style="background:#10202B"></div><div class="m"><b>text-1 · #10202B</b>глубокий морской чернильный</div></div>
+      <div class="sw"><div class="c" style="background:#435663"></div><div class="m"><b>text-2 · #435663</b>7.4:1 на bg-1</div></div>
+      <div class="sw"><div class="c" style="background:linear-gradient(135deg,#F79A3E,#E8622C 55%,#C24E12)"></div><div class="m"><b>brand-light</b>градиент светлой темы</div></div>
+      <div class="sw"><div class="c" style="background:#D97418"></div><div class="m"><b>amber-300 · #D97418</b>акцент-текст на светлом</div></div>
+      <div class="sw"><div class="c" style="background:#0F7A6E"></div><div class="m"><b>wave-300 · #0F7A6E</b>вода потемнее для контраста</div></div>
+      <div class="sw"><div class="c" style="background:rgba(16,32,43,.12)"></div><div class="m"><b>line · rgba(16,32,43,.12)</b>границы</div></div>
+      <div class="sw"><div class="c" style="background:#12877A"></div><div class="m"><b>wave-400 · #12877A</b>всплески знака</div></div>
+      <div class="sw"><div class="c" style="background:#C24E12"></div><div class="m"><b>flame-600 · #C24E12</b>текст на огне — светлый</div></div>
+    </div>
+
+    <div class="grid g3" style="margin-top:18px">
+      <figure class="tile center" style="background:#F5F2EB">
+        <svg style="width:110px" viewBox="0 0 512 512"><use href="#pv-mark-light"/></svg>
+        <figcaption style="color:#75848E;font-size:13px;margin-top:12px">Знак light · на бумаге</figcaption></figure>
+      <figure class="tile center" style="background:#FFFFFF">
+        <svg style="width:110px" viewBox="0 0 512 512"><use href="#pv-mark-light"/></svg>
+        <figcaption style="color:#75848E;font-size:13px;margin-top:12px">Знак light · на белом: шапка-вырез работает</figcaption></figure>
+      <figure class="tile center" style="background:#F5F2EB;color:#10202B">
+        <svg style="width:110px" viewBox="0 0 512 512"><use href="#pv-mark-mono"/></svg>
+        <figcaption style="color:#75848E;font-size:13px;margin-top:12px">Монохром чернильный · печать, одноцветка</figcaption></figure>
+    </div>
+
+    <div class="tile" style="margin-top:18px;background:#F5F2EB;border-color:rgba(16,32,43,.12)">
+      <div class="kit-row">
+        <button class="btn" style="background:linear-gradient(135deg,#F79A3E,#E8622C 55%,#C24E12);color:#FFF8F0;box-shadow:0 0 0 1px rgba(217,106,16,.28),0 14px 44px rgba(217,106,16,.16)">Собрать раскладку</button>
+        <button class="btn" style="background:transparent;color:#10202B;border-color:rgba(16,32,43,.24)">Призрак</button>
+        <button class="btn" style="background:#EEEAE1;color:#10202B;border-color:rgba(16,32,43,.12)">Мягкая</button>
+        <span style="display:inline-flex;align-items:center;gap:8px;padding:6px 12px;border-radius:999px;background:rgba(18,135,122,.1);border:1px solid rgba(18,135,122,.35);color:#0F7A6E;font:600 13px/1 var(--font-body)">ветер 12 м/с</span>
+        <span style="padding:13px 16px;border-radius:14px;background:#FFF;border:1px solid rgba(16,32,43,.24);color:#10202B;font:600 14.5px/1.2 var(--font-body)">Название маршрута</span>
+      </div>
+      <p style="color:#435663;font-size:13.5px;margin:16px 0 0">
+        Правила светлой темы: снежная шапка — только вырез (не белая заливка); акцентный текст темнее
+        (<b style="color:#D97418">#D97418</b>, а не #FFC46B); текст на огне — светлый (#FFF8F0);
+        тени мягкие и серые, без чёрных дыр; стекло — молочное, а не дымчатое.</p>
+    </div>
+  </section>
+
+  <section>
+    <span class="num">11</span>
+    <h2>Файлы</h2>
+    <table class="files" style="margin-top:14px">
+      <tr><td>logo/mark.svg</td><td>основной знак, вектор, прозрачный фон</td></tr>
+      <tr><td>logo/mark-light.svg / png/mark-light-512.png</td><td>знак для светлого фона: шапка и мачта — вырезы</td></tr>
+      <tr><td>logo/mark-mono.svg</td><td>одноцветный знак (currentColor) для печати и гравировки</td></tr>
+      <tr><td>logo/logo-horizontal.svg</td><td>логотип: знак + название + слоган</td></tr>
+      <tr><td>logo/app-icon.svg / png/app-icon-512.png, -192.png</td><td>иконка приложения для сторов</td></tr>
+      <tr><td>logo/favicon.svg / png/favicon-64.png, -32.png</td><td>фавиконки</td></tr>
+      <tr><td>logo/rasterize.py</td><td>скрипт перерисовки PNG из геометрии знака (правьте цифры — всё пересоберётся)</td></tr>
+      <tr><td>site/theme.css</td><td>тёмная тема: токены + компоненты (.btn, .card, .badge, .input…)</td></tr>
+      <tr><td>site/index.html</td><td>макет тёмного лендинга с применением темы</td></tr>
+      <tr><td>site/brand-book.html</td><td>этот брендбук</td></tr>
+      <tr><td>design-pack/</td><td>референс-пак для кодинг-агентов: AGENTS.md, tokens.css/json, brand.md, components.md, assets/</td></tr>
+      <tr><td>logo/v1…v3 *.png</td><td>AI-концепты поиска стиля (референсы, не для продакшена)</td></tr>
+    </table>
+  </section>
+
+  <footer>Провиант · айдентика v1.0 · знак, палитра, тёмная тема и UI-кит в одном месте</footer>
+</div>
+
+<div class="modal" id="kit-modal" role="dialog" aria-modal="true" aria-labelledby="kit-modal-t">
+  <div class="modal-card">
+    <h3 id="kit-modal-t" style="margin-bottom:10px">Завершить поход?</h3>
+    <p style="font-size:14.5px;margin:0 0 20px">Раскладка будет архивирована, остатки продуктов
+       пересчитаны в список покупок на следующий выход.</p>
+    <div class="kit-row" style="justify-content:flex-end">
+      <button class="btn btn-ghost" data-modal-close>Отмена</button>
+      <button class="btn btn-primary" data-modal-close>Завершить</button>
+    </div>
+  </div>
+</div>
+<div class="toasts" id="kit-toasts"></div>
+
+<script>
+(function(){
+  "use strict";
+  var $ = function(s, r){ return (r||document).querySelector(s); };
+  var $ = function(s, r){ return Array.prototype.slice.call((r||document).querySelectorAll(s)); };
+
+  /* ---------- свитчи ---------- */
+  $('.sw2').forEach(function(sw){
+    sw.addEventListener('click', function(){
+      sw.classList.toggle('on');
+      sw.setAttribute('aria-checked', sw.classList.contains('on'));
+    });
+  });
+
+  /* ---------- чипы ---------- */
+  $('.chip2').forEach(function(ch){
+    ch.addEventListener('click', function(e){
+      if (e.target.hasAttribute('data-rm')) { ch.remove(); return; }
+      if (ch.textContent.indexOf('добавить') > -1) { toast('ok', 'Скоро', 'Свои теги появятся в v2.1'); return; }
+      ch.classList.toggle('on');
+    });
+  });
+
+  /* ---------- селекты ---------- */
+  $('.sel').forEach(function(sel){
+    var btn = $('.sel-btn', sel);
+    btn.addEventListener('click', function(e){ e.stopPropagation(); sel.classList.toggle('open'); });
+    $('.sel-opt', sel).forEach(function(op){
+      op.addEventListener('click', function(){
+        $('[aria-selected]', sel).forEach(function(o){ o.setAttribute('aria-selected','false'); });
+        op.setAttribute('aria-selected','true');
+        $('[data-val]', sel).textContent = op.textContent;
+        sel.classList.remove('open');
+      });
+    });
+  });
+  document.addEventListener('click', function(){
+    $('.sel.open, .dp.open').forEach(function(p){ p.classList.remove('open'); });
+  });
+  document.addEventListener('keydown', function(e){
+    if (e.key === 'Escape') {
+      $('.sel.open, .dp.open').forEach(function(p){ p.classList.remove('open'); });
+      $('#kit-modal').classList.remove('open');
+    }
+  });
+
+  /* ---------- date-range picker ---------- */
+  var MONTHS = ['январь','февраль','март','апрель','май','июнь','июль','август','сентябрь','октябрь','ноябрь','декабрь'];
+  var MONTHS_G = ['янв','фев','мар','апр','мая','июн','июл','авг','сен','окт','ноя','дек'];
+  function makeDP(root){
+    var today = new Date(); today.setHours(0,0,0,0);
+    var view = new Date(today.getFullYear(), today.getMonth(), 1);
+    var start = null, end = null, hover = null;
+    var grid = $('[data-dp-grid]', root), title = $('[data-dp-title]', root),
+        field = $('[data-val]', root);
+    function key(d){ return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate(); }
+    function fmt(d){ return d.getDate()+' '+MONTHS_G[d.getMonth()]+(d.getFullYear()!==today.getFullYear()?' '+d.getFullYear():''); }
+    function label(){
+      field.textContent = start ? (end ? fmt(start)+' — '+fmt(end) : fmt(start)+' — …') : 'Выберите даты';
+    }
+    function render(){
+      title.textContent = MONTHS[view.getMonth()]+' '+view.getFullYear();
+      grid.innerHTML = '';
+      var first = new Date(view), off = (first.getDay()+6)%7;
+      var from = new Date(view); from.setDate(from.getDate()-off);
+      for (var i=0;i<42;i++){
+        (function(){
+          var d = new Date(from); d.setDate(from.getDate()+i);
+          var b = document.createElement('button');
+          b.type = 'button'; b.className = 'dp-d'; b.textContent = d.getDate();
+          if (d.getMonth() !== view.getMonth()) b.classList.add('out');
+          if (d < today) b.classList.add('dis');
+          if (+d === +today) b.classList.add('today');
+          var lo = start, hi = end || hover;
+          if (start && hi && hi < start) { lo = hi; hi = start; }
+          if (lo && d >= lo && hi && d <= hi) b.classList.add('in');
+          if (start && +d === +start) b.classList.add('start');
+          if (end && +d === +end) b.classList.add('end');
+          if (!end && hover && start && +d === +hover) b.classList.add('end');
+          b.addEventListener('click', function(ev){
+            ev.stopPropagation();
+            if (!start || (start && end)) { start = d; end = null; }
+            else if (d < start) { start = d; }
+            else { end = d; }
+            label(); render();
+            if (start && end) setTimeout(function(){ root.classList.remove('open'); }, 260);
+          });
+          b.addEventListener('mouseenter', function(){ if (start && !end) { hover = d; render(); } });
+          grid.appendChild(b);
+        })();
+      }
+    }
+    $('[data-dp-field]', root).addEventListener('click', function(e){
+      e.stopPropagation(); root.classList.toggle('open'); render();
+    });
+    $('[data-dp-prev]', root).addEventListener('click', function(e){
+      e.stopPropagation(); view = new Date(view.getFullYear(), view.getMonth()-1, 1); render();
+    });
+    $('[data-dp-next]', root).addEventListener('click', function(e){
+      e.stopPropagation(); view = new Date(view.getFullYear(), view.getMonth()+1, 1); render();
+    });
+    $('[data-dp-preset]', root).forEach(function(p){
+      p.addEventListener('click', function(e){
+        e.stopPropagation();
+        var n = +p.getAttribute('data-dp-preset');
+        start = new Date(today);
+        if (n === 2) { var wd = (today.getDay()+6)%7; start.setDate(start.getDate()+(5-wd+7)%7||7); }
+        end = new Date(start); end.setDate(end.getDate()+n-1);
+        view = new Date(start.getFullYear(), start.getMonth(), 1);
+        label(); render();
+        setTimeout(function(){ root.classList.remove('open'); }, 260);
+      });
+    });
+    label();
+  }
+  $('.dp').forEach(makeDP);
+
+  /* ---------- сегменты с подсказкой ---------- */
+  var segHints = ['Показана раскладка на один день: 3 приёма пищи, 354 г.',
+                  'Недельный срез: закупка одним списком, вес 2,4 кг на человека.',
+                  'Весь поход: 7 дней, 12 040 ккал, дежурства по парам.'];
+  var seg = $('#kit-seg');
+  if (seg) $('.tab', seg).forEach(function(t, i){
+    t.addEventListener('click', function(){
+      $('.tab', seg).forEach(function(x){ x.classList.remove('on'); });
+      t.classList.add('on');
+      $('#kit-seg-hint').textContent = segHints[i];
+    });
+  });
+
+  /* ---------- табы ---------- */
+  var tabs = $('#kit-tabs');
+  if (tabs) $('.tab', tabs).forEach(function(t){
+    t.addEventListener('click', function(){
+      $('.tab', tabs).forEach(function(x){ x.classList.remove('on'); });
+      t.classList.add('on');
+      $('.tabpane').forEach(function(p){ p.classList.toggle('on', p.getAttribute('data-pane') === t.getAttribute('data-tab')); });
+    });
+  });
+
+  /* ---------- аккордеон ---------- */
+  $('.acc-h').forEach(function(h){
+    h.addEventListener('click', function(){ h.parentElement.classList.toggle('open'); });
+  });
+
+  /* ---------- степпер / слайдер / прогресс ---------- */
+  var step = $('#kit-step');
+  function recalc(){
+    var crew = +$('b', step).textContent, days = +$('#kit-rng').value;
+    var norm = Math.min(96, Math.round((crew*354*days)/(crew*days*6.2)));
+    $('#kit-bar').style.width = norm + '%';
+    $('#kit-bar').parentElement.nextElementSibling.textContent =
+      norm + ' % дневной нормы веса · пересчитывается степпером и слайдером';
+  }
+  if (step) $('button', step).forEach(function(b, i){
+    b.addEventListener('click', function(){
+      var v = +$('b', step).textContent + (i ? 1 : -1);
+      $('b', step).textContent = Math.max(1, Math.min(12, v));
+      recalc();
+    });
+  });
+  var rng = $('#kit-rng');
+  if (rng) {
+    var paint = function(){
+      rng.style.setProperty('--val', ((rng.value-rng.min)/(rng.max-rng.min)*100)+'%');
+      $('#kit-rng-val').textContent = rng.value + ' дней';
+      recalc();
+    };
+    rng.addEventListener('input', paint); paint();
+  }
+
+  /* ---------- поиск с очисткой ---------- */
+  var ks = $('#kit-search');
+  if (ks) $('#kit-clear').addEventListener('click', function(){ ks.value=''; ks.focus(); });
+
+  /* ---------- пагинация ---------- */
+  var pg = $('#kit-pg');
+  if (pg) $('button', pg).forEach(function(b){
+    b.addEventListener('click', function(){
+      if (!/^\d+$/.test(b.textContent)) return;
+      $('button', pg).forEach(function(x){ x.classList.remove('on'); });
+      b.classList.add('on');
+    });
+  });
+
+  /* ---------- тосты ---------- */
+  function toast(type, title, msg){
+    var wrap = $('#kit-toasts');
+    var el = document.createElement('div');
+    el.className = 'toast ' + type;
+    el.innerHTML = '<span class="ti">' + (type==='ok'
+        ? '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round"><path d="m5 13 4 4L19 7"/></svg>'
+        : '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>')
+      + '</span><span><b>'+title+'</b><small>'+msg+'</small></span><i class="tbar"></i>';
+    wrap.appendChild(el);
+    setTimeout(function(){ el.style.transition='opacity .3s, transform .3s'; el.style.opacity='0'; el.style.transform='translateY(8px)';
+      setTimeout(function(){ el.remove(); }, 320); }, 4000);
+  }
+  window.toast = toast;
+  $('#kit-toast-ok').addEventListener('click', function(){ toast('ok','Раскладка собрана','354 г/чел · 1 720 ккал · список покупок готов'); });
+  $('#kit-toast-err').addEventListener('click', function(){ toast('err','Не хватает воды','Добавьте минимум 1 день на экипаж из 4 человек'); });
+
+  /* ---------- модалка ---------- */
+  var modal = $('#kit-modal');
+  $('#kit-modal-open').addEventListener('click', function(){ modal.classList.add('open'); });
+  modal.addEventListener('click', function(e){ if (e.target === modal) modal.classList.remove('open'); });
+  $('[data-modal-close]').forEach(function(b){ b.addEventListener('click', function(){ modal.classList.remove('open'); }); });
+})();
+</script>
+</body>
+</html>

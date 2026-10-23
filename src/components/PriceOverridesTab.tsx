@@ -303,7 +303,7 @@ export default function PriceOverridesTab({ tripId }: Props) {
             background: activeTab === 'total' ? 'var(--elev)' : 'transparent',
             border: activeTab === 'total' ? '1px solid transparent' : '1px solid var(--border)',
             color: activeTab === 'total' ? 'var(--text)' : 'var(--muted)',
-            backgroundImage: activeTab === 'total' ? 'linear-gradient(var(--elev), var(--elev)) padding-box, linear-gradient(90deg, var(--w1), var(--w2)) border-box' : 'none'
+            backgroundImage: activeTab === 'total' ? 'linear-gradient(var(--elev), var(--elev)) padding-box, var(--grad-brand) border-box' : 'none'
           }}
         >
           Закупка
@@ -319,7 +319,7 @@ export default function PriceOverridesTab({ tripId }: Props) {
             background: activeTab === 'days' ? 'var(--elev)' : 'transparent',
             border: activeTab === 'days' ? '1px solid transparent' : '1px solid var(--border)',
             color: activeTab === 'days' ? 'var(--text)' : 'var(--muted)',
-            backgroundImage: activeTab === 'days' ? 'linear-gradient(var(--elev), var(--elev)) padding-box, linear-gradient(90deg, var(--w1), var(--w2)) border-box' : 'none'
+            backgroundImage: activeTab === 'days' ? 'linear-gradient(var(--elev), var(--elev)) padding-box, var(--grad-brand) border-box' : 'none'
           }}
         >
           По дням
@@ -335,7 +335,7 @@ export default function PriceOverridesTab({ tripId }: Props) {
             background: activeTab === 'person' ? 'var(--elev)' : 'transparent',
             border: activeTab === 'person' ? '1px solid transparent' : '1px solid var(--border)',
             color: activeTab === 'person' ? 'var(--text)' : 'var(--muted)',
-            backgroundImage: activeTab === 'person' ? 'linear-gradient(var(--elev), var(--elev)) padding-box, linear-gradient(90deg, var(--w1), var(--w2)) border-box' : 'none'
+            backgroundImage: activeTab === 'person' ? 'linear-gradient(var(--elev), var(--elev)) padding-box, var(--grad-brand) border-box' : 'none'
           }}
         >
           На человека

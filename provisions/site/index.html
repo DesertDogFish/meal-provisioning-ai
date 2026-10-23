@@ -1,0 +1,634 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Провиант — еда для гор и моря</title>
+<meta name="theme-color" content="#0B141B">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+/* ========= токены тёмной темы (копия site/theme.css) ========= */
+:root{
+  --bg-0:#0B141B; --bg-1:#101D27; --bg-2:#162634; --bg-3:#1E3243;
+  --line:rgba(148,199,214,.14); --line-strong:rgba(148,199,214,.28);
+  --text-1:#EDF4F7; --text-2:#A9BEC9; --text-3:#6F8895;
+  --amber-200:#FFD9A0; --amber-300:#FFC46B; --amber-500:#FF9E2C; --flame-600:#E85D1F;
+  --wave-300:#7FD8CC; --wave-400:#57C7B8; --wave-600:#2E9C8E; --snow:#F2F7F5;
+  --grad-brand:linear-gradient(135deg,#FFD08A 0%,#F2842B 52%,#E85D1F 100%);
+  --r-sm:12px; --r-md:18px; --r-lg:26px;
+  --font-display:"Unbounded","Manrope",system-ui,"Segoe UI",sans-serif;
+  --font-body:"Manrope",system-ui,"Segoe UI",sans-serif;
+  --shadow-1:0 18px 50px rgba(3,10,16,.5);
+}
+*{box-sizing:border-box} html,body{margin:0}
+body{
+  background:
+    radial-gradient(1100px 540px at 82% -12%, rgba(255,158,44,.17), transparent 62%),
+    radial-gradient(900px 500px at 6% 110%, rgba(87,199,184,.11), transparent 60%),
+    var(--bg-0);
+  color:var(--text-1); font:400 16px/1.6 var(--font-body);
+  -webkit-font-smoothing:antialiased; overflow-x:hidden;
+}
+/* зерно плёнки — data-uri, без внешних файлов */
+body::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;opacity:.05;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/></filter><rect width='140' height='140' filter='url(%23n)'/></svg>");}
+.wrap{width:min(1160px,92vw);margin:0 auto;position:relative;z-index:1}
+h1,h2,h3{font-family:var(--font-display);font-weight:700;line-height:1.08;letter-spacing:-.015em;margin:0 0 .45em}
+h1{font-size:clamp(36px,5.6vw,64px)}
+h2{font-size:clamp(24px,3.2vw,38px)}
+h3{font-size:18px;letter-spacing:0}
+p{color:var(--text-2)}
+a{color:var(--wave-300);text-decoration:none}
+::selection{background:rgba(255,158,44,.35)}
+
+/* ========= плавающая nav-пилюля ========= */
+.nav{position:sticky;top:14px;z-index:60;display:flex;justify-content:center;padding:0 4vw}
+.nav-pill{display:flex;align-items:center;gap:26px;width:min(1080px,100%);
+  padding:10px 12px 10px 18px;border-radius:999px;
+  background:rgba(16,29,39,.66);backdrop-filter:blur(16px) saturate(1.3);
+  border:1px solid var(--line);box-shadow:0 14px 40px rgba(3,10,16,.45)}
+.logo{display:flex;align-items:center;gap:11px;color:var(--text-1)}
+.logo svg{width:32px;height:32px}
+.logo b{font:700 16px/1 var(--font-display);letter-spacing:.06em}
+.nav-links{display:flex;gap:4px;margin-left:auto}
+.nav-links a{color:var(--text-2);font:600 14px/1 var(--font-body);padding:9px 14px;border-radius:999px;transition:.18s}
+.nav-links a:hover{color:var(--text-1);background:var(--bg-2)}
+@media(max-width:820px){.nav-links{display:none}}
+
+/* ========= кнопки ========= */
+.btn{display:inline-flex;align-items:center;gap:10px;border:1px solid transparent;cursor:pointer;
+  padding:14px 24px;border-radius:999px;font:700 15px/1 var(--font-body);transition:.18s;position:relative}
+.btn-primary{background:var(--grad-brand);color:#221204;
+  box-shadow:0 0 0 1px rgba(255,158,44,.3),0 16px 44px rgba(242,122,18,.28)}
+.btn-primary:hover{transform:translateY(-2px);filter:brightness(1.07)}
+.btn-ghost{color:var(--text-1);border-color:var(--line-strong);background:rgba(22,38,52,.4)}
+.btn-ghost:hover{background:var(--bg-2);transform:translateY(-2px)}
+.btn-sm{padding:10px 18px;font-size:14px}
+
+/* ========= hero ========= */
+.hero{display:grid;grid-template-columns:1.02fr .98fr;gap:52px;align-items:center;padding:76px 0 30px}
+@media(max-width:980px){.hero{grid-template-columns:1fr;gap:40px;padding-top:44px}}
+.pill{display:inline-flex;align-items:center;gap:9px;padding:8px 15px;border-radius:999px;
+  background:rgba(87,199,184,.1);border:1px solid rgba(87,199,184,.32);color:var(--wave-300);
+  font:700 12px/1 var(--font-body);letter-spacing:.16em;text-transform:uppercase}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--wave-400);box-shadow:0 0 0 0 rgba(87,199,184,.6);animation:pulse 2.4s infinite}
+@keyframes pulse{70%{box-shadow:0 0 0 9px rgba(87,199,184,0)}100%{box-shadow:0 0 0 0 rgba(87,199,184,0)}}
+.hero h1{margin:22px 0 18px}
+.hero h1 em{font-style:normal;background:var(--grad-brand);-webkit-background-clip:text;background-clip:text;color:transparent}
+.hero .lead{font-size:17.5px;max-width:520px}
+.cta-row{display:flex;gap:14px;flex-wrap:wrap;margin:30px 0 30px}
+.stats{display:flex;gap:12px;flex-wrap:wrap}
+.stat{display:flex;align-items:baseline;gap:8px;padding:10px 16px;border-radius:var(--r-md);
+  background:rgba(16,29,39,.6);border:1px solid var(--line)}
+.stat b{font:700 17px/1 var(--font-display);color:var(--amber-300)}
+.stat span{font-size:12.5px;color:var(--text-3)}
+
+/* правая колонка hero: bento-стек */
+.hero-art{position:relative;display:flex;flex-direction:column;gap:14px}
+.hero-art::before{content:"";position:absolute;inset:-8% -4%;z-index:-1;
+  background:radial-gradient(closest-side,rgba(255,158,44,.17),transparent 72%)}
+.glass{background:linear-gradient(160deg,rgba(22,38,52,.72),rgba(13,23,32,.78));
+  border:1px solid var(--line);border-radius:var(--r-lg);backdrop-filter:blur(12px);
+  box-shadow:var(--shadow-1)}
+.meal-card{padding:22px 22px 16px;animation:float 7s ease-in-out infinite}
+@keyframes float{50%{transform:translateY(-7px)}}
+.meal-head{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.meal-head h3{margin:0;font-size:16px}
+.badge{margin-left:auto;display:inline-flex;align-items:center;gap:7px;padding:6px 11px;border-radius:999px;
+  background:rgba(87,199,184,.12);border:1px solid rgba(87,199,184,.34);color:var(--wave-300);font:700 12px/1 var(--font-body)}
+.meal-row{display:flex;align-items:center;gap:13px;padding:12px 0;border-bottom:1px dashed var(--line-strong)}
+.meal-row:last-of-type{border-bottom:0}
+.m-ico{width:38px;height:38px;flex:none;border-radius:12px;display:grid;place-items:center;
+  background:rgba(255,158,44,.12);border:1px solid rgba(255,158,44,.26);color:var(--amber-300)}
+.meal-row b{font-size:14.5px}
+.meal-row small{display:block;color:var(--text-3);font-size:12.5px}
+.kcal{margin-left:auto;text-align:right;font:800 14px/1.25 var(--font-body);color:var(--wave-300)}
+.kcal small{display:block;color:var(--text-3);font-weight:600;font-size:11.5px}
+.meal-total{display:flex;justify-content:space-between;padding:13px 2px 4px;margin-top:6px;
+  border-top:1px solid var(--line);font-size:13.5px;color:var(--text-2)}
+.meal-total b{color:var(--amber-300);font-size:14.5px}
+.mini-row{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.mini{padding:16px 18px;display:flex;align-items:center;gap:14px;animation:float 7s ease-in-out infinite}
+.mini:nth-child(2){animation-delay:-3.5s}
+.mini .ring{flex:none}
+.mini b{font:700 15px/1.3 var(--font-display)}
+.mini span{display:block;font-size:12px;color:var(--text-3)}
+@media(max-width:520px){.mini-row{grid-template-columns:1fr}}
+
+/* ========= живая волна ========= */
+.wave-band{position:relative;height:90px;margin:26px 0 6px;overflow:hidden}
+.wave-band svg{position:absolute;left:0;top:50%;translate:0 -50%;width:2400px;height:90px;animation:drift 16s linear infinite}
+.wave-band svg.w2{opacity:.4;animation-duration:23s;animation-direction:reverse}
+@keyframes drift{to{transform:translateX(-1200px)}}
+@media(prefers-reduced-motion:reduce){.wave-band svg,.meal-card,.mini,.dot{animation:none}}
+
+/* ========= bento фич ========= */
+.bento{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;padding:26px 0 10px}
+.card{padding:26px;border-radius:var(--r-lg);background:linear-gradient(170deg,var(--bg-1),#0D1720);
+  border:1px solid var(--line);transition:.22s;position:relative;overflow:hidden}
+.card:hover{transform:translateY(-4px);border-color:var(--line-strong);
+  box-shadow:0 22px 60px rgba(3,10,16,.55)}
+.card.wide{grid-column:span 2}
+@media(max-width:900px){.bento{grid-template-columns:1fr}.card.wide{grid-column:span 1}}
+.f-ico{width:46px;height:46px;border-radius:14px;display:grid;place-items:center;margin-bottom:16px;
+  background:rgba(255,158,44,.12);border:1px solid rgba(255,158,44,.3);color:var(--amber-300)}
+.card.teal .f-ico{background:rgba(87,199,184,.1);border-color:rgba(87,199,184,.32);color:var(--wave-300)}
+.card p{margin:0;font-size:14.5px}
+.seg{display:flex;gap:4px;padding:5px;margin:16px 0 4px;border-radius:999px;background:var(--bg-0);
+  border:1px solid var(--line);width:max-content}
+.seg button{border:0;cursor:pointer;padding:9px 18px;border-radius:999px;background:transparent;
+  color:var(--text-2);font:700 13px/1 var(--font-body);transition:.18s}
+.seg button.on{background:var(--grad-brand);color:#221204;box-shadow:0 6px 18px rgba(242,122,18,.3)}
+.chips{display:flex;gap:9px;flex-wrap:wrap;margin-top:16px}
+.chip{padding:8px 13px;border-radius:12px;background:var(--bg-2);border:1px solid var(--line);
+  color:var(--text-2);font:600 13px/1 var(--font-body);display:inline-flex;gap:8px;align-items:center}
+.chip b{color:var(--text-1)}
+.bar{height:7px;border-radius:99px;background:var(--bg-3);overflow:hidden;margin-top:14px}
+.bar i{display:block;height:100%;border-radius:99px;background:var(--grad-brand)}
+.bar.teal i{background:linear-gradient(90deg,var(--wave-600),var(--wave-300))}
+
+/* ========= CTA ========= */
+.cta{margin:64px 0 0;padding:52px 30px;border-radius:32px;text-align:center;position:relative;overflow:hidden;
+  background:radial-gradient(640px 260px at 50% -30%,rgba(255,158,44,.24),transparent 70%),
+             linear-gradient(170deg,var(--bg-1),#0C161E);
+  border:1px solid var(--line)}
+.cta p{max-width:540px;margin:0 auto 28px}
+.cta-form{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+.input{padding:14px 20px;width:min(320px,100%);border-radius:999px;background:rgba(11,20,27,.7);
+  border:1px solid var(--line-strong);color:var(--text-1);font:600 15px/1.2 var(--font-body)}
+.input::placeholder{color:var(--text-3)}
+.input:focus{outline:2px solid rgba(255,158,44,.5);outline-offset:1px}
+/* ========= план-полоса: date picker, степпер, чипы ========= */
+.plan{display:flex;gap:16px;flex-wrap:wrap;align-items:center;padding:18px 20px;border-radius:var(--r-lg);margin-top:6px}
+.plan .lbl{font:700 11px/1 var(--font-body);letter-spacing:.18em;text-transform:uppercase;color:var(--text-3)}
+.dp{position:relative}
+.dp-pop{position:absolute;top:calc(100% + 8px);left:0;width:304px;background:var(--bg-2);border:1px solid var(--line-strong);border-radius:18px;box-shadow:0 24px 70px rgba(3,10,16,.55);padding:14px;display:none;z-index:40}
+.dp.open .dp-pop{display:block}
+.dp-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+.dp-head b{font:700 14.5px/1 var(--font-display);text-transform:capitalize}
+.dp-nav{width:32px;height:32px;border-radius:10px;border:1px solid var(--line);background:var(--bg-1);color:var(--text-2);cursor:pointer}
+.dp-nav:hover{color:var(--text-1);background:var(--bg-3)}
+.dp-wd{display:grid;grid-template-columns:repeat(7,1fr);font:700 10.5px/1 var(--font-body);letter-spacing:.08em;color:var(--text-3);text-align:center;margin:8px 0 4px}
+.dp-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px}
+.dp-d{position:relative;height:36px;border-radius:10px;border:0;background:transparent;color:var(--text-1);font:600 13px/1 var(--font-body);cursor:pointer}
+.dp-d:hover{background:var(--bg-3)}
+.dp-d.out{color:var(--text-3);opacity:.45}
+.dp-d.dis{opacity:.25;pointer-events:none}
+.dp-d.in{background:rgba(255,158,44,.16);border-radius:0}
+.dp-d.start,.dp-d.end{background:var(--grad-brand);color:#221204;font-weight:800}
+.dp-d.start{border-radius:10px 0 0 10px}
+.dp-d.end{border-radius:0 10px 10px 0}
+.dp-d.start.end{border-radius:10px}
+.dp-d.today::after{content:"";position:absolute;left:50%;bottom:4px;width:4px;height:4px;margin-left:-2px;border-radius:50%;background:var(--wave-400)}
+.dp-presets{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+.dp-field{display:flex;justify-content:space-between;align-items:center;gap:12px;cursor:pointer;
+  padding:13px 16px;border-radius:999px;background:rgba(11,20,27,.7);border:1px solid var(--line-strong);
+  color:var(--text-1);font:600 14.5px/1.2 var(--font-body);min-width:250px}
+.step{display:inline-flex;align-items:center;gap:2px;border:1px solid var(--line-strong);border-radius:999px;padding:4px;background:rgba(11,20,27,.7)}
+.step button{width:34px;height:34px;border-radius:50%;border:0;background:transparent;color:var(--text-1);font:800 18px/1 var(--font-body);cursor:pointer}
+.step button:hover{background:var(--bg-3)}
+.step b{min-width:36px;text-align:center;font:700 15px/1 var(--font-display)}
+.chip2{padding:9px 14px;border-radius:999px;background:rgba(22,38,52,.5);border:1px solid var(--line);color:var(--text-2);font:600 13px/1 var(--font-body);display:inline-flex;gap:8px;align-items:center;cursor:pointer;transition:.15s}
+.chip2:hover{border-color:var(--line-strong)}
+.chip2.on{background:rgba(255,158,44,.14);border-color:rgba(255,158,44,.45);color:var(--amber-300)}
+/* тосты */
+.toasts{position:fixed;right:18px;bottom:18px;display:flex;flex-direction:column;gap:10px;z-index:100}
+.toast{display:flex;gap:12px;align-items:flex-start;min-width:250px;max-width:340px;padding:14px 16px;border-radius:16px;background:var(--bg-2);border:1px solid var(--line-strong);box-shadow:0 18px 50px rgba(3,10,16,.55);position:relative;overflow:hidden;animation:tin .3s ease}
+@keyframes tin{from{transform:translateY(14px);opacity:0}}
+.toast .ti{flex:none;width:22px;height:22px;border-radius:50%;display:grid;place-items:center}
+.toast.ok .ti{background:rgba(87,199,184,.18);color:var(--wave-300)}
+.toast.err .ti{background:rgba(255,107,87,.16);color:#FF8A7A}
+.toast b{font:700 14px/1.3 var(--font-body);color:var(--text-1);display:block}
+.toast small{color:var(--text-3);font-size:12.5px}
+.toast .tbar{position:absolute;left:0;bottom:0;height:3px;background:var(--wave-400);animation:tbar 4s linear forwards}
+.toast.err .tbar{background:#FF6B57}
+@keyframes tbar{from{width:100%}to{width:0}}
+.footer{padding:34px 0 40px;margin-top:70px;border-top:1px solid var(--line);color:var(--text-3);font-size:13.5px}
+
+/* ========= СВЕТЛАЯ ТЕМА · «день на марине» ========= */
+:root[data-theme="light"]{
+  --bg-0:#F5F2EB; --bg-1:#FFFFFF; --bg-2:#EEEAE1; --bg-3:#E2DCCE;
+  --line:rgba(16,32,43,.12); --line-strong:rgba(16,32,43,.24);
+  --text-1:#10202B; --text-2:#435663; --text-3:#75848E;
+  --amber-200:#F9B569; --amber-300:#D97418; --amber-500:#D96A10; --flame-600:#C24E12;
+  --wave-300:#0F7A6E; --wave-400:#12877A; --wave-600:#0C6B60; --snow:#FFFFFF;
+  --grad-brand:linear-gradient(135deg,#F79A3E 0%,#E8622C 55%,#C24E12 100%);
+  --shadow-1:0 18px 50px rgba(31,42,50,.12);
+}
+:root[data-theme="light"] body{
+  background:
+    radial-gradient(1100px 540px at 82% -12%, rgba(232,138,42,.15), transparent 62%),
+    radial-gradient(900px 500px at 6% 110%, rgba(18,135,122,.10), transparent 60%),
+    var(--bg-0);
+}
+:root[data-theme="light"] body::before{opacity:.035}
+:root[data-theme="light"] .btn-primary{color:#FFF8F0}
+:root[data-theme="light"] .seg button.on{color:#FFF8F0}
+:root[data-theme="light"] .nav-pill{background:rgba(255,255,255,.74)}
+:root[data-theme="light"] .glass{background:linear-gradient(160deg,rgba(255,255,255,.92),rgba(255,255,255,.72))}
+:root[data-theme="light"] .stat{background:rgba(255,255,255,.66)}
+:root[data-theme="light"] .input,
+:root[data-theme="light"] .dp-field,
+:root[data-theme="light"] .step{background:rgba(255,255,255,.85)}
+:root[data-theme="light"] .chip2{background:rgba(255,255,255,.6)}
+:root[data-theme="light"] .card{background:linear-gradient(170deg,#FFFFFF,#F3EFE6)}
+:root[data-theme="light"] .cta{background:radial-gradient(640px 260px at 50% -30%,rgba(232,138,42,.18),transparent 70%),linear-gradient(170deg,#FFFFFF,#F1EDE3)}
+:root[data-theme="light"] .dp-pop,
+:root[data-theme="light"] .toast{background:var(--bg-1)}
+:root[data-theme="light"] .dp-d:hover{background:var(--bg-2)}
+:root[data-theme="light"] .dp-d.in{background:rgba(217,106,16,.14)}
+:root[data-theme="light"] .wave-band path{stroke:var(--wave-600)}
+:root[data-theme="light"] .ring circle:first-child{stroke:#E2DCCE}
+:root[data-theme="light"] .ring text{fill:#10202B}
+:root[data-theme="light"] .m-ico{background:rgba(217,106,16,.1);border-color:rgba(217,106,16,.26)}
+/* знак: тёмный/светлый вариант переключаются по теме */
+.u-l{display:none}
+:root[data-theme="light"] .u-d{display:none}
+:root[data-theme="light"] .u-l{display:inline}
+/* переключатель темы */
+.theme-t{width:40px;height:40px;border-radius:50%;border:1px solid var(--line-strong);background:transparent;color:var(--text-2);cursor:pointer;display:grid;place-items:center;transition:.18s}
+.theme-t:hover{color:var(--text-1);background:var(--bg-2)}
+.theme-t .sun{display:none}
+:root[data-theme="light"] .theme-t .sun{display:block}
+:root[data-theme="light"] .theme-t .moon{display:none}
+.footer .wrap{display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <linearGradient id="gSail" x1="210" y1="140" x2="348" y2="319" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFC46B"/><stop offset=".55" stop-color="#F08A2E"/><stop offset="1" stop-color="#E4571B"/>
+    </linearGradient>
+    <linearGradient id="gRefl" x1="248" y1="341" x2="248" y2="413" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#C46A2A" stop-opacity=".5"/><stop offset="1" stop-color="#C46A2A" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="gSailL" x1="210" y1="140" x2="348" y2="319" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#F79A3E"/><stop offset=".55" stop-color="#E8622C"/><stop offset="1" stop-color="#C24E12"/>
+    </linearGradient>
+    <linearGradient id="gReflL" x1="248" y1="341" x2="248" y2="413" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#C24E12" stop-opacity=".35"/><stop offset="1" stop-color="#C24E12" stop-opacity="0"/>
+    </linearGradient>
+    <g id="pv-mark">
+      <path d="M187 341 L324 341 L248 413 Z" fill="url(#gRefl)"/>
+      <path d="M210 140 Q294 209 348 319 L210 319 Z" fill="url(#gSail)" stroke="url(#gSail)" stroke-width="8" stroke-linejoin="round"/>
+      <path d="M209 102 L234 132 L224 126 L216.5 132 L209 126 L201.5 132 L194 126 L184 132 Z" fill="#F5F2EA" stroke="#F5F2EA" stroke-width="5" stroke-linejoin="round"/>
+      <path d="M135 331 C155 325 175 337 195 331 C215 325 235 337 255 331 C275 325 295 337 315 331 C335 325 355 337 375 331" stroke="#F5F2EA" stroke-width="7" stroke-linecap="round" fill="none"/>
+    </g>
+    <g id="pv-mark-mono">
+      <path fill="currentColor" fill-opacity=".35" d="M187 341 L324 341 L248 413 Z"/>
+      <path fill="currentColor" d="M210 140 Q294 209 348 319 L210 319 Z"/>
+      <path fill="currentColor" d="M209 102 L234 132 L224 126 L216.5 132 L209 126 L201.5 132 L194 126 L184 132 Z"/>
+      <path d="M135 331 C155 325 175 337 195 331 C215 325 235 337 255 331 C275 325 295 337 315 331 C335 325 355 337 375 331" stroke="currentColor" stroke-width="7" stroke-linecap="round" fill="none"/>
+    </g>
+    <g id="pv-mark-light">
+      <path d="M187 341 L324 341 L248 413 Z" fill="url(#gReflL)"/>
+      <path d="M210 140 Q294 209 348 319 L210 319 Z" fill="url(#gSailL)" stroke="url(#gSailL)" stroke-width="8" stroke-linejoin="round"/>
+      <path d="M209 102 L234 132 L224 126 L216.5 132 L209 126 L201.5 132 L194 126 L184 132 Z" fill="#10202B" stroke="#10202B" stroke-width="5" stroke-linejoin="round"/>
+      <path d="M135 331 C155 325 175 337 195 331 C215 325 235 337 255 331 C275 325 295 337 315 331 C335 325 355 337 375 331" stroke="#12877A" stroke-width="7" stroke-linecap="round" fill="none"/>
+    </g>
+  </defs>
+</svg>
+
+<nav class="nav">
+  <div class="nav-pill">
+    <a class="logo" href="#"><svg viewBox="0 0 512 512"><use href="#pv-mark" class="u-d"/><use href="#pv-mark-light" class="u-l"/></svg><b>ПРОВИАНТ</b></a>
+    <div class="nav-links">
+      <a href="#">Маршруты</a><a href="#">Калькулятор</a><a href="#">Снаряжение</a><a href="#">Блог</a>
+    </div>
+    <button class="theme-t" id="theme-toggle" aria-label="Переключить тему">
+      <svg class="moon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>
+      <svg class="sun" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+    </button>
+    <a class="btn btn-primary btn-sm" href="#">Начать</a>
+  </div>
+</nav>
+
+<main class="wrap">
+  <section class="hero">
+    <div>
+      <span class="pill"><span class="dot"></span>планировщик провизии · v2.0</span>
+      <h1>Меню для <em>гор</em><br>и <em>моря</em></h1>
+      <p class="lead">Провиант собирает раскладку под маршрут, состав группы и погоду —
+        от недельных стоянок на яхте до траверсов выше снеговой линии.
+        Граммы, калории и список закупок — автоматически.</p>
+      <div class="cta-row">
+        <a class="btn btn-primary" href="#">Собрать раскладку
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M5 12h14m-6-6 6 6-6 6"/></svg></a>
+        <a class="btn btn-ghost" href="#">Смотреть демо</a>
+      </div>
+      <div class="stats">
+        <div class="stat"><b>1 200+</b><span>маршрутов</span></div>
+        <div class="stat"><b>48 ч</b><span>без сети</span></div>
+        <div class="stat"><b>−18 %</b><span>вес рюкзака</span></div>
+      </div>
+    </div>
+
+    <div class="hero-art">
+      <div class="glass meal-card">
+        <div class="meal-head">
+          <h3>День 3 · Хребет → Бухта</h3>
+          <span class="badge">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M3 15c2-2 4-2 6 0s4 2 6 0 4-2 6 0M3 9c2-2 4-2 6 0s4 2 6 0 4-2 6 0"/></svg>
+            ветер 12 м/с · +4°</span>
+        </div>
+        <div class="meal-row">
+          <span class="m-ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 10h16M6 10c0 6 2.5 9 6 9s6-3 6-9M9 6c0-1.5 1-2 1-3M14 6c0-1.5 1-2 1-3"/></svg></span>
+          <span><b>Завтрак</b><small>овсянка с курагой и орехами, чай</small></span>
+          <span class="kcal">420 ккал<small>96 г</small></span>
+        </div>
+        <div class="meal-row">
+          <span class="m-ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 12h18M5 12c1 5 3.5 8 7 8s6-3 7-8M12 4v4"/></svg></span>
+          <span><b>Обед</b><small>сыр, галеты, шоколад, термос</small></span>
+          <span class="kcal">610 ккал<small>118 г</small></span>
+        </div>
+        <div class="meal-row">
+          <span class="m-ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3c3 3.5 5 6.2 5 9a5 5 0 0 1-10 0c0-2.8 2-5.5 5-9ZM12 21v-4"/></svg></span>
+          <span><b>Ужин</b><small>чечевица с овощами, сухари, какао</small></span>
+          <span class="kcal">690 ккал<small>140 г</small></span>
+        </div>
+        <div class="meal-total"><span>Итого на человека</span><b>1 720 ккал · 354 г</b></div>
+      </div>
+      <div class="mini-row">
+        <div class="glass mini">
+          <svg class="ring" width="54" height="54" viewBox="0 0 54 54">
+            <circle cx="27" cy="27" r="22" fill="none" stroke="#1E3243" stroke-width="7"/>
+            <circle cx="27" cy="27" r="22" fill="none" stroke="url(#gSail)" stroke-width="7" stroke-linecap="round"
+                    stroke-dasharray="99 138" transform="rotate(-90 27 27)"/>
+            <text x="27" y="31" text-anchor="middle" font-family="Manrope, sans-serif" font-size="12" font-weight="800" fill="#EDF4F7">72%</text>
+          </svg>
+          <div><b>354 г</b><span>от дневной нормы веса</span></div>
+        </div>
+        <div class="glass mini">
+          <svg class="ring" width="54" height="54" viewBox="0 0 54 54">
+            <circle cx="27" cy="27" r="22" fill="none" stroke="#1E3243" stroke-width="7"/>
+            <circle cx="27" cy="27" r="22" fill="none" stroke="#57C7B8" stroke-width="7" stroke-linecap="round"
+                    stroke-dasharray="118 138" transform="rotate(-90 27 27)"/>
+            <text x="27" y="31" text-anchor="middle" font-family="Manrope, sans-serif" font-size="12" font-weight="800" fill="#EDF4F7">86%</text>
+          </svg>
+          <div><b>1 720</b><span>ккал из плана 2 000</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="plan glass" aria-label="Быстрый расчёт раскладки">
+    <span class="lbl">быстрый расчёт</span>
+    <div class="dp" id="plan-dp">
+      <button class="dp-field" data-dp-field>
+        <span data-val>Даты похода</span>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z"/></svg>
+      </button>
+      <div class="dp-pop">
+        <div class="dp-head">
+          <button class="dp-nav" data-dp-prev aria-label="Предыдущий месяц"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="m15 6-6 6 6 6"/></svg></button>
+          <b data-dp-title></b>
+          <button class="dp-nav" data-dp-next aria-label="Следующий месяц"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="m9 6 6 6-6 6"/></svg></button>
+        </div>
+        <div class="dp-wd"><span>пн</span><span>вт</span><span>ср</span><span>чт</span><span>пт</span><span>сб</span><span>вс</span></div>
+        <div class="dp-grid" data-dp-grid></div>
+        <div class="dp-presets">
+          <button class="chip2" data-dp-preset="2">Выходные</button>
+          <button class="chip2" data-dp-preset="3">3 дня</button>
+          <button class="chip2" data-dp-preset="7">Неделя</button>
+        </div>
+      </div>
+    </div>
+    <div class="step" id="plan-step" title="Экипаж">
+      <button aria-label="Меньше">−</button><b>4</b><button aria-label="Больше">+</button>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="chip2 on">без глютена</button>
+      <button class="chip2">веган</button>
+      <button class="chip2 on">без лактозы</button>
+    </div>
+    <button class="btn btn-primary" id="plan-go">Рассчитать провиант</button>
+  </section>
+
+  <div class="wave-band" aria-hidden="true">
+    <svg viewBox="0 0 2400 90" preserveAspectRatio="none">
+      <path d="M0 45 C50 29 100 61 150 45 C200 29 250 61 300 45 C350 29 400 61 450 45 C500 29 550 61 600 45 C650 29 700 61 750 45 C800 29 850 61 900 45 C950 29 1000 61 1050 45 C1100 29 1150 61 1200 45 C1250 29 1300 61 1350 45 C1400 29 1450 61 1500 45 C1550 29 1600 61 1650 45 C1700 29 1750 61 1800 45 C1850 29 1900 61 1950 45 C2000 29 2050 61 2100 45 C2150 29 2200 61 2250 45 C2300 29 2350 61 2400 45" fill="none" stroke="#2E9C8E" stroke-width="2.5"/>
+    </svg>
+    <svg class="w2" viewBox="0 0 2400 90" preserveAspectRatio="none">
+      <path d="M0 50 C50 34 100 66 150 50 C200 34 250 66 300 50 C350 34 400 66 450 50 C500 34 550 66 600 50 C650 34 700 66 750 50 C800 34 850 66 900 50 C950 34 1000 66 1050 50 C1100 34 1150 66 1200 50 C1250 34 1300 66 1350 50 C1400 34 1450 66 1500 50 C1550 34 1600 66 1650 50 C1700 34 1750 66 1800 50 C1850 34 1900 66 1950 50 C2000 34 2050 66 2100 50 C2150 34 2200 66 2250 50 C2300 34 2350 66 2400 50" fill="none" stroke="#2E9C8E" stroke-width="2"/>
+    </svg>
+  </div>
+
+  <section class="bento">
+    <div class="card wide">
+      <span class="f-ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3 4 19h16L12 3ZM12 3v16M8.5 12.5 12 19l3.5-6.5"/></svg></span>
+      <h3>Яхта или горы — один переключатель</h3>
+      <p>Профиль похода меняет всю логику раскладки: морская кухня учитывает качку,
+         автономность и опреснитель, горная — высоту, холод и каждый грамм за спиной.</p>
+      <div class="seg" role="tablist" id="bento-seg">
+        <button class="on">⛵ Яхта</button><button>🏔 Горы</button><button>🥾 Треккинг</button>
+      </div>
+      <div class="chips" id="bento-chips">
+        <span class="chip"><b>7 дней</b> автономности</span>
+        <span class="chip"><b>4</b> человека</span>
+        <span class="chip">галета-контроль <b>✓</b></span>
+      </div>
+    </div>
+    <div class="card teal">
+      <span class="f-ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3v3M7 21h10M12 6c-4 0-6 3-6 7h12c0-4-2-7-6-7ZM9 17v4M15 17v4"/></svg></span>
+      <h3>Граммы и ккал</h3>
+      <p>Баланс БЖУ под нагрузку дня: переходы, набор высоты, ветер.</p>
+      <div class="bar"><i style="width:72%"></i></div>
+      <div class="bar teal"><i style="width:86%"></i></div>
+      <div class="chips"><span class="chip">белки <b>18%</b></span><span class="chip">жиры <b>32%</b></span><span class="chip">углеводы <b>50%</b></span></div>
+    </div>
+    <div class="card teal">
+      <span class="f-ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3v10m0 0 4-4m-4 4-4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg></span>
+      <h3>Офлайн и экспорт</h3>
+      <p>Раскладка живёт без сети в горах и в море. Экспорт в CSV, PDF и чек-лист для закупки.</p>
+      <div class="chips">
+        <span class="chip">.csv</span><span class="chip">.pdf</span><span class="chip">GPX-маршрут</span><span class="chip">Telegram-чек</span>
+      </div>
+    </div>
+    <div class="card wide">
+      <span class="f-ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M17 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9.5 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM22 21v-2a4 4 0 0 0-3-3.87M15.5 3.13a4 4 0 0 1 0 7.75"/></svg></span>
+      <h3>Общий котёл для экипажа</h3>
+      <p>Раскладка делится на команду: аллергии, предпочтения и дежурства по камбузу —
+         Провиант сам разложит продукты по дням и дежурным парам.</p>
+      <div class="chips">
+        <span class="chip"><b>Аня</b> без глютена</span>
+        <span class="chip"><b>Марк</b> +20% порция</span>
+        <span class="chip">дежурные <b>пары на день</b></span>
+        <span class="chip">авто-замена продуктов <b>✓</b></span>
+      </div>
+    </div>
+  </section>
+
+  <section class="cta">
+    <span class="pill" style="background:rgba(255,158,44,.1);border-color:rgba(255,158,44,.36);color:var(--amber-300)">бесплатно для первых 500 экипажей</span>
+    <h2 style="margin-top:16px">Соберите раскладку за 10 минут</h2>
+    <p>Маршрут, даты, состав группы — Провиант предложит меню, посчитает вес
+       и соберёт список покупок. Оставьте почту — пришлём ранний доступ.</p>
+    <form class="cta-form" id="cta-form">
+      <input class="input" id="cta-email" type="email" placeholder="you@crew.me">
+      <button class="btn btn-primary">Получить доступ</button>
+    </form>
+  </section>
+</main>
+
+<footer class="footer">
+  <div class="wrap">
+    <svg style="width:20px;height:20px;color:var(--text-3)" viewBox="0 0 512 512"><use href="#pv-mark-mono"/></svg>
+    <span>© 2026 Провиант · еда для гор и моря</span>
+    <span style="margin-left:auto">hello@proviant.app</span>
+  </div>
+</footer>
+
+<div class="toasts" id="toasts"></div>
+
+<script>
+(function(){
+  "use strict";
+  var $ = function(s, r){ return (r||document).querySelector(s); };
+  var $ = function(s, r){ return Array.prototype.slice.call((r||document).querySelectorAll(s)); };
+
+  /* ---------- тема: dark по умолчанию, light по кнопке ---------- */
+  var root = document.documentElement;
+  try { var saved = localStorage.getItem('pv-theme'); if (saved) root.setAttribute('data-theme', saved); } catch(e){}
+  var tt = $('#theme-toggle');
+  if (tt) tt.addEventListener('click', function(){
+    var next = root.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
+    root.setAttribute('data-theme', next);
+    try { localStorage.setItem('pv-theme', next); } catch(e){}
+  });
+
+  /* ---------- тосты ---------- */
+  function toast(type, title, msg){
+    var el = document.createElement('div');
+    el.className = 'toast ' + type;
+    el.innerHTML = '<span class="ti">' + (type==='ok'
+        ? '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round"><path d="m5 13 4 4L19 7"/></svg>'
+        : '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>')
+      + '</span><span><b>'+title+'</b><small>'+msg+'</small></span><i class="tbar"></i>';
+    $('#toasts').appendChild(el);
+    setTimeout(function(){ el.style.transition='opacity .3s, transform .3s'; el.style.opacity='0'; el.style.transform='translateY(8px)';
+      setTimeout(function(){ el.remove(); }, 320); }, 4000);
+  }
+
+  /* ---------- date-range picker ---------- */
+  var MONTHS = ['январь','февраль','март','апрель','май','июнь','июль','август','сентябрь','октябрь','ноябрь','декабрь'];
+  var MONTHS_G = ['янв','фев','мар','апр','мая','июн','июл','авг','сен','окт','ноя','дек'];
+  function makeDP(root){
+    var today = new Date(); today.setHours(0,0,0,0);
+    var view = new Date(today.getFullYear(), today.getMonth(), 1);
+    var start = null, end = null, hover = null;
+    var grid = $('[data-dp-grid]', root), title = $('[data-dp-title]', root), field = $('[data-val]', root);
+    function fmt(d){ return d.getDate()+' '+MONTHS_G[d.getMonth()]; }
+    function label(){ field.textContent = start ? (end ? fmt(start)+' — '+fmt(end) : fmt(start)+' — …') : 'Даты похода'; }
+    function render(){
+      title.textContent = MONTHS[view.getMonth()]+' '+view.getFullYear();
+      grid.innerHTML = '';
+      var first = new Date(view), off = (first.getDay()+6)%7;
+      var from = new Date(view); from.setDate(from.getDate()-off);
+      for (var i=0;i<42;i++){
+        (function(){
+          var d = new Date(from); d.setDate(from.getDate()+i);
+          var b = document.createElement('button');
+          b.type='button'; b.className='dp-d'; b.textContent=d.getDate();
+          if (d.getMonth()!==view.getMonth()) b.classList.add('out');
+          if (d<today) b.classList.add('dis');
+          if (+d===+today) b.classList.add('today');
+          var lo=start, hi=end||hover;
+          if (start && hi && hi<start){ lo=hi; hi=start; }
+          if (lo && hi && d>=lo && d<=hi) b.classList.add('in');
+          if (start && +d===+start) b.classList.add('start');
+          if (end && +d===+end) b.classList.add('end');
+          if (!end && hover && start && +d===+hover) b.classList.add('end');
+          b.addEventListener('click', function(ev){
+            ev.stopPropagation();
+            if (!start || (start && end)) { start=d; end=null; }
+            else if (d<start) { start=d; }
+            else { end=d; }
+            label(); render();
+            if (start && end) setTimeout(function(){ root.classList.remove('open'); }, 260);
+          });
+          b.addEventListener('mouseenter', function(){ if (start && !end){ hover=d; render(); } });
+          grid.appendChild(b);
+        })();
+      }
+    }
+    $('[data-dp-field]', root).addEventListener('click', function(e){ e.stopPropagation(); root.classList.toggle('open'); render(); });
+    $('[data-dp-prev]', root).addEventListener('click', function(e){ e.stopPropagation(); view=new Date(view.getFullYear(), view.getMonth()-1, 1); render(); });
+    $('[data-dp-next]', root).addEventListener('click', function(e){ e.stopPropagation(); view=new Date(view.getFullYear(), view.getMonth()+1, 1); render(); });
+    $('[data-dp-preset]', root).forEach(function(p){
+      p.addEventListener('click', function(e){
+        e.stopPropagation();
+        var n=+p.getAttribute('data-dp-preset');
+        start=new Date(today);
+        if (n===2){ var wd=(today.getDay()+6)%7; start.setDate(start.getDate()+((5-wd+7)%7||7)); }
+        end=new Date(start); end.setDate(end.getDate()+n-1);
+        view=new Date(start.getFullYear(), start.getMonth(), 1);
+        label(); render();
+        setTimeout(function(){ root.classList.remove('open'); }, 260);
+      });
+    });
+    label();
+    root.state = function(){ return {start:start, end:end}; };
+  }
+  var dp = $('#plan-dp'); makeDP(dp);
+  document.addEventListener('click', function(){ $('.dp.open, .sel.open').forEach(function(p){ p.classList.remove('open'); }); });
+  document.addEventListener('keydown', function(e){ if (e.key==='Escape') $('.dp.open').forEach(function(p){ p.classList.remove('open'); }); });
+
+  /* ---------- степпер экипажа ---------- */
+  var step = $('#plan-step');
+  $('button', step).forEach(function(b, i){
+    b.addEventListener('click', function(){
+      var v = +$('b', step).textContent + (i ? 1 : -1);
+      $('b', step).textContent = Math.max(1, Math.min(12, v));
+    });
+  });
+
+  /* ---------- чипы диет ---------- */
+  $('.chip2').forEach(function(ch){
+    if (ch.hasAttribute('data-dp-preset')) return;
+    ch.addEventListener('click', function(){ ch.classList.toggle('on'); });
+  });
+
+  /* ---------- расчёт ---------- */
+  $('#plan-go').addEventListener('click', function(){
+    var r = dp.state();
+    if (!r.start || !r.end) { toast('err','Нет дат','Выберите диапазон в календаре — например, пресет «Неделя»'); return; }
+    var days = Math.round((r.end - r.start)/86400000) + 1;
+    var crew = +$('b', step).textContent;
+    var diets = $('.plan .chip2.on').length;
+    var kg = (crew*days*0.354).toFixed(1).replace('.', ',');
+    var kcal = (crew*days*1720).toLocaleString('ru-RU');
+    toast('ok','Провиант собран', kg+' кг · '+kcal+' ккал · экипаж '+crew+' · дней: '+days+(diets?' · учтено диет: '+diets:''));
+  });
+
+  /* ---------- bento-сегменты ---------- */
+  var sets = [
+    '<span class="chip"><b>7 дней</b> автономности</span><span class="chip"><b>4</b> человека</span><span class="chip">галета-контроль <b>✓</b></span>',
+    '<span class="chip"><b>2 400 м</b> набор высоты</span><span class="chip"><b>−6°</b> ночёвка</span><span class="chip">газ: 2 баллона <b>✓</b></span>',
+    '<span class="chip"><b>18 км</b> в день</span><span class="chip"><b>3</b> заброски</span><span class="chip">фильтр для воды <b>✓</b></span>'
+  ];
+  var seg = $('#bento-seg');
+  $('button', seg).forEach(function(b, i){
+    b.addEventListener('click', function(){
+      $('button', seg).forEach(function(x){ x.classList.remove('on'); });
+      b.classList.add('on');
+      $('#bento-chips').innerHTML = sets[i];
+    });
+  });
+
+  /* ---------- форма раннего доступа ---------- */
+  $('#cta-form').addEventListener('submit', function(e){
+    e.preventDefault();
+    var v = $('#cta-email').value.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v)) { toast('err','Проверьте почту','Похоже, в адресе опечатка: '+ (v || 'поле пустое')); return; }
+    toast('ok','Заявка принята','Пришлём приглашение в течение суток. Добро пожаловать в экипаж!');
+    $('#cta-email').value = '';
+  });
+})();
+</script>
+
+</body>
+</html>
