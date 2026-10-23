@@ -43,8 +43,11 @@ const substitutions: Record<string, MockSubstitution[]> = {};
 let substitutionSeq = 1;
 
 /** Фаза 13 (п.6): мягкое удаление позиции «в рамках похода» — то же замещение,
- * но с to=null (продукт убирается из расчёта, рецепт в каталоге не меняется). */
-interface MockRemoved extends Omit<MockSubstitution, 'toIngredientId'> {}
+ * но с toIngredientId=null (продукт убирается из расчёта, рецепт в каталоге не меняется).
+ * Единый тип: Omit+`| null` вместо переопределения поля (совместимо с strict TS). */
+interface MockRemoved extends Omit<MockSubstitution, 'toIngredientId'> {
+  toIngredientId: null;
+}
 const removedItems: Record<string, MockRemoved[]> = {};
 let removedSeq = 1;
 
@@ -53,9 +56,32 @@ function allTripEdits(tripId: string): Array<MockSubstitution | MockRemoved> {
   return [...(substitutions[tripId] || []), ...(removedItems[tripId] || [])];
 }
 
+/** Строка сводки/закупки mock-сервера (unit + цены нужны для пересчёта при правках). */
+type TripEditRow = {
+  ingredientId: string;
+  catalogId?: string;
+  ingredientName?: string;
+  unit: string;
+  totalAmount: number;
+  plannedUnitPrice: number | null;
+  actualUnitPrice: number | null;
+  plannedCost: number | null;
+  actualCost: number | null;
+  overridden: boolean;
+  hasPlannedPrice?: boolean;
+};
+
+/** Актуальная плановая цена продукта из in-memory прайса (последняя по effectiveFrom). */
+function priceOf(catalogId: string): number | null {
+  const list = prices
+    .filter(p => p.ingredientId === catalogId)
+    .sort((a, b) => a.effectiveFrom.localeCompare(b.effectiveFrom));
+  return list.length ? list[list.length - 1].pricePerUnit : null;
+}
+
 /** Применение пер-походных правок к строкам закупки: from→to × ratio,
  * ручные добавления (from=null), удаления (to=null → сумма не считается). */
-function applyTripEditsToRows<T extends { ingredientId: string; catalogId?: string; totalAmount: number; plannedUnitPrice: number | null; actualUnitPrice: number | null; plannedCost: number | null; actualCost: number | null; overridden: boolean }>(
+function applyTripEditsToRows<T extends TripEditRow>(
   tripId: string,
   rows: T[],
   scaleAmount: (amountPerServing: number) => number,
@@ -65,7 +91,7 @@ function applyTripEditsToRows<T extends { ingredientId: string; catalogId?: stri
   const idOf = (r: T) => String(r.catalogId ?? r.ingredientId);
   const out: T[] = rows.map(r => ({ ...r }));
   /** Пересчёт стоимостей строки: costOf учитывает г/мл против ₽/кг (баг «284 046 ₽»). */
-  const recalc = (r: T & { unit?: string }) => {
+  const recalc = (r: T) => {
     const u = r.unit || 'KG';
     r.plannedCost = r.plannedUnitPrice != null ? costOf(r.totalAmount, u, r.plannedUnitPrice) : null;
     r.actualCost = r.actualUnitPrice != null ? costOf(r.totalAmount, u, r.actualUnitPrice) : null;
@@ -95,12 +121,12 @@ function applyTripEditsToRows<T extends { ingredientId: string; catalogId?: stri
       if (dstIdx >= 0) {
         const dst = out[dstIdx];
         dst.totalAmount = dst.totalAmount + amount;
-        recalc(dst as T & { unit?: string });
+        recalc(dst);
       } else {
         const product = products.find(pr => pr.id === String(e.toIngredientId));
-        const p = product?.price ?? null;
+        const p = priceOf(String(e.toIngredientId)) ?? src.plannedUnitPrice;
         const o = ovFor(tripId, String(e.toIngredientId));
-        const addedRow = {
+        const addedRow: T = {
           ...src,
           ingredientId: String(e.toIngredientId),
           catalogId: String(e.toIngredientId),
@@ -111,8 +137,8 @@ function applyTripEditsToRows<T extends { ingredientId: string; catalogId?: stri
           actualUnitPrice: o?.actualPrice ?? p,
           overridden: !!o,
           hasPlannedPrice: p != null,
-        } as unknown as T;
-        recalc(addedRow as T & { unit?: string });
+        };
+        recalc(addedRow);
         out.push(addedRow);
       }
     } else {
@@ -120,9 +146,9 @@ function applyTripEditsToRows<T extends { ingredientId: string; catalogId?: stri
       if (out.some(r => idOf(r) === String(e.toIngredientId))) continue;
       const amount = scaleAmount(e.amountPerServing || 0);
       const product = products.find(pr => pr.id === String(e.toIngredientId));
-      const p = product?.price ?? null;
+      const p = priceOf(String(e.toIngredientId));
       const o = ovFor(tripId, String(e.toIngredientId));
-      const manualRow = {
+      const manualRow: TripEditRow = {
         ingredientId: String(e.toIngredientId),
         catalogId: String(e.toIngredientId),
         ingredientName: product?.name ?? 'Новый продукт',
@@ -130,11 +156,13 @@ function applyTripEditsToRows<T extends { ingredientId: string; catalogId?: stri
         totalAmount: amount,
         plannedUnitPrice: p,
         actualUnitPrice: o?.actualPrice ?? p,
+        plannedCost: null,
+        actualCost: null,
         overridden: !!o,
         hasPlannedPrice: p != null,
-      } as unknown as T;
-      recalc(manualRow as T & { unit?: string });
-      out.push(manualRow);
+      };
+      recalc(manualRow as unknown as T);
+      out.push(manualRow as unknown as T);
     }
   }
   return out;
@@ -969,6 +997,7 @@ export const mockServer = {
         id: `rmv-${removedSeq++}`,
         recipeId,
         fromIngredientId: fromId,
+        toIngredientId: null,
         amountPerServing: Number(body?.amountPerServing ?? 0),
         ratio: 1,
         added: false,
