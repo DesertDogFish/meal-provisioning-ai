@@ -47,6 +47,12 @@ export function DateRange({
     // с ним «съедало» только что выбранную пользователем endDate (регрессия CR-3).
     if (endDate && newStartDate > endDate) {
       onEndDateChange(newStartDate);
+    } else if (!endDate && newStartDate) {
+      // Пустой endDate при непустом startDate — контракт CR-3: пустое поле
+      // подтягивается к startDate (см. useEffect на маунте). Без этой ветки
+      // очистка startDate (value='') оставляла endDate навсегда пустым, и
+      // последующий выбор даты «оживлял» устаревший endDate из state формы.
+      onEndDateChange(newStartDate);
     }
   };
 
@@ -63,7 +69,6 @@ export function DateRange({
         <DatePicker
           value={startDate || null}
           onChange={handleStartDateChange}
-          maxDate={endDate ? new Date(`${endDate}T00:00:00`) : undefined}
           placeholder={startPlaceholder}
           id="start-date"
         />

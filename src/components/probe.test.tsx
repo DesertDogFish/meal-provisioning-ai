@@ -1,21 +1,32 @@
-import { describe, it, expect, vi } from 'vitest';
-import { render, fireEvent, cleanup } from '@testing-library/react';
+import { describe, it } from 'vitest';
+import { render, fireEvent } from '@testing-library/react';
 import React from 'react';
-import { DatePicker } from './DatePicker';
+import { DateRange } from './DateRange';
 
-describe('probe dp', () => {
-  it('controlled update', () => {
-    cleanup();
-    const onChange = vi.fn();
-    const { rerender } = render(<DatePicker value={null} onChange={onChange} id="x" disabled />);
-    const inp = () => document.getElementById('x') as HTMLInputElement;
-    console.log('P1', JSON.stringify({v: inp().value, d: inp().disabled}));
-    rerender(<DatePicker value="2026-07-01" onChange={onChange} id="x" disabled={false} minDate={new Date('2026-07-01T00:00:00')} />);
-    console.log('P2', JSON.stringify({v: inp().value, d: inp().disabled, min: inp().getAttribute('min')}));
-    fireEvent.change(inp(), { target: { value: '2026-07-10' } });
-    console.log('P3 calls', JSON.stringify(onChange.mock.calls), 'domval', inp().value);
-    rerender(<DatePicker value="2026-07-10" onChange={onChange} id="x" minDate={new Date('2026-07-10T00:00:00')} />);
-    console.log('P4', JSON.stringify({v: inp().value, min: inp().getAttribute('min')}));
-    expect(true).toBe(true);
+describe('probe', () => {
+  it('range interaction', () => {
+    function W() {
+      const [d, setD] = React.useState({ startDate: '', endDate: '' });
+      return (
+        <div>
+          <DateRange
+            startDate={d.startDate}
+            endDate={d.endDate}
+            onStartDateChange={v => setD(p => ({ ...p, startDate: v }))}
+            onEndDateChange={v => setD(p => ({ ...p, endDate: v }))}
+          />
+          <span data-testid="state">{JSON.stringify(d)}</span>
+        </div>
+      );
+    }
+    const { getByLabelText, getByTestId } = render(<W />);
+    const end = () => getByLabelText('Дата окончания') as HTMLInputElement;
+    console.log('X1 disabled:', end().disabled, 'min:', end().getAttribute('min'));
+    fireEvent.change(getByLabelText('Дата начала'), { target: { value: '2026-07-01' } });
+    console.log('X2 state:', getByTestId('state').textContent, 'disabled:', end().disabled, 'min:', end().getAttribute('min'));
+    fireEvent.change(end(), { target: { value: '2026-07-05' } });
+    console.log('X3 state:', getByTestId('state').textContent, 'endVal:', end().value);
+    fireEvent.change(getByLabelText('Дата начала'), { target: { value: '2026-07-20' } });
+    console.log('X4 state:', getByTestId('state').textContent, 'endVal:', end().value);
   });
 });
