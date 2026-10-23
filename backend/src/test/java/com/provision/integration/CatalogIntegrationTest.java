@@ -173,7 +173,6 @@ class CatalogIntegrationTest {
     }
 
     @Test
-    @Test
     @Order(4)
     @DisplayName("CAT-04: Filter cookMinutes=0 returns only 'no fire' dishes (46 per seed)")
     void cat04_filterNoFireDishes() throws Exception {
