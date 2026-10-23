@@ -13,6 +13,8 @@ export interface ApiError {
   detail?: string;
   instance?: string;
   errors?: Array<{ field: string; message: string; rejectedValue?: unknown }>;
+  // Контракт совпадает с бэкендом ErrorResponse.UsedInResource (record):
+  // resourceType / resourceId / resourceName (id — число, Long→String Jackson не применяется к error-телам).
   usedIn?: Array<{ resourceType: string; resourceId: number; resourceName: string }>;
 }
 

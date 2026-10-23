@@ -64,11 +64,11 @@ const UNIT_LABELS: Record<string, string> = {
 };
 
 // CONTRACT-P1 (PLAN.md Backlog п.1): где продукт занят — для PRODUCT_IN_USE.usedIn
-function findUsedIn(productId: string): { resourceType: string; id: string; name: string }[] {
-  const usedIn: { resourceType: string; id: string; name: string }[] = [];
+function findUsedIn(productId: string): { resourceType: string; resourceId: string; resourceName: string }[] {
+  const usedIn: { resourceType: string; resourceId: string; resourceName: string }[] = [];
   for (const r of recipes) {
     if (r.ingredients.some(i => i.ingredientId === productId)) {
-      usedIn.push({ resourceType: 'RECIPE', id: r.id, name: r.name });
+      usedIn.push({ resourceType: 'RECIPE', resourceId: r.id, resourceName: r.name });
     }
   }
   for (const t of trips) {
@@ -78,7 +78,7 @@ function findUsedIn(productId: string): { resourceType: string; id: string; name
         return rec?.ingredients.some(i => i.ingredientId === productId);
       })
     );
-    if (inTrip) usedIn.push({ resourceType: 'TRIP', id: t.id, name: t.name });
+    if (inTrip) usedIn.push({ resourceType: 'TRIP', resourceId: t.id, resourceName: t.name });
   }
   return usedIn;
 }

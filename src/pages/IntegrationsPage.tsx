@@ -287,7 +287,8 @@ export default function IntegrationsPage() {
             <div>
               <h2 className="text-xl font-bold" style={{ color: 'var(--text)' }}>Open Food Facts</h2>
               <p className="text-sm mt-1" style={{ color: 'var(--muted)' }}>
-                Краудсорсинговая база данных продуктов питания с реальными ценами
+                Open Food Facts используется для идентификации продуктов (штрихкод, название, бренд, фото).
+                Цены необходимо вводить вручную или импортировать из других источников.
               </p>
               <div className="flex items-center gap-2 mt-2">
                 {offIntegration && getStatusIcon(offIntegration.status)}
