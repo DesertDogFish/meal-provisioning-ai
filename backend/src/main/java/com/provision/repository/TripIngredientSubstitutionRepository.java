@@ -26,4 +26,14 @@ public interface TripIngredientSubstitutionRepository extends JpaRepository<Trip
     List<TripIngredientSubstitution> findByTripIdWithIngredients(@Param("tripId") Long tripId);
     
     void deleteByTripIdAndRecipeIdAndFromIngredientId(Long tripId, Long recipeId, Long fromIngredientId);
+
+    @Query("SELECT s FROM TripIngredientSubstitution s " +
+           "JOIN FETCH s.recipe r " +
+           "LEFT JOIN FETCH s.fromIngredient " +
+           "LEFT JOIN FETCH s.toIngredient " +
+           "WHERE s.trip.id = :tripId")
+    List<TripIngredientSubstitution> findAllEditsForTrip(@Param("tripId") Long tripId);
+
+    Optional<TripIngredientSubstitution> findByTripIdAndRecipeIdAndAddedTrueAndToIngredientId(
+        Long tripId, Long recipeId, Long toIngredientId);
 }

@@ -30,7 +30,7 @@ const RECIPE_OMELET = {
   baseServings: 2,
   ingredients: [
     { ingredientId: 'ing-egg', ingredient: ING_EGG, amount: 4 }, // 2 яйца/порция
-    { ingredientId: 'ing-bread', ingredient: ING_BREAD, amount: 0.2 }, // 0.1 кг/порция
+    { ingredientId: 'ing-bread', ingredient: ING_BREAD, amount: 200 }, // 200 г = 0.2 кг/порция (цена задаётся в ₽/кг)
   ],
 };
 
@@ -134,7 +134,7 @@ describe('calculateMenuByDays', () => {
     const meal = menu[0].meals[0];
     expect(meal.recipeName).toBe('Unknown'); // name не задан в рецепте → Unknown
     expect(meal.ingredients.find(i => i.name === 'Яйцо')!.amount).toBe(8); // 2*4
-    expect(meal.ingredients.find(i => i.name === 'Хлеб')!.amount).toBeCloseTo(0.4);
+    expect(meal.ingredients.find(i => i.name === 'Хлеб')!.amount).toBeCloseTo(400); // 200 г × (4/2 порции) = 400 г
   });
 });
 
@@ -165,7 +165,7 @@ describe('calculateDayShopping', () => {
     const day2: TripDay = { ...day1, id: 'd2', dayDate: '2026-05-02' };
     const res = calculateDayShopping(makeTrip([day1, day2]), recipesMap, PRICES);
     expect(res).toHaveLength(2);
-    expect(res[0].dayCost).toBeCloseTo(8 * 15 + 0.4 * 200); // яйца + хлеб
+    expect(res[0].dayCost).toBeCloseTo(8 * 15 + 0.4 * 200); // яйца 8шт×15₽ + хлеб 400г×200₽/кг=80₽
     expect(res[0].hasMissingPrices).toBe(false);
   });
   it('день без цены → hasMissingPrices=true', () => {
@@ -181,7 +181,7 @@ describe('calculateDayShopping', () => {
 describe('calculatePersonSummary', () => {
   it('итоги поездки: стоимость на человека и на приём пищи', () => {
     const { summary, tripSummary } = calculatePersonSummary(makeTrip([day1]), recipesMap, PRICES);
-    const dayCost = 8 * 15 + 0.4 * 200; // 120 + 80 = 200
+    const dayCost = 8 * 15 + 0.4 * 200; // 120 + 80 = 200 (400 г → 0.4 кг × 200 ₽/кг)
     expect(tripSummary.totalCost).toBeCloseTo(dayCost);
     expect(tripSummary.costPerDefaultPerson).toBeCloseTo(dayCost / 4);
     expect(tripSummary.totalPersonMeals).toBe(4);

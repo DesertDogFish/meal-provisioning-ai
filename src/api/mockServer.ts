@@ -6,6 +6,8 @@
 import { mockIngredients, mockRecipes, mockTrips, mockProductCategories, mockPrices } from '../data/mockData';
 import { Ingredient, Recipe, Trip, ProductCategory, IngredientPrice } from '../types';
 import { calculateRecipeKcal } from '../utils/calc';
+// BUGFIX (284 046 ₽): стоимость = базовые единицы × цена за базовую единицу.
+import { costOf } from '../utils/calculations';
 
 // In-memory хранилище
 const products: Ingredient[] = [...mockIngredients];
@@ -20,6 +22,168 @@ let syncRunning = false;
 
 // Price overrides хранилище (tripId -> ingredientId -> override)
 const priceOverrides: Record<string, Record<string, { actualPrice: number; comment?: string }>> = {};
+
+// Фаза 13 (п.5): soft-disable позиций закупки в рамках похода (не удаляя продукт)
+const shoppingExcluded: Record<string, string[]> = {};
+
+// Фаза 13 (п.6): пер-походные замещения ингредиентов (TripIngredientSubstitution).
+// Хранят ДЛЬТУ черновика состава блюда относительно каталога: from/to/ratio и
+// добавленные вручную позиции (added=true). Закупка/дни/человек считают с ними.
+interface MockSubstitution {
+  id: string;
+  recipeId: string;
+  fromIngredientId: string | null; // null = позиция добавлена руками
+  toIngredientId: string | null;   // null = позиция мягко удалена из расчёта похода
+  amountPerServing: number;        // количество на порцию (для расчёта закупки)
+  ratio: number;
+  added: boolean;
+  removed?: boolean;               // true = мягкое удаление (рецепт в каталоге не тронут)
+  comment?: string;
+}
+const substitutions: Record<string, MockSubstitution[]> = {};
+let substitutionSeq = 1;
+
+/** Фаза 13 (п.6): мягкое удаление позиции «в рамках похода» — то же замещение,
+ * но с toIngredientId=null (продукт убирается из расчёта, рецепт в каталоге не меняется).
+ * Legacy-хранилище removedItems объединяется с substitutions на чтении (GET/агрегация). */
+const removedItems: Record<string, MockSubstitution[]> = {};
+let removedSeq = 1;
+
+/** Все пер-походные правки состава (замещения + удаления) одним списком. */
+function allTripEdits(tripId: string): MockSubstitution[] {
+  return [...(substitutions[tripId] || []), ...(removedItems[tripId] || [])];
+}
+
+/** Строка сводки/закупки mock-сервера (unit + цены нужны для пересчёта при правках). */
+type TripEditRow = {
+  ingredientId: string;
+  catalogId?: string;
+  ingredientName?: string;
+  unit: string;
+  totalAmount: number;
+  plannedUnitPrice: number | null;
+  actualUnitPrice: number | null;
+  plannedCost: number | null;
+  actualCost: number | null;
+  overridden: boolean;
+  hasPlannedPrice?: boolean;
+};
+
+/** Актуальная плановая цена продукта из in-memory прайса (последняя по effectiveFrom). */
+function priceOf(catalogId: string): number | null {
+  const list = prices
+    .filter(p => p.ingredientId === catalogId)
+    .sort((a, b) => a.effectiveFrom.localeCompare(b.effectiveFrom));
+  return list.length ? list[list.length - 1].pricePerUnit : null;
+}
+
+/** Применение пер-походных правок к строкам закупки: from→to × ratio,
+ * ручные добавления (from=null), удаления (to=null → сумма не считается). */
+function applyTripEditsToRows<T extends TripEditRow>(
+  tripId: string,
+  rows: T[],
+  scaleAmount: (amountPerServing: number) => number,
+): T[] {
+  const edits = allTripEdits(tripId);
+  if (!edits.length) return rows;
+  const idOf = (r: T) => String(r.catalogId ?? r.ingredientId);
+  const out: T[] = rows.map(r => ({ ...r }));
+  /** Пересчёт стоимостей строки: costOf учитывает г/мл против ₽/кг (баг «284 046 ₽»). */
+  const recalc = (r: T) => {
+    const u = r.unit || 'KG';
+    r.plannedCost = r.plannedUnitPrice != null ? costOf(r.totalAmount, u, r.plannedUnitPrice) : null;
+    r.actualCost = r.actualUnitPrice != null ? costOf(r.totalAmount, u, r.actualUnitPrice) : null;
+  };
+  for (const e of edits) {
+    const srcIdx = e.fromIngredientId == null ? -1 : out.findIndex(r => idOf(r) === String(e.fromIngredientId));
+    if (e.toIngredientId == null) {
+      // мягкое удаление позиции в рамках похода
+      if (srcIdx >= 0) {
+        const row = out[srcIdx];
+        row.plannedCost = null;
+        row.actualCost = null;
+        row.overridden = false;
+        row.actualUnitPrice = null;
+      }
+      continue;
+    }
+    if (srcIdx >= 0) {
+      // замена from→to: количество переносим на 'to' с коэффициентом ratio
+      const src = out[srcIdx];
+      const amount = src.totalAmount * (e.ratio || 1);
+      src.plannedCost = null;
+      src.actualCost = null;
+      src.overridden = false;
+      src.actualUnitPrice = null;
+      const dstIdx = out.findIndex(r => idOf(r) === String(e.toIngredientId));
+      if (dstIdx >= 0) {
+        const dst = out[dstIdx];
+        dst.totalAmount = dst.totalAmount + amount;
+        recalc(dst);
+      } else {
+        const product = products.find(pr => pr.id === String(e.toIngredientId));
+        const p = priceOf(String(e.toIngredientId)) ?? src.plannedUnitPrice;
+        const o = ovFor(tripId, String(e.toIngredientId));
+        const addedRow: T = {
+          ...src,
+          ingredientId: String(e.toIngredientId),
+          catalogId: String(e.toIngredientId),
+          ingredientName: product?.name ?? 'Замещённый продукт',
+          unit: product?.unit ?? src.unit,
+          totalAmount: amount,
+          plannedUnitPrice: p,
+          actualUnitPrice: o?.actualPrice ?? p,
+          overridden: !!o,
+          hasPlannedPrice: p != null,
+        };
+        recalc(addedRow);
+        out.push(addedRow);
+      }
+    } else {
+      // позиция добавлена руками (from=null либо 'from' отсутствует в базовых строках)
+      if (out.some(r => idOf(r) === String(e.toIngredientId))) continue;
+      const amount = scaleAmount(e.amountPerServing || 0);
+      const product = products.find(pr => pr.id === String(e.toIngredientId));
+      const p = priceOf(String(e.toIngredientId));
+      const o = ovFor(tripId, String(e.toIngredientId));
+      const manualRow: TripEditRow = {
+        ingredientId: String(e.toIngredientId),
+        catalogId: String(e.toIngredientId),
+        ingredientName: product?.name ?? 'Новый продукт',
+        unit: product?.unit ?? 'KG',
+        totalAmount: amount,
+        plannedUnitPrice: p,
+        actualUnitPrice: o?.actualPrice ?? p,
+        plannedCost: null,
+        actualCost: null,
+        overridden: !!o,
+        hasPlannedPrice: p != null,
+      };
+      recalc(manualRow as unknown as T);
+      out.push(manualRow as unknown as T);
+    }
+  }
+  return out;
+}
+
+function ovFor(tripId: string, rowIngredientId: string) {
+  const key = String(rowIngredientId).replace(/^ing/, '');
+  return priceOverrides[tripId]?.[key];
+}
+
+/** Фаза 13 (п.1): mock работает в jsdom-тестах — клиентский стейдж (tripStaging,
+ * localStorage) виден и здесь. Читаем массив id по префиксу ключа вкладки браузера. */
+function loadClientStage(prefix: string, tripId: string): Record<string, true> {
+  try {
+    const raw = (globalThis as any).localStorage?.getItem(`${prefix}-${tripId}`);
+    const arr = raw ? (JSON.parse(raw) as unknown) : [];
+    const out: Record<string, true> = {};
+    if (Array.isArray(arr)) for (const x of arr) if (typeof x === 'string') out[x] = true;
+    return out;
+  } catch {
+    return {};
+  }
+}
 
 // Auth хранилище
 interface MockUser {
@@ -650,16 +814,32 @@ export const mockServer = {
         }
       ];
 
+      // Фаза 13 (п.1): пер-походные правки состава применяются ДО финализации строк:
+      // from→to × ratio, ручные добавления, мягкие удаления (to=null).
+      const scalePerServing = (aps: number) => aps * (trip.defaultPeople || 1) * Math.max(1, trip.days?.length || 1);
+      const editedRows = applyTripEditsToRows(tripId, baseRows, scalePerServing);
+
+      // Фаза 13 (п.6): soft-disable позиций закупки (из стейджа или PUT /shopping-exclusions)
+      const excludedSet = new Set<string>([
+        ...(shoppingExcluded[tripId] || []),
+        ...Object.keys(loadClientStage('trip-shopping-excluded', tripId)),
+      ]);
+      const inScope = editedRows.filter(r => !excludedSet.has(String(r.catalogId ?? r.ingredientId)) && !excludedSet.has(String(r.ingredientId)));
+
       // CONTRACT-P1: расширенные поля — берутся из реального справочника продуктов
-      // (unitLabel/packSize/roundToPacks), substitutedFrom — из рецептов (замещённые продукты).
+      // (unitLabel/packSize/roundToPacks), substitutedFrom — из замещений похода
+      // (пер-походные TripIngredientSubstitution + legacy-флаги рецептов).
       const substitutedIds = new Set<string>();
       for (const r of recipes) {
         for (const ri of r.ingredients) {
           if ((ri as any).substitutedFrom) substitutedIds.add(ri.ingredientId);
         }
       }
+      for (const s of substitutions[tripId] || []) {
+        if (s.toIngredientId != null) substitutedIds.add(String(s.toIngredientId));
+      }
 
-      const items = baseRows.map(row => {
+      const items = inScope.map(row => {
         const product = products.find(p => p.id === row.catalogId);
         const packSize = product?.packSize ?? null;
         const roundToPacks = !!product?.roundToPacks && !!packSize;
@@ -669,20 +849,30 @@ export const mockServer = {
 
         return {
           ...row,
-          ingredientId: row.catalogId, // CONTRACT-P1: реальный id из каталога (обратная совместимость чисел — в catalogId)
+          ingredientId: row.catalogId ?? row.ingredientId, // CONTRACT-P1: реальный id из каталога (обратная совместимость чисел — в catalogId)
           unitLabel: product ? UNIT_LABELS[product.unit] || product.unit : UNIT_LABELS[row.unit] || row.unit,
           packSize,
           roundToPacks,
           packsToBuy,
           buyAmount,
           leftoverAmount,
-          substitutedFrom: substitutedIds.has(row.catalogId) ? row.catalogId : null,
+          substitutedFrom: (() => {
+            const cid = String(row.catalogId ?? row.ingredientId);
+            if (!substitutedIds.has(cid)) return null;
+            const src = (substitutions[tripId] || []).find(s => String(s.toIngredientId) === cid && s.fromIngredientId != null);
+            return src ? String(src.fromIngredientId) : cid;
+          })(),
         };
       });
 
-      const totalPlannedCost = items.reduce((sum, i) => sum + (i.plannedCost || 0), 0);
-      const totalActualCost = items.reduce((sum, i) => sum + (i.actualCost || 0), 0);
-      const deltaPercent = totalPlannedCost > 0 ? ((totalActualCost - totalPlannedCost) / totalPlannedCost) * 100 : null;
+      // Фаза 14: итоги — целые рубли; позиции и цены за единицу остаются точными.
+      // Дельта считается от ТОЧНЫХ сумм (округление только для отображения итогов),
+      // иначе округление вносило бы артефакт ~±0.02 п.п. в процент.
+      const totalPlannedCostExact = items.reduce((sum, i) => sum + (i.plannedCost || 0), 0);
+      const totalActualCostExact = items.reduce((sum, i) => sum + (i.actualCost || 0), 0);
+      const totalPlannedCost = Math.round(totalPlannedCostExact);
+      const totalActualCost = Math.round(totalActualCostExact);
+      const deltaPercent = totalPlannedCostExact > 0 ? ((totalActualCostExact - totalPlannedCostExact) / totalPlannedCostExact) * 100 : null;
 
       return {
         items,
@@ -691,8 +881,163 @@ export const mockServer = {
         deltaPercent,
         overriddenCount: items.filter(i => i.overridden).length,
         hasMissingPrices: items.some(i => !i.hasPlannedPrice),
-        missingIngredients: items.filter(i => !i.hasPlannedPrice).map(i => i.ingredientName)
+        missingIngredients: items.filter(i => !i.hasPlannedPrice).map(i => i.ingredientName),
+        // Фаза 13 (п.6): позиции, снятые soft-disable (UI показывает их серыми)
+        excludedIngredientIds: [...excludedSet],
       };
+    }
+
+    // ===== Фаза 13 (п.1): пер-походные замещения состава (TripIngredientSubstitution) =====
+    // GET /trips/:id/substitutions
+    if (parts.length === 3 && parts[2] === 'substitutions' && method === 'GET') {
+      const tripId = parts[1];
+      if (!trips.find(t => t.id === tripId)) {
+        throw { status: 404, message: 'Not found', detail: `Trip ${tripId} not found` };
+      }
+      return [
+        ...(substitutions[tripId] || []),
+        ...(removedItems[tripId] || []),
+      ];
+    }
+
+    // POST /trips/:id/substitutions — создать замену/добавление/мягкое удаление позиции
+    if (parts.length === 3 && parts[2] === 'substitutions' && method === 'POST') {
+      const tripId = parts[1];
+      const trip = trips.find(t => t.id === tripId);
+      if (!trip) {
+        throw { status: 404, message: 'Not found', detail: `Trip ${tripId} not found` };
+      }
+      const recipeId = String(body?.recipeId ?? '');
+      if (!recipes.find(r => r.id === recipeId)) {
+        throw { status: 404, message: 'Not found', detail: `Recipe ${recipeId} not found` };
+      }
+      const fromId = body?.fromIngredientId == null ? null : String(body.fromIngredientId);
+      const toId = body?.toIngredientId == null ? null : String(body.toIngredientId);
+      if (fromId == null && toId == null) {
+        throw { status: 400, message: 'Bad request', detail: 'fromIngredientId or toIngredientId required' };
+      }
+      if (fromId != null && toId != null && fromId === toId) {
+        throw { status: 400, message: 'Bad request', detail: 'From and to ingredients must be different' };
+      }
+      const list = substitutions[tripId] || (substitutions[tripId] = []);
+      // одна правка на позицию блюда (замена/удаление) — как unique(trip,recipe,from) на бэкенде
+      if (fromId != null && allTripEdits(tripId).some(s => s.recipeId === recipeId && String(s.fromIngredientId) === fromId)) {
+        throw { status: 409, message: 'Conflict', detail: 'This position already has a trip-level edit' };
+      }
+      if (toId == null) {
+        // мягкое удаление позиции «в рамках похода» (рецепт в каталоге не трогается)
+        const created: MockSubstitution = {
+          id: `rmv-${removedSeq++}`,
+          recipeId,
+          fromIngredientId: fromId,
+          toIngredientId: null,
+          amountPerServing: Number(body?.amountPerServing ?? 0),
+          ratio: 1,
+          added: false,
+          removed: true,
+          comment: body?.comment,
+        };
+        (removedItems[tripId] || (removedItems[tripId] = [])).push(created);
+        return created;
+      }
+      const created: MockSubstitution = {
+        id: `sub-${substitutionSeq++}`,
+        recipeId,
+        fromIngredientId: fromId,
+        toIngredientId: toId,
+        amountPerServing: Number(body?.amountPerServing ?? 0),
+        ratio: Number(body?.ratio ?? 1) || 1,
+        added: fromId == null,
+        removed: false,
+        comment: body?.comment,
+      };
+      list.push(created);
+      return created;
+    }
+
+    // DELETE /trips/:id/substitutions/:subId
+    if (parts.length === 4 && parts[2] === 'substitutions' && method === 'DELETE') {
+      const tripId = parts[1];
+      if (!trips.find(t => t.id === tripId)) {
+        throw { status: 404, message: 'Not found', detail: `Trip ${tripId} not found` };
+      }
+      const before = allTripEdits(tripId).length;
+      substitutions[tripId] = (substitutions[tripId] || []).filter(s => s.id !== parts[3]);
+      removedItems[tripId] = (removedItems[tripId] || []).filter(s => s.id !== parts[3]);
+      return allTripEdits(tripId).length === before ? null : { status: 'deleted' };
+    }
+
+    // PUT /trips/:id/shopping-exclusions — список ingredientId, исключаемых из расчёта
+    if (parts.length === 3 && parts[2] === 'shopping-exclusions' && method === 'PUT') {
+      const tripId = parts[1];
+      if (!trips.find(t => t.id === tripId)) {
+        throw { status: 404, message: 'Not found', detail: `Trip ${tripId} not found` };
+      }
+      if (!Array.isArray(body?.ingredientIds)) {
+        throw { status: 400, message: 'Bad request', detail: 'Expected { ingredientIds: string[] }' };
+      }
+      shoppingExcluded[tripId] = body.ingredientIds.map(String);
+      return shoppingExcluded[tripId];
+    }
+
+    // GET /trips/:id/shopping-exclusions
+    if (parts.length === 3 && parts[2] === 'shopping-exclusions' && method === 'GET') {
+      const tripId = parts[1];
+      if (!trips.find(t => t.id === tripId)) {
+        throw { status: 404, message: 'Not found', detail: `Trip ${tripId} not found` };
+      }
+      return shoppingExcluded[tripId] || [];
+    }
+
+    // DELETE /trips/:id/shopping-exclusions/:ingredientId
+    if (parts.length === 4 && parts[2] === 'shopping-exclusions' && method === 'DELETE') {
+      const tripId = parts[1];
+      if (!trips.find(t => t.id === tripId)) {
+        throw { status: 404, message: 'Not found', detail: `Trip ${tripId} not found` };
+      }
+      shoppingExcluded[tripId] = (shoppingExcluded[tripId] || []).filter(x => x !== String(parts[3]));
+      return null;
+    }
+
+    // POST /trips/:id/ingredient-removals — мягкое удаление продукта из блюда в рамках похода
+    if (parts.length === 3 && parts[2] === 'ingredient-removals' && method === 'POST') {
+      const tripId = parts[1];
+      const trip = trips.find(t => t.id === tripId);
+      if (!trip) {
+        throw { status: 404, message: 'Not found', detail: `Trip ${tripId} not found` };
+      }
+      const recipeId = String(body?.recipeId ?? '');
+      const fromId = body?.fromIngredientId == null ? null : String(body.fromIngredientId);
+      if (fromId == null) {
+        throw { status: 400, message: 'Bad request', detail: 'fromIngredientId required' };
+      }
+      const list = removedItems[tripId] || (removedItems[tripId] = []);
+      if (list.some(r => r.recipeId === recipeId && String(r.fromIngredientId) === fromId)) {
+        return list.find(r => r.recipeId === recipeId && String(r.fromIngredientId) === fromId);
+      }
+      const created: MockSubstitution = {
+        id: `rmv-${removedSeq++}`,
+        recipeId,
+        fromIngredientId: fromId,
+        toIngredientId: null,
+        amountPerServing: Number(body?.amountPerServing ?? 0),
+        ratio: 1,
+        added: false,
+        removed: true,
+        comment: body?.comment,
+      };
+      list.push(created);
+      return created;
+    }
+
+    // DELETE /trips/:id/ingredient-removals/:removalId
+    if (parts.length === 4 && parts[2] === 'ingredient-removals' && method === 'DELETE') {
+      const tripId = parts[1];
+      if (!trips.find(t => t.id === tripId)) {
+        throw { status: 404, message: 'Not found', detail: `Trip ${tripId} not found` };
+      }
+      removedItems[tripId] = (removedItems[tripId] || []).filter(r => r.id !== parts[3]);
+      return null;
     }
     
     // GET /trips/:id/summary/person
@@ -729,10 +1074,10 @@ export const mockServer = {
           hasMissingPrices: shoppingData.hasMissingPrices,
           missingIngredients: shoppingData.missingIngredients,
           totalPersonMeals,
-          plannedCostPerDefaultPerson: shoppingData.totalPlannedCost / defaultPeople,
-          actualCostPerDefaultPerson: shoppingData.totalActualCost / defaultPeople,
-          plannedCostPerPersonMeal: shoppingData.totalPlannedCost / totalPersonMeals,
-          actualCostPerPersonMeal: shoppingData.totalActualCost / totalPersonMeals,
+          plannedCostPerDefaultPerson: Math.round(shoppingData.totalPlannedCost / defaultPeople),
+          actualCostPerDefaultPerson: Math.round(shoppingData.totalActualCost / defaultPeople),
+          plannedCostPerPersonMeal: Math.round(shoppingData.totalPlannedCost / totalPersonMeals),
+          actualCostPerPersonMeal: Math.round(shoppingData.totalActualCost / totalPersonMeals),
           caloriesPerPersonMeal: null // Не считаем в mock
         }
       };

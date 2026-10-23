@@ -111,6 +111,11 @@ const isISODate = (s: unknown): boolean => typeof s === 'string' && /^\d{4}-\d{2
  * и при несогласованности формата возвращает null → наверх летит пустое событие.
  * Мы переопределяем parseDate: ISO-строку принимаем как есть, остальное —
  * стандартным парсером.
+ *
+ * ЗАМЕТКА (типизация): в реактовских .d.ts пакета react-datepicker@9 проп
+ * `parseDate` отсутствует (в рантайме он поддерживается), поэтому хелпер
+ * объявлен отдельно и подставляется через spread с приведением типа ниже —
+ * это сохраняет поведение и не ломает strict typecheck.
  */
 const parseDate = (text: string): Date | null => {
   if (!text) return null;
@@ -118,6 +123,9 @@ const parseDate = (text: string): Date | null => {
   const d = new Date(text);
   return Number.isNaN(d.getTime()) ? null : d;
 };
+
+/** Пропсы ReactDatePicker, не вошедшие в public .d.ts пакета (но рабочие в рантайме). */
+const undocumentedPickerProps = { parseDate } as unknown as Record<string, never>;
 
 /**
  * Текстовое поле (type="text") для react-datepicker (customInput).
@@ -302,7 +310,7 @@ export function DatePicker({
       open={pickerOpen}
       onFocus={() => setPickerOpen(true)}
       onClickOutside={() => setPickerOpen(false)}
-      parseDate={parseDate}
+      {...undocumentedPickerProps}
       dateFormat="yyyy-MM-dd"
       locale={ru}
       placeholderText={placeholder ?? 'Выберите дату'}

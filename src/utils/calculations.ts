@@ -11,6 +11,23 @@ export function calculateAmountPerPerson(amount: number, baseServings: number, p
   return (amount / baseServings) * people;
 }
 
+/**
+ * BUGFIX (расчёт стоимости): цена в справочнике задаётся за базовую единицу
+ * измерения продукта (₽/кг, ₽/л), а количество в рецептах для KG/L хранится в
+ * граммах/миллилитрах. Раньше стоимость считалась как amount × pricePerUnit,
+ * из-за чего 160 г борща по 1775,29 ₽/кг превращались в 284 046 ₽. Теперь
+ * доля килограмма/литра учитывается явно. Для PCS/PACK amount уже штуки — без пересчёта.
+ */
+export function toBaseUnits(amount: number, unit: string): number {
+  if (unit === 'KG' || unit === 'L') return amount / 1000;
+  return amount;
+}
+
+/** Стоимость позиции: количество (в единицах рецепта) → базовые единицы × цена за базовую единицу. */
+export function costOf(amount: number, unit: string, pricePerUnit: number): number {
+  return toBaseUnits(amount, unit) * pricePerUnit;
+}
+
 export function findPriceForDate(prices: IngredientPrice[], date: string): IngredientPrice | undefined {
   const sorted = prices
     .filter(p => p.effectiveFrom <= date)
@@ -89,17 +106,19 @@ export function calculateShoppingList(trip: Trip, recipes: Map<string, any>, pri
           // Обновляем стоимость, если есть цена на эту дату
           const price = findPriceForDate(prices.filter(p => p.ingredientId === ri.ingredientId), day.dayDate);
           if (price) {
-            existing.estimatedCost = (existing.estimatedCost || 0) + amountPerMeal * price.pricePerUnit;
+            // BUGFIX: единицы — г/мл против ₽/кг; см. costOf()
+            existing.estimatedCost = (existing.estimatedCost || 0) + costOf(amountPerMeal, existing.unit, price.pricePerUnit);
             existing.hasPrice = true;
           }
         } else {
           const price = findPriceForDate(prices.filter(p => p.ingredientId === ri.ingredientId), day.dayDate);
+          const unit = ri.ingredient?.unit || 'PCS';
           items.set(ri.ingredientId, {
             ingredientId: ri.ingredientId,
             ingredientName: ri.ingredient?.name || 'Unknown',
-            unit: ri.ingredient?.unit || 'PCS',
+            unit,
             totalAmount: amountPerMeal,
-            estimatedCost: price ? amountPerMeal * price.pricePerUnit : undefined,
+            estimatedCost: price ? costOf(amountPerMeal, unit, price.pricePerUnit) : undefined,
             hasPrice: !!price
           });
         }
@@ -145,7 +164,8 @@ export function calculateDayShopping(trip: Trip, recipes: Map<string, any>, pric
       const ingredientPrices = prices.filter(p => p.ingredientId === item.ingredientId);
       const price = findPriceForDate(ingredientPrices, day.dayDate);
       if (price) {
-        item.estimatedCost = item.totalAmount * price.pricePerUnit;
+        // BUGFIX: единицы — г/мл против ₽/кг; см. costOf()
+        item.estimatedCost = costOf(item.totalAmount, item.unit, price.pricePerUnit);
         item.hasPrice = true;
         dayCost += item.estimatedCost;
       } else {

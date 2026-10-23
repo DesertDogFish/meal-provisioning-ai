@@ -68,7 +68,7 @@ describe('Баг агрегации стоимости по endDate', () => {
                 unit: 'KG',
                 category: 'Крупы',
               },
-              amount: 0.8,
+              amount: 800,
             },
           ],
         },
@@ -97,13 +97,13 @@ describe('Баг агрегации стоимости по endDate', () => {
   it('должен считать стоимость по дням, а не по endDate', () => {
     const shoppingList = calculateShoppingList(trip, recipes, prices);
     
-    // День 10 мая: 0.8 KG × 180₽ = 144₽
-    // День 20 мая: 0.8 KG × 250₽ = 200₽
+    // День 10 мая: 800 г (0.8 кг) × 180₽/кг = 144₽
+    // День 20 мая: 800 г × 250₽/кг = 200₽
     // Итого: 344₽
     
     const grechka = shoppingList.find(item => item.ingredientId === '1');
     expect(grechka).toBeDefined();
-    expect(grechka?.totalAmount).toBe(1.6); // 0.8 + 0.8
+    expect(grechka?.totalAmount).toBe(1600); // 800 г + 800 г
     expect(grechka?.estimatedCost).toBe(344); // 144 + 200
   });
 
