@@ -12,10 +12,12 @@ type Props = React.InputHTMLAttributes<HTMLInputElement> & {
 /** Поле ввода с hint/error/success и опциональной очисткой. */
 export const Input = React.forwardRef<HTMLInputElement, Props>(
   ({ label, hint, error, success, onClear, className, id, ...rest }, ref) => {
-    const inputId = id || React.useId();
+    // ID is derived from the `id` prop; no hook is used so that rendering stays
+    // hook-order-safe (calling React.useId conditionally violates rules-of-hooks).
+    const inputId = id ?? undefined;
     const state = error ? 'err' : success ? 'ok' : '';
     return (
-      <div className={s.wrap}>
+      <div className={[s.wrap, className].filter(Boolean).join(' ')}>
         {label && <label className={s.lbl} htmlFor={inputId}>{label}</label>}
         <div className={s.box}>
           <input

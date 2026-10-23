@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { Search, Utensils, X } from 'lucide-react';
 import { MealType } from '../types';
 import { formatAmount } from '../utils/calculations';
@@ -37,11 +37,7 @@ export default function RecipesPage() {
   const [selectedRecipe, setSelectedRecipe] = useState<string | null>(null);
   const [visibleCount, setVisibleCount] = useState(24);
 
-  useEffect(() => {
-    loadRecipes();
-  }, []);
-
-  const loadRecipes = async () => {
+  const loadRecipes = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -56,7 +52,11 @@ export default function RecipesPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [showError]);
+
+  useEffect(() => {
+    loadRecipes();
+  }, [loadRecipes]);
 
   // Получить уникальные категории
   const categories = useMemo(() => {

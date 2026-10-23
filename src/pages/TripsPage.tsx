@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Mountain, Calendar, Users, Trash2, Edit2 } from 'lucide-react';
 import { useToast } from '../components/ToastProvider';
@@ -34,11 +34,7 @@ export default function TripsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -57,7 +53,11 @@ export default function TripsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [showError]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   // FIX: TripResponse бэкенда (/api/v1/trips) уже отфильтрован по текущему
   // пользователю и НЕ содержит поля userId — из-за строгого сравнения

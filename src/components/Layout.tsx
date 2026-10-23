@@ -1,6 +1,6 @@
 import { NavLink, useNavigate } from 'react-router-dom';
 import { Compass, LogOut, Menu, Mountain, Ship } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import ApiModeBadge from './ApiModeBadge';
 import BrandMark from './BrandMark';
 import ThemeToggle from './ThemeToggle';
@@ -21,11 +21,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
 
-  useEffect(() => {
-    loadUser();
-  }, []);
-
-  const loadUser = async () => {
+  const loadUser = useCallback(async () => {
     try {
       const user = await api.get<User>('/auth/me');
       setCurrentUser(user);
@@ -36,7 +32,11 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       setCurrentUser(null);
       showError('Не удалось загрузить профиль пользователя');
     }
-  };
+  }, [showError]);
+
+  useEffect(() => {
+    loadUser();
+  }, [loadUser]);
 
   // FIX: нормализация роли — бэкенд отдаёт 'ADMIN', но защита от регистра-расхождений
   const isAdmin = currentUser?.role?.toUpperCase() === 'ADMIN';
