@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#152531"/>
+      <stop offset="1" stop-color="#0B141B"/>
+    </linearGradient>
+    <linearGradient id="s" x1="210" y1="140" x2="348" y2="319" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFC46B"/>
+      <stop offset="1" stop-color="#E4571B"/>
+    </linearGradient>
+  </defs>
+  <!-- тёмная подложка-плитка: знак читается в любой вкладке -->
+  <rect width="64" height="64" rx="14" fill="url(#bg)"/>
+  <g transform="translate(-8.79 -8.97) scale(.16)">
+    <path d="M210 140 Q294 209 348 319 L210 319 Z" fill="url(#s)" stroke="url(#s)" stroke-width="14" stroke-linejoin="round"/>
+    <path d="M209 100 L234 132 L222 132 L209 116 L196 132 L184 132 Z" fill="#F5F2EA" stroke="#F5F2EA" stroke-width="10" stroke-linejoin="round"/>
+    <path d="M135 331 C155 325 175 337 195 331 C215 325 235 337 255 331 C275 325 295 337 315 331 C335 325 355 337 375 331" stroke="#F5F2EA" stroke-width="12" stroke-linecap="round"/>
+  </g>
+</svg>

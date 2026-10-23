@@ -129,7 +129,7 @@ export default function TripsPage() {
         <button
           onClick={() => setShowCreate(true)}
           className="flex items-center gap-2 px-4 py-2.5 rounded-full transition-all"
-          style={{ background: 'linear-gradient(90deg, var(--w1), var(--w2))', color: '#04121A' }}
+          style={{ background: 'var(--grad-brand)', color: '#221204', boxShadow: '0 0 0 1px rgba(255,158,44,.3), 0 16px 44px rgba(242,122,18,.28)' }}
         >
           <Plus size={18} />
           <span className="hidden sm:inline">Новый поход</span>
@@ -161,10 +161,11 @@ export default function TripsPage() {
           {myTrips.map(trip => (
             <div
               key={trip.id}
-              className="rounded-xl p-5 transition-all hover:scale-[1.01]"
+              className="glass lift p-5 relative overflow-hidden"
               style={{
-                background: `linear-gradient(rgba(10, 16, 28, 0.82), rgba(10, 16, 28, 0.88)), url(${getTripCover(trip.name)}) center/cover no-repeat, var(--surface)`,
-                border: '1px solid var(--border)'
+                backgroundImage: `linear-gradient(rgba(11, 20, 27, 0.82), rgba(13, 23, 32, 0.88)), url(${getTripCover(trip.name)})`,
+                backgroundSize: 'cover',
+                backgroundPosition: 'center'
               }}
             >
               <div className="flex items-center justify-between">
@@ -193,7 +194,7 @@ export default function TripsPage() {
                     style={{ color: 'var(--muted)' }}
                     onMouseEnter={(e) => {
                       e.currentTarget.style.color = 'var(--w1)';
-                      e.currentTarget.style.background = 'rgba(45, 212, 191, 0.1)';
+                      e.currentTarget.style.background = 'rgba(87, 199, 184, 0.1)';
                     }}
                     onMouseLeave={(e) => {
                       e.currentTarget.style.color = 'var(--muted)';
@@ -207,7 +208,7 @@ export default function TripsPage() {
                     className="p-2 rounded-lg transition-colors"
                     style={{ color: 'var(--muted)' }}
                     onMouseEnter={(e) => {
-                      e.currentTarget.style.color = '#FCA5A5';
+                      e.currentTarget.style.color = '#FFB4A2';
                       e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)';
                     }}
                     onMouseLeave={(e) => {

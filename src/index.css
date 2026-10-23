@@ -2,19 +2,90 @@
 @import "tailwindcss";
 
 :root {
-  --bg: #0B0F17;
-  --surface: #121826;
-  --elev: #1A2233;
-  --surface-2: #334155;
-  --border: rgba(255, 255, 255, 0.08);
-  --text: #E6EDF7;
-  --muted: #8B98AC;
-  --w1: #2DD4BF;
-  --w2: #38BDF8;
-  --fire: #F59E0B;
-  --ok: #34D399;
+  /* ===== Дизайн-система «Провиант» (брендбук) ===== */
+
+  /* Backgrounds */
+  --bg-0: #0B141B;      /* Основной фон */
+  --bg-1: #101D27;      /* Фон панелей/карточек */
+  --bg-2: #162634;      /* Ховеры, второстепенные элементы */
+  --bg-3: #1E3243;      /* Активные состояния, бордеры */
+
+  /* Lines & Borders */
+  --line: rgba(148,199,214,.14);
+  --line-strong: rgba(148,199,214,.28);
+
+  /* Text */
+  --text-1: #EDF4F7;    /* Основной текст */
+  --text-2: #A9BEC9;    /* Второстепенный текст */
+  --text-3: #6F8895;    /* Приглушенный текст / placeholders */
+
+  /* Accents */
+  --amber-200: #FFD9A0;
+  --amber-300: #FFC46B;
+  --amber-500: #FF9E2C; /* Главный акцент (кнопки, активные табы) */
+  --flame-600: #E85D1F;
+  --wave-300: #7FD8CC;  /* Второй акцент (инфо, успех) */
+  --wave-400: #57C7B8;
+  --wave-600: #2E9C8E;
+  --snow: #F2F7F5;
+
+  /* Gradients */
+  --grad-brand: linear-gradient(135deg, #FFD08A 0%, #F2842B 52%, #E85D1F 100%);
+
+  /* Radii */
+  --r-sm: 12px;
+  --r-md: 18px;
+  --r-lg: 26px;
+
+  /* Shadows */
+  --shadow-1: 0 18px 50px rgba(3,10,16,.5);
+
+  /* Fonts */
+  --font-display: "Unbounded", sans-serif;
+  --font-body: "Manrope", sans-serif;
+
+  /* ===== Алиасы старой системы → новые токены (совместимость с инлайновыми стилями страниц) ===== */
+  --bg: var(--bg-0);
+  --surface: var(--bg-1);
+  --elev: var(--bg-2);
+  --surface-2: var(--bg-3);
+  --border: var(--line);
+  --text: var(--text-1);
+  --muted: var(--text-2);
+  --w1: var(--wave-400);
+  --w2: var(--wave-300);
+  --fire: var(--amber-500);
+  --ok: var(--wave-400);
+  --r: var(--r-md);
+
   /* ФИКС 4: все нативные элементы браузера (календарь, select, скроллбары) — в тёмной теме */
   color-scheme: dark;
+}
+
+/* ===== Tailwind v4 theme mapping (утилиты bg-background, text-primary и т.д.) ===== */
+@theme {
+  --color-background: #0B141B;   /* var(--bg-0) */
+  --color-surface: #101D27;      /* var(--bg-1) */
+  --color-elevated: #162634;     /* var(--bg-2) */
+  --color-active: #1E3243;       /* var(--bg-3) */
+  --color-primary: #FF9E2C;      /* var(--amber-500) */
+  --color-primary-soft: #FFC46B; /* var(--amber-300) */
+  --color-secondary: #57C7B8;    /* var(--wave-400) */
+  --color-accent: #7FD8CC;       /* var(--wave-300) */
+  --color-flame: #E85D1F;        /* var(--flame-600) */
+  --color-foreground: #EDF4F7;   /* var(--text-1) */
+  --color-muted: #6F8895;        /* var(--text-3) */
+  --color-muted-2: #A9BEC9;      /* var(--text-2) */
+  --color-line: rgba(148,199,214,.14);
+  --color-line-strong: rgba(148,199,214,.28);
+  --color-snow: #F2F7F5;
+
+  --font-display: "Unbounded", sans-serif;
+  --font-sans: "Manrope", sans-serif;
+
+  --radius-sm: 12px;
+  --radius-md: 18px;
+  --radius-lg: 26px;
 }
 
 * {
@@ -22,15 +93,32 @@
 }
 
 body {
-  background: radial-gradient(1100px 500px at 85% -10%, rgba(56, 189, 248, 0.09), transparent),
-              radial-gradient(900px 500px at -10% 30%, rgba(45, 212, 191, 0.07), transparent),
-              var(--bg);
-  color: var(--text);
-  font-family: Manrope, system-ui, sans-serif;
+  background-color: var(--bg-0);
+  background-image:
+    radial-gradient(1100px 520px at 85% -10%, rgba(255, 158, 44, 0.07), transparent),
+    radial-gradient(900px 520px at -10% 30%, rgba(87, 199, 184, 0.06), transparent);
+  color: var(--text-1);
+  font-family: var(--font-body);
 }
 
-h1, h2, h3, .logo-word {
-  font-family: Unbounded, Manrope, sans-serif;
+/* Эффект «зерна плёнки» из брендбука */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.05;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='0.7'/%3E%3C/svg%3E");
+}
+
+h1, h2, h3, .logo-word, .font-display {
+  font-family: var(--font-display);
+  letter-spacing: -.015em;
+}
+
+::placeholder {
+  color: var(--text-3);
 }
 
 /* Custom scrollbar */
@@ -42,11 +130,11 @@ h1, h2, h3, .logo-word {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--bg-3);
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.2);
+  background: rgba(148, 199, 214, 0.3);
 }
 
 /* Toast animation */
@@ -77,31 +165,55 @@ h1, h2, h3, .logo-word {
 .text-fire { color: var(--fire); }
 
 .glass {
-  background: rgba(26, 34, 51, 0.62);
-  backdrop-filter: blur(14px);
-  border: 1px solid var(--border);
+  background: linear-gradient(160deg, rgba(22,38,52,.72), rgba(13,23,32,.78));
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-1);
+}
+
+/* Карточки/панели попроще — фон bg-1, бордер line */
+.panel {
+  background: var(--bg-1);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+}
+
+/* Метрики в стиле .stat из брендбука */
+.stat {
+  background: var(--bg-1);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  padding: 14px 16px;
+}
+.stat-value {
+  color: var(--amber-300);
+  font-family: var(--font-display);
+  letter-spacing: -.015em;
 }
 
 .grad-btn {
-  background: linear-gradient(90deg, var(--w1), var(--w2));
-  color: #04121A;
+  background: var(--grad-brand);
+  color: #221204;
   border: none;
+  box-shadow: 0 0 0 1px rgba(255,158,44,.3), 0 16px 44px rgba(242,122,18,.28);
   border-radius: 999px;
   padding: 10px 18px;
   font: 800 13px Manrope;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: transform 0.2s, filter 0.2s, box-shadow 0.2s;
 }
 
 .grad-btn:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 10px 26px rgba(45, 212, 191, 0.4);
+  transform: translateY(-2px);
+  filter: brightness(1.07);
 }
 
 .ghost-btn {
-  background: none;
-  border: 1px solid var(--border);
-  color: var(--text);
+  background: rgba(22,38,52,.4);
+  border: 1px solid var(--line-strong);
+  color: var(--text-1);
   border-radius: 999px;
   padding: 10px 18px;
   font: 600 13px Manrope;
@@ -110,16 +222,75 @@ h1, h2, h3, .logo-word {
 }
 
 .ghost-btn:hover {
-  background: rgba(255, 255, 255, 0.05);
-  border-color: rgba(255, 255, 255, 0.15);
+  background: var(--bg-2);
+}
+
+/* Сегментированный контрол (.seg) из брендбука */
+.seg {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  background: rgba(11,20,27,.7);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+}
+.seg-btn {
+  border: 0;
+  background: transparent;
+  color: var(--text-2);
+  font: 700 12px Manrope;
+  padding: 8px 14px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.seg-btn:hover {
+  color: var(--text-1);
+  background: var(--bg-2);
+}
+.seg-btn.active {
+  background: var(--grad-brand);
+  color: #221204;
+  box-shadow: 0 8px 22px rgba(242,122,18,.3);
+}
+
+/* Строки блюд с пунктирным бордером (.meal-row) */
+.meal-row {
+  border-bottom: 1px dashed var(--line);
+}
+.meal-row:last-child {
+  border-bottom: 0;
+}
+
+/* Появление контента */
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.fade-in-up {
+  animation: fade-in-up 0.5s cubic-bezier(.22,.61,.36,1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fade-in-up { animation: none; }
+  .lift:hover { transform: none !important; }
+}
+
+/* Подъём интерактивных элементов при наведении */
+.lift {
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.lift:hover {
+  transform: translateY(-2px);
+  border-color: var(--line-strong);
 }
 
 /* Price Overrides v2 */
 .note-box {
-  border: 1px dashed rgba(255, 255, 255, 0.25);
-  border-radius: 12px;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--r-sm);
   padding: 10px 14px;
-  color: var(--muted);
+  color: var(--text-2);
   font-size: 12px;
   margin: 10px 0;
 }
@@ -147,9 +318,9 @@ input[type=number]::-webkit-outer-spin-button {
   width: 24px;
   height: 24px;
   border-radius: 50%;
-  border: 1px solid var(--border);
-  background: var(--elev);
-  color: var(--muted);
+  border: 1px solid var(--line-strong);
+  background: var(--bg-2);
+  color: var(--text-2);
   font: 800 13px/1 Manrope;
   cursor: pointer;
   user-select: none;
@@ -160,22 +331,23 @@ input[type=number]::-webkit-outer-spin-button {
 }
 
 .nf-btn:hover {
-  color: var(--text);
-  border-color: rgba(255, 255, 255, 0.16);
+  color: var(--text-1);
+  border-color: var(--line-strong);
+  background: var(--bg-3);
 }
 
 .nf-btn:active {
-  color: var(--w1);
-  border-color: var(--w1);
-  box-shadow: 0 0 0 3px rgba(45, 212, 191, 0.18);
+  color: var(--amber-500);
+  border-color: var(--amber-500);
+  box-shadow: 0 0 0 3px rgba(255, 158, 44, 0.18);
 }
 
 .nf-input {
   width: 86px;
-  background: var(--elev);
-  border: 1px solid var(--border);
-  color: var(--text);
-  border-radius: 10px;
+  background: rgba(11,20,27,.7);
+  border: 1px solid var(--line-strong);
+  color: var(--text-1);
+  border-radius: var(--r-sm);
   padding: 7px 9px;
   font: 700 12px Manrope;
   text-align: right;
@@ -183,13 +355,13 @@ input[type=number]::-webkit-outer-spin-button {
 }
 
 .nf-input:focus {
-  outline: none;
-  border-color: var(--w1);
-  box-shadow: 0 0 0 3px rgba(45, 212, 191, 0.18);
+  outline: 2px solid rgba(255,158,44,.5);
+  outline-offset: 0;
+  border-color: var(--amber-500);
 }
 
 .nf-input::placeholder {
-  color: var(--muted);
+  color: var(--text-3);
   font-weight: 600;
 }
 
@@ -227,19 +399,20 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   border-radius: 999px;
   padding: 2px 9px;
   font: 700 10px Manrope;
-  background: rgba(245, 158, 11, 0.16);
-  color: #F8C468;
+  background: rgba(255, 158, 44, 0.14);
+  border: 1px solid rgba(255, 158, 44, 0.34);
+  color: var(--amber-300);
 }
 
 /* CR-1: расчётная калорийность */
 .kcal-calculated {
-  background: rgba(45, 212, 191, 0.1);
-  border: 1px solid rgba(45, 212, 191, 0.35);
-  border-radius: 12px;
+  background: rgba(87, 199, 184, 0.1);
+  border: 1px solid rgba(87, 199, 184, 0.34);
+  border-radius: var(--r-sm);
   padding: 10px 12px;
   font-size: 13px;
   margin-top: 10px;
-  color: var(--text);
+  color: var(--text-1);
 }
 
 .chip-delta {
@@ -250,18 +423,18 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
 }
 
 .chip-delta.dim {
-  background: rgba(255, 255, 255, 0.06);
-  color: var(--muted);
+  background: rgba(148, 199, 214, 0.08);
+  color: var(--text-3);
 }
 
 .chip-delta.fire {
-  background: rgba(245, 158, 11, 0.16);
-  color: #F8C468;
+  background: rgba(255, 158, 44, 0.14);
+  color: var(--amber-300);
 }
 
 .chip-delta.ok {
-  background: rgba(52, 211, 153, 0.16);
-  color: #7EE2B8;
+  background: rgba(87, 199, 184, 0.12);
+  color: var(--wave-300);
 }
 
 .sticky-totals {
@@ -273,16 +446,17 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   gap: 18px;
   align-items: center;
   flex-wrap: wrap;
-  background: rgba(26, 34, 51, 0.62);
-  backdrop-filter: blur(14px);
-  border: 1px solid var(--border);
-  border-radius: var(--r);
+  background: linear-gradient(160deg, rgba(22,38,52,.86), rgba(13,23,32,.9));
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-1);
 }
 
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(5, 8, 13, 0.6);
+  background: rgba(3, 10, 16, 0.66);
   backdrop-filter: blur(6px);
   display: grid;
   place-items: center;
@@ -294,16 +468,17 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   max-height: 86vh;
   overflow: auto;
   padding: 22px;
-  background: rgba(26, 34, 51, 0.62);
-  backdrop-filter: blur(14px);
-  border: 1px solid var(--border);
-  border-radius: var(--r);
+  background: linear-gradient(160deg, rgba(22,38,52,.9), rgba(13,23,32,.94));
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-1);
 }
 
 .reset-btn {
   background: none;
   border: 0;
-  color: var(--muted);
+  color: var(--text-2);
   cursor: pointer;
   font-size: 14px;
   padding: 4px;
@@ -311,7 +486,22 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
 }
 
 .reset-btn:hover {
-  color: var(--fire);
+  color: var(--amber-500);
+}
+
+/* Глобальные поля ввода в стиле брендбука: bg-0 поверх панелей, line-strong бордер, янтарный фокус */
+input:not([type="checkbox"]):not([type="radio"]),
+select,
+textarea {
+  background-color: rgba(11,20,27,.7);
+  border: 1px solid var(--line-strong);
+  color: var(--text-1);
+}
+input:not([type="checkbox"]):not([type="radio"]):focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid rgba(255,158,44,.5);
+  outline-offset: 1px;
 }
 
 /* Fix Date Picker icon color */
@@ -326,21 +516,39 @@ input:-webkit-autofill,
 input:-webkit-autofill:hover,
 input:-webkit-autofill:focus,
 input:-webkit-autofill:active {
-  -webkit-text-fill-color: var(--text, #e2e8f0) !important;
-  caret-color: var(--text, #e2e8f0) !important;
-  -webkit-box-shadow: 0 0 0 1000px var(--surface, #1e293b) inset !important;
+  -webkit-text-fill-color: var(--text-1) !important;
+  caret-color: var(--text-1) !important;
+  -webkit-box-shadow: 0 0 0 1000px var(--bg-1) inset !important;
   border-radius: inherit;
   transition: background-color 5000s ease-in-out 0s;
 }
 
-/* ФИКС 2: аккуратный бейдж категории блюда (без КАПСА) */
+/* ФИКС 2: аккуратный бейдж категории блюда (без КАПСА) — стиль teal/wave */
 .recipe-category-badge {
   display: inline-block;
   padding: 2px 10px;
   font-size: 0.75rem;
-  font-weight: 500;
-  color: var(--muted, #94a3b8);
-  background: var(--surface-2, #334155);
-  border-radius: 12px;
+  font-weight: 600;
+  color: var(--wave-300);
+  background: rgba(87, 199, 184, 0.12);
+  border: 1px solid rgba(87, 199, 184, 0.34);
+  border-radius: 999px;
   text-transform: none; /* явно убираем КАПС, если где-то остался */
+}
+
+/* Бейджи статусов (Badge) по брендбуку */
+.badge-success {
+  background: rgba(87, 199, 184, 0.12);
+  border: 1px solid rgba(87, 199, 184, 0.34);
+  color: var(--wave-300);
+}
+.badge-warning {
+  background: rgba(255, 158, 44, 0.14);
+  border: 1px solid rgba(255, 158, 44, 0.34);
+  color: var(--amber-300);
+}
+.badge-neutral {
+  background: rgba(148, 199, 214, 0.08);
+  border: 1px solid var(--line);
+  color: var(--text-2);
 }

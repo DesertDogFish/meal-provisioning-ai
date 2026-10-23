@@ -56,7 +56,7 @@ export class ErrorBoundary extends Component<Props, State> {
         <div className="min-h-screen flex items-center justify-center p-4" style={{ background: 'var(--bg)' }}>
           <div className="rounded-2xl shadow-lg p-8 max-w-md w-full" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
             <div className="flex items-center justify-center w-16 h-16 rounded-full mx-auto mb-4" style={{ background: 'rgba(239, 68, 68, 0.1)' }}>
-              <AlertTriangle size={32} style={{ color: '#FCA5A5' }} />
+              <AlertTriangle size={32} style={{ color: '#FFB4A2' }} />
             </div>
             <h2 className="text-xl font-bold text-center mb-2" style={{ color: 'var(--text)' }}>
               Что-то пошло не так
@@ -77,7 +77,7 @@ export class ErrorBoundary extends Component<Props, State> {
             <button
               onClick={this.reset}
               className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-full transition-colors"
-              style={{ background: 'linear-gradient(90deg, var(--w1), var(--w2))', color: '#04121A' }}
+              style={{ background: 'var(--grad-brand)', color: '#221204' }}
             >
               <RefreshCw size={18} />
               Попробовать снова
