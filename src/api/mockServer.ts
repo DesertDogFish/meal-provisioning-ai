@@ -393,9 +393,60 @@ export const mockServer = {
   },
 
   // Рецепты
-  handleRecipes(method: string, _path: string, _body?: any): any {
+  handleRecipes(method: string, path: string, body?: any): any {
+    const url = new URL(`http://localhost${path}`);
+    // GET /recipes?search=... — серверный поиск по названию блюда и продуктам
+    // (используется поиском блюд в модалке «Добавить приём пищи»).
+    if (method === 'GET' && url.searchParams.get('search')) {
+      const q = normalize(url.searchParams.get('search')!);
+      const hit = (r: Recipe) =>
+        normalize(r.name).includes(q) ||
+        r.ingredients.some(ri => {
+          const ing = products.find(p => p.id === ri.ingredientId) ?? ri.ingredient;
+          return ing ? normalize(ing.name).includes(q) : false;
+        });
+      return recipes.filter(hit).map(r => this.recipeToResponse(r));
+    }
+
+    // PUT /admin/recipes/:id — правка состава блюда прямо из окна добавления
+    // приёма пищи (замена/добавление продукта). В mock роль не проверяем.
+    if (method === 'PUT' && url.pathname.startsWith('/admin/recipes/')) {
+      const id = url.pathname.split('/')[3];
+      const idx = recipes.findIndex(r => r.id === id);
+      if (idx === -1) {
+        throw { status: 404, message: 'Not found', detail: `Recipe ${id} not found` } as any;
+      }
+      const items = Array.isArray(body?.ingredients) ? body.ingredients : null;
+      if (!items || items.length === 0) {
+        throw { status: 400, message: 'Bad request', detail: 'ingredients is required' } as any;
+      }
+      for (const it of items) {
+        if (!products.some(p => p.id === String(it.ingredientId))) {
+          throw { status: 400, message: 'VALIDATION_ERROR', detail: `Ingredient ${it.ingredientId} not found` } as any;
+        }
+      }
+      recipes[idx] = {
+        ...recipes[idx],
+        name: body.name ?? recipes[idx].name,
+        mealType: body.mealType ?? recipes[idx].mealType,
+        baseServings: body.baseServings ?? recipes[idx].baseServings,
+        ingredients: items.map((it: any) => ({
+          ingredientId: String(it.ingredientId),
+          amount: Number(it.amount),
+        })),
+      };
+      return this.recipeToResponse(recipes[idx]);
+    }
+
     if (method === 'GET') {
-      return recipes.map(r => {
+      return recipes.map(r => this.recipeToResponse(r));
+    }
+
+    throw { status: 405, message: 'Method not allowed' };
+  },
+
+  /** Приводит рецепт из in-memory хранилища к форме ответа GET /recipes. */
+  recipeToResponse(r: Recipe): any {
         const ingredients = r.ingredients.map(ri => {
           const ing = products.find(p => p.id === ri.ingredientId);
           return {
@@ -423,10 +474,6 @@ export const mockServer = {
           calculatedCaloriesPerServing: kcalResult.caloriesPerServing,
           missingKcalIngredients: kcalResult.missingKcalIngredients
         };
-      });
-    }
-
-    throw { status: 405, message: 'Method not allowed' };
   },
 
   // Походы

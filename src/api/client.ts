@@ -332,9 +332,32 @@ export function normalizeRecipe(recipe: Recipe): Recipe {
 }
 
 /** Единая точка загрузки рецептов (использовать вместо api.get('/recipes')) */
-export async function getRecipes(): Promise<Recipe[]> {
-  const data = await api.get<Recipe[]>('/recipes');
+export async function getRecipes(search?: string): Promise<Recipe[]> {
+  const qs = search && search.trim() ? `?search=${encodeURIComponent(search.trim())}` : '';
+  const data = await api.get<Recipe[]>(`/recipes${qs}`);
   return Array.isArray(data) ? data.map(normalizeRecipe) : data;
+}
+
+/**
+ * Правка состава блюда (замена/добавление продукта) — PUT /admin/recipes/:id.
+ * Бэкенд принимает полный RecipeRequest, поэтому прокидываем все поля блюда,
+ * меняя только ingredients. Ответ нормализуем так же, как GET /recipes.
+ */
+export async function updateRecipeIngredients(
+  recipe: Recipe,
+  ingredients: { ingredientId: string; amount: number }[],
+): Promise<Recipe> {
+  const body = {
+    name: recipe.name,
+    mealType: recipe.mealType,
+    category: recipe.category,
+    cookMinutes: recipe.cookMinutes,
+    baseServings: recipe.baseServings,
+    caloriesPerServing: recipe.caloriesPerServing,
+    ingredients,
+  };
+  const data = await api.put<Recipe>(`/admin/recipes/${recipe.id}`, body);
+  return normalizeRecipe(data ?? { ...recipe, ingredients: ingredients as any });
 }
 
 // Утилиты для контракта
