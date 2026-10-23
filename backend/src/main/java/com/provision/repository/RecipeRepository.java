@@ -22,6 +22,19 @@ public interface RecipeRepository extends JpaRepository<Recipe, Long> {
     
     @Query("SELECT r FROM Recipe r LEFT JOIN FETCH r.ingredients ri LEFT JOIN FETCH ri.ingredient WHERE r.id = :id")
     Recipe findByIdWithIngredients(@Param("id") Long id);
+
+    /**
+     * FIX P1 («дикая загрузка сервера при открытии похода»): пакетная загрузка
+     * рецептов с составом (ingredients + ingredient) одним запросом — для
+     * SummaryService, который обходит все блюда похода. При open-in-view:false
+     * ленивые recipe.ingredients/ri.ingredient иначе грузятся по одному запросу
+     * на каждый рецепт/ингредиент (N+1). Дубли рецептов (раздувание от join)
+     * устраняет Hibernate при именованном fetch-join; distinct не используется,
+     * т.к. Hibernate не поддерживает DISTINCT + FETCH.
+     */
+    @Query("SELECT r FROM Recipe r LEFT JOIN FETCH r.ingredients ri LEFT JOIN FETCH ri.ingredient " +
+           "WHERE r.id IN :ids")
+    List<Recipe> findAllWithIngredientsByIds(@Param("ids") java.util.Collection<Long> ids);
     
     @Query("SELECT r FROM Recipe r LEFT JOIN FETCH r.ingredients ri LEFT JOIN FETCH ri.ingredient ORDER BY r.name")
     List<Recipe> findAllWithIngredients();

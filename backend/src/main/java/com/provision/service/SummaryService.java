@@ -64,67 +64,98 @@ public class SummaryService {
         return priceRepository.findEffectivePrice(ingredientId, date);
     }
 
-    public List<MenuByDayResponse> getMenuByDays(Long tripId, Long userId) {
-        Trip trip = tripRepository.findByIdWithDaysAndMeals(tripId, userId)
-                .orElseThrow(() -> new com.provision.exception.NotFoundException("Trip not found or access denied"));
+    /**
+     * Всё, что нужно для любой агрегации похода: загруженные одним пакетом
+     * (JOIN FETCH) составы рецептов и правки состава похода.
+     * FIX P1: при open-in-view:false ленивые recipe.ingredients / ri.ingredient
+     * иначе грузились по одному запросу на блюдо/ингредиент (классическое N+1),
+     * а self-invocation getShoppingList из getPersonSummary обходил прокси
+     * @Transactional. Теперь вся загрузка — в одном транзакционном методе.
+     */
+    private record TripCalculationContext(Map<Long, Recipe> recipesById,
+                                          TripIngredientEditService.TripEditBundle edits) {}
 
-        return trip.getDays().stream()
-                .map(day -> {
-                    int effectivePeople = calculateEffectivePeople(trip, day, null);
-                    List<MenuByDayResponse.MenuMealResponse> meals = day.getMeals().stream()
-                            .map(meal -> {
-                                int mealPeople = calculateEffectivePeople(trip, day, meal);
-                                Recipe recipe = meal.getRecipe();
-                                
-                                List<MenuByDayResponse.MenuMealResponse.MenuIngredientResponse> ingredients = 
-                                        recipe.getIngredients().stream()
-                                                .map(ri -> {
-                                                    BigDecimal amount = calculateAmountForMeal(
-                                                            ri.getAmount(),
-                                                            recipe.getBaseServings(),
-                                                            mealPeople
-                                                    );
-                                                    return new MenuByDayResponse.MenuMealResponse.MenuIngredientResponse(
-                                                            ri.getIngredient().getName(),
-                                                            amount,
-                                                            ri.getIngredient().getUnit()
-                                                    );
-                                                })
-                                                .toList();
-
-                                return new MenuByDayResponse.MenuMealResponse(
-                                        meal.getMealType().name(),
-                                        recipe.getName(),
-                                        mealPeople,
-                                        ingredients
-                                );
-                            })
-                            .toList();
-
-                    return new MenuByDayResponse(
-                            day.getDayDate().toString(),
-                            effectivePeople,
-                            meals
-                    );
-                })
-                .toList();
+    /**
+     * Пакетно подменяет рецепты блюд похода на варианты с загруженным составом
+     * (ingredients + ingredient). Дедупликация Hibernate по id гарантирует: тот же
+     * managed-экземплярRecipe получает заполненную коллекцию, поэтому ссылки
+     * meal.getRecipe() продолжают работать без дополнительных запросов.
+     */
+    private void ensureIngredientsLoaded(Trip trip, Map<Long, Recipe> recipesById) {
+        for (TripDay day : trip.getDays()) {
+            for (TripMeal meal : day.getMeals()) {
+                Recipe r = meal.getRecipe();
+                if (r != null) {
+                    Recipe hydrated = recipesById.get(r.getId());
+                    if (hydrated != null) {
+                        meal.setRecipe(hydrated);
+                    }
+                }
+            }
+        }
     }
 
-    public ShoppingListResponse getShoppingList(Long tripId, Long userId) {
+    private TripCalculationContext loadCalculationContext(Trip trip) {
+        Set<Long> recipeIds = new HashSet<>();
+        for (TripDay day : trip.getDays()) {
+            for (TripMeal meal : day.getMeals()) {
+                if (meal.getRecipe() != null) {
+                    recipeIds.add(meal.getRecipe().getId());
+                }
+            }
+        }
+        // ОДИН batch-запрос со fetch-join вместо N+1 по составу рецептов.
+        Map<Long, Recipe> recipesById = new HashMap<>();
+        if (!recipeIds.isEmpty()) {
+            for (Recipe r : recipeRepository.findAllWithIngredientsByIds(recipeIds)) {
+                recipesById.putIfAbsent(r.getId(), r);
+            }
+        }
+        ensureIngredientsLoaded(trip, recipesById);
+        TripIngredientEditService.TripEditBundle edits =
+                tripIngredientEditService.bundleForTrip(trip.getId());
+        return new TripCalculationContext(recipesById, edits);
+    }
+
+    /** Результат полной агрегации закупки — переиспользуется между эндпоинтами. */
+    private record ShoppingComputation(ShoppingListResponse shoppingList,
+                                       List<DayShoppingResponse> byDays,
+                                       int totalPersonMeals,
+                                       BigDecimal totalCalories) {}
+
+    /**
+     * FIX P1: единственный метод, который читает БД и считает закупку похода целиком
+     * (общий список + по дням + калории/приёмы). Помечен @Transactional явно, чтобы
+     * весь обход графа (trip→days→meals→recipe→ingredients→ingredient, цены, правки)
+     * выполнялся внутри одной транзакции даже при вызовах через this (self-invocation):
+     * публичные эндпоинт-методы теперь только делегируют сюда, не вызывая друг друга.
+     */
+    @Transactional(readOnly = true)
+    public ShoppingComputation computeShopping(Long tripId, Long userId) {
         Trip trip = tripRepository.findByIdWithDaysAndMeals(tripId, userId)
                 .orElseThrow(() -> new com.provision.exception.NotFoundException("Trip not found or access denied"));
 
+        TripCalculationContext ctx = loadCalculationContext(trip);
         Map<Long, BigDecimal> overrides = priceResolutionService.getAllOverrides(tripId);
+
         Map<Long, ShoppingAggregation> aggregation = new LinkedHashMap<>();
+        int totalPersonMeals = 0;
+        BigDecimal totalCalories = BigDecimal.ZERO;
 
         // Фаза 14 (N3): пер-походные правки состава (замены/добавления/удаления),
         // применяются ДО агрегации по ингредиентам. Рецепт в каталоге не трогается.
-        TripIngredientEditService.TripEditBundle edits = tripIngredientEditService.bundleForTrip(tripId);
+        TripIngredientEditService.TripEditBundle edits = ctx.edits();
 
         for (TripDay day : trip.getDays()) {
             for (TripMeal meal : day.getMeals()) {
                 int mealPeople = calculateEffectivePeople(trip, day, meal);
+                totalPersonMeals += mealPeople;
                 Recipe recipe = meal.getRecipe();
+                if (recipe.getCaloriesPerServing() != null) {
+                    totalCalories = totalCalories.add(
+                            BigDecimal.valueOf(recipe.getCaloriesPerServing())
+                                    .multiply(BigDecimal.valueOf(mealPeople)));
+                }
 
                 List<TripIngredientEditService.EffectiveLine> lines = tripIngredientEditService.applyEdits(
                         tripId, recipe, recipe.getIngredients(),
@@ -147,6 +178,7 @@ public class SummaryService {
             }
         }
 
+        // --- Общий список покупок ---
         List<ShoppingItemResponse> items = new ArrayList<>();
         BigDecimal totalPlannedCost = BigDecimal.ZERO;
         BigDecimal totalActualCost = BigDecimal.ZERO;
@@ -155,22 +187,22 @@ public class SummaryService {
         int overriddenCount = 0;
 
         // FIX P1 (аудит): раньше findEffectivePrice вызывался внутри цикла по каждому
-        // ингредиенту — N+1. Теперь плановые цены на дату окончания грузятся одним
-        // пакетным запросом DISTINCT ON; оверрайды и так уже в памяти (getAllOverrides).
+        // ингредиенту — N+1. Теперь плановые цены на дату окончания грузятся одним пакетным
+        // запросом DISTINCT ON; оверрайды и так уже в памяти (getAllOverrides).
         Map<Long, IngredientPrice> plannedPricesByIngredient = loadLatestPrices(
                 aggregation.keySet(), trip.getEndDate());
 
         for (ShoppingAggregation agg : aggregation.values()) {
             Long ingredientId = agg.ingredient().getId();
             BigDecimal overridePrice = overrides.get(ingredientId);
-            
+
             // Получаем плановую цену на дату окончания похода (для общей сводки)
             Optional<IngredientPrice> plannedPriceOpt = Optional.ofNullable(
                     plannedPricesByIngredient.get(ingredientId));
-            
+
             BigDecimal plannedUnitPrice = plannedPriceOpt.map(IngredientPrice::getPricePerUnit).orElse(null);
             BigDecimal actualUnitPrice = overridePrice != null ? overridePrice : plannedUnitPrice;
-            
+
             BigDecimal plannedCost = null;
             BigDecimal actualCost = null;
             boolean hasPlannedPrice = plannedUnitPrice != null;
@@ -217,7 +249,7 @@ public class SummaryService {
         BigDecimal deltaPercent = calculateDeltaPercent(totalPlannedCost, totalActualCost);
 
         // Фаза 14: итоговые суммы — целые рубли (позиции и цены за единицу остаются точными).
-        return new ShoppingListResponse(
+        ShoppingListResponse shoppingList = new ShoppingListResponse(
                 items,
                 roundToRub(totalPlannedCost),
                 roundToRub(totalActualCost),
@@ -226,14 +258,8 @@ public class SummaryService {
                 hasMissingPrices,
                 missingIngredients
         );
-    }
 
-    public List<DayShoppingResponse> getShoppingByDays(Long tripId, Long userId) {
-        Trip trip = tripRepository.findByIdWithDaysAndMeals(tripId, userId)
-                .orElseThrow(() -> new com.provision.exception.NotFoundException("Trip not found or access denied"));
-
-        Map<Long, BigDecimal> overrides = priceResolutionService.getAllOverrides(tripId);
-
+        // --- Покупки по дням ---
         // FIX P1 (аудит): пакетная загрузка цен вместо N+1 внутри цикла по дням.
         // 1) Один запрос DISTINCT ON на всю дату окончания — это нижняя грань:
         //    для любой даты внутри похода эффективная цена либо совпадает, либо старше.
@@ -241,42 +267,50 @@ public class SummaryService {
         //    их ценовые ряды в память; для дат раньше endDate корректируем эффективную
         //    цену pick'ом из ряда (иначе distinct-on вернул бы цену, ещё не действующую на день).
         Set<Long> allIngredientIds = new HashSet<>();
-        for (TripDay day : trip.getDays()) {
-            for (TripMeal meal : day.getMeals()) {
-                if (meal.getRecipe() != null && meal.getRecipe().getIngredients() != null) {
-                    meal.getRecipe().getIngredients().forEach(ri ->
-                            allIngredientIds.add(ri.getIngredient().getId()));
-                }
+        for (Recipe r : ctx.recipesById().values()) {
+            if (r.getIngredients() != null) {
+                r.getIngredients().forEach(ri -> allIngredientIds.add(ri.getIngredient().getId()));
             }
         }
 
-        // Фаза 14 (N3): правки состава похода + id замещённых продуктов в ценовой набор
-        TripIngredientEditService.TripEditBundle dayEdits = tripIngredientEditService.bundleForTrip(tripId);
-        for (Map<Long, TripIngredientSubstitution> subs : dayEdits.substitutionsByRecipeAndFrom().values()) {
+        // Фаза 14 (N3): id замещённых/добавленных продуктов тоже в ценовой набор
+        for (Map<Long, TripIngredientSubstitution> subs : edits.substitutionsByRecipeAndFrom().values()) {
             for (TripIngredientSubstitution sub : subs.values()) {
                 if (sub.getToIngredient() != null) allIngredientIds.add(sub.getToIngredient().getId());
             }
         }
-        for (List<TripIngredientSubstitution> added : dayEdits.addedByRecipe().values()) {
+        for (List<TripIngredientSubstitution> added : edits.addedByRecipe().values()) {
             for (TripIngredientSubstitution a : added) {
                 if (a.getToIngredient() != null) allIngredientIds.add(a.getToIngredient().getId());
             }
         }
+
         LocalDate rangeEnd = trip.getEndDate();
         Map<Long, IngredientPrice> basePrices = loadLatestPrices(allIngredientIds, rangeEnd);
         Map<Long, List<IngredientPrice>> priceSeries = new HashMap<>();
         if (!allIngredientIds.isEmpty()) {
-            for (IngredientPrice p : priceRepository.findByIngredientIdInOrderByEffectiveFromDesc(allIngredientIds)) {
-                priceSeries.computeIfAbsent(p.getIngredient().getId(), k -> new ArrayList<>()).add(p);
+            // FIX P1: ценовые ряды нужны ТОЛЬКО для поправок на дни раньше endDate —
+            // один пакетный запрос вместо скрытого N+1 (раньше грузился полный ряд на
+            // каждый ингредиент похода, даже когда история цен не использовалась).
+            Set<Long> needHistory = new HashSet<>();
+            for (Map.Entry<Long, IngredientPrice> e : basePrices.entrySet()) {
+                if (e.getValue().getEffectiveFrom().isAfter(trip.getStartDate())) {
+                    needHistory.add(e.getKey());
+                }
+            }
+            if (!needHistory.isEmpty()) {
+                for (IngredientPrice p : priceRepository.findByIngredientIdInOrderByEffectiveFromDesc(needHistory)) {
+                    priceSeries.computeIfAbsent(p.getIngredient().getId(), k -> new ArrayList<>()).add(p);
+                }
             }
         }
 
-        return trip.getDays().stream()
+        List<DayShoppingResponse> byDays = trip.getDays().stream()
                 .map(day -> {
                     Map<Long, ShoppingAggregation> dayAggregation = new LinkedHashMap<>();
                     BigDecimal dayPlannedCost = BigDecimal.ZERO;
                     BigDecimal dayActualCost = BigDecimal.ZERO;
-                    boolean hasMissingPrices = false;
+                    boolean dayHasMissingPrices = false;
 
                     LocalDate dayDate = day.getDayDate();
 
@@ -284,10 +318,10 @@ public class SummaryService {
                         int mealPeople = calculateEffectivePeople(trip, day, meal);
                         Recipe recipe = meal.getRecipe();
 
-                        // Фаза 14 (N3): тот же пер-походный edits-bundle, что и в общей закупке
+                        // Тот же per-trip edits-bundle, что и в общей закупке (один раз на расчёт)
                         List<TripIngredientEditService.EffectiveLine> lines = tripIngredientEditService.applyEdits(
                                 tripId, recipe, recipe.getIngredients(),
-                                dayEdits.subsFor(recipe.getId()), dayEdits.addedFor(recipe.getId()));
+                                edits.subsFor(recipe.getId()), edits.addedFor(recipe.getId()));
 
                         for (TripIngredientEditService.EffectiveLine line : lines) {
                             BigDecimal mealAmount = calculateAmountForMeal(
@@ -305,18 +339,18 @@ public class SummaryService {
                         }
                     }
 
-                    List<ShoppingItemResponse> items = new ArrayList<>();
+                    List<ShoppingItemResponse> dayItems = new ArrayList<>();
                     for (ShoppingAggregation agg : dayAggregation.values()) {
                         Long ingredientId = agg.ingredient().getId();
                         BigDecimal overridePrice = overrides.get(ingredientId);
-                        
+
                         // Эффективная цена на дату дня: из кэша (O(1)), без обращения к БД.
                         Optional<IngredientPrice> plannedPriceOpt = effectivePriceFromCache(
                                 ingredientId, dayDate, basePrices, priceSeries);
-                        
+
                         BigDecimal plannedUnitPrice = plannedPriceOpt.map(IngredientPrice::getPricePerUnit).orElse(null);
                         BigDecimal actualUnitPrice = overridePrice != null ? overridePrice : plannedUnitPrice;
-                        
+
                         BigDecimal plannedCost = null;
                         BigDecimal actualCost = null;
                         boolean hasPlannedPrice = plannedUnitPrice != null;
@@ -326,7 +360,7 @@ public class SummaryService {
                             plannedCost = agg.totalAmount().multiply(plannedUnitPrice).setScale(2, RoundingMode.HALF_UP);
                             dayPlannedCost = dayPlannedCost.add(plannedCost);
                         } else if (overridePrice == null) {
-                            hasMissingPrices = true;
+                            dayHasMissingPrices = true;
                         }
 
                         if (actualUnitPrice != null) {
@@ -336,7 +370,7 @@ public class SummaryService {
 
                         PackCalculation packs = calculatePacks(agg.ingredient(), agg.totalAmount());
 
-                        items.add(new ShoppingItemResponse(
+                        dayItems.add(new ShoppingItemResponse(
                                 ingredientId,
                                 agg.ingredient().getName(),
                                 agg.ingredient().getUnit(),
@@ -347,51 +381,108 @@ public class SummaryService {
                                 actualCost,
                                 overridden,
                                 hasPlannedPrice,
-                                packs.packSize(),      // FIX (P1): packSize из справочника
-                                packs.packsToBuy(),    // FIX (P1): ceil(total/packSize) при roundToPacks
-                                packs.buyAmount(),     // FIX (P1): сколько реально покупать
-                                packs.leftoverAmount(),// FIX (P1): излишек
-                                agg.substitutedFromName   // Фаза 14: имя замещённого продукта
+                                packs.packSize(),
+                                packs.packsToBuy(),
+                                packs.buyAmount(),
+                                packs.leftoverAmount(),
+                                agg.substitutedFromName
                         ));
                     }
 
                     return new DayShoppingResponse(
                             day.getDayDate().toString(),
-                            items,
+                            dayItems,
                             roundToRub(dayPlannedCost),   // Фаза 14: итоги — целые рубли
                             roundToRub(dayActualCost),
-                            hasMissingPrices
+                            dayHasMissingPrices
+                    );
+                })
+                .toList();
+
+        return new ShoppingComputation(shoppingList, byDays, totalPersonMeals, totalCalories);
+    }
+
+    public List<MenuByDayResponse> getMenuByDays(Long tripId, Long userId) {
+        Trip trip = tripRepository.findByIdWithDaysAndMeals(tripId, userId)
+                .orElseThrow(() -> new com.provision.exception.NotFoundException("Trip not found or access denied"));
+
+        // FIX P1: состав рецептов и правки состава — одним batch-запросом каждый
+        // (см. loadCalculationContext); раньше recipe.ingredients грузился лениво
+        // по одному запросу на блюдо/ингредиент (N+1 при open-in-view:false).
+        loadCalculationContext(trip);
+
+        return trip.getDays().stream()
+                .map(day -> {
+                    int effectivePeople = calculateEffectivePeople(trip, day, null);
+                    List<MenuByDayResponse.MenuMealResponse> meals = day.getMeals().stream()
+                            .map(meal -> {
+                                int mealPeople = calculateEffectivePeople(trip, day, meal);
+                                Recipe recipe = meal.getRecipe();
+                                
+                                List<MenuByDayResponse.MenuMealResponse.MenuIngredientResponse> ingredients = 
+                                        recipe.getIngredients().stream()
+                                                .map(ri -> {
+                                                    BigDecimal amount = calculateAmountForMeal(
+                                                            ri.getAmount(),
+                                                            recipe.getBaseServings(),
+                                                            mealPeople
+                                                    );
+                                                    return new MenuByDayResponse.MenuMealResponse.MenuIngredientResponse(
+                                                            ri.getIngredient().getName(),
+                                                            amount,
+                                                            ri.getIngredient().getUnit()
+                                                    );
+                                                })
+                                                .toList();
+
+                                return new MenuByDayResponse.MenuMealResponse(
+                                        meal.getMealType().name(),
+                                        recipe.getName(),
+                                        mealPeople,
+                                        ingredients
+                                );
+                            })
+                            .toList();
+
+                    return new MenuByDayResponse(
+                            day.getDayDate().toString(),
+                            effectivePeople,
+                            meals
                     );
                 })
                 .toList();
     }
 
+    /**
+     * FIX P1: эндпоинт только делегирует в единый транзакционный расчёт —
+     * никаких повторных обходов графа и вызовов getShoppingList изнутри других
+     * методов (self-invocation обходил прокси @Transactional).
+     */
+    public ShoppingListResponse getShoppingList(Long tripId, Long userId) {
+        return computeShopping(tripId, userId).shoppingList();
+    }
+
+    public List<DayShoppingResponse> getShoppingByDays(Long tripId, Long userId) {
+        return computeShopping(tripId, userId).byDays();
+    }
+
     public PersonSummaryResponse getPersonSummary(Long tripId, Long userId) {
+        // Принадлежность похода и доступность defaultPeople — из того же графа,
+        // что и раньше; сам расчёт закупки не повторяется (см. computeShopping ниже).
         Trip trip = tripRepository.findByIdWithDaysAndMeals(tripId, userId)
                 .orElseThrow(() -> new com.provision.exception.NotFoundException("Trip not found or access denied"));
+        // FIX P1: состав рецептов подгружается ОДНИМ batch-запросом (JOIN FETCH),
+        // иначе ленивые recipe.ingredients/ri.ingredient грузятся по запросу на
+        // блюдо/ингредиент прямо здесь (N+1 при open-in-view:false).
+        loadCalculationContext(trip);
 
-        ShoppingListResponse shoppingList = getShoppingList(tripId, userId);
-        
-        int totalPersonMeals = 0;
-        BigDecimal totalCalories = BigDecimal.ZERO;
-        
-        for (TripDay day : trip.getDays()) {
-            for (TripMeal meal : day.getMeals()) {
-                int mealPeople = calculateEffectivePeople(trip, day, meal);
-                totalPersonMeals += mealPeople;
-                
-                if (meal.getRecipe().getCaloriesPerServing() != null) {
-                    totalCalories = totalCalories.add(
-                            BigDecimal.valueOf(meal.getRecipe().getCaloriesPerServing())
-                                    .multiply(BigDecimal.valueOf(mealPeople))
-                    );
-                }
-            }
-        }
-
-        // Создаём final копии для использования в лямбде
-        final int finalTotalPersonMeals = totalPersonMeals;
-        final BigDecimal finalTotalCalories = totalCalories;
+        // FIX P1: переиспользуем ОДИН результат закупки вместо повторного вызова
+        // getShoppingList (двойная агрегация + self-invocation, обходивший прокси
+        // @Transactional). totalPersonMeals/totalCalories считаются там же за один обход.
+        ShoppingComputation computation = computeShopping(tripId, userId);
+        ShoppingListResponse shoppingList = computation.shoppingList();
+        final int finalTotalPersonMeals = computation.totalPersonMeals();
+        final BigDecimal finalTotalCalories = computation.totalCalories();
 
         List<PersonSummaryResponse.PersonIngredientResponse> ingredients = shoppingList.items().stream()
                 .map(item -> {
