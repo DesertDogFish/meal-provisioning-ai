@@ -1,0 +1,21 @@
+# Prevent BOM/CRLF problems (PowerShell Out-File adds UTF-8 BOM on Windows)
+* text=auto eol=lf
+
+*.ts text eol=lf
+*.tsx text eol=lf
+*.css text eol=lf
+*.html text eol=lf
+*.json text eol=lf
+*.java text eol=lf
+*.sql text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.md text eol=lf
+
+# Binary — never touch
+*.jar binary
+*.png binary
+*.jpg binary
+*.ico binary
+*.woff binary
+*.woff2 binary
