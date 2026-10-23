@@ -21,6 +21,15 @@ public interface RecipeIngredientRepository extends JpaRepository<RecipeIngredie
     
     @Query("SELECT ri.recipe.id FROM RecipeIngredient ri WHERE ri.ingredient.id = :ingredientId")
     List<Long> findRecipeIdsByIngredientId(@Param("ingredientId") Long ingredientId);
-    
+
+    /**
+     * P1 (аудит): пакетный подсчёт использования нескольких ингредиентов в рецептах
+     * одним запросом GROUP BY — вместо N отдельных findRecipeIdsByIngredientId (N+1).
+     * Возвращает пары [ingredientId, count]; ингредиенты без использования отсутствуют в результате.
+     */
+    @Query("SELECT ri.ingredient.id, COUNT(DISTINCT ri.recipe.id) FROM RecipeIngredient ri " +
+           "WHERE ri.ingredient.id IN :ingredientIds GROUP BY ri.ingredient.id")
+    List<Object[]> countRecipesByIngredientIds(@Param("ingredientIds") java.util.Collection<Long> ingredientIds);
+
     boolean existsByRecipeIdAndIngredientId(Long recipeId, Long ingredientId);
 }

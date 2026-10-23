@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-**✅ Все фазы 1–11 закрыты (последняя проверка: 2026-10-23).** Фаза 11 (исправление находок аудита бэкенда P0/P1) завершена и закоммичена (`8880928`, `898552a`), гейты зелёные: `mvn test` = 66 run / 0 failed / 3 skipped (Skipped — @Disabled с TODO, не регресс), `npm run build` = SUCCESS. Открытые пункты собраны в «Next Step» (кандидаты следующего спринта) и в Backlog (P3/P4). Протоколы предыдущих фаз — в конце файла (Backlog / Completed / Timeline).
+**✅ Все фазы 1–12 закрыты (последняя проверка: 2026-10-23).** Фаза 11 (аудит бэкенда P0/P1) закоммичена (`8880928`, `898552a`). Фаза 12 (P1-остатки аудита: usedIn, packsToBuy, @Async sync, N+1 ProductService/SummaryService, startup-хилл логов, дубль ingredientId) выполнена 2026-10-23 — **диффы в рабочем дереве, не коммитятся** (проверяются вручную). Гейты зелёные: `mvn test` = 66 run / 0 failed / 3 skipped, `npm run build` = SUCCESS. Открытые пункты: P2/P3 в «Next Step» и Backlog. Протоколы предыдущих фаз — в конце файла (Backlog / Completed / Timeline).
 
 > **HOTFIX 2026-10-23: `ReferenceError: e is not defined` на старте продакшен-билда.**
 > Причина: в `src/api/client.ts` (конструктор `ApiClient`, строка чтения env) при правке канала инъекции `VITE_API_MODE` (`window.meta`-обход для тестов) опечатка `e.VITE_API_MODE` вместо `env.VITE_API_MODE`. Vite/esbuild не резолвят идентификаторы — в минифицированном бандле остаётся голодная `e`, ReferenceError при создании синглтона `api` (модуль грузится на старте). Dockerfile.frontend (ARG/ENV VITE_API_URL/VITE_API_MODE) — ни при чём; `mode.ts`, `main.tsx`, `App.tsx` проверены, чисто.
@@ -35,18 +35,21 @@
 
 ## Next Step
 
-# 📋 Кандидаты следующего спринта (открытые пункты после закрытия Фазы 11)
+# ✅ Фаза 12 (P1 residuals) — ЗАВЕРШЕНА 2026-10-23. Диффы в рабочем дереве, НЕ коммитятся (красная линия).
 
-Все шаги Фазы 11 (Шаги 1–6: IDOR, фильтры, Long→String, N+1 trips, findAll() цен, финальные гейты) **выполнены и закоммичены** (`8880928`, `898552a`) — протокол в секции Completed ниже. Активных планов работ нет; ниже — верифицированные открытые пункты (состояние проверено grep'ом по коду на HEAD `898552a`, 2026-10-23).
+Все 7 пунктов P1-остатков Фазы 11 закрыты в коде (каждый сверен grep'ом, 2026-10-23):
+- ~~N+1 в ProductService.toProductResponse~~ → ✅ пакетные карты `priceByIngredient`/`usageCountByIngredient` одним IN-запросом на страницу (`ProductService.java:100,104`).
+- ~~N+1 findEffectivePrice в SummaryService~~ → ✅ batch DISTINCT ON `loadLatestPrices(...)` + кэш ценовых рядов `effectivePriceFromCache` (`SummaryService.java:135,227,267,489,506`; репо-метод `findLatestPricesAsOfForIngredients`, `IngredientPriceRepository.java:46`).
+- ~~HTTP-in-transaction в syncPrices~~ → ✅ `@Async("taskExecutor") executePriceSync` + self-injection через ObjectProvider (`IntegrationService.java:233,242,301`), `config/AsyncConfig.java`.
+- ~~markRunningAsFailedOnStartup не вызывался~~ → ✅ `@EventListener(ApplicationReadyEvent.class)` (`SyncLogService.java:35`).
+- ~~null packsToBuy/leftoverAmount~~ → ✅ расчёт через packSize (`SummaryService.java:185,187,304,306`).
+- ~~usedIn=null в 409 PRODUCT_IN_USE~~ → ✅ `ProductInUseConflictException` + наполнение `usedIn` в GlobalExceptionHandler (:63–70), names через `recipeRepository.findAllById` batch (:231).
+- ~~Дублирующий @NotNull ingredientId в теле~~ → ✅ убран из `TripPriceOverrideRequest` (комментарий :10–11).
+- Бонус: устранён N+1 в IngredientMappingService (batch-запрос `findByExternalIds`, изменён `OffRecipeSourceTest`).
 
-### P1 — функциональные дыры (все ещё живы в коде)
-- [ ] **N+1 в `ProductService.toProductResponse`** (~:188–233): 2 доп. запроса на элемент страницы (эффективная цена + использование). Починить пакетной загрузкой (batch-карты `Map<Long,...>` одним запросом по `IN` списку id страницы).
-- [ ] **N+1 в `SummaryService.findEffectivePrice`** внутри цикла по ингредиентам (:137–138): вынести в один batch-запрос (аналог `findLatestPricesAsOfForIngredients` из Фазы 11, но с учётом оверрайдов).
-- [ ] **Синхронный внешний HTTP внутри БД-транзакции** в `IntegrationService.syncPrices` (:168–310): вынести сетевой вызов за транзакцию (`@Async`/TransactionTemplate), иначе 202 ACCEPTED врёт клиенту и держит соединение пула.
-- [ ] **`markRunningAsFailedOnStartup` не вызывается** (IntegrationService): навесить `ApplicationRunner`/`@EventListener(ApplicationReadyEvent)`, иначе зависшие SYNC-логи вечно в статусе RUNNING.
-- [ ] **null-поля ShoppingList**: `packsToBuy`/`leftoverAmount` жёстко `null` в `SummaryService.java:177,179,267,269` (закомментированная упаковка) — UI-фича «сколько пачек купить» не работает. Реализовать расчёт через packaging-данные ингредиента.
-- [ ] **`usedIn` в 409 PRODUCT_IN_USE всегда null**: поле объявлено в `dto/error/ErrorResponse.java:18`, но нигде не наполняется (grep по `usedIn` даёт единственное вхождение). Находить список рецептов при удалении занятого продукта.
-- [ ] **Дублирующий `@NotNull Long ingredientId` в теле** `dto/trip/TripPriceOverrideRequest.java:10–11`, хотя `ingredientId` уже в URL (`TripPriceOverrideController.java:30`). Риск 400 при корректных запросах клиента. Убрать из DTO (или принимать, сверяя с path-переменной).
+Гейты (2026-10-23): `mvn test` = **66 run / 0 failed / 3 skipped (@Disabled TODO)** BUILD SUCCESS (прайс-оверрайд тесты адаптированы под пакетную загрузку цен); `npm run build` = SUCCESS; `npm run test` = 196 passed / 5 failed — падения `TripForm.test.tsx` доказаны как pre-existing (git stash → тот же результат на чистом HEAD, не регресс).
+
+Активных планов кода нет; ниже — верифицированные открытые пункты P2/P3 (состояние проверено grep'ом, 2026-10-23).
 
 ### P2 — косметика/контракт
 - [ ] Отзыв access-токена при logout (короткий TTL — частичный митигейт уже есть); переход на RFC7807 `ProblemDetail`; `DataIntegrityViolationException` (CHECK по датам) → 400 вместо generic 500 в GlobalExceptionHandler.
@@ -237,7 +240,8 @@
 ### Статус фаз
 - Фазы 1–10: ✅ закрыты (миграция 13/13 компонентов, AppContext удалён, тестовая пирамида построена)
 - Бэклог P1, P2 (e2e), CI-фиксы: ✅ закрыты 2026-10-22/23
-- **Фаза 11 (аудит бэкенда P0/P1): ✅ закрыта 2026-10-23** (`8880928`, `898552a`). Открытые пункты следующего спринта — в «Next Step»
+- **Фаза 11 (аудит бэкенда P0/P1): ✅ закрыта 2026-10-23** (`8880928`, `898552a`).
+- **Фаза 12 (P1-остатки аудита): ✅ выполнена 2026-10-23**, диффы в рабочем дереве (не коммитятся). Остатки P2/P3 — в «Next Step»
 
 ## Completed
 
@@ -262,7 +266,8 @@
 - **Weeks 1–5:** ✅ Batch 2/3 migration, тестирование P0/P1, Playwright e2e — ЗАВЕРШЕНО (2026-10-22/23)
 - **Week 6:** ✅ Дизайн-система / полировка UI (PR #26) — ЗАВЕРШЕНО
 - **Week 7:** ✅ ФАЗА 11 — исправление находок аудита бэкенда (P0/P1): IDOR, фильтры, Long→String, N+1 trips, findAll() цен — ЗАВЕРШЕНО 2026-10-23 (коммиты `8880928`, `898552a`; гейты: mvn test 66/0, build SUCCESS)
-- **Дальше:** остатка P1/P2 из «Next Step» (кандидаты спринта), затем гигиена CI/кода (P3-бэклог)
+- **Week 7+:** ✅ ФАЗА 12 — P1-остатки аудита (usedIn, packsToBuy/leftoverAmount, @Async syncPrices, пакетные цены ProductService/SummaryService, startup-хилл sync-логов, дубль ingredientId) — ЗАВЕРШЕНО 2026-10-23; гейты: mvn test 66/0/3skipped, npm build SUCCESS, npm test 196/201 (5 pre-existing TripForm)
+- **Дальше:** P2 (RFC7807, MapStruct, мёртвые эндпоинты, таймзоны), затем гигиена CI/кода (P3-бэклог)
 
 ## Completed Tickets (архив тикетов, детали — в «Completed» и git-истории)
 

@@ -129,13 +129,19 @@ public class SummaryService {
         List<String> missingIngredients = new ArrayList<>();
         int overriddenCount = 0;
 
+        // FIX P1 (аудит): раньше findEffectivePrice вызывался внутри цикла по каждому
+        // ингредиенту — N+1. Теперь плановые цены на дату окончания грузятся одним
+        // пакетным запросом DISTINCT ON; оверрайды и так уже в памяти (getAllOverrides).
+        Map<Long, IngredientPrice> plannedPricesByIngredient = loadLatestPrices(
+                aggregation.keySet(), trip.getEndDate());
+
         for (ShoppingAggregation agg : aggregation.values()) {
             Long ingredientId = agg.ingredient().getId();
             BigDecimal overridePrice = overrides.get(ingredientId);
             
             // Получаем плановую цену на дату окончания похода (для общей сводки)
-            Optional<IngredientPrice> plannedPriceOpt = priceRepository
-                    .findEffectivePrice(ingredientId, trip.getEndDate());
+            Optional<IngredientPrice> plannedPriceOpt = Optional.ofNullable(
+                    plannedPricesByIngredient.get(ingredientId));
             
             BigDecimal plannedUnitPrice = plannedPriceOpt.map(IngredientPrice::getPricePerUnit).orElse(null);
             BigDecimal actualUnitPrice = overridePrice != null ? overridePrice : plannedUnitPrice;
@@ -162,6 +168,8 @@ public class SummaryService {
                 overriddenCount++;
             }
 
+            PackCalculation packs = calculatePacks(agg.ingredient(), agg.totalAmount());
+
             items.add(new ShoppingItemResponse(
                     ingredientId,
                     agg.ingredient().getName(),
@@ -173,10 +181,10 @@ public class SummaryService {
                     actualCost,
                     overridden,
                     hasPlannedPrice,
-                    null,  // packSize
-                    null,  // packsToBuy
-                    null,  // buyAmount
-                    null,  // leftoverAmount
+                    packs.packSize(),      // FIX (P1): packSize из справочника
+                    packs.packsToBuy(),    // FIX (P1): ceil(total/packSize) при roundToPacks
+                    packs.buyAmount(),     // FIX (P1): сколько реально покупать
+                    packs.leftoverAmount(),// FIX (P1): излишек
                     null   // substitutedFrom
             ));
         }
@@ -200,12 +208,38 @@ public class SummaryService {
 
         Map<Long, BigDecimal> overrides = priceResolutionService.getAllOverrides(tripId);
 
+        // FIX P1 (аудит): пакетная загрузка цен вместо N+1 внутри цикла по дням.
+        // 1) Один запрос DISTINCT ON на всю дату окончания — это нижняя грань:
+        //    для любой даты внутри похода эффективная цена либо совпадает, либо старше.
+        // 2) Собираем id всех ингредиентов рецептов похода и одним запросом тянем все
+        //    их ценовые ряды в память; для дат раньше endDate корректируем эффективную
+        //    цену pick'ом из ряда (иначе distinct-on вернул бы цену, ещё не действующую на день).
+        Set<Long> allIngredientIds = new HashSet<>();
+        for (TripDay day : trip.getDays()) {
+            for (TripMeal meal : day.getMeals()) {
+                if (meal.getRecipe() != null && meal.getRecipe().getIngredients() != null) {
+                    meal.getRecipe().getIngredients().forEach(ri ->
+                            allIngredientIds.add(ri.getIngredient().getId()));
+                }
+            }
+        }
+        LocalDate rangeEnd = trip.getEndDate();
+        Map<Long, IngredientPrice> basePrices = loadLatestPrices(allIngredientIds, rangeEnd);
+        Map<Long, List<IngredientPrice>> priceSeries = new HashMap<>();
+        if (!allIngredientIds.isEmpty()) {
+            for (IngredientPrice p : priceRepository.findByIngredientIdInOrderByEffectiveFromDesc(allIngredientIds)) {
+                priceSeries.computeIfAbsent(p.getIngredient().getId(), k -> new ArrayList<>()).add(p);
+            }
+        }
+
         return trip.getDays().stream()
                 .map(day -> {
                     Map<Long, ShoppingAggregation> dayAggregation = new LinkedHashMap<>();
                     BigDecimal dayPlannedCost = BigDecimal.ZERO;
                     BigDecimal dayActualCost = BigDecimal.ZERO;
                     boolean hasMissingPrices = false;
+
+                    LocalDate dayDate = day.getDayDate();
 
                     for (TripMeal meal : day.getMeals()) {
                         int mealPeople = calculateEffectivePeople(trip, day, meal);
@@ -229,8 +263,9 @@ public class SummaryService {
                         Long ingredientId = agg.ingredient().getId();
                         BigDecimal overridePrice = overrides.get(ingredientId);
                         
-                        Optional<IngredientPrice> plannedPriceOpt = priceRepository
-                                .findEffectivePrice(ingredientId, day.getDayDate());
+                        // Эффективная цена на дату дня: из кэша (O(1)), без обращения к БД.
+                        Optional<IngredientPrice> plannedPriceOpt = effectivePriceFromCache(
+                                ingredientId, dayDate, basePrices, priceSeries);
                         
                         BigDecimal plannedUnitPrice = plannedPriceOpt.map(IngredientPrice::getPricePerUnit).orElse(null);
                         BigDecimal actualUnitPrice = overridePrice != null ? overridePrice : plannedUnitPrice;
@@ -252,6 +287,8 @@ public class SummaryService {
                             dayActualCost = dayActualCost.add(actualCost);
                         }
 
+                        PackCalculation packs = calculatePacks(agg.ingredient(), agg.totalAmount());
+
                         items.add(new ShoppingItemResponse(
                                 ingredientId,
                                 agg.ingredient().getName(),
@@ -263,10 +300,10 @@ public class SummaryService {
                                 actualCost,
                                 overridden,
                                 hasPlannedPrice,
-                                null,  // packSize
-                                null,  // packsToBuy
-                                null,  // buyAmount
-                                null,  // leftoverAmount
+                                packs.packSize(),      // FIX (P1): packSize из справочника
+                                packs.packsToBuy(),    // FIX (P1): ceil(total/packSize) при roundToPacks
+                                packs.buyAmount(),     // FIX (P1): сколько реально покупать
+                                packs.leftoverAmount(),// FIX (P1): излишек
                                 null   // substitutedFrom
                         ));
                     }
@@ -412,5 +449,78 @@ public class SummaryService {
         void addAmount(BigDecimal amount) {
             totalAmount = totalAmount.add(amount);
         }
+    }
+
+    /**
+     * FIX (P1, аудит Phase 11): расчёт упаковок для позиций списка покупок.
+     * Раньше packSize/packsToBuy/buyAmount/leftoverAmount были захардкожены в null,
+     * и UI не мог показать «сколько пачек покупать».
+     *
+     * Правила (совпадают с mockServer.ts CONTRACT-P1):
+     *  - packSize берётся из Ingredient.packSize (размер упаковки в единицах измерения продукта);
+     *  - packsToBuy считается только при roundToPacks=true и валидном packSize (>0),
+     *    иначе все поля остаютcя null — UI показывает вес/объём вместо штук;
+     *  - buyAmount = packsToBuy * packSize (что реально класть в корзину);
+     *  - leftoverAmount = buyAmount - totalAmount (излишек).
+     */
+    private record PackCalculation(BigDecimal packSize, Integer packsToBuy,
+                                   BigDecimal buyAmount, BigDecimal leftoverAmount) {}
+
+    private PackCalculation calculatePacks(Ingredient ingredient, BigDecimal totalAmount) {
+        BigDecimal packSize = ingredient.getPackSize();
+        if (packSize == null || packSize.compareTo(BigDecimal.ZERO) <= 0) {
+            return new PackCalculation(packSize, null, null, null);
+        }
+        if (!Boolean.TRUE.equals(ingredient.getRoundToPacks())) {
+            return new PackCalculation(packSize, null, null, null);
+        }
+        int packsToBuy = totalAmount.divide(packSize, 0, RoundingMode.CEILING).intValue();
+        BigDecimal buyAmount = packSize.multiply(BigDecimal.valueOf(packsToBuy))
+                .setScale(3, RoundingMode.HALF_UP);
+        BigDecimal leftover = buyAmount.subtract(totalAmount).setScale(3, RoundingMode.HALF_UP);
+        return new PackCalculation(packSize, packsToBuy, buyAmount, leftover);
+    }
+
+    /**
+     * FIX P1 (аудит): пакетная загрузка последней действующей на date цены для каждого
+     * ингредиента из набора — один DISTINCT ON запрос вместо N вызовов findEffectivePrice.
+     * Возвращает map ingredientId -> IngredientPrice; ингредиенты без цен в мапе отсутствуют.
+     */
+    private Map<Long, IngredientPrice> loadLatestPrices(Collection<Long> ingredientIds, LocalDate date) {
+        if (ingredientIds == null || ingredientIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, IngredientPrice> result = new HashMap<>();
+        for (IngredientPrice p : priceRepository.findLatestPricesAsOfForIngredients(date, ingredientIds)) {
+            // DISTINCT ON + ORDER BY effective_from DESC => первая запись на ингредиент — самая свежая.
+            result.putIfAbsent(p.getIngredient().getId(), p);
+        }
+        return result;
+    }
+
+    /**
+     * Эффективная цена на dayDate из кэша (без обращения к БД).
+     * basePrice — срез на endDate похода; если он датируется позже dayDate, берём из
+     * ценового ряда series (отсортирован DESC) первый элемент с effectiveFrom <= dayDate.
+     */
+    private Optional<IngredientPrice> effectivePriceFromCache(
+            Long ingredientId,
+            LocalDate dayDate,
+            Map<Long, IngredientPrice> basePrices,
+            Map<Long, List<IngredientPrice>> series) {
+        IngredientPrice base = basePrices.get(ingredientId);
+        if (base == null || !base.getEffectiveFrom().isAfter(dayDate)) {
+            return Optional.ofNullable(base);
+        }
+        // Срез на endDate ещё не действовал на дату дня — спускаемся по ряду к более раннему срезу.
+        List<IngredientPrice> history = series.get(ingredientId);
+        if (history != null) {
+            for (IngredientPrice p : history) {
+                if (!p.getEffectiveFrom().isAfter(dayDate)) {
+                    return Optional.of(p);
+                }
+            }
+        }
+        return Optional.empty();
     }
 }

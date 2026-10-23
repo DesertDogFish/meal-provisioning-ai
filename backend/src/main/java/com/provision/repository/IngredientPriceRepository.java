@@ -13,6 +13,14 @@ import java.util.Optional;
 @Repository
 public interface IngredientPriceRepository extends JpaRepository<IngredientPrice, Long> {
     List<IngredientPrice> findByIngredientIdOrderByEffectiveFromDesc(Long ingredientId);
+
+    /**
+     * P1 (аудит): ценовые ряды для набора ингредиентов одним запросом
+     * (для корректировки эффективной цены на даты внутри похода в памяти).
+     */
+    @Query("SELECT ip FROM IngredientPrice ip WHERE ip.ingredient.id IN :ingredientIds ORDER BY ip.ingredient.id, ip.effectiveFrom DESC")
+    List<IngredientPrice> findByIngredientIdInOrderByEffectiveFromDesc(
+            @Param("ingredientIds") java.util.Collection<Long> ingredientIds);
     
     @Query("SELECT ip FROM IngredientPrice ip WHERE ip.ingredient.id = :ingredientId AND ip.effectiveFrom <= :date ORDER BY ip.effectiveFrom DESC LIMIT 1")
     Optional<IngredientPrice> findEffectivePrice(@Param("ingredientId") Long ingredientId, @Param("date") LocalDate date);
