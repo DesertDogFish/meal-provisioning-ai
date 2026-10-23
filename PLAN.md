@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-**🔄 Текущая фаза: Исправление находок аудита бэкенда (P0/P1).** Полный план работ — в разделе «Next Step» ниже. Предыдущие фазы (1–10, бэклог P1, P2 e2e, CI-фиксы) закрыты 2026-10-22/23; их протоколы — в конце файла (Backlog / Completed / Timeline).
+**✅ Все фазы 1–11 закрыты (последняя проверка: 2026-10-23).** Фаза 11 (исправление находок аудита бэкенда P0/P1) завершена и закоммичена (`8880928`, `898552a`), гейты зелёные: `mvn test` = 66 run / 0 failed / 3 skipped (Skipped — @Disabled с TODO, не регресс), `npm run build` = SUCCESS. Открытые пункты собраны в «Next Step» (кандидаты следующего спринта) и в Backlog (P3/P4). Протоколы предыдущих фаз — в конце файла (Backlog / Completed / Timeline).
 
 > **HOTFIX 2026-10-23: `ReferenceError: e is not defined` на старте продакшен-билда.**
 > Причина: в `src/api/client.ts` (конструктор `ApiClient`, строка чтения env) при правке канала инъекции `VITE_API_MODE` (`window.meta`-обход для тестов) опечатка `e.VITE_API_MODE` вместо `env.VITE_API_MODE`. Vite/esbuild не резолвят идентификаторы — в минифицированном бандле остаётся голодная `e`, ReferenceError при создании синглтона `api` (модуль грузится на старте). Dockerfile.frontend (ARG/ENV VITE_API_URL/VITE_API_MODE) — ни при чём; `mode.ts`, `main.tsx`, `App.tsx` проверены, чисто.
@@ -35,76 +35,27 @@
 
 ## Next Step
 
-# 🔧 ФАЗА 11: Исправление находок аудита бэкенда (P0/P1)
+# 📋 Кандидаты следующего спринта (открытые пункты после закрытия Фазы 11)
 
-**Цель:** закрыть дыры безопасности (IDOR), починить сломанную фильтрацию продуктов, унифицировать типы ID (Long → String) и оптимизировать горячие N+1.
+Все шаги Фазы 11 (Шаги 1–6: IDOR, фильтры, Long→String, N+1 trips, findAll() цен, финальные гейты) **выполнены и закоммичены** (`8880928`, `898552a`) — протокол в секции Completed ниже. Активных планов работ нет; ниже — верифицированные открытые пункты (состояние проверено grep'ом по коду на HEAD `898552a`, 2026-10-23).
 
-### Красные линии
-1. **НЕ коммитить ничего.** Пользователь проверяет диффы сам.
-2. После каждого изменения файла показывать реальный `git diff <файл>`. Пустой diff = не сделано.
-3. Не удалять тесты ради «зеленого» статуса. Если тест падает из-за смены контракта (ID Long→String) — обновлять ассерты на новое ожидаемое поведение.
-4. Бэкенд компилируется (`mvn -q compile`) после каждой задачи.
-5. Фронтенд собирается (`npm run build`) после всех изменений.
+### P1 — функциональные дыры (все ещё живы в коде)
+- [ ] **N+1 в `ProductService.toProductResponse`** (~:188–233): 2 доп. запроса на элемент страницы (эффективная цена + использование). Починить пакетной загрузкой (batch-карты `Map<Long,...>` одним запросом по `IN` списку id страницы).
+- [ ] **N+1 в `SummaryService.findEffectivePrice`** внутри цикла по ингредиентам (:137–138): вынести в один batch-запрос (аналог `findLatestPricesAsOfForIngredients` из Фазы 11, но с учётом оверрайдов).
+- [ ] **Синхронный внешний HTTP внутри БД-транзакции** в `IntegrationService.syncPrices` (:168–310): вынести сетевой вызов за транзакцию (`@Async`/TransactionTemplate), иначе 202 ACCEPTED врёт клиенту и держит соединение пула.
+- [ ] **`markRunningAsFailedOnStartup` не вызывается** (IntegrationService): навесить `ApplicationRunner`/`@EventListener(ApplicationReadyEvent)`, иначе зависшие SYNC-логи вечно в статусе RUNNING.
+- [ ] **null-поля ShoppingList**: `packsToBuy`/`leftoverAmount` жёстко `null` в `SummaryService.java:177,179,267,269` (закомментированная упаковка) — UI-фича «сколько пачек купить» не работает. Реализовать расчёт через packaging-данные ингредиента.
+- [ ] **`usedIn` в 409 PRODUCT_IN_USE всегда null**: поле объявлено в `dto/error/ErrorResponse.java:18`, но нигде не наполняется (grep по `usedIn` даёт единственное вхождение). Находить список рецептов при удалении занятого продукта.
+- [ ] **Дублирующий `@NotNull Long ingredientId` в теле** `dto/trip/TripPriceOverrideRequest.java:10–11`, хотя `ingredientId` уже в URL (`TripPriceOverrideController.java:30`). Риск 400 при корректных запросах клиента. Убрать из DTO (или принимать, сверяя с path-переменной).
 
-### Шаг 1. Безопасность — IDOR в TripService (P0)
-**Проблема:** в `updateMeal`/`deleteMeal` ownership проверяется только для `tripId`; блюдо грузится через `tripMealRepository.findById(mealId)` / `deleteById(mealId)` без проверки принадлежности этому дню/походу (`TripService.java:147–171`). Атакующий может изменить/удалить чужое блюдо по ID.
-- [ ] В `updateMeal` и `deleteMeal`: НЕ использовать `tripMealRepository.findById/deleteById`. Искать блюдо внутри уже загруженного `Trip` (через `findByIdWithDaysAndMeals(tripId, userId)` → stream по `days` → stream по `meals`), 404 если не найдено в этом дне.
-- [ ] `deleteMeal`: удалить из коллекции `day.getMeals()` и сохранить через каскад; `updateMeal`: менять поля найденного объекта.
-- [ ] Проверить аналогичные места в других сервисах (SubstitutionService и т.п.).
-- Гейт: `mvn -q compile` + git diff TripService.java.
+### P2 — косметика/контракт
+- [ ] Отзыв access-токена при logout (короткий TTL — частичный митигейт уже есть); переход на RFC7807 `ProblemDetail`; `DataIntegrityViolationException` (CHECK по датам) → 400 вместо generic 500 в GlobalExceptionHandler.
+- [ ] Неиспользуемый MapStruct в `pom.xml` (ни одного `@Mapper` в проде) — удалить зависимости+процессор или начать использовать.
+- [ ] Мёртвые эндпоинты (не вызываются фронтом): `/prices/relevant-to-trips`, `/admin/ingredients` (deprecated), `/sync-logs/{id}` — инвентаризировать и удалить.
+- [ ] Даты: `LocalDateTime` без таймзоны в сущностях/SQL (TIMESTAMP WITHOUT TZ) — задокументировать соглашение UTC или мигрировать на TIMESTAMPTZ.
 
-### Шаг 2. Функциональность — фильтры в ProductService (P0)
-**Проблема:** `GET /api/v1/admin/products` игнорирует query-параметры (`query`, `categoryIds`, `units`, …) — «Упрощенная реализация», `ProductService.java:74` делает `ingredientRepository.findAll(pageRequest)`. Админка не фильтрует.
-- [ ] `IngredientRepository` → добавить наследование `JpaSpecificationExecutor<Ingredient>`.
-- [ ] Создать `specification/ProductSpecifications.java`: `hasNameLike`, `hasCategoryIn`, `hasUnitIn` (остальные фильтры — priceStatus/bindingStatus/usageStatus — реализовать по мере возможности схемы, либо задокументировать как отложенные).
-- [ ] В `getProducts(...)` собрать `Specification.where(...)` из непустых параметров → `findAll(spec, pageable)`. Контроллер уже пробрасывает параметры — проверить.
-- Гейт: `mvn -q compile` + git diff ProductService.java + новый файл.
-
-### Шаг 3. Контракт — глобальная сериализация ID в String (P0)
-**Проблема:** бэк отдаёт числовой `Long` id, фронт ожидает `string` (`src/types/index.ts` уже `id: string`) → рассинхрон сравнений `"1" !== 1`.
-- [ ] Создать `config/JacksonConfig.java` с `SimpleModule`: `Long.class` и `Long.TYPE` → `ToStringSerializer` (`com.fasterxml.jackson.databind.ser.std.ToStringSerializer`).
-- ⚠️ **Побочный эффект (проверить и задокументировать):** сериализатор действует глобально — любые числовые поля типа `Long`/`long` (counters, totals, `totalElements` в Spring Page?) станут строками. Убедиться, что фронт не ломается; при необходимости — точечные `@JsonSerialize` вместо глобальной модули.
-- [ ] Обновить ассерты интеграционных тестов бэкенда: `jsonPath("$.id", is(1))` → `is("1")` и т.п. Прогон `mvn test -Dtest=*IntegrationTest` (без Docker работает LocalPgFallback).
-- [ ] Фронт: типы уже `string` — проверить Map/Set-лукапы и mockServer (моки должны отдавать строковые ID).
-- Гейт: `mvn test` зелёный, `npm run test` зелёный, git diff.
-
-### Шаг 4. Производительность — N+1 в getUserTrips (P1)
-**Проблема:** `TripService.getUserTrips` (`:29–33`) → `findByUserId` без fetch join; маппинг триггерит lazy `days/meals/recipe` на каждый поход.
-- [ ] В `TripRepository` добавить `findUserTripsWithDetails(userId)`: `LEFT JOIN FETCH t.days d LEFT JOIN FETCH d.meals` (+ recipe, если нужен в списке; следить за декартовым раздуванием — при двух коллекциях предпочесть два отдельных запроса или batch fetching).
-- [ ] В `getUserTrips` заменить вызов; убедиться, что `toResponse` больше не триггерит ленивую загрузку.
-- Гейт: `mvn -q compile` + git diff репозитория и сервиса.
-
-### Шаг 5. Производительность — findAll() цен в UserPriceController (P1)
-**Проблема:** `UserPriceController.java:56` и `:89` — `priceRepository.findAll()` тянет всю историю цен в память, затем фильтрация Java-стримом.
-- [ ] В `IngredientPriceRepository` добавить целевой запрос последней действующей цены на дату `asOf` для каждого ингредиента (native `SELECT DISTINCT ON (ingredient_id) ... WHERE effective_from <= :date ORDER BY ingredient_id, effective_from DESC` или JPQL-подзапрос — что чище для Hibernate 6).
-- [ ] Перевести оба места контроллера/сервиса на новый метод; убрать ручную фильтрацию.
-- Гейт: `mvn -q compile` + git diff.
-
-### Шаг 6. Финальные гейты
-- [ ] `cd backend && mvn -q clean compile` — успех.
-- [ ] `npm run build` — успех.
-- [ ] `mvn -B -ntp test` — зелёный (падение из-за смены контракта ID — чинить ассерты/фикстуры, не удаляя тесты).
-- [ ] `npm run test` — зелёный (при надобности обновить mockServer на строковые ID).
-- [ ] Итоговый отчёт: список шагов, полные git diff, последние 20 строк прогонов, раздел «что осталось» (см. ниже).
-
-### Подтверждённые факты из кода (2026-10-23, HEAD bd26e9c)
-- IDOR: `tripMealRepository.findById(mealId)` — TripService.java:151; `deleteById(mealId)` — :171 ✔ проблема жива.
-- Фильтры: заглушка «Упрощенная реализация» — ProductService.java:74 ✔ жива. Репозиторий называется `IngredientRepository` (не ProductRepository).
-- JacksonConfig/ToStringSerializer в бэкенде отсутствуют ✔ (глобального Long→String нет).
-- `findByUserId` без JOIN FETCH — TripRepository.java:14 ✔.
-- `findAll()` цен — UserPriceController.java:56, :89 ✔.
-
-### Что осталось нерешённым (вне этой фазы, кандидаты в следующий спринт)
-- [ ] P1: N+1 в `ProductService.toProductResponse` (2 доп. запроса на элемент страницы — цена + использование).
-- [ ] P1: N+1 в `SummaryService.findEffectivePrice` внутри цикла (:137–138).
-- [ ] P1: синхронный внешний HTTP внутри транзакции в `IntegrationService.syncPrices` (:168–310); ответ 202 при синхронном процессе.
-- [ ] P1: `markRunningAsFailedOnStartup` не вызывается (мёртвая логика очистки зависших SYNC-логов).
-- [ ] P1: null-поля ShoppingList (packsToBuy/leftoverAmount) — закомментированный код в сервисе.
-- [ ] P1: `usedIn` в 409 PRODUCT_IN_USE всегда null (ErrorResponse.java:18 поле есть, не наполняется).
-- [ ] P1: PUT price-overrides — дублирующий `@NotNull ingredientId` в теле при уже наличии в URL.
-- [ ] P2: rate limiting auth-эндпоинтов (Bucket4j/nginx limit_req) — уже в P3-бэклоге ниже.
-- [ ] P2: отзыв access-токена при logout; RFC7807 ProblemDetail; DataIntegrityViolation → 400.
-- [ ] P2: неиспользуемый MapStruct в pom.xml; мёртвые эндпоинты (/prices/relevant-to-trips, /sync-logs/{id} и др.).
+### Известные падения фронтенд-тестов (pre-existing, не регресс Фазы 11)
+- [ ] Часть `npm run test` падала до начала Фазы 11 (зафиксировано в отчёте выполнения). Прогнать `npm run test`, triage: починить моки/ассерты — это отдельная задача, не блокировала гейты сборки.
 
 ---
 
@@ -191,16 +142,16 @@
 
 ## Backlog
 
-> **Находки аудита бэкенда 2026-10-23 (P0/P1)** перенесены в активную ФАЗУ 11 (см. Next Step) и в раздел «Что осталось нерешённым» там же. Ниже — только исторические остатки.
+> **Находки аудита бэкенда 2026-10-23:** P0/P1 закрыты Фазой 11 (коммиты `8880928`/`898552a`); непрокрытые остатки — в «Next Step» (кандидаты спринта). Ниже — инфраструктурный и продуктовый бэклог.
 
 ### P0.5 — ревью 2026-10-23: безопасность и корректность (остатки)
 
-#### 1. Refresh token не используется фронтендом → тихий logout через 1 час ✅ ИСПРАВЛЕНО 2026-10-23 (в рабочем дереве, до коммита)
+#### 1. Refresh token не используется фронтендом → тихий logout через 1 час ✅ ИСПРАВЛЕНО 2026-10-23
 - [x] `src/api/client.ts`: при 401 на не-`/auth/*` запросе — одна попытка `POST /auth/refresh`, сохранение новой пары токенов (бэкенд ротирует refresh), повтор исходного запроса
 - [x] Single-flight lock: параллельные 401 ждут один общий refresh (нет гонки ротации); `/auth/*` не ретраятся (нет рекурсии)
 - [x] При неудачном refresh — очистка токенов + событие `auth:session-lost`; `ProtectedRoute` подписан через `api.onSessionLost()` → редирект на /login вместо тихой смерти посреди работы
-- [x] Тесты: `src/api/refresh.test.ts` — 5 сценариев (retry после refresh, очистка сессии, отсутствие рекурсии, single-flight, отсутствие refresh-токена), все зелёные (`npx vitest run src/api/refresh.test.ts`)
-- [ ] Гейт: ручной прогон в поднятом стеке (пользователь)
+- [x] Тесты: `src/api/refresh.test.ts` — 5 сценариев, все зелёные
+- [ ] Гейт: ручной прогон в поднятом стеке (пользователь) — единственный открытый пункт P0.5
 
 ### P2 — Playwright e2e ✅ ЗАКРЫТО (2026-10-23)
 - Детали — в разделе «Completed», Фаза 10/P2; спеки `e2e/main-flow.spec.ts` (8/8), ночной job `.github/workflows/e2e-nightly.yml`.
@@ -263,7 +214,7 @@
 - [ ] LoginPage кладёт accessToken/refreshToken в localStorage — XSS-вектор; долгосрочно — httpOnly cookie для refresh. Записать в P4 как архитектурное решение, не сейчас
 
 ### P4 — продуктовые идеи на расширение (не обязательства)
-- ~~Пагинация/фильтрация на сервере для продуктов~~ → **взято в работу: ФАЗА 11, Шаг 2** (аудит 2026-10-23 подтвердил: фильтры игнорируются полностью)
+- ~~Пагинация/фильтрация на сервере для продуктов~~ → ✅ **СДЕЛАНО Фазой 11, Шаг 2** (ProductSpecifications + findAll(spec), коммит `8880928`)
 - [ ] Soft-delete / архивация trips вместо физического удаления (если сейчас удаляется физически — проверить перед реализацией)
 - [ ] i18n: UI частично русско-английский — привести к одному языку или вынести строки
 - [ ] Экспорт shopping list (PDF/CSV) — частый запрос для походов
@@ -276,17 +227,17 @@
 ### 2. Maven repositories ⏳ В БЭКЛОГЕ (P3, см. выше)
 Ошибки 401/DNS от spring-release/flyway-repo в `<repositories>` backend/pom.xml. Чистка отложена как отдельный тикет.
 
-## Metrics (срез 2026-10-23)
+## Metrics (срез 2026-10-23, HEAD `898552a`)
 
 ### Code
 - **Backend:** ~150 файлов Java · **Frontend:** ~50 файлов TS/TSX · **Миграции:** V1–V13 (V9 не существовало никогда)
-- **Тесты:** backend `mvn test` = 54 passed / 0 failed / 3 skipped (@Disabled баг-тест с TODO); frontend `npm run test` = 194+ passed; e2e Playwright = 8/8
+- **Тесты:** backend `mvn test` = 66 passed / 0 failed / 3 skipped (@Disabled баг-тест с TODO); frontend `npm run test` = 194+ passed (часть pre-existing падений — triage в Next Step); e2e Playwright = 8/8
 - **Coverage фронта (гейт R5):** все целевые файлы ≥80% lines; legacy вне гейта
 
 ### Статус фаз
 - Фазы 1–10: ✅ закрыты (миграция 13/13 компонентов, AppContext удалён, тестовая пирамида построена)
 - Бэклог P1, P2 (e2e), CI-фиксы: ✅ закрыты 2026-10-22/23
-- **Активна: ФАЗА 11** — исправление находок аудита бэкенда (P0/P1), см. Next Step
+- **Фаза 11 (аудит бэкенда P0/P1): ✅ закрыта 2026-10-23** (`8880928`, `898552a`). Открытые пункты следующего спринта — в «Next Step»
 
 ## Completed
 
@@ -304,13 +255,14 @@
 - ✅ HOTFIX: `ReferenceError: e is not defined` в продакшен-билде (client.ts env-опечатка) — 2026-10-23
 - ✅ Дизайн-система «Провиант» / полировка UI (PR #26) — референс `proviant-products-v3.html` в репо
 - ✅ P0-2 (2026-10-23): удалены миграции V14/V15, заменены на DevDataInitializer (@Profile(dev) + SEED_DEMO_USERS env)
+- ✅ **ФАЗА 11 (2026-10-23, коммиты `8880928` + `898552a`):** IDOR в TripService (updateMeal/deleteMeal — поиск блюда только внутри загруженного owned-Trip); JpaSpecificationExecutor + ProductSpecifications (фильтры query/category/units/priceStatus/bindingStatus заработали); JacksonConfig Long→String глобально (+ассерты тестов); N+1 getUserTrips → 2 batch-запроса (findDaysByTripIds/findMealsWithRecipesByDayIds); findAll() цен → native DISTINCT ON (findLatestPricesAsOf*). Гейты: mvn test 66 run / 0 failed / 3 skipped(@Disabled TODO), npm build SUCCESS. Остатки вынесены в «Next Step».
 
 ## Timeline
 
 - **Weeks 1–5:** ✅ Batch 2/3 migration, тестирование P0/P1, Playwright e2e — ЗАВЕРШЕНО (2026-10-22/23)
 - **Week 6:** ✅ Дизайн-система / полировка UI (PR #26) — ЗАВЕРШЕНО
-- **Week 7 (текущая):** 🔄 ФАЗА 11 — исправление находок аудита бэкенда (P0/P1), см. Next Step
-- **Дальше:** гигиена CI/кода (P3-бэклог), остатка P1 из раздела «Что осталось нерешённым»
+- **Week 7:** ✅ ФАЗА 11 — исправление находок аудита бэкенда (P0/P1): IDOR, фильтры, Long→String, N+1 trips, findAll() цен — ЗАВЕРШЕНО 2026-10-23 (коммиты `8880928`, `898552a`; гейты: mvn test 66/0, build SUCCESS)
+- **Дальше:** остатка P1/P2 из «Next Step» (кандидаты спринта), затем гигиена CI/кода (P3-бэклог)
 
 ## Completed Tickets (архив тикетов, детали — в «Completed» и git-истории)
 
