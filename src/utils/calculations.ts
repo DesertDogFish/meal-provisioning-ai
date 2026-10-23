@@ -36,6 +36,14 @@ export function formatAmount(amount: number, unit: string): string {
   return `${Math.round(amount)} ${unit}`;
 }
 
+/**
+ * FIX: признак «продукт отключён» (enabled=false). Отключённые продукты не должны
+ * попадать ни в меню, ни в закупку, ни в чеки/сводки. undefined = включён (обратная совместимость).
+ */
+export function isIngredientDisabled(ri: any): boolean {
+  return ri?.ingredient?.enabled === false;
+}
+
 export function calculateMenuByDays(trip: Trip, recipes: Map<string, any>): MenuDay[] {
   if (!trip.days) return [];
   return trip.days.map(day => ({
@@ -48,11 +56,14 @@ export function calculateMenuByDays(trip: Trip, recipes: Map<string, any>): Menu
         mealType: meal.mealType,
         recipeName: recipe?.name || 'Unknown',
         servings: people,
-        ingredients: (recipe?.ingredients || []).map((ri: any) => ({
-          name: ri.ingredient?.name || 'Unknown',
-          amount: calculateAmountPerPerson(ri.amount, recipe.baseServings, people),
-          unit: ri.ingredient?.unit || 'PCS'
-        }))
+        // FIX: отключённые продукты не отражаются в меню
+        ingredients: (recipe?.ingredients || [])
+          .filter((ri: any) => !isIngredientDisabled(ri))
+          .map((ri: any) => ({
+            name: ri.ingredient?.name || 'Unknown',
+            amount: calculateAmountPerPerson(ri.amount, recipe.baseServings, people),
+            unit: ri.ingredient?.unit || 'PCS'
+          }))
       };
     })
   }));

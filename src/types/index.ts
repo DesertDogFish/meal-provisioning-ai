@@ -44,6 +44,8 @@ export interface Ingredient {
   roundToPacks?: boolean;
   kcalPer100g?: number;
   pieceWeightG?: number;
+  /** FIX: отключённые продукты (enabled=false) исключаются из меню/закупки/чеков. undefined = включён. */
+  enabled?: boolean;
   createdAt: string;
 }
 
