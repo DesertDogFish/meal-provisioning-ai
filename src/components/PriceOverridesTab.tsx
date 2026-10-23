@@ -269,7 +269,7 @@ export default function PriceOverridesTab({ tripId }: Props) {
       const price = pricesData.find(p => p.ingredientId === ingredientId);
       const unitPrice = price?.pricePerUnit;
       const unit = data.ingredient?.unit || 'PCS';
-      // BUGFIX (расчёт): цена задаётся в ₽/кг (₽/л), а количество для KG/L — в г/мл.
+      // FIX (T0): контракт единиц — KG/L хранят базовые единицы (кг/л), цена — ₽/кг (₽/л).
       // Стоимость позиции = базовые единицы × цена за базовую единицу (см. toBaseUnits).
       const baseQty = toBaseUnits(data.amount, unit);
       
@@ -306,7 +306,7 @@ export default function PriceOverridesTab({ tripId }: Props) {
               const amount = (ri.amount / recipe.baseServings) * people;
               const price = pricesData.find(p => p.ingredientId === ri.ingredientId);
               if (price) {
-                // BUGFIX: г/мл против ₽/кг — стоимость в базовых единицах
+                // FIX (T0): стоимость в базовых единицах (кг/л × ₽/кг) — см. toBaseUnits
                 dayCost += toBaseUnits(amount, ri.ingredient?.unit || 'PCS') * price.pricePerUnit;
               }
             }

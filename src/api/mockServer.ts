@@ -88,7 +88,7 @@ function applyTripEditsToRows<T extends TripEditRow>(
   if (!edits.length) return rows;
   const idOf = (r: T) => String(r.catalogId ?? r.ingredientId);
   const out: T[] = rows.map(r => ({ ...r }));
-  /** Пересчёт стоимостей строки: costOf учитывает г/мл против ₽/кг (баг «284 046 ₽»). */
+  /** Пересчёт стоимостей строки через costOf (базовые единицы × цена за базовую единицу). */
   const recalc = (r: T) => {
     const u = r.unit || 'KG';
     r.plannedCost = r.plannedUnitPrice != null ? costOf(r.totalAmount, u, r.plannedUnitPrice) : null;

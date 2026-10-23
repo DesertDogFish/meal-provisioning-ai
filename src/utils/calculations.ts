@@ -12,18 +12,20 @@ export function calculateAmountPerPerson(amount: number, baseServings: number, p
 }
 
 /**
- * BUGFIX (расчёт стоимости): цена в справочнике задаётся за базовую единицу
- * измерения продукта (₽/кг, ₽/л), а количество в рецептах для KG/L хранится в
- * граммах/миллилитрах. Раньше стоимость считалась как amount × pricePerUnit,
- * из-за чего 160 г борща по 1775,29 ₽/кг превращались в 284 046 ₽. Теперь
- * доля килограмма/литра учитывается явно. Для PCS/PACK amount уже штуки — без пересчёта.
+ * FIX (T0, зелёный main): контракт единиц — KG/L хранят БАЗОВЫЕ единицы (кг/л).
+ * См. backend KcalCalculator.java, фикстуры contract.test.ts (гречка 1.8 KG →
+ * план 360 ₽ = 1.8 × 200 ₽/кг), calc.test.ts KCAL-01 (0.08 KG → 280 ккал) и
+ * mock-строки mockServer.ts (totalAmount в кг при цене ₽/кг).
+ * Предыдущая интерпретация «amount в рецептах в граммах» (багфикс «284 046 ₽»)
+ * противоречила этому контракту: стоимость расходилась в 1000 раз
+ * (CI: expected 120.08 to be close to 200). Поэтому toBaseUnits/costOf теперь
+ * identity: количество уже в базовых единицах, цена — за базовую единицу.
  */
-export function toBaseUnits(amount: number, unit: string): number {
-  if (unit === 'KG' || unit === 'L') return amount / 1000;
+export function toBaseUnits(amount: number, _unit: string): number {
   return amount;
 }
 
-/** Стоимость позиции: количество (в единицах рецепта) → базовые единицы × цена за базовую единицу. */
+/** Стоимость позиции: количество (базовые единицы) × цена за базовую единицу. */
 export function costOf(amount: number, unit: string, pricePerUnit: number): number {
   return toBaseUnits(amount, unit) * pricePerUnit;
 }
