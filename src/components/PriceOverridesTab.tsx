@@ -6,6 +6,10 @@ import { mealsWord } from '../utils/text';
 import { NumberField } from './NumberField';
 import { api, getRecipes } from '../api/client';
 
+/** Фаза 13 (п.4): человекочитаемая единица для подписи цены «₽ / ед». */
+const unitShortLabel: Record<string, string> = { KG: 'кг', G: 'г', L: 'л', ML: 'мл', PCS: 'шт', PACK: 'уп' };
+const priceUnitSuffix = (unit?: string) => `₽ / ${unitShortLabel[unit || ''] || 'ед.'}`;
+
 interface ShoppingItem {
   ingredientId: string;
   ingredientName: string;
@@ -348,7 +352,7 @@ export default function PriceOverridesTab({ tripId }: Props) {
                 <th className="text-right px-2 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: '11px' }}>Кол-во</th>
                 <th className="text-right px-2 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: '11px' }}>План ₽/ед</th>
                 <th className="text-right px-2 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: '11px' }}>План ₽</th>
-                <th className="text-right px-2 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: '11px' }}>Факт ₽/ед</th>
+                <th className="text-right px-2 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: '11px' }} title="Цена за единицу измерения продукта (не сумма чека)">Факт ₽/ед</th>
                 <th className="text-right px-2 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: '11px' }}>Факт ₽</th>
                 <th className="text-right px-2 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: '11px' }}>Δ</th>
                 <th className="px-2 py-3"></th>
@@ -377,6 +381,7 @@ export default function PriceOverridesTab({ tripId }: Props) {
                       <NumberField
                         value={item.actualUnitPrice ?? null}
                         stepRef={item.plannedUnitPrice}
+                        placeholder={`цена ${priceUnitSuffix(item.unit)}`}
                         onCommit={v => {
                           setShoppingItems(prev => prev.map(i => 
                             i.ingredientId === item.ingredientId 
@@ -513,7 +518,7 @@ export default function PriceOverridesTab({ tripId }: Props) {
           <div className="modal-sheet" onClick={e => e.stopPropagation()}>
             <b style={{ fontFamily: 'Unbounded', fontSize: '15px', color: 'var(--text)' }}>Ввести чек</b>
             <p style={{ color: 'var(--muted)', fontSize: '12px', margin: '6px 0 14px' }}>
-              Фактические цены за единицу. Пусто = «= план».
+              Фактические цены за единицу (₽/кг, ₽/шт и т.д. — см. подпись в поле). Пусто = «= план».
             </p>
             <div className="flex flex-col gap-3">
               {shoppingItems.map(item => (
@@ -529,6 +534,7 @@ export default function PriceOverridesTab({ tripId }: Props) {
                     size="sm"
                     value={item.actualUnitPrice ?? null}
                     stepRef={item.plannedUnitPrice}
+                    placeholder={`цена ${priceUnitSuffix(item.unit)}`}
                     onCommit={v => {
                       setShoppingItems(prev => prev.map(i => 
                         i.ingredientId === item.ingredientId 

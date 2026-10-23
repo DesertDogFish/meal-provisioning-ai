@@ -15,6 +15,50 @@
   cursor: pointer;
 }
 
+/* ФАЗА 13 (UX): поле — input[type=text]; нативный браузерный пикер подавлен
+   полностью (правило ниже — страховка на случай, если type=date встретится
+   где-то ещё). Единственный календарь — наш попапер .dark-calendar. */
+input::-webkit-calendar-picker-indicator {
+  display: none !important;
+}
+
+.dp-field-wrap {
+  position: relative;
+  display: block;
+  width: 100%;
+}
+
+.dp-text-input {
+  padding-right: 44px; /* место под иконку + крестик */
+}
+
+.dp-icon {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--muted, #8b98ac);
+  pointer-events: none; /* клик проходит в input → открывает наш попапер */
+}
+
+.dp-clear {
+  position: absolute;
+  right: 28px;
+  top: 50%;
+  transform: translateY(-50%);
+  border: none;
+  background: transparent;
+  color: var(--muted, #8b98ac);
+  font-size: 15px;
+  line-height: 1;
+  padding: 2px 4px;
+  cursor: pointer;
+}
+
+.dp-clear:hover {
+  color: var(--fire, #f59e0b);
+}
+
 .date-picker-input:hover:not(.disabled):not(.error) {
   border-color: rgba(255, 255, 255, 0.15);
 }

@@ -1,0 +1,100 @@
+/* Фаза 13 (UX): кастомный селект — тёмная тема, анимация, клавиатура */
+
+.cselect {
+  display: inline-block;
+}
+
+.cselect-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: var(--elev);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.cselect-trigger:hover:not(:disabled) {
+  border-color: var(--w1);
+}
+
+.cselect-trigger:focus-visible {
+  outline: none;
+  border-color: var(--w1);
+  box-shadow: 0 0 0 3px rgba(45, 212, 191, 0.18);
+}
+
+.cselect-trigger:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.cselect-value {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cselect-arrow {
+  flex-shrink: 0;
+  color: var(--muted);
+  transition: transform 0.18s ease;
+}
+
+.cselect-arrow.rotated {
+  transform: rotate(180deg);
+}
+
+.cselect-list {
+  position: absolute;
+  z-index: 60;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  max-height: 260px;
+  overflow-y: auto;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  border-radius: 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  animation: cselect-in 0.14s ease-out;
+}
+
+@keyframes cselect-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.cselect-option {
+  padding: 8px 10px;
+  border-radius: calc(10px - 4px);
+  font-size: 14px;
+  color: var(--text);
+  cursor: pointer;
+  user-select: none;
+}
+
+.cselect-option.active {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.cselect-option.selected {
+  color: var(--w1);
+  font-weight: 700;
+}
