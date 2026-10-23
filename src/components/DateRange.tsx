@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from 'react';
+﻿import { useEffect } from 'react';
 import { DatePicker } from './DatePicker';
 
 interface DateRangeProps {
@@ -29,17 +29,9 @@ export function DateRange({
   startPlaceholder = 'Выберите дату',
   endPlaceholder = 'Выберите дату'
 }: DateRangeProps) {
-  const [internalEndDate, setInternalEndDate] = useState(endDate);
-
-  // Синхронизируем internalEndDate с prop endDate при изменении
-  useEffect(() => {
-    setInternalEndDate(endDate);
-  }, [endDate]);
-
   // При первом рендере, если startDate есть, а endDate нет — ставим endDate = startDate
   useEffect(() => {
     if (startDate && !endDate) {
-      setInternalEndDate(startDate);
       onEndDateChange(startDate);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -49,15 +41,16 @@ export function DateRange({
   const handleStartDateChange = (newStartDate: string) => {
     onStartDateChange(newStartDate);
     
-    // Если endDate меньше startDate — обновляем endDate
-    if (internalEndDate && newStartDate > internalEndDate) {
-      setInternalEndDate(newStartDate);
+    // Если endDate меньше startDate — обновляем endDate.
+    // ВАЖНО: сверяемся с prop endDate (состояние формы), а не с локальным:
+    // на маунте автоподтягивание заполняет endDate = startDate, и сравнение
+    // с ним «съедало» только что выбранную пользователем endDate (регрессия CR-3).
+    if (endDate && newStartDate > endDate) {
       onEndDateChange(newStartDate);
     }
   };
 
   const handleEndDateChange = (newEndDate: string) => {
-    setInternalEndDate(newEndDate);
     onEndDateChange(newEndDate);
   };
 
@@ -70,7 +63,7 @@ export function DateRange({
         <DatePicker
           value={startDate || null}
           onChange={handleStartDateChange}
-          maxDate={internalEndDate ? new Date(internalEndDate) : undefined}
+          maxDate={endDate ? new Date(`${endDate}T00:00:00`) : undefined}
           placeholder={startPlaceholder}
           id="start-date"
         />
@@ -80,9 +73,9 @@ export function DateRange({
           {endLabel}
         </label>
         <DatePicker
-          value={internalEndDate || null}
+          value={endDate || null}
           onChange={handleEndDateChange}
-          minDate={startDate ? new Date(startDate) : undefined}
+          minDate={startDate ? new Date(`${startDate}T00:00:00`) : undefined}
           disabled={!startDate}
           placeholder={endPlaceholder}
           id="end-date"
