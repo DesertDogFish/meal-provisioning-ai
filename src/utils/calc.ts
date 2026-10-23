@@ -16,8 +16,12 @@ export function calculateKcal(
   let grams: number;
   
   if (unit === 'KG' || unit === 'L') {
-    // кг/л → граммы: умножаем на 1000
-    grams = amount * 1000;
+    // FIX (2026-10-24, единая семантика единиц): для KG/L количество в
+    // рецептах хранится в ГРАММАХ/МИЛЛИЛИТРАХ — так же, как стоимость
+    // считается через toBaseUnits (g/1000 × ₽/кг). Раньше здесь было
+    // amount*1000 («кг→г»), что при уже gram-значении завышало ккал в
+    // 1000 раз (падал тест CR-1: 250186 вместо 436). Берём как есть.
+    grams = amount;
   } else if (unit === 'PCS' || unit === 'PACK') {
     // шт/уп → граммы: умножаем на piece_weight_g
     if (pieceWeightG == null) return null;
