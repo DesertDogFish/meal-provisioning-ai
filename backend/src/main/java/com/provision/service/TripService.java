@@ -27,7 +27,23 @@ public class TripService {
 
     @Transactional(readOnly = true)
     public List<TripResponse> getUserTrips(Long userId) {
-        return tripRepository.findByUserId(userId).stream()
+        List<Trip> trips = tripRepository.findByUserId(userId);
+        if (trips.isEmpty()) {
+            return List.of();
+        }
+
+        // P1 (аудит ФАЗЫ 11, Шаг 4): было N+1 — lazy days/meals/recipe грузились
+        // по одному запросу на каждый поход/день. Теперь: ровно 2 batch-запроса,
+        // после чего коллекции уже в persistence context и toResponse не триггерит ленивую загрузку.
+        List<Long> tripIds = trips.stream().map(Trip::getId).toList();
+        List<TripDay> days = tripRepository.findDaysByTripIds(tripIds);
+
+        if (!days.isEmpty()) {
+            List<Long> dayIds = days.stream().map(TripDay::getId).toList();
+            tripRepository.findMealsWithRecipesByDayIds(dayIds);
+        }
+
+        return trips.stream()
                 .map(this::toResponse)
                 .toList();
     }
