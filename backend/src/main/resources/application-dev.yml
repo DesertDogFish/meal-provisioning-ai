@@ -1,0 +1,21 @@
+# Development profile settings
+# Activated via SPRING_PROFILES_ACTIVE=dev
+
+logging:
+  level:
+    root: DEBUG
+    com.provision: DEBUG
+    org.springframework.security: DEBUG
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    enabled: true
+
+server:
+  error:
+    include-message: always
+    include-binding-errors: always

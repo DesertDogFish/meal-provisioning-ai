@@ -27,7 +27,7 @@
       postgres:
         condition: service_healthy
     environment:
-      SPRING_PROFILES_ACTIVE: dev
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
       SEED_DEMO_USERS: ${SEED_DEMO_USERS:-false}
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/provision
       SPRING_DATASOURCE_USERNAME: provision
