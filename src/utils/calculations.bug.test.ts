@@ -68,7 +68,10 @@ describe('Баг агрегации стоимости по endDate', () => {
                 unit: 'KG',
                 category: 'Крупы',
               },
-              amount: 800,
+              // FIX (T0, зелёный main): контракт единиц — KG хранит базовые
+              // единицы (кг), см. toBaseUnits в calculations.ts. Было `800`
+              // («граммы») — противоречило contract.test.ts/calc.test.ts/e2e.
+              amount: 0.8, // 0.8 кг = 800 г на рецепт (baseServings 4)
             },
           ],
         },
@@ -97,13 +100,13 @@ describe('Баг агрегации стоимости по endDate', () => {
   it('должен считать стоимость по дням, а не по endDate', () => {
     const shoppingList = calculateShoppingList(trip, recipes, prices);
     
-    // День 10 мая: 800 г (0.8 кг) × 180₽/кг = 144₽
-    // День 20 мая: 800 г × 250₽/кг = 200₽
+    // День 10 мая: 0.8 кг × 180₽/кг = 144₽
+    // День 20 мая: 0.8 кг × 250₽/кг = 200₽
     // Итого: 344₽
     
     const grechka = shoppingList.find(item => item.ingredientId === '1');
     expect(grechka).toBeDefined();
-    expect(grechka?.totalAmount).toBe(1600); // 800 г + 800 г
+    expect(grechka?.totalAmount).toBeCloseTo(1.6); // 0.8 + 0.8 (базовые единицы — кг)
     expect(grechka?.estimatedCost).toBe(344); // 144 + 200
   });
 

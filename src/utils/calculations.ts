@@ -12,14 +12,22 @@ export function calculateAmountPerPerson(amount: number, baseServings: number, p
 }
 
 /**
- * FIX (T0, зелёный main): контракт единиц — KG/L хранят БАЗОВЫЕ единицы (кг/л).
- * См. backend KcalCalculator.java, фикстуры contract.test.ts (гречка 1.8 KG →
- * план 360 ₽ = 1.8 × 200 ₽/кг), calc.test.ts KCAL-01 (0.08 KG → 280 ккал) и
- * mock-строки mockServer.ts (totalAmount в кг при цене ₽/кг).
- * Предыдущая интерпретация «amount в рецептах в граммах» (багфикс «284 046 ₽»)
- * противоречила этому контракту: стоимость расходилась в 1000 раз
- * (CI: expected 120.08 to be close to 200). Поэтому toBaseUnits/costOf теперь
- * identity: количество уже в базовых единицах, цена — за базовую единицу.
+ * FIX (T0, зелёный main): единый контракт единиц для всей кодовой базы —
+ * KG/L хранят БАЗОВЫЕ единицы (кг/л), PCS/PACK — штуки/упаковки.
+ * Обоснование контракта: backend KcalCalculator.java, фикстуры
+ * contract.test.ts (гречка 1.8 KG → план 360 ₽ = 1.8 × 200 ₽/кг),
+ * calc.test.ts KCAL-01 (0.08 KG → 280 ккал), TripForm-поток e2e.
+ * Ранее существовали две взаимоисключающие интерпретации:
+ *  - «граммы» (багфикс «284 046 ₽»: toBaseUnits делил на 1000) — ломала
+ *    CR-1 ккал (250186 вместо 436) и стоимость в calculations.test.ts
+ *    (CI: expected 120.08 to be close to 200);
+ *  - «базовые единицы» — ломала расчётные ассерты баг-теста агрегации
+ *    стоимости по дням (calculations.bug.test.ts), чья фикстура была
+ *    написана в граммах (amount: 800).
+ * Теперь toBaseUnits/costOf — identity (количество уже в базовых единицах,
+ * цена — за базовую единицу), а фикстура calculations.bug.test.ts приведена
+ * к контракту (800 г → 0.8 кг). Смысловое ядро баг-теста (цена каждой даты,
+ * а не endDate) сохранено: 0.8×180 + 0.8×250 = 344 ₽ ≠ 400 ₽.
  */
 export function toBaseUnits(amount: number, _unit: string): number {
   return amount;
