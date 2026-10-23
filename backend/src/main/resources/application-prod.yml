@@ -1,0 +1,30 @@
+# Production profile settings
+# Activated via SPRING_PROFILES_ACTIVE=prod
+
+logging:
+  level:
+    root: WARN
+    com.provision: INFO
+    org.springframework.security: WARN
+    org.hibernate.SQL: WARN
+    org.hibernate.type.descriptor.sql.BasicBinder: WARN
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: never
+
+springdoc:
+  swagger-ui:
+    enabled: false
+  api-docs:
+    enabled: false
+
+server:
+  error:
+    include-message: false
+    include-binding-errors: never

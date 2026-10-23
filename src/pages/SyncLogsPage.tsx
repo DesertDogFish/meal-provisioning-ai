@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
+﻿import { useState, useEffect } from 'react';
 import { useToast } from '../components/ToastProvider';
+import { DatePicker } from '../components/DatePicker';
 import { RefreshCw, X, AlertCircle } from 'lucide-react';
 
 interface SyncLog {
@@ -264,22 +265,8 @@ export default function SyncLogsPage() {
           <option value="FAILED">FAILED</option>
         </select>
 
-        <input
-          type="date"
-          value={filterFrom}
-          onChange={e => setFilterFrom(e.target.value)}
-          className="px-4 py-2.5 rounded-lg outline-none"
-          style={{ background: 'var(--elev)', border: '1px solid var(--border)', color: 'var(--text)' }}
-        />
-
-        <input
-          type="date"
-          value={filterTo}
-          onChange={e => setFilterTo(e.target.value)}
-          className="px-4 py-2.5 rounded-lg outline-none"
-          style={{ background: 'var(--elev)', border: '1px solid var(--border)', color: 'var(--text)' }}
-        />
-
+        <DatePicker value={filterFrom || null} onChange={(v) => setFilterFrom(v)} placeholder="С" />
+        <DatePicker value={filterTo || null} onChange={(v) => setFilterTo(v)} placeholder="По" />
         <button onClick={resetFilters} className="ghost-btn">
           Сбросить
         </button>

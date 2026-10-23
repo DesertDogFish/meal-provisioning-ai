@@ -60,5 +60,4 @@ springdoc:
 
 logging:
   level:
-    com.provision: DEBUG
-    org.springframework.security: DEBUG
+    root: INFO

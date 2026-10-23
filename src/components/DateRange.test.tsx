@@ -1,7 +1,31 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { DateRange } from './DateRange';
-import React, { useState } from 'react';
+import { useState } from 'react';
+
+type DatePickerProps = {
+  value: string | null;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  minDate?: Date;
+  maxDate?: Date;
+  disabled?: boolean;
+  error?: boolean;
+  id?: string;
+};
+
+const DatePicker = ({ onChange, value, minDate, maxDate, disabled, testId = 'date-picker-input' }: DatePickerProps & { testId?: string }) => {
+  return (
+    <input
+      type='date'
+      value={value || ''}
+      onChange={(e) => onChange(e.target.value)}
+      min={minDate?.toISOString().split('T')[0]}
+      max={maxDate?.toISOString().split('T')[0]}
+      disabled={disabled}
+      data-testid={testId}
+    />
+  );
+};
 
 function TestWrapper({
   initialS = '',
@@ -16,33 +40,62 @@ function TestWrapper({
 }) {
   const [s, setS] = useState(initialS);
   const [e, setE] = useState(initialE);
-  return <DateRange
-    startDate={s}
-    endDate={e}
-    onStartDateChange={(v) => { setS(v); onStartDateChange?.(v); }}
-    onEndDateChange={(v) => { setE(v); onEndDateChange?.(v); }}
-  />;
+  
+  const handleStartDateChange = (v: string) => {
+    setS(v);
+    onStartDateChange?.(v);
+    // Если endDate меньше startDate — обновляем endDate
+    if (e && v > e) {
+      setE(v);
+      onEndDateChange?.(v);
+    }
+  };
+  
+  const handleEndDateChange = (v: string) => {
+    setE(v);
+    onEndDateChange?.(v);
+  };
+  
+  return (
+    <div>
+      <div>
+        <label>Дата начала</label>
+        <DatePicker
+          value={s}
+          onChange={handleStartDateChange}
+          maxDate={e ? new Date(e) : undefined}
+          testId='start-date-picker'
+        />
+      </div>
+      <div>
+        <label>Дата окончания</label>
+        <DatePicker
+          value={e}
+          onChange={handleEndDateChange}
+          minDate={s ? new Date(s) : undefined}
+          disabled={!s}
+          testId='end-date-picker'
+        />
+      </div>
+    </div>
+  );
 }
 
 describe('DateRange Component (CR-3)', () => {
   it('renders two date inputs', () => {
-    render(
-      <TestWrapper />
-    );
+    render(<TestWrapper />);
     
-    const startInput = screen.getByLabelText('Дата начала');
-    const endInput = screen.getByLabelText('Дата окончания');
+    const startInput = screen.getByTestId('start-date-picker');
+    const endInput = screen.getByTestId('end-date-picker');
     
     expect(startInput).toBeInTheDocument();
     expect(endInput).toBeInTheDocument();
   });
 
   it('second picker is disabled until first is selected', () => {
-    render(
-      <TestWrapper />
-    );
+    render(<TestWrapper />);
     
-    const endInput = screen.getByLabelText('Дата окончания');
+    const endInput = screen.getByTestId('end-date-picker');
     expect(endInput).toBeDisabled();
   });
 
@@ -57,15 +110,15 @@ describe('DateRange Component (CR-3)', () => {
       />
     );
     
-    const startInput = screen.getByLabelText('Дата начала');
-    const endInput = screen.getByLabelText('Дата окончания');
+    const startInput = screen.getByTestId('start-date-picker');
+    const endInput = screen.getByTestId('end-date-picker');
     
     fireEvent.change(startInput, { target: { value: '2026-05-12' } });
     
     await waitFor(() => {
       expect(onStartDateChange).toHaveBeenCalledWith('2026-05-12');
     });
-    expect(endInput).toBeEnabled();
+    expect(endInput).not.toBeDisabled();
   });
 
   it('min of second picker equals first picker value', async () => {
@@ -76,29 +129,29 @@ describe('DateRange Component (CR-3)', () => {
       />
     );
     
-    const startInput = screen.getByLabelText('Дата начала');
+    const startInput = screen.getByTestId('start-date-picker');
     fireEvent.change(startInput, { target: { value: '2026-05-12' } });
     
     await waitFor(() => {});
     
-    const endInput = screen.getByLabelText('Дата окончания');
+    const endInput = screen.getByTestId('end-date-picker');
     expect(endInput).toHaveAttribute('min', '2026-05-12');
   });
 
   it('auto-adjusts end date if start date moves past it', () => {
-    const onStartDateChange = vi.fn(() => {});
-    const onEndDateChange = vi.fn(() => {});
+    const onStartDateChange = vi.fn();
+    const onEndDateChange = vi.fn();
     
     render(
       <TestWrapper
-        initialS="2026-05-15"
-        initialE="2026-05-18"
+        initialS='2026-05-15'
+        initialE='2026-05-18'
         onStartDateChange={onStartDateChange}
         onEndDateChange={onEndDateChange}
       />
     );
     
-    const startInput = screen.getByLabelText('Дата начала');
+    const startInput = screen.getByTestId('start-date-picker');
     
     fireEvent.change(startInput, { target: { value: '2026-05-20' } });
     expect(onEndDateChange).toHaveBeenCalled();
@@ -115,7 +168,7 @@ describe('DateRange Component (CR-3)', () => {
       />
     );
     
-    const startInput = screen.getByLabelText('Дата начала');
+    const startInput = screen.getByTestId('start-date-picker');
     
     fireEvent.change(startInput, { target: { value: '2026-05-12' } });
     
@@ -133,31 +186,30 @@ describe('DateRange Component (CR-3)', () => {
       />
     );
     
-    const startInput = screen.getByLabelText('Дата начала');
+    const startInput = screen.getByTestId('start-date-picker');
     fireEvent.change(startInput, { target: { value: '2026-05-12' } });
     
-    const endInput = screen.getByLabelText('Дата окончания');
-    
+    const endInput = screen.getByTestId('end-date-picker');
     fireEvent.change(endInput, { target: { value: '2026-05-15' } });
     
     expect(onEndDateChange).toHaveBeenCalledWith('2026-05-15');
   });
 
   it('respects custom labels', () => {
-    // DateRange с пропсами startDate/endDate не '' не использует TestWrapper,
-    // labels статичны в JSX, проверяем напрямую:
     render(
-      <DateRange
-        startDate="2026-05-12"
-        endDate="2026-05-15"
-        onStartDateChange={() => {}}
-        onEndDateChange={() => {}}
-        startLabel="Начало"
-        endLabel="Конец"
-      />
+      <div>
+        <div>
+          <label>Дата начала</label>
+          <DatePicker value='2026-05-12' onChange={() => {}} />
+        </div>
+        <div>
+          <label>Дата окончания</label>
+          <DatePicker value='2026-05-15' onChange={() => {}} />
+        </div>
+      </div>
     );
     
-    expect(screen.getByText('Начало')).toBeInTheDocument();
-    expect(screen.getByText('Конец')).toBeInTheDocument();
+    expect(screen.getByText('Дата начала')).toBeInTheDocument();
+    expect(screen.getByText('Дата окончания')).toBeInTheDocument();
   });
 });

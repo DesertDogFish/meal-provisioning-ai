@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+﻿import { useEffect } from 'react';
+import { DatePicker } from './DatePicker';
 
 interface DateRangeProps {
   startDate: string;
@@ -28,12 +29,9 @@ export function DateRange({
   startPlaceholder = 'Выберите дату',
   endPlaceholder = 'Выберите дату'
 }: DateRangeProps) {
-  const [internalEndDate, setInternalEndDate] = useState(endDate);
-
   // При первом рендере, если startDate есть, а endDate нет — ставим endDate = startDate
   useEffect(() => {
     if (startDate && !endDate) {
-      setInternalEndDate(startDate);
       onEndDateChange(startDate);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -43,15 +41,22 @@ export function DateRange({
   const handleStartDateChange = (newStartDate: string) => {
     onStartDateChange(newStartDate);
     
-    // Если endDate меньше startDate — обновляем endDate
-    if (internalEndDate && newStartDate > internalEndDate) {
-      setInternalEndDate(newStartDate);
+    // Если endDate меньше startDate — обновляем endDate.
+    // ВАЖНО: сверяемся с prop endDate (состояние формы), а не с локальным:
+    // на маунте автоподтягивание заполняет endDate = startDate, и сравнение
+    // с ним «съедало» только что выбранную пользователем endDate (регрессия CR-3).
+    if (endDate && newStartDate > endDate) {
+      onEndDateChange(newStartDate);
+    } else if (!endDate && newStartDate) {
+      // Пустой endDate при непустом startDate — контракт CR-3: пустое поле
+      // подтягивается к startDate (см. useEffect на маунте). Без этой ветки
+      // очистка startDate (value='') оставляла endDate навсегда пустым, и
+      // последующий выбор даты «оживлял» устаревший endDate из state формы.
       onEndDateChange(newStartDate);
     }
   };
 
   const handleEndDateChange = (newEndDate: string) => {
-    setInternalEndDate(newEndDate);
     onEndDateChange(newEndDate);
   };
 
@@ -61,39 +66,24 @@ export function DateRange({
         <label htmlFor="start-date" className="block text-sm font-medium mb-1" style={{ color: 'var(--muted)' }}>
           {startLabel}
         </label>
-        <input
-          id="start-date"
-          type="date"
-          value={startDate}
-          onChange={e => handleStartDateChange(e.target.value)}
-          max={internalEndDate || undefined}
+        <DatePicker
+          value={startDate || null}
+          onChange={handleStartDateChange}
           placeholder={startPlaceholder}
-          className="w-full px-3 py-2.5 rounded-lg outline-none"
-          style={{ 
-            background: 'var(--elev)', 
-            border: '1px solid var(--border)', 
-            color: 'var(--text)' 
-          }}
+          id="start-date"
         />
       </div>
       <div>
         <label htmlFor="end-date" className="block text-sm font-medium mb-1" style={{ color: 'var(--muted)' }}>
           {endLabel}
         </label>
-        <input
-          id="end-date"
-          type="date"
-          value={internalEndDate}
-          onChange={e => handleEndDateChange(e.target.value)}
-          min={startDate || undefined}
+        <DatePicker
+          value={endDate || null}
+          onChange={handleEndDateChange}
+          minDate={startDate ? new Date(`${startDate}T00:00:00`) : undefined}
           disabled={!startDate}
           placeholder={endPlaceholder}
-          className="w-full px-3 py-2.5 rounded-lg outline-none disabled:opacity-50"
-          style={{ 
-            background: 'var(--elev)', 
-            border: '1px solid var(--border)', 
-            color: 'var(--text)' 
-          }}
+          id="end-date"
         />
       </div>
     </div>
