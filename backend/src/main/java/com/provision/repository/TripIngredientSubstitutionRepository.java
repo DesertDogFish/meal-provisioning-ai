@@ -27,12 +27,29 @@ public interface TripIngredientSubstitutionRepository extends JpaRepository<Trip
     
     void deleteByTripIdAndRecipeIdAndFromIngredientId(Long tripId, Long recipeId, Long fromIngredientId);
 
+    // FIX P1: recipe.ingredients больше не грузим (в агрегации закупки состав берётся
+    // из batch-запроса RecipeRepository.findAllWithIngredientsByIds; дедупликация
+    // сущностей в persistence context гарантирует, что те же рецепты будут с составом).
     @Query("SELECT s FROM TripIngredientSubstitution s " +
            "JOIN FETCH s.recipe r " +
            "LEFT JOIN FETCH s.fromIngredient " +
            "LEFT JOIN FETCH s.toIngredient " +
            "WHERE s.trip.id = :tripId")
     List<TripIngredientSubstitution> findAllEditsForTrip(@Param("tripId") Long tripId);
+
+    /**
+     * FIX P1: правки состава похода вместе с составом затронутых рецептов —
+     * одним запросом (JOIN FETCH), чтобы при open-in-view:false не получать
+     * LazyInitializationException/N+1 на recipe.getIngredients() вне транзакции.
+     */
+    @Query("SELECT s FROM TripIngredientSubstitution s " +
+           "JOIN FETCH s.recipe r " +
+           "LEFT JOIN FETCH r.ingredients ri " +
+           "LEFT JOIN FETCH ri.ingredient " +
+           "LEFT JOIN FETCH s.fromIngredient " +
+           "LEFT JOIN FETCH s.toIngredient " +
+           "WHERE s.trip.id = :tripId")
+    List<TripIngredientSubstitution> findAllEditsForTripWithRecipeIngredients(@Param("tripId") Long tripId);
 
     Optional<TripIngredientSubstitution> findByTripIdAndRecipeIdAndAddedTrueAndToIngredientId(
         Long tripId, Long recipeId, Long toIngredientId);
