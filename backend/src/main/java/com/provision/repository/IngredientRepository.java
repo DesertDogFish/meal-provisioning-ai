@@ -2,6 +2,7 @@ package com.provision.repository;
 
 import com.provision.entity.Ingredient;
 import com.provision.entity.UnitOfMeasure;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
@@ -26,6 +27,11 @@ public interface IngredientRepository extends JpaRepository<Ingredient, Long>, J
     Optional<Ingredient> findByCode(String code);
     boolean existsByCode(String code);
     
+    // FIX (скрытый N+1): category — LAZY @ManyToOne; IngredientService.toDto читает
+    // ingredient.getCategory().getName() на каждый элемент списка → по одному
+    // «select ... from product_categories where id=?» на ингредиент. Fetch-join
+    // решает это одним запросом (категорий мало, раздувание строк незначимо).
+    @EntityGraph(attributePaths = {"category"})
     @Query("SELECT i FROM Ingredient i ORDER BY i.name")
     List<Ingredient> findAllOrderByname();
     

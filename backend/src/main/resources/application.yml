@@ -62,6 +62,17 @@ springdoc:
     tags-sorter: alpha
     operations-sorter: alpha
 
+# FIX (шум в логах + диагностика N+1): org.hibernate.orm.results логирует каждый
+# извлечённый JDBC-столбец («Extracted JDBC value») — тысячи строк на один запрос.
+# Держим Hibernate на WARN, но SQL оставляем DEBUG — это полезный инструмент
+# для отслеживания N+1 (число «select ... from ingredients where id=?» и т.п.).
 logging:
   level:
     root: INFO
+    com.provision: DEBUG          # наш код — можно DEBUG в dev
+    org.hibernate: WARN           # ← ГЛАВНОЕ: убиваем шум orm.results
+    org.hibernate.SQL: DEBUG      # SQL-запросы оставляем DEBUG (полезно для диагностики N+1)
+    org.hibernate.orm.results: WARN   # конкретно этот логгер — источник шума
+    org.hibernate.type.descriptor.sql: WARN
+    org.springframework: INFO
+    org.springframework.security: WARN
