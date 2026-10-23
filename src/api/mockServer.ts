@@ -108,6 +108,27 @@ export const mockServer = {
     if (pathWithoutQuery.startsWith('/integrations/')) {
       return this.handleIntegrations(method, pathWithoutQuery) as T;
     }
+    // ЗАДАЧА 2 (SyncLogsPage на api-клиент): mock-роуты журнала синков и OFF sync/prices
+    if (pathWithoutQuery === '/admin/sync-logs/kpi' && method === 'GET') {
+      return { totalRuns: 0, successRate: 0, totalUpdated: 0, totalErrors: 0 } as T;
+    }
+    if (pathWithoutQuery === '/admin/sync-logs' && method === 'GET') {
+      return [] as T;
+    }
+    if (pathWithoutQuery === '/admin/integrations/OFF/sync/prices' && method === 'POST') {
+      if (syncRunning) {
+        throw {
+          status: 409,
+          message: 'SYNC_ALREADY_RUNNING',
+          detail: 'A synchronization is already in progress',
+        } as any;
+      }
+      syncRunning = true;
+      // Как в handleIntegrations: синк «происходит» асинхронно и освобождает флаг,
+      // иначе последующие sync-запросы вечно получают 409.
+      setTimeout(() => { syncRunning = false; }, 1500);
+      return { status: 'RUNNING', startedAt: new Date().toISOString() } as T;
+    }
     if (pathWithoutQuery.startsWith('/recipes')) {
       return this.handleRecipes(method, path, body) as T;
     }

@@ -48,9 +48,12 @@ export default function TripsPage() {
       ]);
       setCurrentUser(user);
       setTrips(tripsData);
-    } catch (err) {
-      console.error('Failed to load ', err);
+    } catch (err: any) {
+      console.error('Failed to load trips:', err);
+      // ЗАДАЧА 3: тост + сброс устаревшего списка
+      setTrips([]);
       setError('Не удалось загрузить данные');
+      showError(err?.detail || 'Не удалось загрузить список походов');
     } finally {
       setLoading(false);
     }

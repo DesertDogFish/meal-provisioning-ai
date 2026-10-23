@@ -4,7 +4,7 @@
  * Выбор режима: localStorage → VITE_API_MODE → auto-пинг GET /api/v1/meta
  */
 
-import type { UnitOfMeasure } from '../types';
+import type { Recipe, UnitOfMeasure } from '../types';
 
 export interface ApiError {
   status: number;
@@ -301,6 +301,39 @@ export class ApiClient {
 }
 
 export const api = new ApiClient();
+
+/**
+ * ЗАДАЧА 1 (аудит коннекшенов): бэкенд в GET /recipes отдаёт плоские поля
+ * ingredientId/ingredientName/unit/unitLabel, а UI читает вложенный ri.ingredient?.name.
+ * Нормализуем ответ в одном месте: подставляем ingredient из плоских полей, если он отсутствует.
+ * В mock-режиме ingredient уже есть — там нормализация ничего не меняет.
+ */
+export function normalizeRecipe(recipe: Recipe): Recipe {
+  if (!Array.isArray(recipe.ingredients)) return recipe;
+  return {
+    ...recipe,
+    ingredients: recipe.ingredients.map((ri) => ({
+      ...ri,
+      ingredient:
+        ri.ingredient ??
+        ({
+          id: String(ri.ingredientId),
+          name: (ri as unknown as { ingredientName?: string }).ingredientName ?? 'Неизвестный',
+          unit: ((ri as unknown as { unit?: UnitOfMeasure }).unit ??
+            (ri as unknown as { unitLabel?: UnitOfMeasure }).unitLabel ??
+            'PCS') as UnitOfMeasure,
+          category: '',
+          createdAt: '',
+        } as import('../types').Ingredient),
+    })),
+  };
+}
+
+/** Единая точка загрузки рецептов (использовать вместо api.get('/recipes')) */
+export async function getRecipes(): Promise<Recipe[]> {
+  const data = await api.get<Recipe[]>('/recipes');
+  return Array.isArray(data) ? data.map(normalizeRecipe) : data;
+}
 
 // Утилиты для контракта
 export const UNIT_LABELS: Record<UnitOfMeasure, string> = {

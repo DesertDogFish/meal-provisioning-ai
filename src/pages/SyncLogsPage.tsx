@@ -2,6 +2,7 @@
 import { useToast } from '../components/ToastProvider';
 import { DatePicker } from '../components/DatePicker';
 import { RefreshCw, X, AlertCircle } from 'lucide-react';
+import { api, ApiClientError } from '../api/client';
 
 interface SyncLog {
   id: number;
@@ -82,22 +83,22 @@ export default function SyncLogsPage() {
   const loadSyncLogs = async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams();
-      if (filterType) params.append('type', filterType);
-      if (filterStatus) params.append('status', filterStatus);
-      if (filterFrom) params.append('from', filterFrom);
-      if (filterTo) params.append('to', filterTo);
+      const params: Record<string, string> = {};
+      if (filterType) params.type = filterType;
+      if (filterStatus) params.status = filterStatus;
+      if (filterFrom) params.from = filterFrom;
+      if (filterTo) params.to = filterTo;
 
-      const response = await fetch(`/api/v1/admin/sync-logs?${params}`, {
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('accessToken')}` }
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        setSyncLogs(data);
-      }
+      const data = await api.get<SyncLog[]>('/admin/sync-logs', { params });
+      setSyncLogs(data);
     } catch (error) {
       console.error('Failed to load sync logs:', error);
+      setSyncLogs([]);
+      if (error instanceof ApiClientError && error.error.status === 403) {
+        showError('Нет прав для просмотра журнала синков');
+      } else {
+        showError('Не удалось загрузить журнал синков');
+      }
     } finally {
       setLoading(false);
     }
@@ -105,40 +106,34 @@ export default function SyncLogsPage() {
 
   const loadKpi = async () => {
     try {
-      const response = await fetch('/api/v1/admin/sync-logs/kpi?days=7', {
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('accessToken')}` }
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        setKpi(data);
-      }
+      const data = await api.get<Kpi>('/admin/sync-logs/kpi', { params: { days: '7' } });
+      setKpi(data);
     } catch (error) {
       console.error('Failed to load KPI:', error);
+      setKpi(null);
+      if (error instanceof ApiClientError && error.error.status === 403) {
+        showError('Нет прав для просмотра журнала синков');
+      } else {
+        showError('Не удалось загрузить KPI синхронизаций');
+      }
     }
   };
 
   const startSync = async () => {
     setSyncing(true);
     try {
-      const response = await fetch('/api/v1/admin/integrations/OFF/sync/prices', {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('accessToken')}` }
-      });
-
-      if (response.ok) {
-        showSuccess('Синк запущен');
-        await loadSyncLogs();
-      } else {
-        const error = await response.json();
-        if (error.status === 409) {
-          showError(error.detail || 'Синк уже запущен');
-        } else {
-          showError(error.detail || 'Ошибка запуска синка');
-        }
-      }
+      await api.post('/admin/integrations/OFF/sync/prices');
+      showSuccess('Синк запущен');
+      await loadSyncLogs();
     } catch (error) {
-      showError('Ошибка сети');
+      console.error('Failed to start sync:', error);
+      if (error instanceof ApiClientError && error.error.status === 409) {
+        showError('Синхронизация уже запущена, подожди завершения');
+      } else if (error instanceof ApiClientError && error.error.status === 403) {
+        showError('Нет прав для запуска синхронизации');
+      } else {
+        showError('Не удалось запустить синхронизацию');
+      }
     } finally {
       setSyncing(false);
     }

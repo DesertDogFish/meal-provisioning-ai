@@ -4,7 +4,7 @@ import { Download } from 'lucide-react';
 import { formatAmount } from '../utils/calculations';
 import { mealsWord } from '../utils/text';
 import { NumberField } from './NumberField';
-import { api } from '../api/client';
+import { api, getRecipes } from '../api/client';
 
 interface ShoppingItem {
   ingredientId: string;
@@ -101,7 +101,7 @@ export default function PriceOverridesTab({ tripId }: Props) {
       
       const [tripData, recipesData, pricesData] = await Promise.all([
         api.get<Trip>(`/trips/${tripId}`),
-        api.get<Recipe[]>('/recipes'),
+        getRecipes(),
         // P0-3: чтение цен — общий эндпоинт для всех ролей (см. UserPriceController)
         api.get<Price[]>('/prices')
       ]);
