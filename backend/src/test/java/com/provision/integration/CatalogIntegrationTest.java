@@ -111,31 +111,42 @@ class CatalogIntegrationTest {
 
     @Test
     @Order(2)
-    @DisplayName("CAT-02: Filter mealType=BREAKFAST returns exactly 15; SNACK returns 16")
+    @DisplayName("CAT-02: Filter mealType=BREAKFAST returns exactly 38; SNACK returns 62 (per seed)")
     void cat02_filterByMealType() throws Exception {
-        // Test BREAKFAST
-        MvcResult breakfastResult = mockMvc.perform(authGet("/api/v1/recipes?mealType=BREAKFAST"))
+        // FIX (устаревшие константы): раньше тест ожидал 15/16 — это количество блюд V3__seed_catalog
+        // ДО расширения каталога. Миграция V18__seed_catalog_ext_recipes добавляет ещё блюда тех же
+        // meal_type (BREAKFAST +23, SNACK +46), а @BeforeEach делает полный drop+Flyway migrate,
+        // т.е. фильтр возвращает актуальный размер сида. Логика фильтра при этом ВЕРНА: проверяем её
+        // напрямую — каждая возвращённая запись должна иметь искомый mealType, а количество должно
+        // совпадать с независимым COUNT(*) по тем же критериям прямо в БД (тестовая изоляция —
+        // TestDataIsolation.reset перед каждым тестом, отдельная база provision_test_catalog).
+        assertMealTypeCount("BREAKFAST", 38);
+        assertMealTypeCount("SNACK", 62);
+    }
+
+    /**
+     * Фильтр ?mealType=X вернул ровно expected блюд, все — типа X,
+     * и серверный ответ согласован с независимым запросом к БД.
+     */
+    private void assertMealTypeCount(String mealType, int expected) throws Exception {
+        MvcResult result = mockMvc.perform(authGet("/api/v1/recipes?mealType=" + mealType))
                 .andExpect(status().isOk())
                 .andReturn();
 
-        List<RecipeResponse> breakfastRecipes = objectMapper.readValue(
-                breakfastResult.getResponse().getContentAsString(StandardCharsets.UTF_8),
+        List<RecipeResponse> recipes = objectMapper.readValue(
+                result.getResponse().getContentAsString(StandardCharsets.UTF_8),
                 objectMapper.getTypeFactory().constructCollectionType(List.class, RecipeResponse.class)
         );
 
-        assertThat(breakfastRecipes).hasSize(15);
+        assertThat(recipes).hasSize(expected);
 
-        // Test SNACK
-        MvcResult snackResult = mockMvc.perform(authGet("/api/v1/recipes?mealType=SNACK"))
-                .andExpect(status().isOk())
-                .andReturn();
+        Integer dbCount = jdbc.queryForObject(
+                "SELECT count(*) FROM recipes WHERE meal_type = ?", Integer.class, mealType);
+        assertThat(dbCount).isEqualTo(expected);
 
-        List<RecipeResponse> snackRecipes = objectMapper.readValue(
-                snackResult.getResponse().getContentAsString(StandardCharsets.UTF_8),
-                objectMapper.getTypeFactory().constructCollectionType(List.class, RecipeResponse.class)
-        );
-
-        assertThat(snackRecipes).hasSize(16);
+        for (RecipeResponse recipe : recipes) {
+            assertThat(recipe.mealType().name()).isEqualTo(mealType);
+        }
     }
 
     @Test
@@ -162,8 +173,9 @@ class CatalogIntegrationTest {
     }
 
     @Test
+    @Test
     @Order(4)
-    @DisplayName("CAT-04: Filter cookMinutes=0 returns only 'no fire' dishes (18)")
+    @DisplayName("CAT-04: Filter cookMinutes=0 returns only 'no fire' dishes (46 per seed)")
     void cat04_filterNoFireDishes() throws Exception {
         MvcResult result = mockMvc.perform(authGet("/api/v1/recipes?cookMinutes=0"))
                 .andExpect(status().isOk())
@@ -174,9 +186,21 @@ class CatalogIntegrationTest {
                 objectMapper.getTypeFactory().constructCollectionType(List.class, RecipeResponse.class)
         );
 
-        // 18 блюд без готовки в каталоге V3__seed_catalog (пересчитано по сидам; было 22 — устаревшая константа)
-        assertThat(recipes).hasSize(18);
-        
+        // FIX (устаревшая константа): 18 — число «без готовки» по сиду V3 __seed_catalog
+        // ДО расширения каталога. Миграция V18__seed_catalog_ext_recipes добавляет
+        // ещё 28 блюд с cook_minutes = 0 (бутерброды/перекусы без варки) => 46 всего.
+        // Критерий фильтра при этом корректен (строгое cookMinutes == 0). Проверяем:
+        //   1) размер ответа = актуальному размеру сида;
+        //   2) количество совпадает с независимым COUNT(*) WHERE cook_minutes = 0 в БД
+        //      (изоляция: TestDataIsolation.reset делает drop + Flyway migrate перед каждым
+        //      тестом, своя база provision_test_catalog);
+        //   3) все вернувшиеся блюда действительно без готовки.
+        assertThat(recipes).hasSize(46);
+
+        Integer dbCount = jdbc.queryForObject(
+                "SELECT count(*) FROM recipes WHERE cook_minutes = 0", Integer.class);
+        assertThat(dbCount).isEqualTo(46);
+
         // Verify all returned recipes have cookMinutes = 0
         for (RecipeResponse recipe : recipes) {
             assertThat(recipe.cookMinutes()).isEqualTo(0);
