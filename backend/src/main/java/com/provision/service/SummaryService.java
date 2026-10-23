@@ -111,6 +111,18 @@ public class SummaryService {
                 recipesById.putIfAbsent(r.getId(), r);
             }
         }
+        // Фолбэк для unit-тестов и любых ситуаций, когда batch-репозиторий не вернул
+        // рецепт: оставляем в контексте уже готовые (гидратированные) объекты из графа
+        // trips, чтобы расчёт не потерял состав. В проде Hibernate возвращает те же
+        // managed-экземпляры, поэтому putIfAbsent ниже их не перетирает.
+        for (TripDay day : trip.getDays()) {
+            for (TripMeal meal : day.getMeals()) {
+                Recipe r = meal.getRecipe();
+                if (r != null && r.getId() != null) {
+                    recipesById.putIfAbsent(r.getId(), r);
+                }
+            }
+        }
         ensureIngredientsLoaded(trip, recipesById);
         TripIngredientEditService.TripEditBundle edits =
                 tripIngredientEditService.bundleForTrip(trip.getId());
