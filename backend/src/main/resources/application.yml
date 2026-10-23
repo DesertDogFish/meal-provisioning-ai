@@ -16,6 +16,10 @@ spring:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
         format_sql: true
+        # FIX (скрытый N+1 по категориям ингредиентов): схлопывает последовательные
+        # инициализации LAZY-проксей в пакетные запросы «where id in (?, ...)»
+        # вместо одного select на каждую проксию (см. SummaryService.initializeCategoryProxies).
+        default_batch_fetch_size: 50
     open-in-view: false
 
   flyway:

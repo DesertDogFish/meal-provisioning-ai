@@ -4,18 +4,13 @@ import com.provision.dto.summary.*;
 import com.provision.entity.*;
 import com.provision.repository.*;
 import jakarta.persistence.EntityManager;
-import org.hibernate.engine.internal.BatchFetchQueue;
-import org.hibernate.engine.spi.SharedSessionContractImplementor;
-import org.hibernate.metamodel.mapping.EntityMappingType;
+import org.hibernate.Hibernate;
 import org.hibernate.proxy.HibernateProxy;
-import org.hibernate.proxy.LazyInitializer;
-import org.hibernate.SessionFactory;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.math.MathContext;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.*;
@@ -61,15 +56,18 @@ public class SummaryService {
     }
 
     /**
-     * FIX (скрытый N+1 «Initializing proxy: [Ingredient#...]» + отдельный
-     * «select ... from ingredients where id=?» на каждый ингредиент):
+     * FIX (скрытый N+1 «Initializing proxy» + отдельный
+     * «select ... from product_categories where id=?» на каждую категорию):
      * ingredient.category — LAZY @ManyToOne. В расчёте закупки категория не нужна,
      * но любое обращение к прокси Hibernate инициирует её по одному запросу.
-     * Здесь все distinct-прокси категорий регистрируются в BatchFetchQueue сессии
-     * и инициируются батчем: Hibernate группирует id до
-     * hibernate.default_batch_fetch_size («where category_id in (?, ?, ...)») —
-     * один запрос вместо K (числа уникальных категорий). Если EntityManager недоступен
-     * (unit-тесты с моками) или прокси нет — no-op.
+     * Здесь все distinct-неинициализированные прокси категорий собираются в
+     * LinkedHashSet (дедупликация по identity — одна инициализация на прокси) и
+     * инициируются через стабильный публичный API org.hibernate.Hibernate#initialize.
+     * Сами последовательные инициализации схлопываются в пакетные запросы
+     * «where category_id in (?, ...)» настройкой hibernate.default_batch_fetch_size
+     * (см. application.yml) — это надёжный механизм вместо внутреннего SPI
+     * BatchFetchQueue, который не компилируется на текущей версии Hibernate.
+     * Если EntityManager недоступен (unit-тесты с моками) или прокси нет — no-op.
      */
     private void initializeCategoryProxies(java.util.Collection<Recipe> recipes) {
         if (recipes == null || recipes.isEmpty() || entityManager == null) {
@@ -93,19 +91,8 @@ public class SummaryService {
             return;
         }
         try {
-            SharedSessionContractImplementor spi =
-                    entityManager.unwrap(org.hibernate.Session.class).getSession();
-            BatchFetchQueue queue = spi.getBatchFetchQueue();
             for (Object proxyObj : proxies) {
-                LazyInitializer li = ((HibernateProxy) proxyObj).getHibernateLazyInitializer();
-                li.setSession(spi);
-                queue.addBatchEntityToQueue(BatchFetchQueue.ObjectKey.EntityKey.of(
-                        li.getPersistentClass().getName(), li.getIdentifier()));
-            }
-            // Первый initialize() вытаскивает из очереди батч id (до batch-size) одним
-            // запросом «in (...)»; остальные прокси резолвятся из уже загруженного пула.
-            for (Object proxyObj : proxies) {
-                ((HibernateProxy) proxyObj).getHibernateLazyInitializer().initialize();
+                Hibernate.initialize(proxyObj);
             }
         } catch (RuntimeException | Error e) {
             // Не критично: fallback — обычная ленивая инициализация по одному запросу.
