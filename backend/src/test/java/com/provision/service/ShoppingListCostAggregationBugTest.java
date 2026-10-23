@@ -39,6 +39,10 @@ class ShoppingListCostAggregationBugTest {
     private PriceResolutionService priceResolutionService;
     @Mock
     private TripIngredientSubstitutionRepository substitutionRepository;
+    // Фаза 14 (N3): SummaryService требует TripIngredientEditService (6-й аргумент).
+    // Реальный сервис на моке substitutionRepository: findAllEditsForTrip → пустой
+    // список (стаб ниже) → правок состава нет, агрегация считается как раньше.
+    private TripIngredientEditService tripIngredientEditService;
 
     @BeforeEach
     void setUp() {
@@ -47,7 +51,10 @@ class ShoppingListCostAggregationBugTest {
             .thenReturn(Collections.emptyMap());
         when(substitutionRepository.findByTripId(org.mockito.ArgumentMatchers.anyLong()))
             .thenReturn(Collections.emptyList());
-        summaryService = new SummaryService(tripRepository, priceRepository, recipeRepository, priceResolutionService, substitutionRepository);
+        when(substitutionRepository.findAllEditsForTrip(org.mockito.ArgumentMatchers.anyLong()))
+            .thenReturn(Collections.emptyList());
+        tripIngredientEditService = new TripIngredientEditService(substitutionRepository, null);
+        summaryService = new SummaryService(tripRepository, priceRepository, recipeRepository, priceResolutionService, substitutionRepository, tripIngredientEditService);
     }
 
     @Test
