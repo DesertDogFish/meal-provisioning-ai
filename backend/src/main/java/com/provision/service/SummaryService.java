@@ -447,10 +447,6 @@ public class SummaryService {
                 ? roundToRub(shoppingList.totalActualCost().divide(BigDecimal.valueOf(finalTotalPersonMeals), 2, RoundingMode.HALF_UP))
                 : BigDecimal.ZERO;
         
-        BigDecimal actualCostPerPersonMeal = finalTotalPersonMeals > 0
-                ? shoppingList.totalActualCost().divide(BigDecimal.valueOf(finalTotalPersonMeals), 2, RoundingMode.HALF_UP)
-                : BigDecimal.ZERO;
-        
         BigDecimal caloriesPerPersonMeal = finalTotalPersonMeals > 0
                 ? finalTotalCalories.divide(BigDecimal.valueOf(finalTotalPersonMeals), 0, RoundingMode.HALF_UP)
                 : null;

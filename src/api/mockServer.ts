@@ -866,11 +866,13 @@ export const mockServer = {
       });
 
       // Фаза 14: итоги — целые рубли; позиции и цены за единицу остаются точными.
+      // Дельта считается от ТОЧНЫХ сумм (округление только для отображения итогов),
+      // иначе округление вносило бы артефакт ~±0.02 п.п. в процент.
       const totalPlannedCostExact = items.reduce((sum, i) => sum + (i.plannedCost || 0), 0);
       const totalActualCostExact = items.reduce((sum, i) => sum + (i.actualCost || 0), 0);
       const totalPlannedCost = Math.round(totalPlannedCostExact);
       const totalActualCost = Math.round(totalActualCostExact);
-      const deltaPercent = totalPlannedCost > 0 ? ((totalActualCost - totalPlannedCost) / totalPlannedCost) * 100 : null;
+      const deltaPercent = totalPlannedCostExact > 0 ? ((totalActualCostExact - totalPlannedCostExact) / totalPlannedCostExact) * 100 : null;
 
       return {
         items,
