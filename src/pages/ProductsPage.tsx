@@ -326,7 +326,7 @@ export default function ProductsPage() {
 
       {/* Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setShowModal(false)}>
+        <div className="modal-overlay flex items-center justify-center p-4" onClick={() => setShowModal(false)}>
           <div className="rounded-2xl shadow-xl w-full max-w-md p-6" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }} onClick={e => e.stopPropagation()}>
             <h2 className="text-xl font-bold mb-4" style={{ color: 'var(--text)' }}>
               {editingProduct ? 'Редактировать продукт' : 'Новый продукт'}
@@ -350,9 +350,9 @@ export default function ProductsPage() {
                 />
                 {duplicateWarning && (
                   <div className="mt-2 p-3 rounded-lg text-sm" style={{
-                    background: duplicateWarning.type === 'hard' ? 'rgba(239, 68, 68, 0.1)' : 'rgba(255, 158, 44, 0.1)',
-                    border: `1px solid ${duplicateWarning.type === 'hard' ? 'rgba(239, 68, 68, 0.3)' : 'rgba(255, 158, 44, 0.3)'}`,
-                    color: duplicateWarning.type === 'hard' ? '#FFB4A2' : 'var(--amber-300)'
+                    background: duplicateWarning.type === 'hard' ? 'color-mix(in srgb, var(--danger) 10%, transparent)' : 'color-mix(in srgb, var(--amber-500) 10%, transparent)',
+                    border: `1px solid ${duplicateWarning.type === 'hard' ? 'color-mix(in srgb, var(--danger) 30%, transparent)' : 'color-mix(in srgb, var(--amber-500) 30%, transparent)'}`,
+                    color: duplicateWarning.type === 'hard' ? 'var(--danger)' : 'var(--amber-300)'
                   }}>
                     {duplicateWarning.message}
                   </div>
@@ -392,7 +392,7 @@ export default function ProductsPage() {
                       style={{
                         background: formUnit === u ? 'var(--grad-brand)' : 'transparent',
                         border: formUnit === u ? '1px solid transparent' : '1px solid var(--border)',
-                        color: formUnit === u ? '#04121A' : 'var(--text)'
+                        color: formUnit === u ? 'var(--on-fire)' : 'var(--text)'
                       }}
                     >
                       {u === 'KG' ? 'кг' : u === 'L' ? 'л' : u === 'PCS' ? 'шт' : 'уп'}
@@ -446,8 +446,7 @@ export default function ProductsPage() {
                 disabled={!formName || !formCategory || duplicateWarning?.type === 'hard'}
                 className="flex-1 px-4 py-2.5 rounded-full"
                 style={{
-                  background: 'var(--grad-brand)',
-                  color: '#221204',
+                  
                   opacity: (!formName || !formCategory || duplicateWarning?.type === 'hard') ? 0.5 : 1
                 }}
               >

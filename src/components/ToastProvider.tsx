@@ -73,7 +73,7 @@ function ToastContainer({ toasts, onRemove }: { toasts: Toast[]; onRemove: (id: 
   if (toasts.length === 0) return null;
 
   return (
-    <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[9999] space-y-2 w-full max-w-md px-4">
+    <div className="fixed top-4 left-1/2 -translate-x-1/2 space-y-2 w-full max-w-md px-4" style={{ zIndex: 'var(--z-toast)' }}>
       {toasts.map(toast => (
         <ToastItem key={toast.id} toast={toast} onRemove={onRemove} />
       ))}

@@ -2,6 +2,8 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import { Compass, LogOut, Menu, Mountain, Ship } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import ApiModeBadge from './ApiModeBadge';
+import BrandMark from './BrandMark';
+import ThemeToggle from './ThemeToggle';
 import { api } from '../api/client';
 import { useToast } from './ToastProvider';
 
@@ -73,13 +75,12 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen flex fade-in-up" style={{ background: 'var(--bg-0)' }}>
       {/* Sidebar */}
-      <aside className={`fixed inset-y-0 left-0 z-50 w-64 transform transition-transform duration-200 ease-in-out lg:translate-x-0 lg:static lg:inset-auto ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`} style={{ background: 'rgba(16,29,39,.72)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)', borderRight: '1px solid var(--line)' }}>
+      <aside className={`fixed inset-y-0 left-0 w-64 transform transition-transform lg:translate-x-0 lg:static lg:inset-auto ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`} style={{ background: 'color-mix(in srgb, var(--bg-1) 72%, transparent)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)', borderRight: '1px solid var(--line)', zIndex: 'var(--z-nav)' }}>
         <div className="flex items-center gap-3 px-6 py-5" style={{ borderBottom: '1px solid var(--line)' }}>
-          <div id="pv-mark" className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: 'var(--grad-brand)', boxShadow: '0 8px 22px rgba(242,122,18,.3)' }}>
-            <svg width="24" height="24" viewBox="0 0 96 96">
-              <path d="M48 18 L70 70 H26 Z" fill="#221204"/>
-              <path d="M18 80 q8 -6 15 0 t15 0 t15 0 t15 0" stroke="#0B141B" strokeWidth="5" fill="none"/>
-            </svg>
+          {/* DESIGN_MIGRATION 4.1: знак только из design-pack assets/ (mark.svg / mark-light.svg),
+              инлайн-перерисовка и самопальная тень убраны — тень --shadow-glow из токена */}
+          <div id="pv-mark" className="w-10 h-10 rounded-[var(--r-sm)] flex items-center justify-center p-1.5" style={{ boxShadow: 'var(--shadow-glow)' }}>
+            <BrandMark size={32} />
           </div>
           <div>
             <h1 className="text-lg font-bold logo-word" style={{ fontFamily: 'var(--font-display)', color: 'var(--text-1)' }}>Провиант</h1>
@@ -99,7 +100,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 }`
               }
               style={({ isActive }) => ({
-                background: isActive ? 'rgba(255,158,44,.12)' : 'transparent',
+                background: isActive ? 'color-mix(in srgb, var(--amber-500) 12%, transparent)' : 'transparent',
                 boxShadow: isActive ? 'inset 2px 0 0 var(--amber-500)' : 'none',
                 color: isActive ? 'var(--amber-200)' : 'var(--text-2)',
                 fontWeight: 600,
@@ -143,16 +144,20 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
       {/* Mobile overlay */}
       {sidebarOpen && (
-        <div className="fixed inset-0 bg-black/50 z-40 lg:hidden" onClick={() => setSidebarOpen(false)} />
+        <div className="fixed inset-0 lg:hidden" onClick={() => setSidebarOpen(false)}
+          style={{ background: 'color-mix(in srgb, var(--bg-0) 50%, transparent)', zIndex: 'var(--z-pop)' }} />
       )}
 
       {/* Main content */}
       <div className="flex-1 flex flex-col min-h-screen relative z-10">
-        <header className="px-6 py-4 flex items-center gap-4 lg:hidden" style={{ background: 'rgba(16,29,39,.66)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)', borderBottom: '1px solid var(--line)' }}>
-          <button onClick={() => setSidebarOpen(true)} style={{ color: 'var(--text-2)' }}>
+        <header className="px-6 py-4 flex items-center gap-4 lg:hidden" style={{ background: 'color-mix(in srgb, var(--bg-1) 66%, transparent)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)', borderBottom: '1px solid var(--line)' }}>
+          {/* DESIGN_MIGRATION 7.2: иконочные кнопки с обязательным aria-label */}
+          <button className="ibtn" onClick={() => setSidebarOpen(true)} aria-label="Открыть меню навигации">
             <Menu size={24} />
           </button>
-          <h1 className="text-lg font-bold logo-word" style={{ fontFamily: 'var(--font-display)', color: 'var(--text-1)' }}>Провиант</h1>
+          <BrandMark size={28} />
+          <h1 className="text-lg font-bold logo-word flex-1" style={{ fontFamily: 'var(--font-display)', color: 'var(--text-1)' }}>Провиант</h1>
+          <ThemeToggle />
         </header>
         
         {/* Бейдж режима API */}

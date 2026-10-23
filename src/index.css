@@ -1,102 +1,118 @@
 @import url('https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700&family=Manrope:wght@400;600;800&display=swap');
 @import "tailwindcss";
 
+/* ============================================================
+   DESIGN_MIGRATION 0.2: блок :root с дублями токенов УДАЛЁН.
+   Единственный источник правды — provisions/design-pack/tokens.css
+   (подключается первым в main.tsx / index.html): все цвета, радиусы,
+   тени, шрифты, ритм (--sp-*), движение (--t-*, --ease), слои (--z-*),
+   семантика (--danger/--success) и --on-fire приходят оттуда;
+   светлая тема — html[data-theme="light"] (п.1).
+   Ниже — только алиасы совместимости со старой инлайн-разметкой (п.8.1:
+   синонимы живут solely как compatibility-слой, новая код-база пишет
+   var(--bg-1)/var(--line) напрямую).
+   ============================================================ */
 :root {
-  /* ===== Дизайн-система «Провиант» (брендбук) ===== */
-
-  /* Backgrounds */
-  --bg-0: #0B141B;      /* Основной фон */
-  --bg-1: #101D27;      /* Фон панелей/карточек */
-  --bg-2: #162634;      /* Ховеры, второстепенные элементы */
-  --bg-3: #1E3243;      /* Активные состояния, бордеры */
-
-  /* Lines & Borders */
-  --line: rgba(148,199,214,.14);
-  --line-strong: rgba(148,199,214,.28);
-
-  /* Text */
-  --text-1: #EDF4F7;    /* Основной текст */
-  --text-2: #A9BEC9;    /* Второстепенный текст */
-  --text-3: #6F8895;    /* Приглушенный текст / placeholders */
-
-  /* Accents */
-  --amber-200: #FFD9A0;
-  --amber-300: #FFC46B;
-  --amber-500: #FF9E2C; /* Главный акцент (кнопки, активные табы) */
-  --flame-600: #E85D1F;
-  --wave-300: #7FD8CC;  /* Второй акцент (инфо, успех) */
-  --wave-400: #57C7B8;
-  --wave-600: #2E9C8E;
-  --snow: #F2F7F5;
-
-  /* Gradients */
-  --grad-brand: linear-gradient(135deg, #FFD08A 0%, #F2842B 52%, #E85D1F 100%);
-
-  /* Radii */
-  --r-sm: 12px;
-  --r-md: 18px;
-  --r-lg: 26px;
-
-  /* Shadows */
-  --shadow-1: 0 18px 50px rgba(3,10,16,.5);
-
-  /* Fonts */
-  --font-display: "Unbounded", sans-serif;
-  --font-body: "Manrope", sans-serif;
-
-  /* ===== Алиасы старой системы → новые токены (совместимость с инлайновыми стилями страниц) ===== */
   --bg: var(--bg-0);
-  --surface: var(--bg-1);
+  --surface: var(--bg-1);        /* @deprecated — использовать --bg-1 */
   --elev: var(--bg-2);
   --surface-2: var(--bg-3);
-  --border: var(--line);
-  --text: var(--text-1);
+  --border: var(--line);         /* @deprecated — использовать --line */
+  --text: var(--text-1);         /* @deprecated — использовать --text-1 */
   --muted: var(--text-2);
   --w1: var(--wave-400);
   --w2: var(--wave-300);
-  --fire: var(--amber-500);
-  --ok: var(--wave-400);
+  --fire: var(--amber-500);      /* @deprecated — использовать --amber-500 */
+  --ok: var(--success);          /* семантика состояний из tokens.css */
   --r: var(--r-md);
 
-  /* ФИКС 4: все нативные элементы браузера (календарь, select, скроллбары) — в тёмной теме */
-  color-scheme: dark;
+  /* DESIGN_MIGRATION 2.4: фоновые градиенты карточек «витрины» DashboardPage.
+     В dark — прежние значения (визуал не меняется); в light — переопределены
+     ниже по data-theme, чтобы поверхности не оставались «написанными под dark» (п.1.4).
+     Значения — только отсылающие к токенам наслоения color-mix (hex вне токенов запрещён). */
+  --card-hull: linear-gradient(180deg, #2B4A6F, #0B1626);
+  --card-deep: linear-gradient(180deg, #33465e, #101c2b 70%);
+  --card-forest: linear-gradient(180deg, #1d3326, #0c1512);
 }
 
-/* ===== Tailwind v4 theme mapping (утилиты bg-background, text-primary и т.д.) ===== */
-@theme {
-  --color-background: #0B141B;   /* var(--bg-0) */
-  --color-surface: #101D27;      /* var(--bg-1) */
-  --color-elevated: #162634;     /* var(--bg-2) */
-  --color-active: #1E3243;       /* var(--bg-3) */
-  --color-primary: #FF9E2C;      /* var(--amber-500) */
-  --color-primary-soft: #FFC46B; /* var(--amber-300) */
-  --color-secondary: #57C7B8;    /* var(--wave-400) */
-  --color-accent: #7FD8CC;       /* var(--wave-300) */
-  --color-flame: #E85D1F;        /* var(--flame-600) */
-  --color-foreground: #EDF4F7;   /* var(--text-1) */
-  --color-muted: #6F8895;        /* var(--text-3) */
-  --color-muted-2: #A9BEC9;      /* var(--text-2) */
-  --color-line: rgba(148,199,214,.14);
-  --color-line-strong: rgba(148,199,214,.28);
-  --color-snow: #F2F7F5;
-
-  --font-display: "Unbounded", sans-serif;
-  --font-sans: "Manrope", sans-serif;
-
-  --radius-sm: 12px;
-  --radius-md: 18px;
-  --radius-lg: 26px;
+/* Светлая тема: те же роли — светлыми поверхностями пакета (bg-2/bg-3/snow) */
+:root[data-theme="light"] {
+  --card-hull: linear-gradient(180deg, color-mix(in srgb, var(--wave-400) 18%, var(--bg-2)), var(--bg-1));
+  --card-deep: linear-gradient(180deg, var(--bg-3), var(--bg-1) 70%);
+  --card-forest: linear-gradient(180deg, color-mix(in srgb, var(--success) 14%, var(--bg-2)), var(--bg-1));
 }
 
+/* ===== Tailwind v4 theme mapping (утилиты bg-background, text-primary и т.д.) =====
+   DESIGN_MIGRATION 0.3: hex-литералы убраны — цвета утилит ссылаются на переменные
+   токенов design-pack, поэтому утилиты наследуют активную тему (data-theme). */
+@theme inline {
+  --color-background: var(--bg-0);
+  --color-surface: var(--bg-1);
+  --color-elevated: var(--bg-2);
+  --color-active: var(--bg-3);
+  --color-primary: var(--amber-500);
+  --color-primary-soft: var(--amber-300);
+  --color-secondary: var(--wave-400);
+  --color-accent: var(--wave-300);
+  --color-flame: var(--flame-600);
+  --color-foreground: var(--text-1);
+  --color-muted: var(--text-3);
+  --color-muted-2: var(--text-2);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-snow: var(--snow);
+
+  --font-display: var(--font-display);
+  --font-sans: var(--font-body);
+
+  --radius-sm: var(--r-sm);
+  --radius-md: var(--r-md);
+  --radius-lg: var(--r-lg);
+}
+
+/* ============================================================
+   1. Знак (design-pack assets/, не перерисовывается): переключение
+   dark/light-версии — только CSS по data-theme (п.4.1).
+   Охранное поле и min-размер задаются использованием (≥24px).
+   ============================================================ */
+.brand-mark { position: relative; display: inline-flex; flex: none; }
+.brand-mark__dark, .brand-mark__light { display: block; width: 100%; height: 100%; }
+.brand-mark__dark > svg, .brand-mark__light > svg { width: 100%; height: 100%; display: block; }
+.brand-mark__light { display: none; }
+:root[data-theme="light"] .brand-mark__dark { display: none; }
+:root[data-theme="light"] .brand-mark__light { display: block; }
+
+/* 1.1 ThemeToggle: icon-button в стиле .ibtn пакета (42×42, --r-md) */
+.ibtn {
+  width: 42px;
+  height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--r-md);
+  border: 1px solid var(--line-strong);
+  background: color-mix(in srgb, var(--bg-2) 40%, transparent);
+  color: var(--text-2);
+  cursor: pointer;
+  transition: color var(--t-base) var(--ease), background var(--t-base) var(--ease),
+              border-color var(--t-base) var(--ease);
+}
+.ibtn:hover { color: var(--text-1); background: var(--bg-2); }
+.theme-toggle .theme-icon-light { display: none; }
+:root[data-theme="light"] .theme-toggle .theme-icon-dark { display: none; }
+:root[data-theme="light"] .theme-toggle .theme-icon-light { display: inline; }
+
+/* ============================================================
+   2.5/3. Токеннизация index.css: никаких hex/rgba вне токенов.
+   Полупрозрачные наслоения — color-mix от токенов темы.
+   ============================================================ */
 * {
   box-sizing: border-box;
 }
 
 body {
-  background-color: var(--bg-0);
-  background-image:
-    radial-gradient(1100px 520px at 85% -10%, rgba(255, 158, 44, 0.07), transparent),
-    radial-gradient(900px 520px at -10% 30%, rgba(87, 199, 184, 0.06), transparent);
+  /* п.1 DESIGN_MIGRATION: фон следует теме через --grad-dusk (в нём --bg-0 + подсветки) */
+  background-image: var(--grad-dusk);
   color: var(--text-1);
   font-family: var(--font-body);
 }
@@ -134,7 +150,7 @@ h1, h2, h3, .logo-word, .font-display {
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(148, 199, 214, 0.3);
+  background: var(--line-strong);
 }
 
 /* Toast animation */
@@ -150,7 +166,7 @@ h1, h2, h3, .logo-word, .font-display {
 }
 
 .animate-slide-in {
-  animation: slide-in 0.3s ease-out;
+  animation: slide-in var(--t-slow) var(--ease);
 }
 
 /* Midnight Harbor theme classes */
@@ -165,7 +181,7 @@ h1, h2, h3, .logo-word, .font-display {
 .text-fire { color: var(--fire); }
 
 .glass {
-  background: linear-gradient(160deg, rgba(22,38,52,.72), rgba(13,23,32,.78));
+  background: linear-gradient(160deg, color-mix(in srgb, var(--bg-2) 72%, transparent), color-mix(in srgb, var(--bg-0) 78%, transparent));
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border: 1px solid var(--line);
@@ -195,14 +211,14 @@ h1, h2, h3, .logo-word, .font-display {
 
 .grad-btn {
   background: var(--grad-brand);
-  color: #221204;
+  color: var(--on-fire);
   border: none;
-  box-shadow: 0 0 0 1px rgba(255,158,44,.3), 0 16px 44px rgba(242,122,18,.28);
-  border-radius: 999px;
+  box-shadow: var(--shadow-glow);
+  border-radius: var(--r-pill);
   padding: 10px 18px;
   font: 800 13px Manrope;
   cursor: pointer;
-  transition: transform 0.2s, filter 0.2s, box-shadow 0.2s;
+  transition: transform var(--t-base) var(--ease), filter var(--t-base) var(--ease), box-shadow var(--t-base) var(--ease);
 }
 
 .grad-btn:hover {
@@ -211,14 +227,14 @@ h1, h2, h3, .logo-word, .font-display {
 }
 
 .ghost-btn {
-  background: rgba(22,38,52,.4);
+  background: color-mix(in srgb, var(--bg-2) 40%, transparent);
   border: 1px solid var(--line-strong);
   color: var(--text-1);
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   padding: 10px 18px;
   font: 600 13px Manrope;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--t-base) var(--ease);
 }
 
 .ghost-btn:hover {
@@ -230,9 +246,9 @@ h1, h2, h3, .logo-word, .font-display {
   display: inline-flex;
   gap: 4px;
   padding: 4px;
-  background: rgba(11,20,27,.7);
+  background: color-mix(in srgb, var(--bg-0) 70%, transparent);
   border: 1px solid var(--line);
-  border-radius: 999px;
+  border-radius: var(--r-pill);
 }
 .seg-btn {
   border: 0;
@@ -240,9 +256,9 @@ h1, h2, h3, .logo-word, .font-display {
   color: var(--text-2);
   font: 700 12px Manrope;
   padding: 8px 14px;
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--t-base) var(--ease);
 }
 .seg-btn:hover {
   color: var(--text-1);
@@ -250,8 +266,8 @@ h1, h2, h3, .logo-word, .font-display {
 }
 .seg-btn.active {
   background: var(--grad-brand);
-  color: #221204;
-  box-shadow: 0 8px 22px rgba(242,122,18,.3);
+  color: var(--on-fire);
+  box-shadow: var(--shadow-glow);
 }
 
 /* Строки блюд с пунктирным бордером (.meal-row) */
@@ -268,17 +284,25 @@ h1, h2, h3, .logo-word, .font-display {
   to   { opacity: 1; transform: translateY(0); }
 }
 .fade-in-up {
-  animation: fade-in-up 0.5s cubic-bezier(.22,.61,.36,1) both;
+  animation: fade-in-up var(--t-slow) var(--ease) both;
 }
 
+/* 6.4 reduced-motion: глобальное глушение декоративных анимаций/переходов
+   (float/drift/pulse/slide-in/fade-in-up и пр.); состояния читаются без движения */
 @media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
   .fade-in-up { animation: none; }
   .lift:hover { transform: none !important; }
 }
 
 /* Подъём интерактивных элементов при наведении */
 .lift {
-  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+  transition: transform var(--t-base) var(--ease), border-color var(--t-base) var(--ease), box-shadow var(--t-base) var(--ease);
 }
 .lift:hover {
   transform: translateY(-2px);
@@ -324,7 +348,7 @@ input[type=number]::-webkit-outer-spin-button {
   font: 800 13px/1 Manrope;
   cursor: pointer;
   user-select: none;
-  transition: border-color 0.15s, color 0.15s, box-shadow 0.15s;
+  transition: border-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -339,12 +363,12 @@ input[type=number]::-webkit-outer-spin-button {
 .nf-btn:active {
   color: var(--amber-500);
   border-color: var(--amber-500);
-  box-shadow: 0 0 0 3px rgba(255, 158, 44, 0.18);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--amber-500) 18%, transparent);
 }
 
 .nf-input {
   width: 86px;
-  background: rgba(11,20,27,.7);
+  background: color-mix(in srgb, var(--bg-0) 70%, transparent);
   border: 1px solid var(--line-strong);
   color: var(--text-1);
   border-radius: var(--r-sm);
@@ -355,8 +379,8 @@ input[type=number]::-webkit-outer-spin-button {
 }
 
 .nf-input:focus {
-  outline: 2px solid rgba(255,158,44,.5);
-  outline-offset: 0;
+  outline: 2px solid var(--amber-500);
+  outline-offset: 2px;
   border-color: var(--amber-500);
 }
 
@@ -377,13 +401,11 @@ input[type=number]::-webkit-outer-spin-button {
   }
 }
 
-/* CR-4: тёмная схема дат + видимая иконка */
-input[type="date"],
-input[type="datetime-local"] {
-  color-scheme: dark;
-}
-
-input[type="date"]::-webkit-calendar-picker-indicator {
+/* CR-4 → DESIGN_MIGRATION 1.3: цветовую схему нативных контролов (календарь,
+   select, скроллбары) задаёт color-scheme из tokens.css по активной теме —
+   захардкоженный `color-scheme: dark` убран. Иконку даты осветляем инверсией
+   только в тёмной теме (в светлой нативная иконка видна сама). */
+:root:not([data-theme="light"]) input[type="date"]::-webkit-calendar-picker-indicator {
   filter: invert(0.75);
   opacity: 0.75;
   cursor: pointer;
@@ -396,18 +418,18 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
 /* CR-1: чипы отсутствия ккал */
 .kcal-missing {
   display: inline-block;
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   padding: 2px 9px;
   font: 700 10px Manrope;
-  background: rgba(255, 158, 44, 0.14);
-  border: 1px solid rgba(255, 158, 44, 0.34);
+  background: color-mix(in srgb, var(--amber-500) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--amber-500) 34%, transparent);
   color: var(--amber-300);
 }
 
 /* CR-1: расчётная калорийность */
 .kcal-calculated {
-  background: rgba(87, 199, 184, 0.1);
-  border: 1px solid rgba(87, 199, 184, 0.34);
+  background: var(--success-soft);
+  border: 1px solid color-mix(in srgb, var(--success) 34%, transparent);
   border-radius: var(--r-sm);
   padding: 10px 12px;
   font-size: 13px;
@@ -417,23 +439,23 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
 
 .chip-delta {
   display: inline-block;
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   padding: 2px 9px;
   font: 700 10px Manrope;
 }
 
 .chip-delta.dim {
-  background: rgba(148, 199, 214, 0.08);
+  background: color-mix(in srgb, var(--line) 55%, transparent);
   color: var(--text-3);
 }
 
 .chip-delta.fire {
-  background: rgba(255, 158, 44, 0.14);
+  background: color-mix(in srgb, var(--amber-500) 14%, transparent);
   color: var(--amber-300);
 }
 
 .chip-delta.ok {
-  background: rgba(87, 199, 184, 0.12);
+  background: var(--success-soft);
   color: var(--wave-300);
 }
 
@@ -446,7 +468,7 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   gap: 18px;
   align-items: center;
   flex-wrap: wrap;
-  background: linear-gradient(160deg, rgba(22,38,52,.86), rgba(13,23,32,.9));
+  background: linear-gradient(160deg, color-mix(in srgb, var(--bg-2) 86%, transparent), color-mix(in srgb, var(--bg-0) 90%, transparent));
   backdrop-filter: blur(12px);
   border: 1px solid var(--line);
   border-radius: var(--r-md);
@@ -456,11 +478,11 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(3, 10, 16, 0.66);
+  background: color-mix(in srgb, var(--bg-0) 66%, transparent);
   backdrop-filter: blur(6px);
   display: grid;
   place-items: center;
-  z-index: 50;
+  z-index: var(--z-modal);
 }
 
 .modal-sheet {
@@ -468,7 +490,7 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   max-height: 86vh;
   overflow: auto;
   padding: 22px;
-  background: linear-gradient(160deg, rgba(22,38,52,.9), rgba(13,23,32,.94));
+  background: linear-gradient(160deg, color-mix(in srgb, var(--bg-2) 90%, transparent), color-mix(in srgb, var(--bg-0) 94%, transparent));
   backdrop-filter: blur(12px);
   border: 1px solid var(--line);
   border-radius: var(--r-lg);
@@ -482,7 +504,7 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   cursor: pointer;
   font-size: 14px;
   padding: 4px;
-  transition: color 0.2s;
+  transition: color var(--t-base) var(--ease);
 }
 
 .reset-btn:hover {
@@ -493,15 +515,15 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
 input:not([type="checkbox"]):not([type="radio"]),
 select,
 textarea {
-  background-color: rgba(11,20,27,.7);
+  background-color: color-mix(in srgb, var(--bg-0) 70%, transparent);
   border: 1px solid var(--line-strong);
   color: var(--text-1);
 }
 input:not([type="checkbox"]):not([type="radio"]):focus-visible,
 select:focus-visible,
 textarea:focus-visible {
-  outline: 2px solid rgba(255,158,44,.5);
-  outline-offset: 1px;
+  outline: 2px solid var(--amber-500);
+  outline-offset: 2px;
 }
 
 /* Fix Date Picker icon color */
@@ -530,25 +552,25 @@ input:-webkit-autofill:active {
   font-size: 0.75rem;
   font-weight: 600;
   color: var(--wave-300);
-  background: rgba(87, 199, 184, 0.12);
-  border: 1px solid rgba(87, 199, 184, 0.34);
-  border-radius: 999px;
+  background: var(--success-soft);
+  border: 1px solid color-mix(in srgb, var(--success) 34%, transparent);
+  border-radius: var(--r-pill);
   text-transform: none; /* явно убираем КАПС, если где-то остался */
 }
 
 /* Бейджи статусов (Badge) по брендбуку */
 .badge-success {
-  background: rgba(87, 199, 184, 0.12);
-  border: 1px solid rgba(87, 199, 184, 0.34);
+  background: var(--success-soft);
+  border: 1px solid color-mix(in srgb, var(--success) 34%, transparent);
   color: var(--wave-300);
 }
 .badge-warning {
-  background: rgba(255, 158, 44, 0.14);
-  border: 1px solid rgba(255, 158, 44, 0.34);
+  background: color-mix(in srgb, var(--amber-500) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--amber-500) 34%, transparent);
   color: var(--amber-300);
 }
 .badge-neutral {
-  background: rgba(148, 199, 214, 0.08);
+  background: color-mix(in srgb, var(--line) 55%, transparent);
   border: 1px solid var(--line);
   color: var(--text-2);
 }

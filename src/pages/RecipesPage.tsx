@@ -168,8 +168,8 @@ export default function RecipesPage() {
             style={{
               background: filterMealType === '' ? 'var(--grad-brand)' : 'transparent',
               border: filterMealType === '' ? '1px solid transparent' : '1px solid var(--border)',
-              color: filterMealType === '' ? '#04121A' : 'var(--muted)',
-              boxShadow: filterMealType === '' ? '0 0 18px rgba(87, 199, 184, 0.25)' : 'none'
+              color: filterMealType === '' ? 'var(--on-fire)' : 'var(--muted)',
+              boxShadow: filterMealType === '' ? '0 0 18px color-mix(in srgb, var(--wave-400) 25%, transparent)' : 'none'
             }}
           >
             Все {counts.all}
@@ -181,8 +181,8 @@ export default function RecipesPage() {
             style={{
               background: filterMealType === 'BREAKFAST' ? 'var(--grad-brand)' : 'transparent',
               border: filterMealType === 'BREAKFAST' ? '1px solid transparent' : '1px solid var(--border)',
-              color: filterMealType === 'BREAKFAST' ? '#04121A' : 'var(--muted)',
-              boxShadow: filterMealType === 'BREAKFAST' ? '0 0 18px rgba(87, 199, 184, 0.25)' : 'none'
+              color: filterMealType === 'BREAKFAST' ? 'var(--on-fire)' : 'var(--muted)',
+              boxShadow: filterMealType === 'BREAKFAST' ? '0 0 18px color-mix(in srgb, var(--wave-400) 25%, transparent)' : 'none'
             }}
           >
             Завтрак {counts.breakfast}
@@ -194,8 +194,8 @@ export default function RecipesPage() {
             style={{
               background: filterMealType === 'LUNCH' ? 'var(--grad-brand)' : 'transparent',
               border: filterMealType === 'LUNCH' ? '1px solid transparent' : '1px solid var(--border)',
-              color: filterMealType === 'LUNCH' ? '#04121A' : 'var(--muted)',
-              boxShadow: filterMealType === 'LUNCH' ? '0 0 18px rgba(87, 199, 184, 0.25)' : 'none'
+              color: filterMealType === 'LUNCH' ? 'var(--on-fire)' : 'var(--muted)',
+              boxShadow: filterMealType === 'LUNCH' ? '0 0 18px color-mix(in srgb, var(--wave-400) 25%, transparent)' : 'none'
             }}
           >
             Обед {counts.lunch}
@@ -207,8 +207,8 @@ export default function RecipesPage() {
             style={{
               background: filterMealType === 'DINNER' ? 'var(--grad-brand)' : 'transparent',
               border: filterMealType === 'DINNER' ? '1px solid transparent' : '1px solid var(--border)',
-              color: filterMealType === 'DINNER' ? '#04121A' : 'var(--muted)',
-              boxShadow: filterMealType === 'DINNER' ? '0 0 18px rgba(87, 199, 184, 0.25)' : 'none'
+              color: filterMealType === 'DINNER' ? 'var(--on-fire)' : 'var(--muted)',
+              boxShadow: filterMealType === 'DINNER' ? '0 0 18px color-mix(in srgb, var(--wave-400) 25%, transparent)' : 'none'
             }}
           >
             Ужин {counts.dinner}
@@ -220,8 +220,8 @@ export default function RecipesPage() {
             style={{
               background: filterMealType === 'SNACK' ? 'var(--grad-brand)' : 'transparent',
               border: filterMealType === 'SNACK' ? '1px solid transparent' : '1px solid var(--border)',
-              color: filterMealType === 'SNACK' ? '#04121A' : 'var(--muted)',
-              boxShadow: filterMealType === 'SNACK' ? '0 0 18px rgba(87, 199, 184, 0.25)' : 'none'
+              color: filterMealType === 'SNACK' ? 'var(--on-fire)' : 'var(--muted)',
+              boxShadow: filterMealType === 'SNACK' ? '0 0 18px color-mix(in srgb, var(--wave-400) 25%, transparent)' : 'none'
             }}
           >
             Перекус {counts.snack}
@@ -246,7 +246,7 @@ export default function RecipesPage() {
             onClick={() => setNoFireOnly(!noFireOnly)}
             className="px-4 py-2.5 rounded-full text-xs font-bold transition-all"
             style={{
-              background: noFireOnly ? 'rgba(255, 158, 44, 0.16)' : 'transparent',
+              background: noFireOnly ? 'color-mix(in srgb, var(--amber-500) 16%, transparent)' : 'transparent',
               border: noFireOnly ? '1px solid var(--fire)' : '1px solid var(--border)',
               color: noFireOnly ? 'var(--fire)' : 'var(--muted)'
             }}
@@ -281,12 +281,12 @@ export default function RecipesPage() {
                 <h3 className="font-bold mb-2" style={{ color: 'var(--text)' }}>{recipe.name}</h3>
                 <div className="flex flex-wrap gap-2 mb-3">
                   {recipe.category && (
-                    <span className="px-2 py-0.5 text-xs font-medium rounded-full capitalize" style={{ background: 'rgba(87, 199, 184, 0.14)', color: 'var(--wave-300)' }}>
+                    <span className="px-2 py-0.5 text-xs font-medium rounded-full capitalize" style={{ background: 'color-mix(in srgb, var(--wave-400) 14%, transparent)', color: 'var(--wave-300)' }}>
                       {humanizeCategory(recipe.category)}
                     </span>
                   )}
                   {recipe.cookMinutes === 0 ? (
-                    <span className="px-2 py-0.5 text-xs font-bold rounded-full" style={{ background: 'rgba(255, 158, 44, 0.16)', color: 'var(--amber-300)' }}>
+                    <span className="px-2 py-0.5 text-xs font-bold rounded-full" style={{ background: 'color-mix(in srgb, var(--amber-500) 16%, transparent)', color: 'var(--amber-300)' }}>
                       без огня
                     </span>
                   ) : (
@@ -306,8 +306,7 @@ export default function RecipesPage() {
                   </span>
                   <button
                     className="px-4 py-2 rounded-full text-xs font-bold"
-                    style={{ background: 'var(--grad-brand)', color: '#221204' }}
-                  >
+                                      >
                     В меню
                   </button>
                 </div>
@@ -340,13 +339,13 @@ export default function RecipesPage() {
 
       {/* Модалка деталей рецепта */}
       {selected && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setSelectedRecipe(null)}>
+        <div className="modal-overlay flex items-center justify-center p-4" onClick={() => setSelectedRecipe(null)}>
           <div className="rounded-2xl shadow-xl w-full max-w-lg p-6 max-h-[80vh] overflow-y-auto" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }} onClick={e => e.stopPropagation()}>
             <div className="flex items-start justify-between mb-4">
               <div>
                 <h2 className="text-xl font-bold" style={{ color: 'var(--text)' }}>{selected.name}</h2>
                 <div className="flex items-center gap-3 mt-1 text-sm" style={{ color: 'var(--muted)' }}>
-                  <span className="px-2 py-0.5 text-xs font-medium rounded-full" style={{ background: 'rgba(87, 199, 184, 0.14)', color: 'var(--wave-300)' }}>
+                  <span className="px-2 py-0.5 text-xs font-medium rounded-full" style={{ background: 'color-mix(in srgb, var(--wave-400) 14%, transparent)', color: 'var(--wave-300)' }}>
                     {mealTypeLabels[selected.mealType]}
                   </span>
                   {selected.category && <span className="recipe-category-badge">{humanizeCategory(selected.category)}</span>}

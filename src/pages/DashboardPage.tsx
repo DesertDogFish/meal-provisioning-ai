@@ -73,17 +73,17 @@ export default function DashboardPage() {
         <div className="stat">
           <span className="text-xs" style={{ color: 'var(--muted)' }}>Активных походов</span>
           <p className="stat-value text-2xl font-bold mt-1">{myTrips.length}</p>
-          <div className="h-6 mt-2" style={{ background: 'linear-gradient(90deg, transparent, rgba(87, 199, 184, 0.25))', clipPath: 'polygon(0 80%, 15% 60%, 30% 70%, 45% 40%, 60% 55%, 75% 25%, 100% 45%, 100% 100%, 0 100%)' }}></div>
+          <div className="h-6 mt-2" style={{ background: 'linear-gradient(90deg, transparent, color-mix(in srgb, var(--wave-400) 25%, transparent))', clipPath: 'polygon(0 80%, 15% 60%, 30% 70%, 45% 40%, 60% 55%, 75% 25%, 100% 45%, 100% 100%, 0 100%)' }}></div>
         </div>
         <div className="stat">
           <span className="text-xs" style={{ color: 'var(--muted)' }}>Всего людей</span>
           <p className="stat-value text-2xl font-bold mt-1">{totalPeople}</p>
-          <div className="h-6 mt-2" style={{ background: 'linear-gradient(90deg, transparent, rgba(87, 199, 184, 0.25))', clipPath: 'polygon(0 70%, 20% 50%, 40% 60%, 60% 30%, 80% 45%, 100% 35%, 100% 100%, 0 100%)' }}></div>
+          <div className="h-6 mt-2" style={{ background: 'linear-gradient(90deg, transparent, color-mix(in srgb, var(--wave-400) 25%, transparent))', clipPath: 'polygon(0 70%, 20% 50%, 40% 60%, 60% 30%, 80% 45%, 100% 35%, 100% 100%, 0 100%)' }}></div>
         </div>
         <div className="stat">
           <span className="text-xs" style={{ color: 'var(--muted)' }}>Всего дней</span>
           <p className="stat-value text-2xl font-bold mt-1">{myTrips.reduce((acc, t) => acc + (t.days?.length || 0), 0)}</p>
-          <div className="h-6 mt-2" style={{ background: 'linear-gradient(90deg, transparent, rgba(255, 158, 44, 0.25))', clipPath: 'polygon(0 60%, 25% 45%, 50% 55%, 75% 35%, 100% 50%, 100% 100%, 0 100%)' }}></div>
+          <div className="h-6 mt-2" style={{ background: 'linear-gradient(90deg, transparent, color-mix(in srgb, var(--amber-500) 25%, transparent))', clipPath: 'polygon(0 60%, 25% 45%, 50% 55%, 75% 35%, 100% 50%, 100% 100%, 0 100%)' }}></div>
         </div>
       </div>
 
@@ -126,29 +126,30 @@ export default function DashboardPage() {
                   className="rounded-2xl p-5 cursor-pointer transition-all hover:scale-[1.02]"
                   style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
                 >
+                  {/* DESIGN_MIGRATION 2.4: фоны-градиенты «витрины» вынесены в токены --card-* (обе темы) */}
                   <div className="h-24 rounded-xl mb-3" style={{
-                    background: trip.id === 'trip1' 
-                      ? 'radial-gradient(90px 40px at 70% 85%, rgba(255, 158, 44, 0.5), transparent), linear-gradient(180deg, #2B4A6F, #0B1626)'
+                    background: trip.id === 'trip1'
+                      ? `radial-gradient(90px 40px at 70% 85%, color-mix(in srgb, var(--amber-500) 50%, transparent), transparent), var(--card-hull)`
                       : trip.id === 'trip2'
-                      ? 'linear-gradient(180deg, #33465e, #101c2b 70%)'
-                      : 'radial-gradient(60px 26px at 50% 80%, rgba(255, 158, 44, 0.55), transparent), linear-gradient(180deg, #1d3326, #0c1512)'
+                      ? 'var(--card-deep)'
+                      : `radial-gradient(60px 26px at 50% 80%, color-mix(in srgb, var(--amber-500) 55%, transparent), transparent), var(--card-forest)`
                   }}></div>
                   <h3 className="font-bold text-base" style={{ color: 'var(--text)' }}>{trip.name}</h3>
                   <div className="text-xs mt-1" style={{ color: 'var(--muted)' }}>
                     {new Date(trip.startDate).toLocaleDateString('ru-RU')} — {new Date(trip.endDate).toLocaleDateString('ru-RU')}
                   </div>
                   <div className="flex flex-wrap gap-2 mt-2">
-                    <span className="inline-block rounded-full px-2.5 py-1 text-xs font-bold" style={{ background: 'rgba(87, 199, 184, 0.14)', color: 'var(--wave-300)' }}>
+                    <span className="inline-block rounded-full px-2.5 py-1 text-xs font-bold" style={{ background: 'color-mix(in srgb, var(--wave-400) 14%, transparent)', color: 'var(--wave-300)' }}>
                       {trip.defaultPeople} чел
                     </span>
-                    <span className="inline-block rounded-full px-2.5 py-1 text-xs font-bold" style={{ background: 'rgba(87, 199, 184, 0.14)', color: 'var(--wave-300)' }}>
+                    <span className="inline-block rounded-full px-2.5 py-1 text-xs font-bold" style={{ background: 'color-mix(in srgb, var(--wave-400) 14%, transparent)', color: 'var(--wave-300)' }}>
                       {totalDays} дн
                     </span>
                   </div>
                   <div className="flex items-center justify-between mt-3">
                     <span className="text-xs" style={{ color: 'var(--muted)' }}>Меню {completion}%</span>
                     <div className="w-8 h-8 rounded-full flex items-center justify-center" style={{
-                      background: `conic-gradient(var(--w1) 0 ${completion}%, rgba(148,199,214,0.12) 0)`,
+                      background: `conic-gradient(var(--w1) 0 ${completion}%, color-mix(in srgb, var(--line-strong) 40%, transparent) 0)`,
                     }}>
                       <div className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold" style={{ background: 'var(--surface)', color: 'var(--text)' }}>
                         {completion === 100 ? '✓' : completion}

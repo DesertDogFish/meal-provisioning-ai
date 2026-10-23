@@ -128,8 +128,7 @@ export default function TripsPage() {
         </div>
         <button
           onClick={() => setShowCreate(true)}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-full transition-all"
-          style={{ background: 'var(--grad-brand)', color: '#221204', boxShadow: '0 0 0 1px rgba(255,158,44,.3), 0 16px 44px rgba(242,122,18,.28)' }}
+          className="grad-btn flex items-center gap-2"
         >
           <Plus size={18} />
           <span className="hidden sm:inline">Новый поход</span>
@@ -163,7 +162,7 @@ export default function TripsPage() {
               key={trip.id}
               className="glass lift p-5 relative overflow-hidden"
               style={{
-                backgroundImage: `linear-gradient(rgba(11, 20, 27, 0.82), rgba(13, 23, 32, 0.88)), url(${getTripCover(trip.name)})`,
+                backgroundImage: `linear-gradient(color-mix(in srgb, var(--bg-0) 82%, transparent), color-mix(in srgb, var(--bg-0) 88%, transparent)), url(${getTripCover(trip.name)})`,
                 backgroundSize: 'cover',
                 backgroundPosition: 'center'
               }}
@@ -194,7 +193,7 @@ export default function TripsPage() {
                     style={{ color: 'var(--muted)' }}
                     onMouseEnter={(e) => {
                       e.currentTarget.style.color = 'var(--w1)';
-                      e.currentTarget.style.background = 'rgba(87, 199, 184, 0.1)';
+                      e.currentTarget.style.background = 'color-mix(in srgb, var(--wave-400) 10%, transparent)';
                     }}
                     onMouseLeave={(e) => {
                       e.currentTarget.style.color = 'var(--muted)';
@@ -208,8 +207,8 @@ export default function TripsPage() {
                     className="p-2 rounded-lg transition-colors"
                     style={{ color: 'var(--muted)' }}
                     onMouseEnter={(e) => {
-                      e.currentTarget.style.color = '#FFB4A2';
-                      e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)';
+                      e.currentTarget.style.color = 'var(--danger)';
+                      e.currentTarget.style.background = 'color-mix(in srgb, var(--danger) 10%, transparent)';
                     }}
                     onMouseLeave={(e) => {
                       e.currentTarget.style.color = 'var(--muted)';

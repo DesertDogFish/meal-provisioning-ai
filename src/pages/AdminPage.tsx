@@ -281,7 +281,7 @@ export default function AdminPage() {
           <div className="flex justify-between items-center">
             <p className="text-sm" style={{ color: 'var(--muted)' }}>{prices.length} цен</p>
             <button onClick={() => setShowPriceForm(true)}
-              className="flex items-center gap-2 px-4 py-2 rounded-full text-sm" style={{ background: 'var(--grad-brand)', color: '#221204' }}>
+              className="flex items-center gap-2 px-4 py-2 rounded-full text-sm grad-btn">
               <Plus size={16} /> Добавить цену
             </button>
           </div>
@@ -306,7 +306,7 @@ export default function AdminPage() {
                 </select>
               </div>
               <div className="flex gap-2">
-                <button onClick={handleSavePrice} className="px-4 py-2 rounded-full text-sm" style={{ background: 'var(--grad-brand)', color: '#221204' }}>Сохранить</button>
+                <button onClick={handleSavePrice} className="px-4 py-2 rounded-full text-sm grad-btn">Сохранить</button>
                 <button onClick={() => setShowPriceForm(false)} className="px-4 py-2 text-sm" style={{ color: 'var(--muted)' }}>Отмена</button>
               </div>
             </div>
@@ -346,7 +346,7 @@ export default function AdminPage() {
           <div className="flex justify-between items-center">
             <p className="text-sm" style={{ color: 'var(--muted)' }}>{recipes.length} рецептов</p>
             <button onClick={() => setShowRecForm(true)}
-              className="flex items-center gap-2 px-4 py-2 rounded-full text-sm" style={{ background: 'var(--grad-brand)', color: '#221204' }}>
+              className="flex items-center gap-2 px-4 py-2 rounded-full text-sm grad-btn">
               <Plus size={16} /> Новый рецепт
             </button>
           </div>
@@ -383,7 +383,8 @@ export default function AdminPage() {
                       className="w-24 px-3 py-2 rounded-lg text-sm outline-none" style={{ background: 'var(--elev)', border: '1px solid var(--border)', color: 'var(--text)' }} />
                     {recForm.ingredients.length > 1 && (
                       <button onClick={() => setRecForm({ ...recForm, ingredients: recForm.ingredients.filter((_, i) => i !== idx) })}
-                        className="p-2 rounded" style={{ color: '#FFB4A2' }}><X size={16} /></button>
+                        className="ibtn" style={{ width: 32, height: 32, color: 'var(--danger)' }}
+                        aria-label="Удалить блюдо"><X size={16} /></button>
                     )}
                   </div>
                 ))}
@@ -391,7 +392,7 @@ export default function AdminPage() {
                   className="text-sm" style={{ color: 'var(--w1)' }}>+ Добавить ингредиент</button>
               </div>
               <div className="flex gap-2">
-                <button onClick={handleSaveRecipe} className="px-4 py-2 rounded-full text-sm" style={{ background: 'var(--grad-brand)', color: '#221204' }}>Сохранить</button>
+                <button onClick={handleSaveRecipe} className="px-4 py-2 rounded-full text-sm grad-btn">Сохранить</button>
                 <button onClick={() => setShowRecForm(false)} className="px-4 py-2 text-sm" style={{ color: 'var(--muted)' }}>Отмена</button>
               </div>
             </div>
@@ -434,9 +435,9 @@ export default function AdminPage() {
               <div key={staging.id} className="rounded-xl p-5" style={{ 
                 background: 'var(--surface)', 
                 border: `1px solid ${
-                  staging.status === 'PENDING' ? 'rgba(255, 158, 44, 0.3)' : 
-                  staging.status === 'APPROVED' ? 'rgba(87, 199, 184, 0.3)' : 
-                  'rgba(239, 68, 68, 0.3)'
+                  staging.status === 'PENDING' ? 'color-mix(in srgb, var(--amber-500) 30%, transparent)' : 
+                  staging.status === 'APPROVED' ? 'color-mix(in srgb, var(--wave-400) 30%, transparent)' : 
+                  'color-mix(in srgb, var(--danger) 30%, transparent)'
                 }` 
               }}>
                 <div className="flex items-start justify-between mb-3">
@@ -444,10 +445,10 @@ export default function AdminPage() {
                     <div className="flex items-center gap-2">
                       <h3 className="font-bold" style={{ color: 'var(--text)' }}>{staging.suggestedName || 'Без названия'}</h3>
                       <span className="px-2 py-0.5 text-xs font-medium rounded-full" style={{
-                        background: staging.status === 'PENDING' ? 'rgba(255, 158, 44, 0.16)' :
-                          staging.status === 'APPROVED' ? 'rgba(87, 199, 184, 0.16)' : 'rgba(239, 68, 68, 0.16)',
+                        background: staging.status === 'PENDING' ? 'color-mix(in srgb, var(--amber-500) 16%, transparent)' :
+                          staging.status === 'APPROVED' ? 'var(--success-soft)' : 'var(--danger-soft)',
                         color: staging.status === 'PENDING' ? 'var(--amber-300)' :
-                          staging.status === 'APPROVED' ? 'var(--wave-400)' : '#FFB4A2'
+                          staging.status === 'APPROVED' ? 'var(--wave-400)' : 'var(--danger)'
                       }}>
                         {staging.status === 'PENDING' ? 'Ожидает' : staging.status === 'APPROVED' ? 'Одобрен' : 'Отклонён'}
                       </span>
@@ -457,11 +458,11 @@ export default function AdminPage() {
                   {staging.status === 'PENDING' && (
                     <div className="flex gap-2">
                       <button onClick={() => handleApproveStaging(staging.id)}
-                        className="flex items-center gap-1 px-3 py-1.5 rounded-full text-sm" style={{ background: 'var(--grad-brand)', color: '#221204' }}>
+                        className="flex items-center gap-1 px-3 py-1.5 rounded-full text-sm grad-btn">
                         <Check size={14} /> Одобрить
                       </button>
                       <button onClick={() => handleRejectStaging(staging.id)}
-                        className="flex items-center gap-1 px-3 py-1.5 rounded-full text-sm" style={{ border: '1px solid rgba(239, 68, 68, 0.3)', color: '#FFB4A2' }}>
+                        className="flex items-center gap-1 px-3 py-1.5 rounded-full text-sm" style={{ border: '1px solid color-mix(in srgb, var(--danger) 30%, transparent)', color: 'var(--danger)' }}>
                         <X size={14} /> Отклонить
                       </button>
                     </div>
