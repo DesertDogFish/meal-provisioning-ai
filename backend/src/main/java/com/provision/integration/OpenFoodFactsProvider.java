@@ -1,17 +1,18 @@
 package com.provision.integration;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.provision.exception.IntegrationAuthException;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
-import org.springframework.web.client.HttpServerErrorException;
+import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.util.UriComponentsBuilder;
 
 import java.math.BigDecimal;
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
+import java.net.URI;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -52,15 +53,42 @@ public class OpenFoodFactsProvider implements PriceProvider {
     }
 
     /**
-     * Добавляет user_id/password к query-string, если креды заданы.
-     * Спецсимволы в email/пароле обязательно URL-кодируются.
+     * Добавляет user_id/password к query, если креды заданы.
+     * Ручное склейвание строк с URLEncoder убрано: оно ломало передачу
+     * пароля со спецсимволами (#/@) — OFF отвечал 403.
      */
-    private String appendAuthParams(StringBuilder urlBuilder) {
+    private UriComponentsBuilder withAuth(UriComponentsBuilder builder) {
         if (hasCredentials()) {
-            urlBuilder.append("&user_id=").append(URLEncoder.encode(offUserId, StandardCharsets.UTF_8));
-            urlBuilder.append("&password=").append(URLEncoder.encode(offPassword, StandardCharsets.UTF_8));
+            builder.queryParam("user_id", offUserId)
+                   .queryParam("password", offPassword);
         }
-        return urlBuilder.toString();
+        return builder;
+    }
+
+    /**
+     * Безопасная сборка URI. build()+encode() НЕ подходит: Spring считает
+     * '@' разрешённым символом QUERY_PARAM и оставляет его в пароле как есть,
+     * из-за чего OFF не добирает креды (403). Поэтому значения кодируются
+     * явно через URLEncoder (%23 для #, %40 для @), а URI собирается
+     * build(true) без двойного кодирования ('%' — валидный символ query).
+     */
+    private URI buildUri(UriComponentsBuilder builder) {
+        String base = builder.toUriString().split("\\?")[0];
+        UriComponentsBuilder encoded = UriComponentsBuilder.fromUriString(base);
+        builder.build().getQueryParams().forEach((key, values) ->
+                values.forEach(v -> encoded.queryParam(key, encodeQueryValue(v))));
+        return encoded.build(true).toUri();
+    }
+
+    private static String encodeQueryValue(String value) {
+        try {
+            // application/x-www-form-urlencoded: пробел -> '+', остальные
+            // спецсимволы -> percent-encoding. Для email/пароля/кириллицы — то,
+            // что ожидает OFF (совпадает с --data-urlencode в curl).
+            return java.net.URLEncoder.encode(value, java.nio.charset.StandardCharsets.UTF_8);
+        } catch (Exception e) {
+            throw new IllegalStateException("Failed to encode query param", e);
+        }
     }
 
     @PostConstruct
@@ -77,13 +105,8 @@ public class OpenFoodFactsProvider implements PriceProvider {
      * Формирует человекочитаемое сообщение о сбое внешнего API OFF
      * (5xx/429) с учётом наличия учётных записей.
      */
-    private String describeOffFailure(Exception e) {
-        int status = -1;
-        if (e instanceof HttpServerErrorException hse) {
-            status = hse.getStatusCode().value();
-        } else if (e instanceof org.springframework.web.client.HttpStatusCodeException hce) {
-            status = hce.getStatusCode().value();
-        }
+    private String describeOffFailure(HttpStatusCodeException e) {
+        int status = e.getStatusCode().value();
         boolean rateLimited = status == 503 || status == 429;
 
         if (rateLimited && !hasCredentials()) {
@@ -95,7 +118,29 @@ public class OpenFoodFactsProvider implements PriceProvider {
             return "Сервис Open Food Facts временно перегружен (" + status
                     + "), попробуйте позже.";
         }
-        return "Open Food Facts недоступен: " + e.getMessage();
+        return "Open Food Facts недоступен: HTTP " + status;
+    }
+
+    /**
+     * Единая обработка HTTP-ошибок OFF:
+     * 401/403 при переданных кредах — понятная ошибка учётной записи
+     * (IntegrationAuthException -> 502 для клиента, а не 500);
+     * прочие статусы — человекочитаемое описание.
+     */
+    private RuntimeException toOffException(HttpStatusCodeException e) {
+        int status = e.getStatusCode().value();
+        if ((status == 401 || status == 403) && hasCredentials()) {
+            log.error("OFF Auth failed despite credentials present (HTTP {})", status);
+            return new IntegrationAuthException(
+                    "Open Food Facts отклонил авторизацию учётной записи (HTTP " + status
+                            + "). Проверьте OFF_USER_ID/OFF_PASSWORD.", e);
+        }
+        if (status == 401 || status == 403) {
+            return new IntegrationAuthException(
+                    "Open Food Facts требует авторизацию (HTTP " + status
+                            + "). Настройте OFF_USER_ID/OFF_PASSWORD.", e);
+        }
+        return new RuntimeException(describeOffFailure(e), e);
     }
 
     @Override
@@ -121,16 +166,19 @@ public class OpenFoodFactsProvider implements PriceProvider {
     public List<ExternalProductDto> searchProducts(String query, int limit) {
         List<ExternalProductDto> results = new ArrayList<>();
         try {
-            String encodedQuery = URLEncoder.encode(query, StandardCharsets.UTF_8);
-            StringBuilder urlBuilder = new StringBuilder(productsUrl)
-                    .append("/cgi/search.pl?search_simple=1&action=process&json=1")
-                    .append("&page_size=").append(limit)
-                    .append("&fields=code,product_name,brands,quantity,image_url")
-                    .append("&search_terms=").append(encodedQuery);
-            String url = appendAuthParams(urlBuilder);
+            // build(true): строгий percent-encoding значений, включая # и @
+            // в пароле (см. buildUri) — иначе OFF отвечает 403.
+            URI uri = buildUri(withAuth(UriComponentsBuilder.fromUriString(productsUrl)
+                    .path("/cgi/search.pl")
+                    .queryParam("search_simple", 1)
+                    .queryParam("action", "process")
+                    .queryParam("json", 1)
+                    .queryParam("page_size", limit)
+                    .queryParam("fields", "code,product_name,brands,quantity,image_url")
+                    .queryParam("search_terms", query)));
 
             JsonNode response = restClient.get()
-                    .uri(url)
+                    .uri(uri)
                     .retrieve()
                     .body(JsonNode.class);
 
@@ -155,8 +203,12 @@ public class OpenFoodFactsProvider implements PriceProvider {
                     }
                 }
             }
+        } catch (HttpStatusCodeException e) {
+            RuntimeException mapped = toOffException(e);
+            log.error("Failed to search products: {}", mapped.getMessage());
+            throw mapped;
         } catch (Exception e) {
-            String reason = describeOffFailure(e);
+            String reason = "Open Food Facts недоступен: " + e.getMessage();
             log.error("Failed to search products: {}", reason);
             throw new RuntimeException(reason, e);
         }
@@ -167,11 +219,14 @@ public class OpenFoodFactsProvider implements PriceProvider {
     public List<ExternalPriceDto> fetchPrices(String externalCode, LocalDate since) {
         List<ExternalPriceDto> results = new ArrayList<>();
         try {
-            String url = pricesUrl + "/api/v1/prices?product_code=" + externalCode
-                    + "&order_by=-date&size=20";
+            URI uri = buildUri(UriComponentsBuilder.fromUriString(pricesUrl)
+                    .path("/api/v1/prices")
+                    .queryParam("product_code", externalCode)
+                    .queryParam("order_by", "-date")
+                    .queryParam("size", 20));
 
             JsonNode response = restClient.get()
-                    .uri(url)
+                    .uri(uri)
                     .retrieve()
                     .body(JsonNode.class);
 
@@ -192,6 +247,16 @@ public class OpenFoodFactsProvider implements PriceProvider {
                         }
                     }
                 }
+            }
+        } catch (HttpStatusCodeException e) {
+            // Цены OFF — второстепенный источник: не роняем синхронизацию,
+            // но 401/403 логируем отдельно как проблему авторизации.
+            if (e.getStatusCode().value() == 401 || e.getStatusCode().value() == 403) {
+                log.error("OFF prices API auth rejected (HTTP {}) for code {}",
+                        e.getStatusCode().value(), externalCode);
+            } else {
+                log.error("Failed to fetch prices for code {}: HTTP {}",
+                        externalCode, e.getStatusCode().value());
             }
         } catch (Exception e) {
             log.error("Failed to fetch prices for code {}: {}", externalCode, e.getMessage());

@@ -14,6 +14,8 @@ import java.time.LocalDate;
 import java.util.*;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.Mockito.when;
 
 /**
@@ -158,32 +160,55 @@ class DetailedShoppingCalculationTest {
         // Соль: нет цены
         saltPrices = Collections.emptyList();
 
+        // === ЦЕНЫ (меняются во время похода) ===
+        // FIX (аудит P1): сервис больше не зовёт findEffectivePrice на каждый день —
+        // getShoppingByDays грузит пакетно: базовый срез на endDate
+        // (findLatestPricesAsOfForIngredients) + полные ценовые ряды
+        // (findByIngredientIdInOrderByEffectiveFromDesc, DESC). Мокируем именно их.
+        grechkaHistory = () -> Arrays.asList(grechkaPrices.get(1), grechkaPrices.get(0)); // DESC!
+        tushenkaHistory = () -> new ArrayList<>(tushenkaPrices);
+
         // Настройка моков
         when(tripRepository.findByIdWithDaysAndMeals(1L, 1L)).thenReturn(java.util.Optional.of(trip));
-        
-        // Гречка: цена на 12 мая = 200₽ (после 1 мая)
-        when(priceRepository.findEffectivePrice(1L, LocalDate.of(2026, 5, 12)))
-                .thenReturn(Optional.of(grechkaPrices.get(1))); // 200₽
-        when(priceRepository.findEffectivePrice(1L, LocalDate.of(2026, 5, 13)))
-                .thenReturn(Optional.of(grechkaPrices.get(1))); // 200₽
-        when(priceRepository.findEffectivePrice(1L, LocalDate.of(2026, 5, 14)))
-                .thenReturn(Optional.of(grechkaPrices.get(1))); // 200₽
-        
-        // Тушенка: всегда 210₽
-        when(priceRepository.findEffectivePrice(2L, LocalDate.of(2026, 5, 12)))
-                .thenReturn(Optional.of(tushenkaPrices.get(0)));
-        when(priceRepository.findEffectivePrice(2L, LocalDate.of(2026, 5, 13)))
-                .thenReturn(Optional.of(tushenkaPrices.get(0)));
-        when(priceRepository.findEffectivePrice(2L, LocalDate.of(2026, 5, 14)))
-                .thenReturn(Optional.of(tushenkaPrices.get(0)));
-        
-        // Соль: нет цены
-        when(priceRepository.findEffectivePrice(3L, LocalDate.of(2026, 5, 12)))
-                .thenReturn(Optional.empty());
-        when(priceRepository.findEffectivePrice(3L, LocalDate.of(2026, 5, 13)))
-                .thenReturn(Optional.empty());
-        when(priceRepository.findEffectivePrice(3L, LocalDate.of(2026, 5, 14)))
-                .thenReturn(Optional.empty());
+
+        when(priceRepository.findLatestPricesAsOfForIngredients(any(), anyCollection()))
+                .thenAnswer(invocation -> {
+                    Collection<Long> ids = invocation.getArgument(1);
+                    List<IngredientPrice> result = new ArrayList<>();
+                    if (ids.contains(1L)) result.add(grechkaPrices.get(1));   // 200₽ срез на endDate
+                    if (ids.contains(2L)) result.add(tushenkaPrices.get(0));  // 210₽
+                    return result;
+                });
+        when(priceRepository.findByIngredientIdInOrderByEffectiveFromDesc(anyCollection()))
+                .thenAnswer(invocation -> {
+                    Collection<Long> ids = invocation.getArgument(0);
+                    List<IngredientPrice> allHistory = new ArrayList<>();
+                    if (ids.contains(1L)) allHistory.addAll(grechkaHistory.get());
+                    if (ids.contains(2L)) allHistory.addAll(tushenkaHistory.get());
+                    return allHistory;
+                });
+    }
+
+    private PriceSupplier grechkaHistory;
+    private PriceSupplier tushenkaHistory;
+
+    private interface PriceSupplier { java.util.List<IngredientPrice> get(); }
+
+/**
+ * FIX (аудит P1): мокаем пакетные методы сервиса (batch-загрузка цен), а не устаревший
+ * per-ingredient findEffectivePrice. Вспомогательный «эталонный» выбор цены на дату —
+ * зеркало логики SummaryService.effectivePriceFromCache: среди записей с
+ * effectiveFrom <= date берётся самая свежая.
+ */
+    private static IngredientPrice effectivePriceAt(List<IngredientPrice> history, LocalDate date) {
+        IngredientPrice best = null;
+        for (IngredientPrice p : history) {
+            if (!p.getEffectiveFrom().isAfter(date)
+                    && (best == null || p.getEffectiveFrom().isAfter(best.getEffectiveFrom()))) {
+                best = p;
+            }
+        }
+        return best;
     }
 
     @Test
@@ -220,10 +245,8 @@ class DetailedShoppingCalculationTest {
         System.out.println("  Соль: 0.02/4 * " + people1 + " = " + salt1 + " KG");
         
         // Цена на 12 мая
-        BigDecimal priceGrechka1 = priceRepository.findEffectivePrice(1L, LocalDate.of(2026, 5, 12))
-                .orElseThrow().getPricePerUnit();
-        BigDecimal priceTushenka1 = priceRepository.findEffectivePrice(2L, LocalDate.of(2026, 5, 12))
-                .orElseThrow().getPricePerUnit();
+        BigDecimal priceGrechka1 = effectivePriceAt(grechkaPrices, LocalDate.of(2026, 5, 12)).getPricePerUnit();
+        BigDecimal priceTushenka1 = effectivePriceAt(tushenkaPrices, LocalDate.of(2026, 5, 12)).getPricePerUnit();
         
         BigDecimal costGrechka1 = grechka1.multiply(priceGrechka1).setScale(2, RoundingMode.HALF_UP);
         BigDecimal costTushenka1 = tushenka1.multiply(priceTushenka1).setScale(2, RoundingMode.HALF_UP);
@@ -252,10 +275,8 @@ class DetailedShoppingCalculationTest {
         System.out.println("  Тушенка: 4/4 * " + people2 + " = " + tushenka2 + " PCS");
         System.out.println("  Соль: 0.02/4 * " + people2 + " = " + salt2 + " KG");
         
-        BigDecimal priceGrechka2 = priceRepository.findEffectivePrice(1L, LocalDate.of(2026, 5, 13))
-                .orElseThrow().getPricePerUnit();
-        BigDecimal priceTushenka2 = priceRepository.findEffectivePrice(2L, LocalDate.of(2026, 5, 13))
-                .orElseThrow().getPricePerUnit();
+        BigDecimal priceGrechka2 = effectivePriceAt(grechkaPrices, LocalDate.of(2026, 5, 13)).getPricePerUnit();
+        BigDecimal priceTushenka2 = effectivePriceAt(tushenkaPrices, LocalDate.of(2026, 5, 13)).getPricePerUnit();
         
         BigDecimal costGrechka2 = grechka2.multiply(priceGrechka2).setScale(2, RoundingMode.HALF_UP);
         BigDecimal costTushenka2 = tushenka2.multiply(priceTushenka2).setScale(2, RoundingMode.HALF_UP);
@@ -283,10 +304,8 @@ class DetailedShoppingCalculationTest {
         System.out.println("  Тушенка: 4/4 * " + people3 + " = " + tushenka3 + " PCS");
         System.out.println("  Соль: 0.02/4 * " + people3 + " = " + salt3 + " KG");
         
-        BigDecimal priceGrechka3 = priceRepository.findEffectivePrice(1L, LocalDate.of(2026, 5, 14))
-                .orElseThrow().getPricePerUnit();
-        BigDecimal priceTushenka3 = priceRepository.findEffectivePrice(2L, LocalDate.of(2026, 5, 14))
-                .orElseThrow().getPricePerUnit();
+        BigDecimal priceGrechka3 = effectivePriceAt(grechkaPrices, LocalDate.of(2026, 5, 14)).getPricePerUnit();
+        BigDecimal priceTushenka3 = effectivePriceAt(tushenkaPrices, LocalDate.of(2026, 5, 14)).getPricePerUnit();
         
         BigDecimal costGrechka3 = grechka3.multiply(priceGrechka3).setScale(2, RoundingMode.HALF_UP);
         BigDecimal costTushenka3 = tushenka3.multiply(priceTushenka3).setScale(2, RoundingMode.HALF_UP);
@@ -370,23 +389,17 @@ class DetailedShoppingCalculationTest {
                         .build()
         );
 
-        // Моки для нового ингредиента
-        when(priceRepository.findEffectivePrice(10L, LocalDate.of(2026, 5, 10)))
-                .thenReturn(Optional.of(grechkaPrices2.get(0))); // 180₽
-        when(priceRepository.findEffectivePrice(10L, LocalDate.of(2026, 5, 20)))
-                .thenReturn(Optional.of(grechkaPrices2.get(1))); // 250₽
+        // FIX P1: мокаем пакетные методы; эталонная цена на дату — через effectivePriceAt.
 
         BigDecimal amount = new BigDecimal("0.8"); // 0.8 KG на 4 порции
         BigDecimal amountFor4People = summaryService.calculateAmountForMeal(amount, 4, 4); // 0.8 KG
 
         // День 10 мая: цена 180₽
-        BigDecimal price10 = priceRepository.findEffectivePrice(10L, LocalDate.of(2026, 5, 10))
-                .orElseThrow().getPricePerUnit();
+        BigDecimal price10 = effectivePriceAt(grechkaPrices2, LocalDate.of(2026, 5, 10)).getPricePerUnit();
         BigDecimal cost10 = amountFor4People.multiply(price10).setScale(2, RoundingMode.HALF_UP);
 
         // День 20 мая: цена 250₽
-        BigDecimal price20 = priceRepository.findEffectivePrice(10L, LocalDate.of(2026, 5, 20))
-                .orElseThrow().getPricePerUnit();
+        BigDecimal price20 = effectivePriceAt(grechkaPrices2, LocalDate.of(2026, 5, 20)).getPricePerUnit();
         BigDecimal cost20 = amountFor4People.multiply(price20).setScale(2, RoundingMode.HALF_UP);
 
         System.out.println("День 10 мая (до скачка цены):");

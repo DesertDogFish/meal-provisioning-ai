@@ -190,6 +190,27 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
     }
 
+    @ExceptionHandler(com.provision.exception.IntegrationAuthException.class)
+    public ResponseEntity<ErrorResponse> handleIntegrationAuth(
+            com.provision.exception.IntegrationAuthException ex,
+            HttpServletRequest request
+    ) {
+        // Сбой авторизации внешнего API (OFF) — не наш баг: 502 вместо 500.
+        log.error("Integration auth failed: {}", ex.getMessage());
+        ErrorResponse error = new ErrorResponse(
+                "about:blank",
+                "Bad Gateway",
+                HttpStatus.BAD_GATEWAY.value(),
+                ex.getMessage(),
+                request.getRequestURI(),
+                LocalDateTime.now(),
+                null,
+                null,
+                null
+        );
+        return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(error);
+    }
+
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ErrorResponse> handleIllegalArgument(
             IllegalArgumentException ex,

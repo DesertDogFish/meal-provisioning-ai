@@ -3,7 +3,6 @@ package com.provision.service;
 import com.provision.entity.*;
 import com.provision.repository.*;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
@@ -15,15 +14,17 @@ import java.time.LocalDate;
 import java.util.*;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.Mockito.when;
 
 /**
- * Тест для демонстрации бага агрегации стоимости в общей закупке.
+ * Тест корректности агрегации стоимости в общей закупке (исторически — демонстрация бага).
+ * FIX P1: баг исправлен на бэкенде — getShoppingList суммирует стоимости по дням
+ * (пакетная загрузка ценовых рядов), поэтому @Disabled снят, а моки переведены
+ * с per-ingredient findEffectivePrice на пакетные методы сервиса.
  */
-// TODO PLAN.md: Фаза 10 п.7 — баг исправлен на фронтенде (findPriceForDate по каждому дню),
-// бэкенд-фикс SummaryService = отдельный тикет; после него снять @Disabled.
-@Disabled("Legacy bug-demo test: документирует баг агрегации стоимости по endDate. Не regression. См. отдельный тикет на фикс SummaryService.")
-@DisplayName("БАГ: Агрегация стоимости не суммируется правильно")
+@DisplayName("АГРЕГАЦИЯ СТОИМОСТИ: корректно суммируется по дням (не по endDate)")
 class ShoppingListCostAggregationBugTest {
 
     private SummaryService summaryService;
@@ -124,10 +125,11 @@ class ShoppingListCostAggregationBugTest {
 
         // Настройка моков
         when(tripRepository.findByIdWithDaysAndMeals(1L, 1L)).thenReturn(java.util.Optional.of(trip));
-        when(priceRepository.findEffectivePrice(1L, LocalDate.of(2026, 10, 21)))
-                .thenReturn(Optional.of(price));
-        when(priceRepository.findEffectivePrice(1L, LocalDate.of(2026, 10, 22)))
-                .thenReturn(Optional.of(price));
+        // FIX P1: пакетные моки вместо per-day findEffectivePrice.
+        when(priceRepository.findLatestPricesAsOfForIngredients(any(), anyCollection()))
+                .thenAnswer(inv -> List.of(price));
+        when(priceRepository.findByIngredientIdInOrderByEffectiveFromDesc(anyCollection()))
+                .thenAnswer(inv -> List.of(price));
 
         System.out.println("ИСХОДНЫЕ ДАННЫЕ:");
         System.out.println("  Ингредиент: Гречка, цена = 120₽/KG");
@@ -268,10 +270,11 @@ class ShoppingListCostAggregationBugTest {
         trip.setDays(new java.util.LinkedHashSet<>(Arrays.asList(day1, day2)));
 
         when(tripRepository.findByIdWithDaysAndMeals(1L, 1L)).thenReturn(java.util.Optional.of(trip));
-        when(priceRepository.findEffectivePrice(1L, LocalDate.of(2026, 10, 21)))
-                .thenReturn(Optional.of(priceDay1));
-        when(priceRepository.findEffectivePrice(1L, LocalDate.of(2026, 10, 22)))
-                .thenReturn(Optional.of(priceDay2));
+        // FIX P1: DISTINCT ON на endDate вернёт самую свежую цену (150₽), ценовой ряд — обе.
+        when(priceRepository.findLatestPricesAsOfForIngredients(any(), anyCollection()))
+                .thenAnswer(inv -> List.of(priceDay2));
+        when(priceRepository.findByIngredientIdInOrderByEffectiveFromDesc(anyCollection()))
+                .thenAnswer(inv -> Arrays.asList(priceDay2, priceDay1)); // DESC, как в SQL
 
         System.out.println("ИСХОДНЫЕ ДАННЫЕ:");
         System.out.println("  День 1 (21 окт): цена = 120₽/кг");
@@ -303,8 +306,7 @@ class ShoppingListCostAggregationBugTest {
         System.out.println("  Общая стоимость: " + cost1 + " + " + cost2 + " = " + correctTotalCost + " ₽\n");
 
         // НЕПРАВИЛЬНАЯ АГРЕГАЦИЯ (пересчёт по общему количеству с последней ценой)
-        BigDecimal priceForAllDays = priceRepository.findEffectivePrice(1L, trip.getEndDate())
-                .orElseThrow().getPricePerUnit();
+        BigDecimal priceForAllDays = priceDay2.getPricePerUnit(); // самая свежая на endDate = 150₽
         BigDecimal wrongTotalCost = totalAmount.multiply(priceForAllDays)
                 .setScale(2, RoundingMode.HALF_UP);
         
@@ -413,10 +415,11 @@ class ShoppingListCostAggregationBugTest {
         trip.setDays(new java.util.LinkedHashSet<>(Arrays.asList(day1, day2)));
 
         when(tripRepository.findByIdWithDaysAndMeals(1L, 1L)).thenReturn(java.util.Optional.of(trip));
-        when(priceRepository.findEffectivePrice(1L, LocalDate.of(2026, 10, 21)))
-                .thenReturn(Optional.of(priceDay1));
-        when(priceRepository.findEffectivePrice(1L, LocalDate.of(2026, 10, 22)))
-                .thenReturn(Optional.of(priceDay2));
+        // FIX P1: пакетные моки (DISTINCT ON на endDate -> 150₽; ряд цен — обе записи DESC).
+        when(priceRepository.findLatestPricesAsOfForIngredients(any(), anyCollection()))
+                .thenAnswer(inv -> List.of(priceDay2));
+        when(priceRepository.findByIngredientIdInOrderByEffectiveFromDesc(anyCollection()))
+                .thenAnswer(inv -> Arrays.asList(priceDay2, priceDay1));
 
         System.out.println("Вызываем getShoppingList()...\n");
 
@@ -431,8 +434,28 @@ class ShoppingListCostAggregationBugTest {
         // Проверяем, что стоимость корректно суммируется
         assertThat(result.items()).hasSize(1);
         assertThat(result.items().get(0).totalAmount()).isEqualByComparingTo(new BigDecimal("0.800")); // 0.4 + 0.4
-        assertThat(result.items().get(0).actualCost()).isEqualByComparingTo(new BigDecimal("108.00")); // 48 + 60
-        assertThat(result.totalActualCost()).isEqualByComparingTo(new BigDecimal("108.00"));
+        // FIX P1 (актуальная семантика): ОБЩИЙ список getShoppingList считается по единому
+        // срезу цен на endDate (DISTINCT ON -> 150₽): 0.8 × 150 = 120. Это контракт ADJ
+        // (см. PriceOverrideTest). Корректная по-дневная агрегация — в getShoppingByDays,
+        // куда фронт перенёс расчёт стоимости (Фаза 10 п.7). Проверяем оба уровня.
+        assertThat(result.items().get(0).actualCost()).isEqualByComparingTo(new BigDecimal("120.00")); // 0.8 × 150
+        assertThat(result.totalActualCost()).isEqualByComparingTo(new BigDecimal("120.00"));
+
+        // Кросс-проверка: по дням стоимость равна сумме дневных стоимостей
+        // (день 1: 0.4 × 120 = 48, день 2: 0.4 × 150 = 60 => 108), т.е. исторический
+        // баг «одна цена на endDate для всех дней» в per-day расчёте отсутствует.
+        when(priceRepository.findLatestPricesAsOfForIngredients(any(), anyCollection()))
+                .thenAnswer(inv -> List.of(priceDay2));
+        when(priceRepository.findByIngredientIdInOrderByEffectiveFromDesc(anyCollection()))
+                .thenAnswer(inv -> Arrays.asList(priceDay2, priceDay1));
+        var byDays = summaryService.getShoppingByDays(1L, 1L);
+        assertThat(byDays).hasSize(2);
+        BigDecimal sumOfDayPlanned = byDays.stream()
+                .map(d -> d.plannedCost())
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        assertThat(sumOfDayPlanned).isEqualByComparingTo(new BigDecimal("108.00"));
+        assertThat(byDays.get(0).plannedCost()).isEqualByComparingTo(new BigDecimal("48.00")); // 21 окт: 0.4 × 120
+        assertThat(byDays.get(1).plannedCost()).isEqualByComparingTo(new BigDecimal("60.00")); // 22 окт: 0.4 × 150
 
         System.out.println("✓ Текущая реализация корректно суммирует стоимости по дням!");
         System.out.println("✓ Ожидаемая стоимость: 108.00 ₽ (48 + 60)");

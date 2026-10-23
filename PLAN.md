@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-**✅ Все фазы 1–12 закрыты (последняя проверка: 2026-10-23).** Фаза 11 (аудит бэкенда P0/P1) закоммичена (`8880928`, `898552a`). Фаза 12 (P1-остатки аудита: usedIn, packsToBuy, @Async sync, N+1 ProductService/SummaryService, startup-хилл логов, дубль ingredientId) выполнена 2026-10-23 — **диффы в рабочем дереве, не коммитятся** (проверяются вручную). Гейты зелёные: `mvn test` = 66 run / 0 failed / 3 skipped, `npm run build` = SUCCESS. Открытые пункты: P2/P3 в «Next Step» и Backlog. Протоколы предыдущих фаз — в конце файла (Backlog / Completed / Timeline).
+**✅ Все фазы 1–13 закрыты (последняя проверка: 2026-10-23).** Фаза 11 (аудит бэкенда P0/P1) закоммичена (`8880928`, `898552a`). Фаза 12 (P1-остатки аудита: usedIn, packsToBuy, @Async sync, N+1 ProductService/SummaryService, startup-хилл логов, дубль ingredientId) выполнена 2026-10-23 — **диффы в рабочем дереве, не коммитятся** (проверяются вручную). Гейты зелёные: `mvn test` = 66 run / 0 failed / 3 skipped, `npm run build` = SUCCESS. Открытые пункты: P2/P3 в «Next Step» и Backlog. Протоколы предыдущих фаз — в конце файла (Backlog / Completed / Timeline).
 
 > **HOTFIX 2026-10-23: `ReferenceError: e is not defined` на старте продакшен-билда.**
 > Причина: в `src/api/client.ts` (конструктор `ApiClient`, строка чтения env) при правке канала инъекции `VITE_API_MODE` (`window.meta`-обход для тестов) опечатка `e.VITE_API_MODE` вместо `env.VITE_API_MODE`. Vite/esbuild не резолвят идентификаторы — в минифицированном бандле остаётся голодная `e`, ReferenceError при создании синглтона `api` (модуль грузится на старте). Dockerfile.frontend (ARG/ENV VITE_API_URL/VITE_API_MODE) — ни при чём; `mode.ts`, `main.tsx`, `App.tsx` проверены, чисто.
@@ -55,6 +55,26 @@
 - ~~Анонимные запросы к OFF упираются в 503 без объяснения причины~~ → ✅ `OpenFoodFactsProvider`: креды из ENV (`OFF_USER_ID`/`OFF_PASSWORD` → `integration.off.user-id/password`, `application.yml:52–55`), `appendAuthParams()` c `URLEncoder` добавляет `user_id`/`password` к `searchProducts`; `@PostConstruct logAuthMode()` — WARN «OFF credentials not set, running in anonymous mode»; `describeOffFailure()`: 503/429 без кредитов → «Требуется регистрация на OFF», с кредитами → «Сервис временно перегружен». `docker-compose.yml:38–41` + `.env.example` (закомментированный шаблон, реальные секреты не коммитятся). Гейты после правок: `mvn test` = 66/0 failed/3 skipped, BUILD SUCCESS.
 - ⚠️ Обнаружено при сверке контракта: бэк кладёт в `usedIn` список **строк** (names), а фронт (`src/api/client.ts:16`, mockServer) ожидает `Array<{resourceType, resourceId, resourceName}>` — рассинхрон формата (отдельная задача, см. ниже).
 - ❌ Не найдено: метода `getProductByBarcode` / отдельного эндпоинта product-by-code в провайдере нет (только search+prices API) — пункт задачи неприменим.
+
+### ✅ Фаза 13 — Polish & Logic (UX походов, 2026-10-23; диффы в рабочем дереве, НЕ коммитятся)
+- ~~П.1 Нативный пикер даты ломает дизайн~~ → ✅ `DatePicker.tsx`: custom input `type="text"` (значение нормализуется в ISO YYYY-MM-DD, атрибуты min/max/disabled сохранены на `<input>` для контрактов CR-3/e2e); `DatePicker.css`: страховочное правило `input::-webkit-calendar-picker-indicator { display: none !important; }`; единственный календарь — тёмный попапер react-datepicker, иконка — своя lucide-кнопка.
+- ~~П.2 Некрасивые браузерные `<select>`~~ → ✅ новый `src/components/CustomSelect.tsx` + `.css` (тёмная тема на CSS-переменных --surface/--elev/--line(border)/--r-md, анимация opacity/scale, клавиатура Enter/Esc/стрелки, aria). Заменены селекты в TripDetailPage (модал «Добавить приём пищи»: тип приёма + блюдо). Остальные страницы (Products/Admin/Recipes/SyncLogs/Integrations) — кандидаты на точечную замену (P2).
+- ~~П.3 Итоговые суммы с копейками~~ → ✅ `src/utils/formatRub.ts` («1 234 ₽», Math.round, null→'—'); применён ко всем итогам TripDetailPage: KPI-карточки (Стоимость, На чел.), Итого закупки, строки позиций, итоги по дням, сводка «На человека» (включая ₽/чел./приём). Внутренние расчёты не тронуты (округление только на выводе). Таблицы Plan/Fact в PriceOverridesTab оставлены с копейками — это рабочие цены за единицу, не итоги.
+- ~~П.4 Непонятно, за что вводится «Фактическая цена»~~ → ✅ бэкенд хранит **unit price** (`actualUnitPrice × amount = actualCost`, см. TripService/SummaryService), значит UI должен это показывать явно: в `PriceOverridesTab` добавлен placeholder `цена ₽ / кг|шт|уп…` (`priceUnitSuffix(item.unit)`), title у колонки «Факт ₽/ед», подсказка в модалке чека. ⚠️ Гипотеза (не доказана): если пользователь воспринимает поле как «сумму чека за позицию», нужна отдельная инверсия total→unit — пока контракт unit-price отражён явно.
+- ~~П.5 Soft-disable продуктов из расчёта~~ → ✅ клиентская реализация: чекбоксы в таблицах «Закупка на поход» и «Закупка по дням» (`ExclusionCheckbox`), состояние `shoppingExcluded: Set<string>` в TripDetailPage + persist в localStorage (`trip-shopping-excluded-{id}` — переживает навигацию/релоад). Исключённая строка: opacity 0.45 + line-through; итог «Итого: … (без N искл.)». Бэкенд не тронут (по задаче — только клиент).
+- ~~П.6 Цены из «Закупки» не синхронизируются с «По дням»/«На человека»~~ → ✅ причина устранена: единый источник `draftOverrides` (unit-price черновики) поднят в TripDetailPage; пересчёт: `shoppingList.effectiveCost = draft.price × amount`; `dayShopping.dayCost` фильтрует исключённые и берёт effectiveCost; `personSummary.costPerDefaultPerson = draft.price × amountPerPerson`; KPI `totalCostFinal` при наличии правок = shoppingTotalFinal. Все вкладки считают от одного состояния → мгновенная синхронизация.
+- ~~П.7 Черновики цен пропадают при переключении вкладок~~ → ✅ состояние живёт в родителе TripDetailPage (+persist localStorage по trip id, ключ `draftKey`), дети читают через пропсы — размонтирование вкладки больше не сбрасывает данные.
+- Гейты Фазы 13: `npm run build` ✅ SUCCESS; `npx vitest run` = **196 passed / 5 failed** — те же 5 падений `TripForm.test.tsx` доказаны pre-existing (git stash → идентичный результат на чистом HEAD; триage — открытый пункт ниже).
+
+### ✅ CI Lint fix (2026-10-23, после merge Phase 13)
+GitHub Actions `npm run lint` падал с exit 1. Разбор:
+- Ошибки в `design-pack/react/Input.tsx` из CI-лога физически отсутствуют в этом репозитории (папки design-pack нет) — артефакт другой ветки/дерефа CI; актуальный прогон не содержит их.
+- Реальные ошибки lint в нашем дереве (внесены Фазой 13): исправлены —
+  * `TripDetailPage.tsx`: **нарушение rules-of-hooks** (`useState`/`useEffect` для `shoppingExcluded` объявлены ПОСЛЕ ранних return loading/error) → хуки перенесены наверх, к остальным useState/useEffect;
+  * удалён мёртвый код Фазы 13: `setActualUnitPrice`, `unitPriceOf`, промежуточные `includedShopping`/`shoppingTotal` (используется финальный `shoppingTotalFinal`); `setDraftOverrides` убран из деструктуризации;
+  * `DatePicker.tsx`: неиспользуемый деструктурированный проп `autoComplete` (на `<input>` он жёстко задан как `off`).
+- Гейты после фикса: `eslint . --ext ts,tsx` = **0 errors**, exit 0; `npm run build` ✅; `vitest run` = 196/201 (те же 5 pre-existing TripForm).
+- [ ] Опционально (P2): 4 предупреждения `react-hooks/exhaustive-deps` (Layout/Dashboard/Recipes/Trips — интент «смонтировался один раз», стабилизировать loadX через useCallback или осознанно оставить).
 
 ### P2 — косметика/контракт
 - [ ] Формат `usedIn`: привести бэкенд к контрактному `{resourceType, resourceId, resourceName}[]` (сейчас `List<String>` names — фронт не сможет отрендерить). См. `ErrorResponse.java` / `GlobalExceptionHandler.java:63–70`.
@@ -247,7 +267,8 @@
 - Фазы 1–10: ✅ закрыты (миграция 13/13 компонентов, AppContext удалён, тестовая пирамида построена)
 - Бэклог P1, P2 (e2e), CI-фиксы: ✅ закрыты 2026-10-22/23
 - **Фаза 11 (аудит бэкенда P0/P1): ✅ закрыта 2026-10-23** (`8880928`, `898552a`).
-- **Фаза 12 (P1-остатки аудита): ✅ выполнена 2026-10-23**, диффы в рабочем дереве (не коммитятся). Остатки P2/P3 — в «Next Step»
+- **Фаза 12 (P1-остатки аудита): ✅ выполнена 2026-10-23**, диффы в рабочем дереве (не коммитятся).
+- **Фаза 13 (Polish & Logic, UX походов): ✅ выполнена 2026-10-23** (date picker, CustomSelect, formatRub, soft-disable, синхронизация вкладок), диффы в рабочем дереве. Остатки P2/P3 — в «Next Step»
 
 ## Completed
 
