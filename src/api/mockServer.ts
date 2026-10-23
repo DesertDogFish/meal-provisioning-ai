@@ -33,10 +33,11 @@ interface MockSubstitution {
   id: string;
   recipeId: string;
   fromIngredientId: string | null; // null = позиция добавлена руками
-  toIngredientId: string;          // 'to' при замене или сам продукт при добавлении
+  toIngredientId: string | null;   // null = позиция мягко удалена из расчёта похода
   amountPerServing: number;        // количество на порцию (для расчёта закупки)
   ratio: number;
   added: boolean;
+  removed?: boolean;               // true = мягкое удаление (рецепт в каталоге не тронут)
   comment?: string;
 }
 const substitutions: Record<string, MockSubstitution[]> = {};
@@ -44,15 +45,12 @@ let substitutionSeq = 1;
 
 /** Фаза 13 (п.6): мягкое удаление позиции «в рамках похода» — то же замещение,
  * но с toIngredientId=null (продукт убирается из расчёта, рецепт в каталоге не меняется).
- * Единый тип: Omit+`| null` вместо переопределения поля (совместимо с strict TS). */
-interface MockRemoved extends Omit<MockSubstitution, 'toIngredientId'> {
-  toIngredientId: null;
-}
-const removedItems: Record<string, MockRemoved[]> = {};
+ * Legacy-хранилище removedItems объединяется с substitutions на чтении (GET/агрегация). */
+const removedItems: Record<string, MockSubstitution[]> = {};
 let removedSeq = 1;
 
 /** Все пер-походные правки состава (замещения + удаления) одним списком. */
-function allTripEdits(tripId: string): Array<MockSubstitution | MockRemoved> {
+function allTripEdits(tripId: string): MockSubstitution[] {
   return [...(substitutions[tripId] || []), ...(removedItems[tripId] || [])];
 }
 
@@ -867,8 +865,11 @@ export const mockServer = {
         };
       });
 
-      const totalPlannedCost = items.reduce((sum, i) => sum + (i.plannedCost || 0), 0);
-      const totalActualCost = items.reduce((sum, i) => sum + (i.actualCost || 0), 0);
+      // Фаза 14: итоги — целые рубли; позиции и цены за единицу остаются точными.
+      const totalPlannedCostExact = items.reduce((sum, i) => sum + (i.plannedCost || 0), 0);
+      const totalActualCostExact = items.reduce((sum, i) => sum + (i.actualCost || 0), 0);
+      const totalPlannedCost = Math.round(totalPlannedCostExact);
+      const totalActualCost = Math.round(totalActualCostExact);
       const deltaPercent = totalPlannedCost > 0 ? ((totalActualCost - totalPlannedCost) / totalPlannedCost) * 100 : null;
 
       return {
@@ -893,7 +894,7 @@ export const mockServer = {
       }
       return [
         ...(substitutions[tripId] || []),
-        ...(removedItems[tripId] || []).map(r => ({ ...r, toIngredientId: null })),
+        ...(removedItems[tripId] || []),
       ];
     }
 
@@ -917,17 +918,35 @@ export const mockServer = {
         throw { status: 400, message: 'Bad request', detail: 'From and to ingredients must be different' };
       }
       const list = substitutions[tripId] || (substitutions[tripId] = []);
-      if (fromId != null && list.some(s => s.recipeId === recipeId && String(s.fromIngredientId) === fromId)) {
-        throw { status: 409, message: 'Conflict', detail: 'Substitution already exists for this ingredient in this recipe' };
+      // одна правка на позицию блюда (замена/удаление) — как unique(trip,recipe,from) на бэкенде
+      if (fromId != null && allTripEdits(tripId).some(s => s.recipeId === recipeId && String(s.fromIngredientId) === fromId)) {
+        throw { status: 409, message: 'Conflict', detail: 'This position already has a trip-level edit' };
+      }
+      if (toId == null) {
+        // мягкое удаление позиции «в рамках похода» (рецепт в каталоге не трогается)
+        const created: MockSubstitution = {
+          id: `rmv-${removedSeq++}`,
+          recipeId,
+          fromIngredientId: fromId,
+          toIngredientId: null,
+          amountPerServing: Number(body?.amountPerServing ?? 0),
+          ratio: 1,
+          added: false,
+          removed: true,
+          comment: body?.comment,
+        };
+        (removedItems[tripId] || (removedItems[tripId] = [])).push(created);
+        return created;
       }
       const created: MockSubstitution = {
         id: `sub-${substitutionSeq++}`,
         recipeId,
         fromIngredientId: fromId,
-        toIngredientId: toId as string,
+        toIngredientId: toId,
         amountPerServing: Number(body?.amountPerServing ?? 0),
         ratio: Number(body?.ratio ?? 1) || 1,
         added: fromId == null,
+        removed: false,
         comment: body?.comment,
       };
       list.push(created);
@@ -940,9 +959,10 @@ export const mockServer = {
       if (!trips.find(t => t.id === tripId)) {
         throw { status: 404, message: 'Not found', detail: `Trip ${tripId} not found` };
       }
-      const before = (substitutions[tripId] || []).length;
+      const before = allTripEdits(tripId).length;
       substitutions[tripId] = (substitutions[tripId] || []).filter(s => s.id !== parts[3]);
-      return (substitutions[tripId]?.length ?? 0) === before ? null : { status: 'deleted' };
+      removedItems[tripId] = (removedItems[tripId] || []).filter(s => s.id !== parts[3]);
+      return allTripEdits(tripId).length === before ? null : { status: 'deleted' };
     }
 
     // PUT /trips/:id/shopping-exclusions — список ingredientId, исключаемых из расчёта
@@ -993,7 +1013,7 @@ export const mockServer = {
       if (list.some(r => r.recipeId === recipeId && String(r.fromIngredientId) === fromId)) {
         return list.find(r => r.recipeId === recipeId && String(r.fromIngredientId) === fromId);
       }
-      const created: MockRemoved = {
+      const created: MockSubstitution = {
         id: `rmv-${removedSeq++}`,
         recipeId,
         fromIngredientId: fromId,
@@ -1001,6 +1021,7 @@ export const mockServer = {
         amountPerServing: Number(body?.amountPerServing ?? 0),
         ratio: 1,
         added: false,
+        removed: true,
         comment: body?.comment,
       };
       list.push(created);
@@ -1051,10 +1072,10 @@ export const mockServer = {
           hasMissingPrices: shoppingData.hasMissingPrices,
           missingIngredients: shoppingData.missingIngredients,
           totalPersonMeals,
-          plannedCostPerDefaultPerson: shoppingData.totalPlannedCost / defaultPeople,
-          actualCostPerDefaultPerson: shoppingData.totalActualCost / defaultPeople,
-          plannedCostPerPersonMeal: shoppingData.totalPlannedCost / totalPersonMeals,
-          actualCostPerPersonMeal: shoppingData.totalActualCost / totalPersonMeals,
+          plannedCostPerDefaultPerson: Math.round(shoppingData.totalPlannedCost / defaultPeople),
+          actualCostPerDefaultPerson: Math.round(shoppingData.totalActualCost / defaultPeople),
+          plannedCostPerPersonMeal: Math.round(shoppingData.totalPlannedCost / totalPersonMeals),
+          actualCostPerPersonMeal: Math.round(shoppingData.totalActualCost / totalPersonMeals),
           caloriesPerPersonMeal: null // Не считаем в mock
         }
       };

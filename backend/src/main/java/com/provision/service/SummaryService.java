@@ -47,6 +47,19 @@ public class SummaryService {
                 .setScale(3, RoundingMode.HALF_UP);
     }
 
+    /**
+     * Фаза 14 (требование пользователя): все ИТОГОВЫЕ суммы похода округляются до целых
+     * рублей; промежуточные цены за единицу и стоимости отдельных позиций остаются в копейках
+     * («в расчёте используем нормальную цену»), иначе «На человека» при малых суммах
+     * округлялось бы к нулю.
+     */
+    static BigDecimal roundToRub(BigDecimal value) {
+        if (value == null) {
+            return null;
+        }
+        return value.setScale(0, RoundingMode.HALF_UP);
+    }
+
     public Optional<IngredientPrice> findPriceForDate(Long ingredientId, LocalDate date) {
         return priceRepository.findEffectivePrice(ingredientId, date);
     }
@@ -203,10 +216,11 @@ public class SummaryService {
 
         BigDecimal deltaPercent = calculateDeltaPercent(totalPlannedCost, totalActualCost);
 
+        // Фаза 14: итоговые суммы — целые рубли (позиции и цены за единицу остаются точными).
         return new ShoppingListResponse(
                 items,
-                totalPlannedCost,
-                totalActualCost,
+                roundToRub(totalPlannedCost),
+                roundToRub(totalActualCost),
                 deltaPercent,
                 overriddenCount,
                 hasMissingPrices,
@@ -344,8 +358,8 @@ public class SummaryService {
                     return new DayShoppingResponse(
                             day.getDayDate().toString(),
                             items,
-                            dayPlannedCost,
-                            dayActualCost,
+                            roundToRub(dayPlannedCost),   // Фаза 14: итоги — целые рубли
+                            roundToRub(dayActualCost),
                             hasMissingPrices
                     );
                 })
@@ -417,14 +431,20 @@ public class SummaryService {
                 })
                 .toList();
 
-        BigDecimal plannedCostPerDefaultPerson = shoppingList.totalPlannedCost()
-                .divide(BigDecimal.valueOf(trip.getDefaultPeople()), 2, RoundingMode.HALF_UP);
-        
-        BigDecimal actualCostPerDefaultPerson = shoppingList.totalActualCost()
-                .divide(BigDecimal.valueOf(trip.getDefaultPeople()), 2, RoundingMode.HALF_UP);
-        
+        // Фаза 14: все ИТОГОВЫЕ суммы — целые рубли; промежуточный расчёт (позиции, цены за ед.)
+        // остаётся точным. Деление на людей идёт от точного total до округления.
+        BigDecimal plannedCostPerDefaultPerson = roundToRub(shoppingList.totalPlannedCost()
+                .divide(BigDecimal.valueOf(trip.getDefaultPeople()), 2, RoundingMode.HALF_UP));
+
+        BigDecimal actualCostPerDefaultPerson = roundToRub(shoppingList.totalActualCost()
+                .divide(BigDecimal.valueOf(trip.getDefaultPeople()), 2, RoundingMode.HALF_UP));
+
         BigDecimal plannedCostPerPersonMeal = finalTotalPersonMeals > 0
-                ? shoppingList.totalPlannedCost().divide(BigDecimal.valueOf(finalTotalPersonMeals), 2, RoundingMode.HALF_UP)
+                ? roundToRub(shoppingList.totalPlannedCost().divide(BigDecimal.valueOf(finalTotalPersonMeals), 2, RoundingMode.HALF_UP))
+                : BigDecimal.ZERO;
+
+        BigDecimal actualCostPerPersonMeal = finalTotalPersonMeals > 0
+                ? roundToRub(shoppingList.totalActualCost().divide(BigDecimal.valueOf(finalTotalPersonMeals), 2, RoundingMode.HALF_UP))
                 : BigDecimal.ZERO;
         
         BigDecimal actualCostPerPersonMeal = finalTotalPersonMeals > 0
