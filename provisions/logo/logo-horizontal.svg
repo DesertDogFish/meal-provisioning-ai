@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 200" fill="none" role="img" aria-label="Провиант — логотип">
+  <defs>
+    <linearGradient id="sail" x1="210" y1="140" x2="348" y2="319" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFC46B"/>
+      <stop offset=".55" stop-color="#F08A2E"/>
+      <stop offset="1" stop-color="#E4571B"/>
+    </linearGradient>
+    <linearGradient id="refl" x1="248" y1="341" x2="248" y2="413" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#C46A2A" stop-opacity=".5"/>
+      <stop offset="1" stop-color="#C46A2A" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <g transform="translate(-33.3 7.85) scale(.36)">
+    <path d="M187 341 L324 341 L248 413 Z" fill="url(#refl)"/>
+    <path d="M210 140 Q294 209 348 319 L210 319 Z" fill="url(#sail)" stroke="url(#sail)" stroke-width="8" stroke-linejoin="round"/>
+    <path d="M209 102 L234 132 L224 126 L216.5 132 L209 126 L201.5 132 L194 126 L184 132 Z" fill="#F5F2EA" stroke="#F5F2EA" stroke-width="5" stroke-linejoin="round"/>
+    <path d="M135 331 C155 325 175 337 195 331 C215 325 235 337 255 331 C275 325 295 337 315 331 C335 325 355 337 375 331" stroke="#F5F2EA" stroke-width="7" stroke-linecap="round"/>
+  </g>
+  <text x="129" y="104" font-family="Unbounded, Manrope, Arial, sans-serif" font-weight="700" font-size="54" letter-spacing="4" fill="#EDF4F7">ПРОВИАНТ</text>
+  <text x="132" y="144" font-family="Manrope, Arial, sans-serif" font-weight="600" font-size="15" letter-spacing="6.4" fill="#8FA6B2">ЕДА ДЛЯ ГОР И МОРЯ</text>
+</svg>

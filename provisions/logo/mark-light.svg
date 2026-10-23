@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none" role="img" aria-label="Провиант — знак для светлого фона">
+  <defs>
+    <linearGradient id="sailL" x1="210" y1="140" x2="348" y2="319" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#F79A3E"/>
+      <stop offset=".55" stop-color="#E8622C"/>
+      <stop offset="1" stop-color="#C24E12"/>
+    </linearGradient>
+    <linearGradient id="reflL" x1="248" y1="341" x2="248" y2="413" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#C24E12" stop-opacity=".35"/>
+      <stop offset="1" stop-color="#C24E12" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <path d="M187 341 L324 341 L248 413 Z" fill="url(#reflL)"/>
+  <path d="M210 140 Q294 209 348 319 L210 319 Z" fill="url(#sailL)" stroke="url(#sailL)" stroke-width="8" stroke-linejoin="round"/>
+  <!-- вершина чернильная: на светлом снежная заливка не читается -->
+  <path d="M209 102 L234 132 L224 126 L216.5 132 L209 126 L201.5 132 L194 126 L184 132 Z" fill="#10202B" stroke="#10202B" stroke-width="5" stroke-linejoin="round"/>
+  <path d="M135 331 C155 325 175 337 195 331 C215 325 235 337 255 331 C275 325 295 337 315 331 C335 325 355 337 375 331" stroke="#12877A" stroke-width="7" stroke-linecap="round"/>
+</svg>
