@@ -344,7 +344,7 @@ export default function RecipesPage() {
                   <span className="px-2 py-0.5 text-xs font-medium rounded-full" style={{ background: 'rgba(56, 189, 248, 0.14)', color: '#9BD8F5' }}>
                     {mealTypeLabels[selected.mealType]}
                   </span>
-                  {selected.category && <span className="capitalize">{humanizeCategory(selected.category)}</span>}
+                  {selected.category && <span className="recipe-category-badge">{humanizeCategory(selected.category)}</span>}
                   <span>{selected.baseServings} {servingsWord(selected.baseServings)}</span>
                   {selected.caloriesPerServing && <span>{Math.round(selected.caloriesPerServing)} ккал/{servingsWord(1)} · рассчитано из продуктов</span>}
                 </div>
