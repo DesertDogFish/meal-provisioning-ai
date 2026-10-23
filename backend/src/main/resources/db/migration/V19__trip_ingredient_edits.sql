@@ -1,4 +1,4 @@
--- V17__trip_ingredient_edits.sql (Фаза 14, N3)
+-- V19__trip_ingredient_edits.sql (Фаза 14, N3)
 -- Пер-походные правки состава блюда: добавление руками и мягкое удаление.
 -- Таблица trip_ingredient_substitutions расширяется флагами added/removed;
 -- from/to становятся nullable (добавление: from IS NULL; удаление: to IS NULL).

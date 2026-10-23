@@ -30,7 +30,11 @@ const RECIPE_OMELET = {
   baseServings: 2,
   ingredients: [
     { ingredientId: 'ing-egg', ingredient: ING_EGG, amount: 4 }, // 2 яйца/порция
-    { ingredientId: 'ing-bread', ingredient: ING_BREAD, amount: 200 }, // 200 г = 0.2 кг/порция (цена задаётся в ₽/кг)
+    // FIX (T0, зелёный main): контракт единиц — KG/L хранят БАЗОВЫЕ единицы
+    // (кг/л), как в calc.test.ts (KCAL-01: 0.08 KG), backend KcalCalculator и
+    // фикстурах contract.test.ts (гречка 1.8 KG). Раньше было `200` («граммы»),
+    // что давало расхождение ×1000 в CR-тесте ккал (250186 вместо 436).
+    { ingredientId: 'ing-bread', ingredient: ING_BREAD, amount: 0.2 }, // 0.2 кг = 200 г/порция (цена ₽/кг)
   ],
 };
 
@@ -134,7 +138,7 @@ describe('calculateMenuByDays', () => {
     const meal = menu[0].meals[0];
     expect(meal.recipeName).toBe('Unknown'); // name не задан в рецепте → Unknown
     expect(meal.ingredients.find(i => i.name === 'Яйцо')!.amount).toBe(8); // 2*4
-    expect(meal.ingredients.find(i => i.name === 'Хлеб')!.amount).toBeCloseTo(400); // 200 г × (4/2 порции) = 400 г
+    expect(meal.ingredients.find(i => i.name === 'Хлеб')!.amount).toBeCloseTo(0.4); // 0.2 кг × (4/2 порции) = 0.4 кг = 400 г
   });
 });
 

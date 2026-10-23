@@ -85,6 +85,12 @@ jobs:
       
       - run: npm run lint
       
+      # FIX (T0, гейты CI): typecheck как отдельный blocking-шаг — ловит ошибки
+      # вроде parseDate в DatePicker.tsx (react-datepicker v9), которые vite build
+      # не проверяет (esbuild стирает типы).
+      - name: Typecheck
+        run: npm run typecheck
+      
       - run: npm run build
       
       - name: Frontend tests

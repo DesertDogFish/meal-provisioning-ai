@@ -16,8 +16,10 @@ class SummaryServiceTest {
 
     @BeforeEach
     void setUp() {
-        // Создаём сервис без моков для простых unit-тестов
-        summaryService = new SummaryService(null, null, null, null, null);
+        // Создаём сервис без моков для простых unit-тестов (тестируются только
+        // чистые методы calculateEffectivePeople/calculateAmount*). Фаза 14 (N3):
+        // конструктор требует 6-й аргумент TripIngredientEditService — передаём null.
+        summaryService = new SummaryService(null, null, null, null, null, null);
     }
 
     @Test

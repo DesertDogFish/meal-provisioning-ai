@@ -35,6 +35,10 @@ class PriceOverrideTest {
     private TripPriceOverrideRepository overrideRepository;
     @Mock
     private TripIngredientSubstitutionRepository substitutionRepository;
+    // Фаза 14 (N3): SummaryService требует TripIngredientEditService (6-й аргумент).
+    // Реальный сервис на моке substitutionRepository: findAllEditsForTrip → пустой
+    // список (стаб ниже) → правок состава нет, поведение теста не меняется.
+    private TripIngredientEditService tripIngredientEditService;
 
     private PriceResolutionService priceResolutionService;
     private SummaryService summaryService;
@@ -50,7 +54,11 @@ class PriceOverrideTest {
         MockitoAnnotations.openMocks(this);
         
         priceResolutionService = new PriceResolutionService(priceRepository, overrideRepository);
-        summaryService = new SummaryService(tripRepository, priceRepository, recipeRepository, priceResolutionService, substitutionRepository);
+        // Фаза 14 (N3): 6-й аргумент. Реальный сервис на моке substitutionRepository:
+        // findAllEditsForTrip → пустой список (стаб ниже) → правок состава нет.
+        lenient().when(substitutionRepository.findAllEditsForTrip(any())).thenReturn(List.of());
+        tripIngredientEditService = new TripIngredientEditService(substitutionRepository, null);
+        summaryService = new SummaryService(tripRepository, priceRepository, recipeRepository, priceResolutionService, substitutionRepository, tripIngredientEditService);
 
         // FIX P1 (аудит): getShoppingList теперь грузит плановые цены пакетным запросом
         // findLatestPricesAsOfForIngredients вместо per-ingredient findEffectivePrice.
