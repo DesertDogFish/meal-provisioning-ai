@@ -25,6 +25,7 @@ public class SummaryService {
     private final RecipeRepository recipeRepository;
     private final PriceResolutionService priceResolutionService;
     private final TripIngredientSubstitutionRepository substitutionRepository;
+    private final TripIngredientEditService tripIngredientEditService; // Фаза 14 (N3)
 
     public int calculateEffectivePeople(Trip trip, TripDay day, TripMeal meal) {
         if (meal != null && meal.getPeopleOverride() != null) {
@@ -103,21 +104,32 @@ public class SummaryService {
         Map<Long, BigDecimal> overrides = priceResolutionService.getAllOverrides(tripId);
         Map<Long, ShoppingAggregation> aggregation = new LinkedHashMap<>();
 
+        // Фаза 14 (N3): пер-походные правки состава (замены/добавления/удаления),
+        // применяются ДО агрегации по ингредиентам. Рецепт в каталоге не трогается.
+        TripIngredientEditService.TripEditBundle edits = tripIngredientEditService.bundleForTrip(tripId);
+
         for (TripDay day : trip.getDays()) {
             for (TripMeal meal : day.getMeals()) {
                 int mealPeople = calculateEffectivePeople(trip, day, meal);
                 Recipe recipe = meal.getRecipe();
 
-                for (RecipeIngredient ri : recipe.getIngredients()) {
+                List<TripIngredientEditService.EffectiveLine> lines = tripIngredientEditService.applyEdits(
+                        tripId, recipe, recipe.getIngredients(),
+                        edits.subsFor(recipe.getId()), edits.addedFor(recipe.getId()));
+
+                for (TripIngredientEditService.EffectiveLine line : lines) {
                     BigDecimal mealAmount = calculateAmountForMeal(
-                            ri.getAmount(),
+                            line.amountPerServing(),
                             recipe.getBaseServings(),
                             mealPeople
                     );
 
-                    aggregation.computeIfAbsent(ri.getIngredient().getId(), k -> 
-                            new ShoppingAggregation(ri.getIngredient()))
-                            .addAmount(mealAmount);
+                    ShoppingAggregation agg = aggregation.computeIfAbsent(line.ingredient().getId(), k ->
+                            new ShoppingAggregation(line.ingredient()));
+                    agg.addAmount(mealAmount);
+                    if (agg.substitutedFromName == null && line.substitutedFromName() != null) {
+                        agg.substitutedFromName = line.substitutedFromName();
+                    }
                 }
             }
         }
@@ -185,7 +197,7 @@ public class SummaryService {
                     packs.packsToBuy(),    // FIX (P1): ceil(total/packSize) при roundToPacks
                     packs.buyAmount(),     // FIX (P1): сколько реально покупать
                     packs.leftoverAmount(),// FIX (P1): излишек
-                    null   // substitutedFrom
+                    agg.substitutedFromName   // Фаза 14: имя замещённого продукта (null = без замены)
             ));
         }
 
@@ -223,6 +235,19 @@ public class SummaryService {
                 }
             }
         }
+
+        // Фаза 14 (N3): правки состава похода + id замещённых продуктов в ценовой набор
+        TripIngredientEditService.TripEditBundle dayEdits = tripIngredientEditService.bundleForTrip(tripId);
+        for (Map<Long, TripIngredientSubstitution> subs : dayEdits.substitutionsByRecipeAndFrom().values()) {
+            for (TripIngredientSubstitution sub : subs.values()) {
+                if (sub.getToIngredient() != null) allIngredientIds.add(sub.getToIngredient().getId());
+            }
+        }
+        for (List<TripIngredientSubstitution> added : dayEdits.addedByRecipe().values()) {
+            for (TripIngredientSubstitution a : added) {
+                if (a.getToIngredient() != null) allIngredientIds.add(a.getToIngredient().getId());
+            }
+        }
         LocalDate rangeEnd = trip.getEndDate();
         Map<Long, IngredientPrice> basePrices = loadLatestPrices(allIngredientIds, rangeEnd);
         Map<Long, List<IngredientPrice>> priceSeries = new HashMap<>();
@@ -245,16 +270,24 @@ public class SummaryService {
                         int mealPeople = calculateEffectivePeople(trip, day, meal);
                         Recipe recipe = meal.getRecipe();
 
-                        for (RecipeIngredient ri : recipe.getIngredients()) {
+                        // Фаза 14 (N3): тот же пер-походный edits-bundle, что и в общей закупке
+                        List<TripIngredientEditService.EffectiveLine> lines = tripIngredientEditService.applyEdits(
+                                tripId, recipe, recipe.getIngredients(),
+                                dayEdits.subsFor(recipe.getId()), dayEdits.addedFor(recipe.getId()));
+
+                        for (TripIngredientEditService.EffectiveLine line : lines) {
                             BigDecimal mealAmount = calculateAmountForMeal(
-                                    ri.getAmount(),
+                                    line.amountPerServing(),
                                     recipe.getBaseServings(),
                                     mealPeople
                             );
 
-                            dayAggregation.computeIfAbsent(ri.getIngredient().getId(), k -> 
-                                    new ShoppingAggregation(ri.getIngredient()))
-                                    .addAmount(mealAmount);
+                            ShoppingAggregation agg = dayAggregation.computeIfAbsent(line.ingredient().getId(), k ->
+                                    new ShoppingAggregation(line.ingredient()));
+                            agg.addAmount(mealAmount);
+                            if (agg.substitutedFromName == null && line.substitutedFromName() != null) {
+                                agg.substitutedFromName = line.substitutedFromName();
+                            }
                         }
                     }
 
@@ -304,7 +337,7 @@ public class SummaryService {
                                 packs.packsToBuy(),    // FIX (P1): ceil(total/packSize) при roundToPacks
                                 packs.buyAmount(),     // FIX (P1): сколько реально покупать
                                 packs.leftoverAmount(),// FIX (P1): излишек
-                                null   // substitutedFrom
+                                agg.substitutedFromName   // Фаза 14: имя замещённого продукта
                         ));
                     }
 
@@ -433,6 +466,8 @@ public class SummaryService {
     private static class ShoppingAggregation {
         private final Ingredient ingredient;
         private BigDecimal totalAmount = BigDecimal.ZERO;
+        /** Фаза 14: имя продукта, замещённого пер-походной правкой (для колонки substitutedFrom). */
+        private String substitutedFromName;
 
         ShoppingAggregation(Ingredient ingredient) {
             this.ingredient = ingredient;

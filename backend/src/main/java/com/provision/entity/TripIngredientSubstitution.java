@@ -28,13 +28,28 @@ public class TripIngredientSubstitution {
     @JoinColumn(name = "recipe_id", nullable = false)
     private Recipe recipe;
 
+    // Фаза 14 (N3): from = null => позиция добавлена руками; to = null => мягко удалена.
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "from_ingredient_id", nullable = false)
+    @JoinColumn(name = "from_ingredient_id")
     private Ingredient fromIngredient;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "to_ingredient_id", nullable = false)
+    @JoinColumn(name = "to_ingredient_id")
     private Ingredient toIngredient;
+
+    /** true = продукт добавлен в блюдо вручную в рамках похода (не из рецепта). */
+    @Column(nullable = false)
+    @Builder.Default
+    private boolean added = false;
+
+    /** true = продукт убран из расчёта закупки в рамках похода (рецепт не тронут). */
+    @Column(nullable = false)
+    @Builder.Default
+    private boolean removed = false;
+
+    /** Количество на порцию для вручную добавленных позиций (расчёт закупки). */
+    @Column(name = "amount_per_serving", precision = 14, scale = 3)
+    private BigDecimal amountPerServing;
 
     @Column(nullable = false, precision = 10, scale = 4)
     @Builder.Default
