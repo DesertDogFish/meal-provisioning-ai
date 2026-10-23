@@ -48,11 +48,11 @@ cors:
 integration:
   off:
     products-url: https://world.openfoodfacts.org
-    prices-url: https://prices.openfoodfacts.org
-    # Учётная запись на world.openfoodfacts.org (обход лимитов анонимных 503/429).
-    # Значения — ТОЛЬКО из ENV, в git не коммитить. Пусто => анонимный режим.
-    user-id: ${OFF_USER_ID:}
-    password: ${OFF_PASSWORD:}
+    # Цены через OFF НЕ синхронизируются: OFF не предоставляет актуальные
+    # локальные цены в RUB для РФ. Провайдер используется только для
+    # идентификации/обогащения карточек продуктов (штрихкод, название,
+    # бренд, фасовка, фото). Цены вводятся вручную или импортируются
+    # из другого источника.
 
 springdoc:
   api-docs:

@@ -1,146 +1,89 @@
 package com.provision.integration;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.provision.exception.IntegrationAuthException;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
-import org.springframework.util.StringUtils;
 import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.client.RestClient;
-import org.springframework.web.util.UriComponentsBuilder;
 
 import java.math.BigDecimal;
-import java.net.URI;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+/**
+ * Провайдер Open Food Facts.
+ *
+ * Реализация приведена в соответствие с официальной документацией OFF
+ * (https://openfoodfacts.github.io/openfoodfacts-server/api/):
+ *
+ * 1. READ-операции (поиск продуктов) НЕ требуют авторизации — параметры
+ *    user_id/password из GET-запросов убраны (для чтения аккаунт не нужен).
+ *
+ * 2. Обязательный User-Agent в формате "AppName/Version (ContactEmail)" —
+ *    без него OFF блокирует запросы как ботовые (503).
+ *
+ * 3. Клиентский rate limiting: поиск ограничен 10 запросами в минуту на IP,
+ *    поэтому вызовы сериализуются семафором + паузой ~6.5 c между запросами.
+ *
+ * 4. Обработка 429/503: WARN-логирование, экспоненциальный backoff
+ *    (с учётом заголовка Retry-After, если он есть), максимум 3 повтора;
+ *    при финальном провале — graceful degradation (пустой список вместо
+ *    исключения).
+ *
+ * 5. Цены: карточки продуктов ОFF обогащает данными (штрихкод, название,
+ *    бренд, фасовка, фото), но локальных цен в RUB для России НЕ предоставляет.
+ *    Синхронизация цен через OFF отключена: fetchPrices() — заглушка,
+ *    logOnly-сообщение "OFF does not provide local prices...".
+ */
 @Component
 @Slf4j
 public class OpenFoodFactsProvider implements PriceProvider {
 
+    /**
+     * User-Agent строго по доке OFF: "AppName/Version (ContactEmail)".
+     */
+    private static final String USER_AGENT = "ProvisionApp/1.0.0 (support@provision.app)";
+
+    /** Лимит OFF на поиск: 10 запросов в минуту => минимум 6 секунд между ними. */
+    private static final Duration MIN_SEARCH_INTERVAL = Duration.ofMillis(6500);
+
+    /** Максимум повторных попыток при 429/5xx. */
+    private static final int MAX_RETRIES = 3;
+
     private final RestClient restClient;
+
+    /** Двусторонний семафор: одновременно только один поисковый запрос... */
+    private final Semaphore searchPermits = new Semaphore(1, true);
+
+    /** ...плюс глобальная тротлинг-пауза между последовательными запросами. */
+    private volatile Instant lastSearchAt = Instant.EPOCH;
 
     @Value("${integration.off.products-url:https://world.openfoodfacts.org}")
     private String productsUrl;
 
-    @Value("${integration.off.prices-url:https://prices.openfoodfacts.org}")
-    private String pricesUrl;
-
-    // Учётная запись на world.openfoodfacts.org для обхода лимитов анонимных
-    // запросов (503/429). Пустые значения => анонимный режим.
-    // Значения приходят только из ENV (OFF_USER_ID / OFF_PASSWORD), не из git.
-    @Value("${integration.off.user-id:${OFF_USER_ID:}}")
-    private String offUserId;
-
-    @Value("${integration.off.password:${OFF_PASSWORD:}}")
-    private String offPassword;
-
     public OpenFoodFactsProvider() {
         this.restClient = RestClient.builder()
-                .defaultHeader("User-Agent", "Provision/1.0 (admin@provision.app)")
+                .defaultHeader(HttpHeaders.USER_AGENT, USER_AGENT)
                 .build();
     }
 
-    private boolean hasCredentials() {
-        return StringUtils.hasText(offUserId) && StringUtils.hasText(offPassword);
-    }
-
-    /**
-     * Добавляет user_id/password к query, если креды заданы.
-     * Ручное склейвание строк с URLEncoder убрано: оно ломало передачу
-     * пароля со спецсимволами (#/@) — OFF отвечал 403.
-     */
-    private UriComponentsBuilder withAuth(UriComponentsBuilder builder) {
-        if (hasCredentials()) {
-            builder.queryParam("user_id", offUserId)
-                   .queryParam("password", offPassword);
-        }
-        return builder;
-    }
-
-    /**
-     * Безопасная сборка URI. build()+encode() НЕ подходит: Spring считает
-     * '@' разрешённым символом QUERY_PARAM и оставляет его в пароле как есть,
-     * из-за чего OFF не добирает креды (403). Поэтому значения кодируются
-     * явно через URLEncoder (%23 для #, %40 для @), а URI собирается
-     * build(true) без двойного кодирования ('%' — валидный символ query).
-     */
-    private URI buildUri(UriComponentsBuilder builder) {
-        String base = builder.toUriString().split("\\?")[0];
-        UriComponentsBuilder encoded = UriComponentsBuilder.fromUriString(base);
-        builder.build().getQueryParams().forEach((key, values) ->
-                values.forEach(v -> encoded.queryParam(key, encodeQueryValue(v))));
-        return encoded.build(true).toUri();
-    }
-
-    private static String encodeQueryValue(String value) {
-        try {
-            // application/x-www-form-urlencoded: пробел -> '+', остальные
-            // спецсимволы -> percent-encoding. Для email/пароля/кириллицы — то,
-            // что ожидает OFF (совпадает с --data-urlencode в curl).
-            return java.net.URLEncoder.encode(value, java.nio.charset.StandardCharsets.UTF_8);
-        } catch (Exception e) {
-            throw new IllegalStateException("Failed to encode query param", e);
-        }
-    }
-
     @PostConstruct
-    void logAuthMode() {
-        if (hasCredentials()) {
-            log.info("Open Food Facts provider running in AUTHENTICATED mode (user: {})",
-                    offUserId.replaceAll("(^.).*(@.*)", "$1***$2"));
-        } else {
-            log.warn("OFF credentials not set, running in anonymous mode");
-        }
-    }
-
-    /**
-     * Формирует человекочитаемое сообщение о сбое внешнего API OFF
-     * (5xx/429) с учётом наличия учётных записей.
-     */
-    private String describeOffFailure(HttpStatusCodeException e) {
-        int status = e.getStatusCode().value();
-        boolean rateLimited = status == 503 || status == 429;
-
-        if (rateLimited && !hasCredentials()) {
-            return "Open Food Facts отклонил анонимный запрос (" + status
-                    + "). Требуется регистрация на world.openfoodfacts.org и настройка"
-                    + " OFF_USER_ID/OFF_PASSWORD.";
-        }
-        if (rateLimited) {
-            return "Сервис Open Food Facts временно перегружен (" + status
-                    + "), попробуйте позже.";
-        }
-        return "Open Food Facts недоступен: HTTP " + status;
-    }
-
-    /**
-     * Единая обработка HTTP-ошибок OFF:
-     * 401/403 при переданных кредах — понятная ошибка учётной записи
-     * (IntegrationAuthException -> 502 для клиента, а не 500);
-     * прочие статусы — человекочитаемое описание.
-     */
-    private RuntimeException toOffException(HttpStatusCodeException e) {
-        int status = e.getStatusCode().value();
-        if ((status == 401 || status == 403) && hasCredentials()) {
-            log.error("OFF Auth failed despite credentials present (HTTP {})", status);
-            return new IntegrationAuthException(
-                    "Open Food Facts отклонил авторизацию учётной записи (HTTP " + status
-                            + "). Проверьте OFF_USER_ID/OFF_PASSWORD.", e);
-        }
-        if (status == 401 || status == 403) {
-            return new IntegrationAuthException(
-                    "Open Food Facts требует авторизацию (HTTP " + status
-                            + "). Настройте OFF_USER_ID/OFF_PASSWORD.", e);
-        }
-        return new RuntimeException(describeOffFailure(e), e);
+    void logConfig() {
+        log.info("Open Food Facts provider initialized with User-Agent: {}", USER_AGENT);
+        log.info("OFF is used for product enrichment only (barcode/name/brand/pack/photo). "
+                + "Price sync via OFF is disabled: OFF does not provide local prices.");
     }
 
     @Override
@@ -150,9 +93,11 @@ public class OpenFoodFactsProvider implements PriceProvider {
 
     @Override
     public ConnectionStatus testConnection() {
+        // Проверка доступности — обычный READ-запрос, без авторизации.
         try {
             restClient.get()
-                    .uri(pricesUrl + "/api/v1/prices?size=1")
+                    .uri(productsUrl + "/cgi/search.pl?action=process&json=1"
+                            + "&search_simple=1&page_size=1&fields=code&search_terms=milk")
                     .retrieve()
                     .toBodilessEntity();
             return ConnectionStatus.success();
@@ -164,104 +109,217 @@ public class OpenFoodFactsProvider implements PriceProvider {
 
     @Override
     public List<ExternalProductDto> searchProducts(String query, int limit) {
+        // buildUri/queryParam: БЕЗ user_id/password — чтение не требует аккаунта.
+        String uri = UriStringBuilder.from(productsUrl)
+                .path("/cgi/search.pl")
+                .queryParam("search_simple", 1)
+                .queryParam("action", "process")
+                .queryParam("json", 1)
+                .queryParam("page_size", limit)
+                .queryParam("fields", "code,product_name,brands,quantity,image_url")
+                .queryParam("search_terms", query)
+                .build();
+
+        JsonNode response = executeWithThrottlingAndRetry(uri, "search \"" + query + "\"");
+        if (response == null) {
+            // Graceful degradation: после исчерпания ретраев — пустой результат.
+            return Collections.emptyList();
+        }
+
         List<ExternalProductDto> results = new ArrayList<>();
-        try {
-            // build(true): строгий percent-encoding значений, включая # и @
-            // в пароле (см. buildUri) — иначе OFF отвечает 403.
-            URI uri = buildUri(withAuth(UriComponentsBuilder.fromUriString(productsUrl)
-                    .path("/cgi/search.pl")
-                    .queryParam("search_simple", 1)
-                    .queryParam("action", "process")
-                    .queryParam("json", 1)
-                    .queryParam("page_size", limit)
-                    .queryParam("fields", "code,product_name,brands,quantity,image_url")
-                    .queryParam("search_terms", query)));
+        if (response.has("products")) {
+            for (JsonNode product : response.get("products")) {
+                String code = product.has("code") ? product.get("code").asText() : null;
+                String name = product.has("product_name") ? product.get("product_name").asText() : null;
+                String brand = product.has("brands") ? product.get("brands").asText() : null;
+                String quantity = product.has("quantity") ? product.get("quantity").asText() : null;
+                String imageUrl = product.has("image_url") ? product.get("image_url").asText() : null;
 
-            JsonNode response = restClient.get()
-                    .uri(uri)
-                    .retrieve()
-                    .body(JsonNode.class);
-
-            if (response != null && response.has("products")) {
-                for (JsonNode product : response.get("products")) {
-                    String code = product.has("code") ? product.get("code").asText() : null;
-                    String name = product.has("product_name") ? product.get("product_name").asText() : null;
-                    String brand = product.has("brands") ? product.get("brands").asText() : null;
-                    String quantity = product.has("quantity") ? product.get("quantity").asText() : null;
-                    String imageUrl = product.has("image_url") ? product.get("image_url").asText() : null;
-
-                    if (code != null && name != null) {
-                        PackInfo packInfo = parseQuantity(quantity);
-                        results.add(new ExternalProductDto(
-                                code,
-                                name,
-                                brand,
-                                packInfo.amount(),
-                                packInfo.unit(),
-                                imageUrl
-                        ));
-                    }
+                if (code != null && name != null) {
+                    PackInfo packInfo = parseQuantity(quantity);
+                    results.add(new ExternalProductDto(
+                            code,
+                            name,
+                            brand,
+                            packInfo.amount(),
+                            packInfo.unit(),
+                            imageUrl
+                    ));
                 }
             }
-        } catch (HttpStatusCodeException e) {
-            RuntimeException mapped = toOffException(e);
-            log.error("Failed to search products: {}", mapped.getMessage());
-            throw mapped;
-        } catch (Exception e) {
-            String reason = "Open Food Facts недоступен: " + e.getMessage();
-            log.error("Failed to search products: {}", reason);
-            throw new RuntimeException(reason, e);
         }
         return results;
     }
 
+    /**
+     * Синхронизация цен через OFF ОТКЛЮЧЕНА (бизнес-фикс).
+     *
+     * OFF (включая crowdsourced prices.openfoodfacts.org) не предоставляет
+     * актуальные локальные цены в рублях для РФ: там нет RUB-прайсов российских
+     * магазинов. Попытки парсить цены давали только пустые/мусорные данные и
+     * лишние HTTP-запросы к API, усугубляющие rate limiting.
+     *
+     * Цены необходимо вводить вручную или импортировать из другого источника.
+     */
     @Override
     public List<ExternalPriceDto> fetchPrices(String externalCode, LocalDate since) {
-        List<ExternalPriceDto> results = new ArrayList<>();
+        log.warn("OFF does not provide local prices. Please enter manually or use another source."
+                + " (price sync requested for code {}, ignored)", externalCode);
+        return Collections.emptyList();
+    }
+
+    /**
+     * Единый исполнитель GET-запроса к OFF с клиентским throttling'ом
+     * (10 req/min) и экспоненциальным retry на 429/5xx.
+     *
+     * @return тело ответа JSON, либо null после исчерпания попыток
+     *         (graceful degradation — не роняем вызывающий код).
+     */
+    private JsonNode executeWithThrottlingAndRetry(String uri, String description) {
         try {
-            URI uri = buildUri(UriComponentsBuilder.fromUriString(pricesUrl)
-                    .path("/api/v1/prices")
-                    .queryParam("product_code", externalCode)
-                    .queryParam("order_by", "-date")
-                    .queryParam("size", 20));
-
-            JsonNode response = restClient.get()
-                    .uri(uri)
-                    .retrieve()
-                    .body(JsonNode.class);
-
-            if (response != null && response.has("prices")) {
-                for (JsonNode priceNode : response.get("prices")) {
-                    String code = priceNode.has("product_code") ? priceNode.get("product_code").asText() : null;
-                    BigDecimal price = priceNode.has("price") ? priceNode.get("price").decimalValue() : null;
-                    String currency = priceNode.has("currency") ? priceNode.get("currency").asText() : null;
-                    Long dateEpoch = priceNode.has("date") ? priceNode.get("date").asLong() : null;
-
-                    if (code != null && price != null && currency != null && dateEpoch != null) {
-                        LocalDate date = Instant.ofEpochSecond(dateEpoch)
-                                .atZone(ZoneId.systemDefault())
-                                .toLocalDate();
-
-                        if (since == null || !date.isBefore(since)) {
-                            results.add(new ExternalPriceDto(code, price, currency, date));
-                        }
-                    }
-                }
-            }
-        } catch (HttpStatusCodeException e) {
-            // Цены OFF — второстепенный источник: не роняем синхронизацию,
-            // но 401/403 логируем отдельно как проблему авторизации.
-            if (e.getStatusCode().value() == 401 || e.getStatusCode().value() == 403) {
-                log.error("OFF prices API auth rejected (HTTP {}) for code {}",
-                        e.getStatusCode().value(), externalCode);
-            } else {
-                log.error("Failed to fetch prices for code {}: HTTP {}",
-                        externalCode, e.getStatusCode().value());
-            }
-        } catch (Exception e) {
-            log.error("Failed to fetch prices for code {}: {}", externalCode, e.getMessage());
+            acquireSearchSlot();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            log.warn("Interrupted while waiting for OFF search slot");
+            return null;
         }
-        return results;
+
+        HttpStatusCodeException lastError = null;
+        for (int attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+            try {
+                ResponseEntity<JsonNode> entity = restClient.get()
+                        .uri(uri)
+                        .retrieve()
+                        .onStatus(status -> status.value() == 429 || status.is5xxServerError(),
+                                (request, response) -> {
+                                    // Не выбрасываем сразу: сохраняем тело для парсинга
+                                    throw new OffRateLimitedException(response.getStatusCode().value(),
+                                            readBodyQuietly(response));
+                                })
+                        .toEntity(JsonNode.class);
+                return entity.getBody();
+            } catch (OffRateLimitedException e) {
+                lastError = e;
+                long backoffMs = computeBackoffMs(e, attempt);
+                log.warn("Open Food Facts {} returned HTTP {} (attempt {}/{}), retrying in {} ms",
+                        description, e.getStatusCode().value(), attempt + 1, MAX_RETRIES + 1, backoffMs);
+                if (attempt == MAX_RETRIES) {
+                    break;
+                }
+                sleep(backoffMs);
+            } catch (HttpStatusCodeException e) {
+                // Прочие 4xx — повтор бессмысленен.
+                log.warn("Open Food Facts {} failed with HTTP {}: {}",
+                        description, e.getStatusCode().value(), e.getStatusText());
+                return null;
+            } catch (Exception e) {
+                log.warn("Open Food Facts {} failed: {}", description, e.getMessage());
+                return null;
+            }
+        }
+
+        log.error("Open Food Facts {} unavailable after {} retries (last error: HTTP {}). "
+                + "Returning empty result (graceful degradation).",
+                description, MAX_RETRIES + 1,
+                lastError != null ? lastError.getStatusCode().value() : "n/a");
+        return null;
+    }
+
+    /**
+     * Блокирует слот поиска и выдерживает паузу, чтобы суммарная частота
+     * не превысила 10 запросов в минуту (интервал >= 6.5 с).
+     */
+    private void acquireSearchSlot() throws InterruptedException {
+        searchPermits.acquire();
+        long waitMs = Duration.between(lastSearchAt, Instant.now()).minus(MIN_SEARCH_INTERVAL).toMillis();
+        if (waitMs > 0) {
+            log.debug("Throttling OFF request: sleeping {} ms (limit 10 req/min)", waitMs);
+            TimeUnit.MILLISECONDS.sleep(waitMs);
+        }
+        lastSearchAt = Instant.now();
+    }
+
+    /**
+     * Экспоненциальная пауза: Retry-After от OFF, если задан; иначе 5s, 10s, 20s.
+     */
+    private long computeBackoffMs(HttpStatusCodeException e, int attempt) {
+        String retryAfter = e.getResponseHeaders() != null
+                ? e.getResponseHeaders().getFirst(HttpHeaders.RETRY_AFTER)
+                : null;
+        if (retryAfter != null) {
+            try {
+                long seconds = Long.parseLong(retryAfter.trim());
+                return Math.min(TimeUnit.SECONDS.toMillis(Math.max(seconds, 1)),
+                        TimeUnit.MINUTES.toMillis(5));
+            } catch (NumberFormatException ignored) {
+                // HTTP-date формат Retry-After не поддерживаем — fallback ниже.
+            }
+        }
+        return TimeUnit.SECONDS.toMillis(5L << attempt); // 5s, 10s, 20s
+    }
+
+    private static void sleep(long ms) {
+        try {
+            TimeUnit.MILLISECONDS.sleep(ms);
+        } catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    private static String readBodyQuietly(org.springframework.http.client.ClientHttpResponse response) {
+        try {
+            return new String(response.getBody().readAllBytes(),
+                    java.nio.charset.StandardCharsets.UTF_8);
+        } catch (Exception e) {
+            return "";
+        }
+    }
+
+    /** Внутренний маркер "можно повторить" (429 / 5xx). */
+    private static class OffRateLimitedException extends HttpStatusCodeException {
+        private final String body;
+
+        OffRateLimitedException(int statusCode, String bodyAsString) {
+            super(org.springframework.http.HttpStatus.valueOf(statusCode), "", null,
+                    java.nio.charset.StandardCharsets.UTF_8);
+            this.body = bodyAsString;
+        }
+
+        public String getResponseBodyAsString() {
+            return body != null ? body : "";
+        }
+    }
+
+    /**
+     * Простой сборщик URI с корректным percent-encoding значений
+     * (пробел -> %20, спецсимволы экранируются). Авторизационные параметры
+     * намеренно отсутствуют — READ-запросы OFF анонимны.
+     */
+    private static final class UriStringBuilder {
+        private final StringBuilder sb = new StringBuilder();
+
+        static UriStringBuilder from(String base) {
+            UriStringBuilder b = new UriStringBuilder();
+            b.sb.append(base);
+            return b;
+        }
+
+        UriStringBuilder path(String p) {
+            sb.append(p);
+            return this;
+        }
+
+        UriStringBuilder queryParam(String key, Object value) {
+            sb.append(sb.indexOf("?") >= 0 ? '&' : '?')
+              .append(key).append('=')
+              .append(java.net.URLEncoder.encode(String.valueOf(value),
+                      java.nio.charset.StandardCharsets.UTF_8));
+            return this;
+        }
+
+        String build() {
+            return sb.toString();
+        }
     }
 
     private PackInfo parseQuantity(String quantity) {
