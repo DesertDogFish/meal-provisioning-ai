@@ -17,6 +17,28 @@ public interface IngredientPriceRepository extends JpaRepository<IngredientPrice
     @Query("SELECT ip FROM IngredientPrice ip WHERE ip.ingredient.id = :ingredientId AND ip.effectiveFrom <= :date ORDER BY ip.effectiveFrom DESC LIMIT 1")
     Optional<IngredientPrice> findEffectivePrice(@Param("ingredientId") Long ingredientId, @Param("date") LocalDate date);
     
+    /**
+     * P1 (аудит): последний действующий на date срез цены для каждого ингредиента —
+     * DISTINCT ON вместо загрузки всей таблицы цен в память (priceRepository.findAll()).
+     */
+    @Query(value = "SELECT DISTINCT ON (ip.ingredient_id) ip.* " +
+                   "FROM ingredient_prices ip " +
+                   "WHERE ip.effective_from <= CAST(:date AS DATE) " +
+                   "ORDER BY ip.ingredient_id, ip.effective_from DESC",
+           nativeQuery = true)
+    List<IngredientPrice> findLatestPricesAsOf(@Param("date") LocalDate date);
+
+    /** То же, но только по выбранному набору id ингредиентов (для /prices/relevant-to-trips). */
+    @Query(value = "SELECT DISTINCT ON (ip.ingredient_id) ip.* " +
+                   "FROM ingredient_prices ip " +
+                   "WHERE ip.effective_from <= CAST(:date AS DATE) " +
+                   "  AND ip.ingredient_id IN (:ingredientIds) " +
+                   "ORDER BY ip.ingredient_id, ip.effective_from DESC",
+           nativeQuery = true)
+    List<IngredientPrice> findLatestPricesAsOfForIngredients(
+            @Param("date") LocalDate date,
+            @Param("ingredientIds") java.util.Collection<Long> ingredientIds);
+
     boolean existsByIngredientIdAndEffectiveFrom(Long ingredientId, LocalDate effectiveFrom);
     
     Optional<IngredientPrice> findByIngredientIdAndEffectiveFrom(Long ingredientId, LocalDate effectiveFrom);

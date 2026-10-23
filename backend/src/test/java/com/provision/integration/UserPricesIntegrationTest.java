@@ -98,7 +98,7 @@ class UserPricesIntegrationTest {
     }
 
     private Long readId(MvcResult r) throws Exception {
-        return objectMapper.readTree(r.getResponse().getContentAsString(StandardCharsets.UTF_8)).get("id").asLong();
+        return Long.valueOf(objectMapper.readTree(r.getResponse().getContentAsString(StandardCharsets.UTF_8)).get("id").asText());
     }
 
     @Test
@@ -122,7 +122,7 @@ class UserPricesIntegrationTest {
         // среди ответов должен быть наш ингредиент с актуальной (июльской) ценой, а не февральской
         java.util.List<String> priceTexts = new java.util.ArrayList<>();
         for (var node : objectMapper.readTree(r.getResponse().getContentAsString(StandardCharsets.UTF_8))) {
-            if (node.get("ingredientId").asLong() == ingredientId) {
+            if (Long.parseLong(node.get("ingredientId").asText()) == ingredientId) {
                 priceTexts.add(node.get("pricePerUnit").asText());
             }
         }
@@ -155,7 +155,7 @@ class UserPricesIntegrationTest {
         Assertions.assertTrue(root.isArray(), "ответ должен быть массивом");
         com.fasterxml.jackson.databind.JsonNode ours = null;
         for (var node : root) {
-            if (node.get("ingredientId").asLong() == ingredientId) { ours = node; break; }
+            if (Long.parseLong(node.get("ingredientId").asText()) == ingredientId) { ours = node; break; }
         }
         Assertions.assertNotNull(ours, "наш ингредиент должен присутствовать в ответе");
         // как и в PRICES-02: сравнение BigDecimal по compareTo (scale-insensitive), т.к.

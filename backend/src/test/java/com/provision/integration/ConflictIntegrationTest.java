@@ -112,7 +112,7 @@ class ConflictIntegrationTest {
 
         Map<String, Object> ingredientData = objectMapper.readValue(
                 ingredientResult.getResponse().getContentAsString(StandardCharsets.UTF_8), Map.class);
-        Long ingredientId = ((Number) ingredientData.get("id")).longValue();
+        Long ingredientId = Long.valueOf(ingredientData.get("id").toString());
 
         // Create recipe with this ingredient
         RecipeRequest recipeRequest = new RecipeRequest(
@@ -160,7 +160,7 @@ class ConflictIntegrationTest {
 
         Map<String, Object> ingredientData = objectMapper.readValue(
                 ingredientResult.getResponse().getContentAsString(StandardCharsets.UTF_8), Map.class);
-        Long ingredientId = ((Number) ingredientData.get("id")).longValue();
+        Long ingredientId = Long.valueOf(ingredientData.get("id").toString());
 
         // Create recipe with this ingredient
         RecipeRequest recipeRequest = new RecipeRequest(
@@ -217,7 +217,7 @@ class ConflictIntegrationTest {
 
         Map<String, Object> ingredientData = objectMapper.readValue(
                 ingredientResult.getResponse().getContentAsString(StandardCharsets.UTF_8), Map.class);
-        Long ingredientId = ((Number) ingredientData.get("id")).longValue();
+        Long ingredientId = Long.valueOf(ingredientData.get("id").toString());
 
         // Create recipe
         RecipeRequest recipeRequest = new RecipeRequest(
@@ -238,7 +238,7 @@ class ConflictIntegrationTest {
 
         Map<String, Object> recipeData = objectMapper.readValue(
                 recipeResult.getResponse().getContentAsString(StandardCharsets.UTF_8), Map.class);
-        Long recipeId = ((Number) recipeData.get("id")).longValue();
+        Long recipeId = Long.valueOf(recipeData.get("id").toString());
 
         // Create trip
         TripRequest tripRequest = new TripRequest(
@@ -257,11 +257,11 @@ class ConflictIntegrationTest {
 
         Map<String, Object> tripData = objectMapper.readValue(
                 tripResult.getResponse().getContentAsString(StandardCharsets.UTF_8), Map.class);
-        Long tripId = ((Number) tripData.get("id")).longValue();
+        Long tripId = Long.valueOf(tripData.get("id").toString());
 
         // Get first day ID
         List<Map<String, Object>> days = (List<Map<String, Object>>) tripData.get("days");
-        Long dayId = ((Number) days.get(0).get("id")).longValue();
+        Long dayId = Long.valueOf(days.get(0).get("id").toString());
 
         // Add meal with this recipe
         TripMealRequest mealRequest = new TripMealRequest(
