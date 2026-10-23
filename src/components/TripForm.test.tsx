@@ -52,8 +52,10 @@ describe('TripForm — базовый рендер', () => {
     const { startInput, endInput } = renderTripForm();
     expect(screen.getByText('Новый поход')).toBeTruthy();
     expect(screen.getByLabelText('Название')).toBeTruthy();
-    // Оба пикера отрисованы как input[type=date] с классом DatePicker
-    expect(startInput().type).toBe('date');
+    // ФАЗА 13: пикеры отрисованы как input[type=text] (браузерный нативный
+    // пикер подавлен, единственный календарь — попапер react-datepicker)
+    // с классом DatePicker.
+    expect(startInput().type).toBe('text');
     expect(startInput().className).toContain('date-picker-input');
     expect(endInput().className).toContain('date-picker-input');
     expect(screen.getByLabelText('Количество человек')).toHaveValue(4);
