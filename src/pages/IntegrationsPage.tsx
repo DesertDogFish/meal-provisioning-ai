@@ -271,7 +271,7 @@ export default function IntegrationsPage() {
           <div className="flex items-start gap-4">
             <div className="w-12 h-12 rounded-lg flex items-center justify-center" 
                  style={{ background: 'linear-gradient(135deg, var(--w1), var(--w2))' }}>
-              <Wifi size={24} style={{ color: '#04121A' }} />
+              <Wifi size={24} style={{ color: '#221204' }} />
             </div>
             <div>
               <h2 className="text-xl font-bold" style={{ color: 'var(--text)' }}>Open Food Facts</h2>
@@ -310,8 +310,8 @@ export default function IntegrationsPage() {
               disabled={loading}
               className="flex items-center gap-2 px-4 py-2 rounded-full text-sm font-bold transition-all"
               style={{ 
-                background: 'linear-gradient(90deg, var(--w1), var(--w2))', 
-                color: '#04121A',
+                background: 'var(--grad-brand)', 
+                color: '#221204',
                 opacity: loading ? 0.5 : 1
               }}
             >
@@ -325,8 +325,8 @@ export default function IntegrationsPage() {
                 disabled={syncing}
                 className="flex items-center gap-2 px-4 py-2 rounded-full text-sm font-bold transition-all"
                 style={{ 
-                  background: 'linear-gradient(90deg, var(--w1), var(--w2))', 
-                  color: '#04121A',
+                  background: 'var(--grad-brand)', 
+                  color: '#221204',
                   opacity: syncing ? 0.5 : 1
                 }}
               >
@@ -397,7 +397,7 @@ export default function IntegrationsPage() {
                   <button
                     onClick={handleSearchProducts}
                     className="px-4 py-2 rounded-full text-sm font-bold"
-                    style={{ background: 'linear-gradient(90deg, var(--w1), var(--w2))', color: '#04121A' }}
+                    style={{ background: 'var(--grad-brand)', color: '#221204' }}
                   >
                     Найти
                   </button>
@@ -439,7 +439,7 @@ export default function IntegrationsPage() {
                       <button
                         onClick={() => handleCreateMapping(product)}
                         className="px-3 py-1 rounded-full text-xs font-bold"
-                        style={{ background: 'linear-gradient(90deg, var(--w1), var(--w2))', color: '#04121A' }}
+                        style={{ background: 'var(--grad-brand)', color: '#221204' }}
                       >
                         Привязать
                       </button>

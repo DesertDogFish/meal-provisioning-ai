@@ -69,9 +69,9 @@ export default function ApiModeBadge() {
   };
 
   const getBadgeColor = () => {
-    if (mode === 'real' && apiAvailable) return '#22C55E'; // зелёный
-    if (mode === 'real' && !apiAvailable) return '#EF4444'; // красный
-    return '#F59E0B'; // янтарный для mock
+    if (mode === 'real' && apiAvailable) return 'var(--wave-400)'; // зелёный
+    if (mode === 'real' && !apiAvailable) return 'var(--flame-600)'; // красный
+    return 'var(--amber-500)'; // янтарный для mock
   };
 
   const getBadgeText = () => {
@@ -134,9 +134,9 @@ export default function ApiModeBadge() {
             <div className="mb-4 p-3 rounded-lg" style={{ background: 'var(--elev)' }}>
               <div className="flex items-center gap-2 mb-2">
                 {apiAvailable ? (
-                  <Wifi size={16} style={{ color: '#22C55E' }} />
+                  <Wifi size={16} style={{ color: 'var(--wave-400)' }} />
                 ) : (
-                  <WifiOff size={16} style={{ color: '#EF4444' }} />
+                  <WifiOff size={16} style={{ color: 'var(--flame-600)' }} />
                 )}
                 <span style={{ color: 'var(--text)', fontSize: '13px' }}>
                   API: {apiAvailable ? 'доступен' : 'недоступен'}
@@ -148,7 +148,7 @@ export default function ApiModeBadge() {
                 )}
               </div>
               {lastError && (
-                <p style={{ color: '#FCA5A5', fontSize: '12px' }}>
+                <p style={{ color: '#FFB4A2', fontSize: '12px' }}>
                   Ошибка: {lastError}
                 </p>
               )}
@@ -159,7 +159,7 @@ export default function ApiModeBadge() {
               <div
                 className="rounded-xl p-4 cursor-pointer transition-all"
                 style={{
-                  background: mode === 'real' ? 'rgba(52, 211, 153, 0.1)' : 'var(--elev)',
+                  background: mode === 'real' ? 'rgba(87, 199, 184, 0.1)' : 'var(--elev)',
                   border: mode === 'real' ? '2px solid var(--ok)' : '1px solid var(--border)'
                 }}
                 onClick={() => handleModeChange('real')}
@@ -167,7 +167,7 @@ export default function ApiModeBadge() {
                 <div className="flex items-center gap-3">
                   <div
                     className="w-3 h-3 rounded-full"
-                    style={{ background: '#22C55E', boxShadow: '0 0 8px #22C55E' }}
+                    style={{ background: 'var(--wave-400)', boxShadow: '0 0 8px #22C55E' }}
                   />
                   <div className="flex-1">
                     <p className="font-bold" style={{ color: 'var(--text)' }}>Бэкенд</p>
@@ -184,7 +184,7 @@ export default function ApiModeBadge() {
               <div
                 className="rounded-xl p-4 cursor-pointer transition-all"
                 style={{
-                  background: mode === 'mock' ? 'rgba(245, 158, 11, 0.1)' : 'var(--elev)',
+                  background: mode === 'mock' ? 'rgba(255, 158, 44, 0.1)' : 'var(--elev)',
                   border: mode === 'mock' ? '2px solid var(--fire)' : '1px solid var(--border)'
                 }}
                 onClick={() => handleModeChange('mock')}
@@ -214,8 +214,8 @@ export default function ApiModeBadge() {
                 disabled={checking}
                 className="w-full px-4 py-2.5 rounded-full font-semibold transition-all flex items-center justify-center gap-2"
                 style={{
-                  background: 'linear-gradient(90deg, var(--w1), var(--w2))',
-                  color: '#04121A',
+                  background: 'var(--grad-brand)',
+                  color: '#221204',
                   opacity: checking ? 0.6 : 1
                 }}
               >

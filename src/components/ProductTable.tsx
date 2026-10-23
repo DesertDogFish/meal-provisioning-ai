@@ -225,7 +225,7 @@ export function ProductTable({ products, filters, onEdit, onDelete, onResetFilte
                 )}
               </td>
               <td className="px-4 py-3">
-                <span className="chip-delta" style={{ background: 'rgba(56, 189, 248, 0.14)', color: '#9BD8F5' }}>
+                <span className="chip-delta" style={{ background: 'rgba(87, 199, 184, 0.14)', color: 'var(--wave-300)' }}>
                   {product.categoryName}
                 </span>
               </td>

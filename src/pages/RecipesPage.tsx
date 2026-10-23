@@ -166,10 +166,10 @@ export default function RecipesPage() {
             onClick={() => setFilterMealType('')}
             className="px-4 py-2.5 rounded-full text-sm font-bold transition-all"
             style={{
-              background: filterMealType === '' ? 'linear-gradient(90deg, var(--w1), var(--w2))' : 'transparent',
+              background: filterMealType === '' ? 'var(--grad-brand)' : 'transparent',
               border: filterMealType === '' ? '1px solid transparent' : '1px solid var(--border)',
               color: filterMealType === '' ? '#04121A' : 'var(--muted)',
-              boxShadow: filterMealType === '' ? '0 0 18px rgba(45, 212, 191, 0.25)' : 'none'
+              boxShadow: filterMealType === '' ? '0 0 18px rgba(87, 199, 184, 0.25)' : 'none'
             }}
           >
             Все {counts.all}
@@ -179,10 +179,10 @@ export default function RecipesPage() {
             onClick={() => setFilterMealType('BREAKFAST')}
             className="px-4 py-2.5 rounded-full text-sm font-bold transition-all"
             style={{
-              background: filterMealType === 'BREAKFAST' ? 'linear-gradient(90deg, var(--w1), var(--w2))' : 'transparent',
+              background: filterMealType === 'BREAKFAST' ? 'var(--grad-brand)' : 'transparent',
               border: filterMealType === 'BREAKFAST' ? '1px solid transparent' : '1px solid var(--border)',
               color: filterMealType === 'BREAKFAST' ? '#04121A' : 'var(--muted)',
-              boxShadow: filterMealType === 'BREAKFAST' ? '0 0 18px rgba(45, 212, 191, 0.25)' : 'none'
+              boxShadow: filterMealType === 'BREAKFAST' ? '0 0 18px rgba(87, 199, 184, 0.25)' : 'none'
             }}
           >
             Завтрак {counts.breakfast}
@@ -192,10 +192,10 @@ export default function RecipesPage() {
             onClick={() => setFilterMealType('LUNCH')}
             className="px-4 py-2.5 rounded-full text-sm font-bold transition-all"
             style={{
-              background: filterMealType === 'LUNCH' ? 'linear-gradient(90deg, var(--w1), var(--w2))' : 'transparent',
+              background: filterMealType === 'LUNCH' ? 'var(--grad-brand)' : 'transparent',
               border: filterMealType === 'LUNCH' ? '1px solid transparent' : '1px solid var(--border)',
               color: filterMealType === 'LUNCH' ? '#04121A' : 'var(--muted)',
-              boxShadow: filterMealType === 'LUNCH' ? '0 0 18px rgba(45, 212, 191, 0.25)' : 'none'
+              boxShadow: filterMealType === 'LUNCH' ? '0 0 18px rgba(87, 199, 184, 0.25)' : 'none'
             }}
           >
             Обед {counts.lunch}
@@ -205,10 +205,10 @@ export default function RecipesPage() {
             onClick={() => setFilterMealType('DINNER')}
             className="px-4 py-2.5 rounded-full text-sm font-bold transition-all"
             style={{
-              background: filterMealType === 'DINNER' ? 'linear-gradient(90deg, var(--w1), var(--w2))' : 'transparent',
+              background: filterMealType === 'DINNER' ? 'var(--grad-brand)' : 'transparent',
               border: filterMealType === 'DINNER' ? '1px solid transparent' : '1px solid var(--border)',
               color: filterMealType === 'DINNER' ? '#04121A' : 'var(--muted)',
-              boxShadow: filterMealType === 'DINNER' ? '0 0 18px rgba(45, 212, 191, 0.25)' : 'none'
+              boxShadow: filterMealType === 'DINNER' ? '0 0 18px rgba(87, 199, 184, 0.25)' : 'none'
             }}
           >
             Ужин {counts.dinner}
@@ -218,10 +218,10 @@ export default function RecipesPage() {
             onClick={() => setFilterMealType('SNACK')}
             className="px-4 py-2.5 rounded-full text-sm font-bold transition-all"
             style={{
-              background: filterMealType === 'SNACK' ? 'linear-gradient(90deg, var(--w1), var(--w2))' : 'transparent',
+              background: filterMealType === 'SNACK' ? 'var(--grad-brand)' : 'transparent',
               border: filterMealType === 'SNACK' ? '1px solid transparent' : '1px solid var(--border)',
               color: filterMealType === 'SNACK' ? '#04121A' : 'var(--muted)',
-              boxShadow: filterMealType === 'SNACK' ? '0 0 18px rgba(45, 212, 191, 0.25)' : 'none'
+              boxShadow: filterMealType === 'SNACK' ? '0 0 18px rgba(87, 199, 184, 0.25)' : 'none'
             }}
           >
             Перекус {counts.snack}
@@ -246,7 +246,7 @@ export default function RecipesPage() {
             onClick={() => setNoFireOnly(!noFireOnly)}
             className="px-4 py-2.5 rounded-full text-xs font-bold transition-all"
             style={{
-              background: noFireOnly ? 'rgba(245, 158, 11, 0.16)' : 'transparent',
+              background: noFireOnly ? 'rgba(255, 158, 44, 0.16)' : 'transparent',
               border: noFireOnly ? '1px solid var(--fire)' : '1px solid var(--border)',
               color: noFireOnly ? 'var(--fire)' : 'var(--muted)'
             }}
@@ -281,12 +281,12 @@ export default function RecipesPage() {
                 <h3 className="font-bold mb-2" style={{ color: 'var(--text)' }}>{recipe.name}</h3>
                 <div className="flex flex-wrap gap-2 mb-3">
                   {recipe.category && (
-                    <span className="px-2 py-0.5 text-xs font-medium rounded-full capitalize" style={{ background: 'rgba(56, 189, 248, 0.14)', color: '#9BD8F5' }}>
+                    <span className="px-2 py-0.5 text-xs font-medium rounded-full capitalize" style={{ background: 'rgba(87, 199, 184, 0.14)', color: 'var(--wave-300)' }}>
                       {humanizeCategory(recipe.category)}
                     </span>
                   )}
                   {recipe.cookMinutes === 0 ? (
-                    <span className="px-2 py-0.5 text-xs font-bold rounded-full" style={{ background: 'rgba(245, 158, 11, 0.16)', color: '#F8C468' }}>
+                    <span className="px-2 py-0.5 text-xs font-bold rounded-full" style={{ background: 'rgba(255, 158, 44, 0.16)', color: 'var(--amber-300)' }}>
                       без огня
                     </span>
                   ) : (
@@ -306,7 +306,7 @@ export default function RecipesPage() {
                   </span>
                   <button
                     className="px-4 py-2 rounded-full text-xs font-bold"
-                    style={{ background: 'linear-gradient(90deg, var(--w1), var(--w2))', color: '#04121A' }}
+                    style={{ background: 'var(--grad-brand)', color: '#221204' }}
                   >
                     В меню
                   </button>
@@ -346,7 +346,7 @@ export default function RecipesPage() {
               <div>
                 <h2 className="text-xl font-bold" style={{ color: 'var(--text)' }}>{selected.name}</h2>
                 <div className="flex items-center gap-3 mt-1 text-sm" style={{ color: 'var(--muted)' }}>
-                  <span className="px-2 py-0.5 text-xs font-medium rounded-full" style={{ background: 'rgba(56, 189, 248, 0.14)', color: '#9BD8F5' }}>
+                  <span className="px-2 py-0.5 text-xs font-medium rounded-full" style={{ background: 'rgba(87, 199, 184, 0.14)', color: 'var(--wave-300)' }}>
                     {mealTypeLabels[selected.mealType]}
                   </span>
                   {selected.category && <span className="recipe-category-badge">{humanizeCategory(selected.category)}</span>}

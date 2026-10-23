@@ -157,9 +157,9 @@ export default function SyncLogsPage() {
 
   const getStatusChip = (status: string) => {
     const styles = {
-      SUCCESS: { background: 'rgba(52, 211, 153, 0.16)', color: '#7EE2B8' },
-      FAILED: { background: 'rgba(248, 113, 113, 0.16)', color: '#FCA5A5' },
-      RUNNING: { background: 'rgba(56, 189, 248, 0.14)', color: '#9BD8F5' }
+      SUCCESS: { background: 'rgba(87, 199, 184, 0.16)', color: 'var(--wave-300)' },
+      FAILED: { background: 'rgba(248, 113, 113, 0.16)', color: '#FFB4A2' },
+      RUNNING: { background: 'rgba(87, 199, 184, 0.14)', color: 'var(--wave-300)' }
     };
     return (
       <span className="chip-delta" style={styles[status as keyof typeof styles]}>
@@ -170,11 +170,11 @@ export default function SyncLogsPage() {
 
   const getActionChip = (action: string) => {
     const styles: Record<string, { background: string; color: string }> = {
-      UPDATED: { background: 'rgba(56, 189, 248, 0.14)', color: '#9BD8F5' },
-      CREATED: { background: 'rgba(52, 211, 153, 0.16)', color: '#7EE2B8' },
-      SKIPPED_MANUAL: { background: 'rgba(45, 212, 191, 0.14)', color: '#8FE8DC' },
-      SKIPPED_CURRENCY: { background: 'rgba(255, 255, 255, 0.07)', color: 'var(--muted)' },
-      ERROR: { background: 'rgba(248, 113, 113, 0.16)', color: '#FCA5A5' }
+      UPDATED: { background: 'rgba(87, 199, 184, 0.14)', color: 'var(--wave-300)' },
+      CREATED: { background: 'rgba(87, 199, 184, 0.16)', color: 'var(--wave-300)' },
+      SKIPPED_MANUAL: { background: 'rgba(87, 199, 184, 0.14)', color: 'var(--wave-300)' },
+      SKIPPED_CURRENCY: { background: 'rgba(148, 199, 214, 0.08)', color: 'var(--muted)' },
+      ERROR: { background: 'rgba(248, 113, 113, 0.16)', color: '#FFB4A2' }
     };
     return (
       <span className="chip-delta" style={styles[action]}>
@@ -223,10 +223,10 @@ export default function SyncLogsPage() {
           <div className="chip-delta dim">
             запусков за 7 дней: {kpi.totalRuns}
           </div>
-          <div className="chip-delta" style={{ background: 'rgba(52, 211, 153, 0.16)', color: '#7EE2B8' }}>
+          <div className="chip-delta" style={{ background: 'rgba(87, 199, 184, 0.16)', color: 'var(--wave-300)' }}>
             успешность: {kpi.successRate.toFixed(0)}%
           </div>
-          <div className="chip-delta" style={{ background: 'rgba(56, 189, 248, 0.14)', color: '#9BD8F5' }}>
+          <div className="chip-delta" style={{ background: 'rgba(87, 199, 184, 0.14)', color: 'var(--wave-300)' }}>
             обновлено строк: {kpi.totalUpdated}
           </div>
           <div className="chip-delta fire">
@@ -270,11 +270,11 @@ export default function SyncLogsPage() {
       {/* Error Banner */}
       {lastFailed && (
         <div className="rounded-xl p-4 flex items-center gap-3" style={{
-          background: 'rgba(245, 158, 11, 0.12)',
-          border: '1px solid rgba(245, 158, 11, 0.4)'
+          background: 'rgba(255, 158, 44, 0.12)',
+          border: '1px solid rgba(255, 158, 44, 0.4)'
         }}>
-          <AlertCircle size={20} style={{ color: '#F8C468' }} />
-          <span style={{ color: '#F8C468', fontSize: '13px' }}>
+          <AlertCircle size={20} style={{ color: 'var(--amber-300)' }} />
+          <span style={{ color: 'var(--amber-300)', fontSize: '13px' }}>
             Последний запуск упал: {syncLogs[0].details?.errors?.[0]?.message || 'Неизвестная ошибка'}
           </span>
           <div style={{ flex: 1 }}></div>
@@ -319,8 +319,8 @@ export default function SyncLogsPage() {
                   </td>
                   <td className="px-4 py-3">
                     <span className="chip-delta" style={{
-                      background: log.type === 'PRICES' ? 'rgba(56, 189, 248, 0.14)' : 'rgba(255, 255, 255, 0.07)',
-                      color: log.type === 'PRICES' ? '#9BD8F5' : 'var(--muted)'
+                      background: log.type === 'PRICES' ? 'rgba(87, 199, 184, 0.14)' : 'rgba(148, 199, 214, 0.08)',
+                      color: log.type === 'PRICES' ? 'var(--wave-300)' : 'var(--muted)'
                     }}>
                       {log.type}
                     </span>
@@ -408,7 +408,7 @@ export default function SyncLogsPage() {
                           <>
                             {item.oldPrice.toFixed(2)}
                             <span style={{ color: 'var(--muted)', padding: '0 6px' }}>→</span>
-                            <b style={{ color: item.newPrice > item.oldPrice ? '#FCA5A5' : '#7EE2B8' }}>
+                            <b style={{ color: item.newPrice > item.oldPrice ? '#FFB4A2' : 'var(--wave-300)' }}>
                               {item.newPrice.toFixed(2)}
                             </b>
                           </>
