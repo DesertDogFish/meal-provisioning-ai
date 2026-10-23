@@ -51,7 +51,13 @@
 
 Активных планов кода нет; ниже — верифицированные открытые пункты P2/P3 (состояние проверено grep'ом, 2026-10-23).
 
+### ✅ OFF-авторизация (выполнено 2026-10-23, сессия «Интеграция авторизации OpenFoodFacts»)
+- ~~Анонимные запросы к OFF упираются в 503 без объяснения причины~~ → ✅ `OpenFoodFactsProvider`: креды из ENV (`OFF_USER_ID`/`OFF_PASSWORD` → `integration.off.user-id/password`, `application.yml:52–55`), `appendAuthParams()` c `URLEncoder` добавляет `user_id`/`password` к `searchProducts`; `@PostConstruct logAuthMode()` — WARN «OFF credentials not set, running in anonymous mode»; `describeOffFailure()`: 503/429 без кредитов → «Требуется регистрация на OFF», с кредитами → «Сервис временно перегружен». `docker-compose.yml:38–41` + `.env.example` (закомментированный шаблон, реальные секреты не коммитятся). Гейты после правок: `mvn test` = 66/0 failed/3 skipped, BUILD SUCCESS.
+- ⚠️ Обнаружено при сверке контракта: бэк кладёт в `usedIn` список **строк** (names), а фронт (`src/api/client.ts:16`, mockServer) ожидает `Array<{resourceType, resourceId, resourceName}>` — рассинхрон формата (отдельная задача, см. ниже).
+- ❌ Не найдено: метода `getProductByBarcode` / отдельного эндпоинта product-by-code в провайдере нет (только search+prices API) — пункт задачи неприменим.
+
 ### P2 — косметика/контракт
+- [ ] Формат `usedIn`: привести бэкенд к контрактному `{resourceType, resourceId, resourceName}[]` (сейчас `List<String>` names — фронт не сможет отрендерить). См. `ErrorResponse.java` / `GlobalExceptionHandler.java:63–70`.
 - [ ] Отзыв access-токена при logout (короткий TTL — частичный митигейт уже есть); переход на RFC7807 `ProblemDetail`; `DataIntegrityViolationException` (CHECK по датам) → 400 вместо generic 500 в GlobalExceptionHandler.
 - [ ] Неиспользуемый MapStruct в `pom.xml` (ни одного `@Mapper` в проде) — удалить зависимости+процессор или начать использовать.
 - [ ] Мёртвые эндпоинты (не вызываются фронтом): `/prices/relevant-to-trips`, `/admin/ingredients` (deprecated), `/sync-logs/{id}` — инвентаризировать и удалить.

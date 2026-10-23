@@ -35,6 +35,10 @@
       SPRING_JPA_HIBERNATE_DDL_AUTO: validate
       SPRING_FLYWAY_ENABLED: "true"
       JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env}
+      # Open Food Facts: учётная запись для обхода лимитов анонимных запросов (503/429).
+      # Необязательно: пусто => анонимный режим (WARN в логах при старте).
+      OFF_USER_ID: ${OFF_USER_ID:-}
+      OFF_PASSWORD: ${OFF_PASSWORD:-}
     ports:
       - "8080:8080"
     healthcheck:

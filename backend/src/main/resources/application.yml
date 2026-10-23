@@ -49,6 +49,10 @@ integration:
   off:
     products-url: https://world.openfoodfacts.org
     prices-url: https://prices.openfoodfacts.org
+    # Учётная запись на world.openfoodfacts.org (обход лимитов анонимных 503/429).
+    # Значения — ТОЛЬКО из ENV, в git не коммитить. Пусто => анонимный режим.
+    user-id: ${OFF_USER_ID:}
+    password: ${OFF_PASSWORD:}
 
 springdoc:
   api-docs:
