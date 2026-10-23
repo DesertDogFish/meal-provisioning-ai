@@ -66,6 +66,16 @@
 - ~~П.7 Черновики цен пропадают при переключении вкладок~~ → ✅ состояние живёт в родителе TripDetailPage (+persist localStorage по trip id, ключ `draftKey`), дети читают через пропсы — размонтирование вкладки больше не сбрасывает данные.
 - Гейты Фазы 13: `npm run build` ✅ SUCCESS; `npx vitest run` = **196 passed / 5 failed** — те же 5 падений `TripForm.test.tsx` доказаны pre-existing (git stash → идентичный результат на чистом HEAD; триage — открытый пункт ниже).
 
+### ✅ CI Lint fix (2026-10-23, после merge Phase 13)
+GitHub Actions `npm run lint` падал с exit 1. Разбор:
+- Ошибки в `design-pack/react/Input.tsx` из CI-лога физически отсутствуют в этом репозитории (папки design-pack нет) — артефакт другой ветки/дерефа CI; актуальный прогон не содержит их.
+- Реальные ошибки lint в нашем дереве (внесены Фазой 13): исправлены —
+  * `TripDetailPage.tsx`: **нарушение rules-of-hooks** (`useState`/`useEffect` для `shoppingExcluded` объявлены ПОСЛЕ ранних return loading/error) → хуки перенесены наверх, к остальным useState/useEffect;
+  * удалён мёртвый код Фазы 13: `setActualUnitPrice`, `unitPriceOf`, промежуточные `includedShopping`/`shoppingTotal` (используется финальный `shoppingTotalFinal`); `setDraftOverrides` убран из деструктуризации;
+  * `DatePicker.tsx`: неиспользуемый деструктурированный проп `autoComplete` (на `<input>` он жёстко задан как `off`).
+- Гейты после фикса: `eslint . --ext ts,tsx` = **0 errors**, exit 0; `npm run build` ✅; `vitest run` = 196/201 (те же 5 pre-existing TripForm).
+- [ ] Опционально (P2): 4 предупреждения `react-hooks/exhaustive-deps` (Layout/Dashboard/Recipes/Trips — интент «смонтировался один раз», стабилизировать loadX через useCallback или осознанно оставить).
+
 ### P2 — косметика/контракт
 - [ ] Формат `usedIn`: привести бэкенд к контрактному `{resourceType, resourceId, resourceName}[]` (сейчас `List<String>` names — фронт не сможет отрендерить). См. `ErrorResponse.java` / `GlobalExceptionHandler.java:63–70`.
 - [ ] Отзыв access-токена при logout (короткий TTL — частичный митигейт уже есть); переход на RFC7807 `ProblemDetail`; `DataIntegrityViolationException` (CHECK по датам) → 400 вместо generic 500 в GlobalExceptionHandler.

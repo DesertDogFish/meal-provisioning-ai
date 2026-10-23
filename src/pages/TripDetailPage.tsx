@@ -101,7 +101,9 @@ export default function TripDetailPage() {
   // а черновики не теряются при размонтировании вкладок.
   // Сохранение между сессиями — per-trip localStorage (по требованию задачи).
   const draftKey = `trip-actual-prices-${id ?? ''}`;
-  const [draftOverrides, setDraftOverrides] = useState<Record<string, ActualPriceDraft>>(() => {
+  // setDraftOverrides не нужен: черновики цен пишет только сама вкладка
+  // «Закупка» (инлайн-поле), PriceOverridesTab работает с серверными оверрайдами.
+  const [draftOverrides] = useState<Record<string, ActualPriceDraft>>(() => {
     try { return JSON.parse(localStorage.getItem(draftKey) || '{}'); } catch { return {}; }
   });
 
@@ -109,15 +111,19 @@ export default function TripDetailPage() {
     try { localStorage.setItem(draftKey, JSON.stringify(draftOverrides)); } catch { /* quota/SSR — не критично */ }
   }, [draftKey, draftOverrides]);
 
-  /** unit price → цена за всю позицию (бэкенд хранит именно unit price и умножает на кол-во) */
-  const setActualUnitPrice = (ingredientId: string, price: number | null) => {
-    setDraftOverrides(prev => {
-      const next = { ...prev };
-      if (price == null || Number.isNaN(price)) delete next[ingredientId];
-      else next[ingredientId] = { price, total: NaN }; // total пересчитается из количества
-      return next;
-    });
-  };
+  // ===== Фаза 13 (п.5): soft-disable позиций — только на клиенте =====
+  // Хуки ОБЯЗАТЕЛЬНО до ранних return-ов (loading/error) — иначе rules-of-hooks.
+  const excludedKey = `trip-shopping-excluded-${id ?? ''}`;
+  const [shoppingExcluded, setShoppingExcluded] = useState<Set<string>>(() => {
+    try {
+      const raw = JSON.parse(localStorage.getItem(excludedKey) || '[]') as unknown;
+      return Array.isArray(raw) ? new Set(raw.filter((x): x is string => typeof x === 'string')) : new Set();
+    } catch { return new Set(); }
+  });
+
+  useEffect(() => {
+    try { localStorage.setItem(excludedKey, JSON.stringify([...shoppingExcluded])); } catch { /* noop */ }
+  }, [excludedKey, shoppingExcluded]);
 
   useEffect(() => {
     if (id) {
@@ -231,14 +237,6 @@ export default function TripDetailPage() {
   const menuByDays = calculateMenuByDays(trip as any, recipesMap);
   const baseShoppingList = calculateShoppingList(trip as any, recipesMap, prices);
 
-  /** ₽/ед. для позиции: чек (draft) > план (cost / amount). */
-  const unitPriceOf = (item: { ingredientId: string; totalAmount: number; estimatedCost?: number }) => {
-    const draft = draftOverrides[item.ingredientId];
-    if (draft != null) return draft.price;
-    const cost = item.estimatedCost ?? 0;
-    return cost > 0 && item.totalAmount > 0 ? cost / item.totalAmount : undefined;
-  };
-
   const shoppingList = baseShoppingList.map((item, idx) => {
     void idx;
     const cost = item.estimatedCost ?? 0;
@@ -251,22 +249,10 @@ export default function TripDetailPage() {
       effectiveCost: actualUnit != null ? actualUnit * item.totalAmount : cost,
     };
   });
-  const includedShopping = shoppingList.filter(i => !i.excluded);
-  const shoppingTotal = includedShopping.reduce((a, i) => a + (i.effectiveCost || 0), 0);
-
   // ===== Фаза 13 (п.5): soft-disable позиций — только на клиенте =====
   // Исключение из расчёта НЕ меняет справочник и не отправляется на бэкенд;
   // черновик живёт в localStorage по id похода (переживает навигацию/релоад).
-  const [shoppingExcluded, setShoppingExcluded] = useState<Set<string>>(() => {
-    try {
-      const raw = JSON.parse(localStorage.getItem(`trip-shopping-excluded-${id ?? ''}`) || '[]') as unknown;
-      return Array.isArray(raw) ? new Set(raw.filter((x): x is string => typeof x === 'string')) : new Set();
-    } catch { return new Set(); }
-  });
-
-  useEffect(() => {
-    try { localStorage.setItem(`trip-shopping-excluded-${id ?? ''}`, JSON.stringify([...shoppingExcluded])); } catch { /* noop */ }
-  }, [id, shoppingExcluded]);
+  // ВАЖНО: хуки объявлены ДО ранних return-ов выше — порядок одинаковый всегда.
 
   const toggleShoppingExcluded = (ingredientId: string) => {
     setShoppingExcluded(prev => {

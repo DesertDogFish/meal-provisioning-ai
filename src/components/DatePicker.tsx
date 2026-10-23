@@ -137,7 +137,7 @@ const NativeInput = forwardRef<HTMLInputElement, NativeInputProps>(function Nati
   // всё внутреннее состояние react-datepicker, лишнее растеклось бы DOM-атрибутами.
   const {
     value, min, max, disabled, readOnly, required, placeholder,
-    className, stateClassName, id, name, title, tabIndex, autoComplete, autoFocus, form,
+    className, stateClassName, id, name, title, tabIndex, autoFocus, form,
     onFocus, onBlur, onClick, onKeyDown,
   } = props;
   // Собственный controlled-стейт: react-datepicker в тестовых средах (jsdom/
