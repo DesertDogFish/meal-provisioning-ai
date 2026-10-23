@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useToast } from './ToastProvider';
 import { Download } from 'lucide-react';
 import { formatAmount } from '../utils/calculations';
+import { mealsWord } from '../utils/text';
 import { NumberField } from './NumberField';
 import { api } from '../api/client';
 
@@ -488,7 +489,7 @@ export default function PriceOverridesTab({ tripId }: Props) {
           <div className="rounded-xl p-4" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
             <b style={{ color: 'var(--text)' }}>На один человеко-приём</b>
             <p style={{ color: 'var(--muted)', fontSize: '12px', marginTop: '4px' }}>
-              делим на {totalPersonMeals} приёмов
+              делим на {totalPersonMeals} {mealsWord(totalPersonMeals)}
             </p>
             <div className="flex justify-between py-2 mt-2" style={{ borderTop: '1px solid var(--border)' }}>
               <span style={{ color: 'var(--muted)' }}>План</span>
