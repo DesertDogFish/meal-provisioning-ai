@@ -615,6 +615,204 @@ for each day:
 - **Миграция Батча 3** — должна быть завершена до начала этой задачи, чтобы не править один и тот же код дважды
 - **Интеграционные тесты** — не блокируют, но после полировки стоит прогнать визуально (скриншоты ключевых экранов)
 
+
+---
+
+## Тикет: Внедрение дизайн-системы «Провиант» (брендбук)
+
+**Приоритет:** P1
+**Оценка:** 8–12 часов
+**Зависимости:** завершена миграция Батча 3; согласование с тикетом «Полировка UI» (этот тикет заменяет палитру, полировка применяется поверх новых токенов)
+
+### ЗАДАЧА (DDD)
+Внедрить новую дизайн-систему "Провиант" (брендбук) в существующий фронтенд React/Vite/Tailwind.
+
+### КОНТЕКСТ
+У нас есть утвержденный HTML/CSS макет главной страницы с новой цветовой схемой, типографикой и стилями компонентов.
+Цель: применить эти стили ко всему приложению (Dashboard, Trips, Recipes, Admin), чтобы оно выглядело премиально и единообразно.
+
+### ИСТОЧНИК ИСТИНЫ (CSS Variables & Styles)
+Скопируй эти переменные и базовые стили из предоставленного брендбука:
+
+```css
+:root {
+  /* Backgrounds */
+  --bg-0: #0B141B;      /* Основной фон */
+  --bg-1: #101D27;      /* Фон панелей/карточек */
+  --bg-2: #162634;      /* Ховеры, второстепенные элементы */
+  --bg-3: #1E3243;      /* Активные состояния, бордеры */
+
+  /* Lines & Borders */
+  --line: rgba(148,199,214,.14);
+  --line-strong: rgba(148,199,214,.28);
+
+  /* Text */
+  --text-1: #EDF4F7;    /* Основной текст */
+  --text-2: #A9BEC9;    /* Второстепенный текст */
+  --text-3: #6F8895;    /* Приглушенный текст / placeholders */
+
+  /* Accents */
+  --amber-200: #FFD9A0;
+  --amber-300: #FFC46B;
+  --amber-500: #FF9E2C; /* Главный акцент (кнопки, активные табы) */
+  --flame-600: #E85D1F;
+  --wave-300: #7FD8CC;  /* Второй акцент (инфо, успех) */
+  --wave-400: #57C7B8;
+  --wave-600: #2E9C8E;
+  --snow: #F2F7F5;
+
+  /* Gradients */
+  --grad-brand: linear-gradient(135deg, #FFD08A 0%, #F2842B 52%, #E85D1F 100%);
+
+  /* Radii */
+  --r-sm: 12px;
+  --r-md: 18px;
+  --r-lg: 26px;
+
+  /* Shadows */
+  --shadow-1: 0 18px 50px rgba(3,10,16,.5);
+}
+
+/* Шрифты */
+font-family-display: "Unbounded", sans-serif;
+font-family-body: "Manrope", sans-serif;
+```
+
+### ЭТАП 1: Глобальная настройка
+
+1. Подключи шрифты в index.html:
+   ```html
+   <link rel="preconnect" href="https://fonts.googleapis.com">
+   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+   <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+   ```
+
+2. Обнови src/index.css (или global.css):
+   - Вставь блок `:root` с новыми переменными выше.
+   - Удали старые переменные цвета (`--primary`, `--secondary` и т.д.), если они конфликтуют.
+   - Добавь базовые стили body:
+     ```css
+     body {
+       background-color: var(--bg-0);
+       color: var(--text-1);
+       font-family: var(--font-body);
+       /* Опционально: добавить зерно плёнки из брендбука через pseudo-element ::before */
+     }
+     ```
+   - Настрой Tailwind config (tailwind.config.js/ts), чтобы утилиты `bg-background`, `text-primary` использовали новые переменные. Пример:
+     ```js
+     theme: {
+       extend: {
+         colors: {
+           background: 'var(--bg-0)',
+           surface: 'var(--bg-1)',
+           primary: 'var(--amber-500)',
+           secondary: 'var(--wave-400)',
+           muted: 'var(--text-3)',
+           border: 'var(--line)',
+         },
+         fontFamily: {
+           display: ['Unbounded', 'sans-serif'],
+           sans: ['Manrope', 'sans-serif'],
+         },
+         borderRadius: {
+           sm: 'var(--r-sm)',
+           md: 'var(--r-md)',
+           lg: 'var(--r-lg)',
+         }
+       }
+     }
+     ```
+
+### ЭТАП 2: Компоненты UI (Library)
+
+Обнови общие компоненты в `src/components/ui/` (Button, Card, Input, Badge, Tabs).
+
+1. **Button.tsx:**
+   - `variant="primary"`:
+     ```
+     background: var(--grad-brand);
+     color: #221204;
+     box-shadow: 0 0 0 1px rgba(255,158,44,.3), 0 16px 44px rgba(242,122,18,.28);
+     hover: transform translateY(-2px), brightness(1.07);
+     ```
+   - `variant="ghost"`:
+     ```
+     border: 1px solid var(--line-strong);
+     background: rgba(22,38,52,.4);
+     hover: background var(--bg-2);
+     ```
+
+2. **Card.tsx:**
+   ```
+   background: linear-gradient(160deg, rgba(22,38,52,.72), rgba(13,23,32,.78));
+   backdrop-filter: blur(12px);
+   border: 1px solid var(--line);
+   border-radius: var(--r-lg);
+   box-shadow: var(--shadow-1);
+   ```
+
+3. **Input.tsx / Select.tsx:**
+   ```
+   background: rgba(11,20,27,.7);
+   border: 1px solid var(--line-strong);
+   focus: outline 2px solid rgba(255,158,44,.5);
+   color: var(--text-1);
+   ```
+
+4. **Badge.tsx:**
+   - Для статусов используй цвета wave (teal) и amber.
+   - Например, badge-success: bg rgba(87,199,184,.12), border rgba(87,199,184,.34), color var(--wave-300).
+
+### ЭТАП 3: Страницы приложения
+
+Пройдись по основным страницам и примени новые классы.
+
+1. **Layout.tsx (Навигация):**
+   - Сделай шапку "плавающей пилюлей" как в брендбуке:
+     ```
+     position: sticky; top: 14px; z-index: 60;
+     background: rgba(16,29,39,.66);
+     backdrop-filter: blur(16px);
+     border-radius: 999px;
+     border: 1px solid var(--line);
+     ```
+   - Логотип: используй SVG из брендбука (`#pv-mark`) или простой текстовый логотип с font-display.
+
+2. **DashboardPage.tsx / TripsPage.tsx:**
+   - Карточки походов должны использовать стиль `.glass` из брендбука.
+   - Заголовки страниц: `font-family: var(--font-display); letter-spacing: -.015em;`
+   - Метрики (статы): используй стиль `.stat` (фон bg-1, бордер line, цифры amber-300).
+
+3. **TripDetailPage.tsx:**
+   - Табы (Меню, Список покупок, Цены): используй сегментированный контрол (`.seg`) из брендбука.
+     Активный таб: background var(--grad-brand), color #221204.
+     Неактивный: transparent, color var(--text-2).
+   - Списки блюд/продуктов: используй строки с dashed border-bottom (как в `.meal-row`).
+
+4. **RecipesPage.tsx / ProductsPage.tsx:**
+   - Фильтры и поиск: inputs в стиле новых Input.tsx.
+   - Категории: бейджи в стиле teal/wave.
+
+### ЭТАП 4: Детали и анимации
+
+1. Добавь эффект "зерна плёнки" на `body::before` (data-uri svg noise, opacity .05).
+2. Анимация появления контента: fade-in-up для основных секций.
+3. Hover-эффекты для интерактивных элементов (transform translateY).
+
+### ПРОВЕРКИ
+- [ ] `npm run build` — успешно.
+- [ ] Визуально открой http://localhost:3000.
+  - [ ] Проверь читаемость текста (contrast ratio).
+  - [ ] Проверь работу темной темы (все элементы должны быть видны на фоне #0B141B).
+  - [ ] Убедись, что нет "сиротливых" старых цветов (например, ярко-синий bootstrap blue или серый material gray).
+
+### ОТЧЁТ
+1. Список измененных файлов.
+2. Git diff для tailwind.config.js и src/index.css.
+3. Описание ключевых визуальных изменений (что стало выглядеть лучше).
+4. Если где-то старый дизайн ломается (например, кастомные компоненты не переписаны) — перечисли их.
+
 ## Notes
 
 - Все изменения в архитектуре отражаются в ARCHITECTURE.md
