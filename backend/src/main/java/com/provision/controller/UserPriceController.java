@@ -53,7 +53,10 @@ public class UserPriceController {
     @Transactional(readOnly = true)
     public List<IngredientPriceResponse> getPrices(@RequestParam(required = false) LocalDate asOf) {
         LocalDate cutoff = asOf != null ? asOf : LocalDate.now();
-        return latestPerIngredient(priceRepository.findAll(), cutoff);
+        // P1 (аудит): было priceRepository.findAll() — вся история цен в памяти.
+        // Теперь последний срез на каждый ингредиент считается СУБД (DISTINCT ON),
+        // а JOIN FETCH убирает N+1 на ingredient при маппинге.
+        return toSortedResponses(priceRepository.findLatestPricesAsOf(cutoff));
     }
 
     /**
@@ -86,25 +89,21 @@ public class UserPriceController {
         }
 
         // 3. последние действующие срезы цен по этим ингредиентам
-        List<IngredientPrice> candidatePrices = priceRepository.findAll().stream()
-                .filter(p -> relevantIngredientIds.contains(p.getIngredient().getId()))
-                .toList();
-        return latestPerIngredient(candidatePrices, cutoff);
+        //    (P1: фильтрация по set и DISTINCT ON — на стороне БД, не в Java)
+        return toSortedResponses(priceRepository.findLatestPricesAsOfForIngredients(
+                cutoff, relevantIngredientIds));
     }
 
-    /** Последний действующий на cutoff срез цены для каждого ингредиента. */
-    static List<IngredientPriceResponse> latestPerIngredient(List<IngredientPrice> all, LocalDate cutoff) {
-        Map<Long, List<IngredientPrice>> byIngredient = all.stream()
-                .filter(p -> !p.getEffectiveFrom().isAfter(cutoff))
-                .collect(Collectors.groupingBy(p -> p.getIngredient().getId()));
-
-        List<IngredientPriceResponse> result = new ArrayList<>();
-        for (List<IngredientPrice> history : byIngredient.values()) {
-            history.sort(Comparator.comparing(IngredientPrice::getEffectiveFrom));
-            result.add(toResponse(history.get(history.size() - 1)));
-        }
-        result.sort(Comparator.comparing(IngredientPriceResponse::ingredientId));
-        return result;
+    /**
+     * P1 (аудит): агрегация «последний срез на ингредиент» перенесена в SQL
+     * (findLatestPricesAsOf*), здесь остаётся только маппинг и стабильная сортировка
+     * по ingredientId (тот же контракт ответа, что был у latestPerIngredient).
+     */
+    private static List<IngredientPriceResponse> toSortedResponses(List<IngredientPrice> latest) {
+        return latest.stream()
+                .map(UserPriceController::toResponse)
+                .sorted(Comparator.comparing(IngredientPriceResponse::ingredientId))
+                .toList();
     }
 
     private static IngredientPriceResponse toResponse(IngredientPrice price) {

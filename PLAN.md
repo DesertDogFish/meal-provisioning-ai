@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-**✅ Фаза 10 закрыта (2026-10-22). Бэклог P1 закрыт (2026-10-22/23). P2 Playwright e2e: спеки 8/8 зелёные, ночной job + non-blocking PR-прогон настроены (.github/workflows/e2e-nightly.yml). CI Backend Tests починлен (2026-10-23), см. запись ниже.**
+**🔄 Текущая фаза: Исправление находок аудита бэкенда (P0/P1).** Полный план работ — в разделе «Next Step» ниже. Предыдущие фазы (1–10, бэклог P1, P2 e2e, CI-фиксы) закрыты 2026-10-22/23; их протоколы — в конце файла (Backlog / Completed / Timeline).
 
 > **HOTFIX 2026-10-23: `ReferenceError: e is not defined` на старте продакшен-билда.**
 > Причина: в `src/api/client.ts` (конструктор `ApiClient`, строка чтения env) при правке канала инъекции `VITE_API_MODE` (`window.meta`-обход для тестов) опечатка `e.VITE_API_MODE` вместо `env.VITE_API_MODE`. Vite/esbuild не резолвят идентификаторы — в минифицированном бандле остаётся голодная `e`, ReferenceError при создании синглтона `api` (модуль грузится на старте). Dockerfile.frontend (ARG/ENV VITE_API_URL/VITE_API_MODE) — ни при чём; `mode.ts`, `main.tsx`, `App.tsx` проверены, чисто.
@@ -33,17 +33,88 @@
 - ✅ Фаза 10: Тестирование — закрыть дыры регрессий (P0) — ЗАВЕРШЕНО 2026-10-22 (все P0-пункты и критерии готовности зелёные, см. ниже)
 - ✅ Бэклог P1: Testing (бэкенд+контракт) — ЗАВЕРШЁН 2026-10-22 (баг агрегации; Contract расширить; интеграционные тесты локально: mvn test = 48 passed / 0 failed без Docker, Java 17)
 
-**Следующий шаг:** P2 — Playwright e2e 6–10 сценариев (см. раздел Backlog).
+## Next Step
+
+# 🔧 ФАЗА 11: Исправление находок аудита бэкенда (P0/P1)
+
+**Цель:** закрыть дыры безопасности (IDOR), починить сломанную фильтрацию продуктов, унифицировать типы ID (Long → String) и оптимизировать горячие N+1.
+
+### Красные линии
+1. **НЕ коммитить ничего.** Пользователь проверяет диффы сам.
+2. После каждого изменения файла показывать реальный `git diff <файл>`. Пустой diff = не сделано.
+3. Не удалять тесты ради «зеленого» статуса. Если тест падает из-за смены контракта (ID Long→String) — обновлять ассерты на новое ожидаемое поведение.
+4. Бэкенд компилируется (`mvn -q compile`) после каждой задачи.
+5. Фронтенд собирается (`npm run build`) после всех изменений.
+
+### Шаг 1. Безопасность — IDOR в TripService (P0)
+**Проблема:** в `updateMeal`/`deleteMeal` ownership проверяется только для `tripId`; блюдо грузится через `tripMealRepository.findById(mealId)` / `deleteById(mealId)` без проверки принадлежности этому дню/походу (`TripService.java:147–171`). Атакующий может изменить/удалить чужое блюдо по ID.
+- [ ] В `updateMeal` и `deleteMeal`: НЕ использовать `tripMealRepository.findById/deleteById`. Искать блюдо внутри уже загруженного `Trip` (через `findByIdWithDaysAndMeals(tripId, userId)` → stream по `days` → stream по `meals`), 404 если не найдено в этом дне.
+- [ ] `deleteMeal`: удалить из коллекции `day.getMeals()` и сохранить через каскад; `updateMeal`: менять поля найденного объекта.
+- [ ] Проверить аналогичные места в других сервисах (SubstitutionService и т.п.).
+- Гейт: `mvn -q compile` + git diff TripService.java.
+
+### Шаг 2. Функциональность — фильтры в ProductService (P0)
+**Проблема:** `GET /api/v1/admin/products` игнорирует query-параметры (`query`, `categoryIds`, `units`, …) — «Упрощенная реализация», `ProductService.java:74` делает `ingredientRepository.findAll(pageRequest)`. Админка не фильтрует.
+- [ ] `IngredientRepository` → добавить наследование `JpaSpecificationExecutor<Ingredient>`.
+- [ ] Создать `specification/ProductSpecifications.java`: `hasNameLike`, `hasCategoryIn`, `hasUnitIn` (остальные фильтры — priceStatus/bindingStatus/usageStatus — реализовать по мере возможности схемы, либо задокументировать как отложенные).
+- [ ] В `getProducts(...)` собрать `Specification.where(...)` из непустых параметров → `findAll(spec, pageable)`. Контроллер уже пробрасывает параметры — проверить.
+- Гейт: `mvn -q compile` + git diff ProductService.java + новый файл.
+
+### Шаг 3. Контракт — глобальная сериализация ID в String (P0)
+**Проблема:** бэк отдаёт числовой `Long` id, фронт ожидает `string` (`src/types/index.ts` уже `id: string`) → рассинхрон сравнений `"1" !== 1`.
+- [ ] Создать `config/JacksonConfig.java` с `SimpleModule`: `Long.class` и `Long.TYPE` → `ToStringSerializer` (`com.fasterxml.jackson.databind.ser.std.ToStringSerializer`).
+- ⚠️ **Побочный эффект (проверить и задокументировать):** сериализатор действует глобально — любые числовые поля типа `Long`/`long` (counters, totals, `totalElements` в Spring Page?) станут строками. Убедиться, что фронт не ломается; при необходимости — точечные `@JsonSerialize` вместо глобальной модули.
+- [ ] Обновить ассерты интеграционных тестов бэкенда: `jsonPath("$.id", is(1))` → `is("1")` и т.п. Прогон `mvn test -Dtest=*IntegrationTest` (без Docker работает LocalPgFallback).
+- [ ] Фронт: типы уже `string` — проверить Map/Set-лукапы и mockServer (моки должны отдавать строковые ID).
+- Гейт: `mvn test` зелёный, `npm run test` зелёный, git diff.
+
+### Шаг 4. Производительность — N+1 в getUserTrips (P1)
+**Проблема:** `TripService.getUserTrips` (`:29–33`) → `findByUserId` без fetch join; маппинг триггерит lazy `days/meals/recipe` на каждый поход.
+- [ ] В `TripRepository` добавить `findUserTripsWithDetails(userId)`: `LEFT JOIN FETCH t.days d LEFT JOIN FETCH d.meals` (+ recipe, если нужен в списке; следить за декартовым раздуванием — при двух коллекциях предпочесть два отдельных запроса или batch fetching).
+- [ ] В `getUserTrips` заменить вызов; убедиться, что `toResponse` больше не триггерит ленивую загрузку.
+- Гейт: `mvn -q compile` + git diff репозитория и сервиса.
+
+### Шаг 5. Производительность — findAll() цен в UserPriceController (P1)
+**Проблема:** `UserPriceController.java:56` и `:89` — `priceRepository.findAll()` тянет всю историю цен в память, затем фильтрация Java-стримом.
+- [ ] В `IngredientPriceRepository` добавить целевой запрос последней действующей цены на дату `asOf` для каждого ингредиента (native `SELECT DISTINCT ON (ingredient_id) ... WHERE effective_from <= :date ORDER BY ingredient_id, effective_from DESC` или JPQL-подзапрос — что чище для Hibernate 6).
+- [ ] Перевести оба места контроллера/сервиса на новый метод; убрать ручную фильтрацию.
+- Гейт: `mvn -q compile` + git diff.
+
+### Шаг 6. Финальные гейты
+- [ ] `cd backend && mvn -q clean compile` — успех.
+- [ ] `npm run build` — успех.
+- [ ] `mvn -B -ntp test` — зелёный (падение из-за смены контракта ID — чинить ассерты/фикстуры, не удаляя тесты).
+- [ ] `npm run test` — зелёный (при надобности обновить mockServer на строковые ID).
+- [ ] Итоговый отчёт: список шагов, полные git diff, последние 20 строк прогонов, раздел «что осталось» (см. ниже).
+
+### Подтверждённые факты из кода (2026-10-23, HEAD bd26e9c)
+- IDOR: `tripMealRepository.findById(mealId)` — TripService.java:151; `deleteById(mealId)` — :171 ✔ проблема жива.
+- Фильтры: заглушка «Упрощенная реализация» — ProductService.java:74 ✔ жива. Репозиторий называется `IngredientRepository` (не ProductRepository).
+- JacksonConfig/ToStringSerializer в бэкенде отсутствуют ✔ (глобального Long→String нет).
+- `findByUserId` без JOIN FETCH — TripRepository.java:14 ✔.
+- `findAll()` цен — UserPriceController.java:56, :89 ✔.
+
+### Что осталось нерешённым (вне этой фазы, кандидаты в следующий спринт)
+- [ ] P1: N+1 в `ProductService.toProductResponse` (2 доп. запроса на элемент страницы — цена + использование).
+- [ ] P1: N+1 в `SummaryService.findEffectivePrice` внутри цикла (:137–138).
+- [ ] P1: синхронный внешний HTTP внутри транзакции в `IntegrationService.syncPrices` (:168–310); ответ 202 при синхронном процессе.
+- [ ] P1: `markRunningAsFailedOnStartup` не вызывается (мёртвая логика очистки зависших SYNC-логов).
+- [ ] P1: null-поля ShoppingList (packsToBuy/leftoverAmount) — закомментированный код в сервисе.
+- [ ] P1: `usedIn` в 409 PRODUCT_IN_USE всегда null (ErrorResponse.java:18 поле есть, не наполняется).
+- [ ] P1: PUT price-overrides — дублирующий `@NotNull ingredientId` в теле при уже наличии в URL.
+- [ ] P2: rate limiting auth-эндпоинтов (Bucket4j/nginx limit_req) — уже в P3-бэклоге ниже.
+- [ ] P2: отзыв access-токена при logout; RFC7807 ProblemDetail; DataIntegrityViolation → 400.
+- [ ] P2: неиспользуемый MapStruct в pom.xml; мёртвые эндпоинты (/prices/relevant-to-trips, /sync-logs/{id} и др.).
+
+---
+
+## Previous Phase (закрыта 2026-10-22): Фаза 10 — Тестирование, дыры регрессий (P0)
 
 **Симптом:** сломался спаренный дейт-пикер (CR-3) — регрессия прошла молча, потому что нет component-слоя. Диагноз: исполняемых тестов ~11, полезные харнессы исключены из прогона, интеграционные бэкенд-тесты @Disabled. Кодек-реальность: кодер не видит GitHub Actions, поэтому все гейты ниже — ЛОКАЛЬНЫЕ команды; финальный ран смотрю я.
 
 **Механизм контроля вместо «надзора за матрицей»:** Red-green (R1): кодер доказывает локально, что тест ловит поломку, — падение на старом коде до фикса. Это единственное, что он может верифицировать сам, и этого достаточно, чтобы регрессия класса «дейт-пикер» стала физической невозможной.
 
-## Next Step
-
-**Фаза 10: Тестирование — закрыть дыры регрессий (P0)**
-
-### P0 — этот спринт (локально проверяемо кодером)
+### P0 — тот спринт (локально проверяемо кодером)
 
 #### 1. Вернуть calc.test.ts / mockServer.test.ts в прогон vitest ✅ ЗАВЕРШЕНО
 - [x] Переписать самописные `assert`/`console.log` на `it()`/`expect()`
@@ -120,7 +191,9 @@
 
 ## Backlog
 
-### P0.5 — ревью 2026-10-23: безопасность и корректность (повышено из бэклога)
+> **Находки аудита бэкенда 2026-10-23 (P0/P1)** перенесены в активную ФАЗУ 11 (см. Next Step) и в раздел «Что осталось нерешённым» там же. Ниже — только исторические остатки.
+
+### P0.5 — ревью 2026-10-23: безопасность и корректность (остатки)
 
 #### 1. Refresh token не используется фронтендом → тихий logout через 1 час ✅ ИСПРАВЛЕНО 2026-10-23 (в рабочем дереве, до коммита)
 - [x] `src/api/client.ts`: при 401 на не-`/auth/*` запросе — одна попытка `POST /auth/refresh`, сохранение новой пары токенов (бэкенд ротирует refresh), повтор исходного запроса
@@ -129,50 +202,8 @@
 - [x] Тесты: `src/api/refresh.test.ts` — 5 сценариев (retry после refresh, очистка сессии, отсутствие рекурсии, single-flight, отсутствие refresh-токена), все зелёные (`npx vitest run src/api/refresh.test.ts`)
 - [ ] Гейт: ручной прогон в поднятом стеке (пользователь)
 
-#### 2. Секреты по умолчанию в docker-compose.yml ✅ ЧАСТИЧНО ИСПРАВЛЕНО (проверено в HEAD)
-- [x] `JWT_SECRET` — fail-fast `${JWT_SECRET:?...}` в compose + `@PostConstruct validate()` в JwtProperties (пустой/короткий секрет роняет старт); `.env.example` с инструкцией генерации; dev.ps1 генерирует секрет
-- [x] Порт 5432 привязан к `127.0.0.1` (не доступен из сети)
-- [ ] Осталось: `POSTGRES_PASSWORD` по-прежнему дефолтится `provision123` (`${POSTGRES_PASSWORD:-provision123}`) — для чисто локального степа приемлемо, но можно тоже сделать fail-fast вместе с JWT_SECRET
-- [ ] Гейт пройден частично: `docker compose config` без warnings требует проверки пользователем
-
-#### 3. CORS полностью отсутствует на бэкенде ✅ ИСПРАВЛЕНО (проверено в HEAD)
-- [x] SecurityConfig содержит `.cors(...)` с `CorsConfigurationSource`, allowlist из env `CORS_ALLOWED_ORIGINS` (дефолт: localhost:3000/5173), см. SecurityConfig.java строки 38–77
-
-#### 4. Миграция V9 отсутствует в истории (дыра в нумерации) — ВЫЯСНЕНО
-- Проверено `git log --all -- '*V9*'`: файла V9 никогда не было ни в одном коммите/ветке истории. Это не потерянная миграция, а просто пропущенный номер при создании V10.
-- На чистых БД Flyway это проходит (пропуск версии не ошибка). Оставлять как есть; новые миграции продолжать с V12.
-- [ ] Опционально: зафиксировать факт в ARCHITECTURE.md, чтобы никто не «восстанавливал» несуществующую V9
-
-### P1 — следующий спринт
-
-#### 1. Contract расширить (mock, локально) ✅ ЗАКРЫТО (2026-10-22)
-- [x] Алиас `products≡ingredients` (одинаковый count/форма)
-- [x] Пагинация одной формой (`PageResponse`: content/page/size/totalElements/totalPages)
-- [x] 409-payload (DUPLICATE_PRODUCT, PRODUCT_IN_USE, DUPLICATE_PRICE_DATE, SYNC_ALREADY_RUNNING) — машиночитаемые `code` + детали (`usedIn` и т.п.)
-- [x] unitLabel, planned/actual/packsToBuy/leftover/substitutedFrom в shopping-сводках
-- [x] Гейт: `npm run test` ✅ (194 passed; contractExtension.test.ts 17/17 + регрессии нет: contract.test.ts 9/9)
-- Примечание: при реализации найден и исправлен дрейф ключей price-overrides (FIX-2): строки сводки берут override по своему ingredientId, а не по catalogId. Формула агрегации mock сохранена байт-в-байт — контрактные числа FIX-1/FIX-2 не изменились.
-
-#### 2. Баг агрегации стоимости — red-green ✅ ИСПРАВЛЕН
-- [x] Функция `calculateShoppingList` уже правильно считает стоимость по дням (строки 79-83 в calculations.ts)
-- [x] Использует `findPriceForDate` для каждого дня отдельно, а не endDate
-- [x] Создан тест `calculations.bug.test.ts` для проверки этого поведения
-- [x] Гейт: `npm run test` (тест должен пройти) ✅ (2026-10-22: 2/2 passed; red-green доказан инъекцией endDate → 2 failed)
-
-#### 3. Интеграционные бэкенд-тесты вернуть ЛОКАЛЬНО ✅ (2026-10-22)
-- [x] `AuthIntegrationTest` — `/auth/me` 401 вместо 500 (фикс NPE в AuthController); `register→accessToken` (расширен контракт: AuthResponseWithUser) — 8/8 passed
-- [x] `CatalogIntegrationTest` — 403→`permitAll` на публичные GET + миграции V12/V13 (досид ингредиентов рецептов, чинит поиск «тушенка») + UTF-8 фикс MockMvcUtf8PostProcessor (ручной парсинг query без двойного декодирования) — 7/7 passed
-- [x] `ConflictIntegrationTest` / `SecurityIntegrationTest` — login в setUp (хелпер TestUsers), уникальные имена фикстур, сброс схемы (TestDataIsolation) — 3/3 и 6/6 passed
-- [x] Testcontainers с fallback: ContainerSuite → Docker недоступен ⇒ LocalPgFallback поднимает PostgreSQL 15 через initdb/pg_ctl (без демона). Java снижена до 17 (README обновлён)
-- [x] FIX (2026-10-22): V13__seed_price_history падал на CI с SQL 23505 (`ingredient_prices_ingredient_id_effective_from_key`, ключ (11, 2026-01-01)) — generate_series(1,23) включал дату базового сида из V3. Правка только в V13 (V1/V3 не трогаем — правка применённых миграций ломает checksum Flyway): generate_series(1,24), фильтр `WHERE NOT EXISTS` по существующим датам, `ON CONFLICT DO NOTHING` как страховка. Проверено на локальном PostgreSQL 15: старый V13 воспроизводит 23505, новый вставляет 1380 строк, повторный запуск = 0 строк (идемпотентно), дублей нет, окно 2024-10-01…2026-09-01
-- [x] Гейт: `mvn -B -ntp test` зелёный локально ✅ (2026-10-22: Tests run: 48, Failures: 0, Errors: 0, Skipped: 3 — skipped только @Disabled агрегационный баг-тест с TODO PLAN.md; surefire-exclude для Integration* снят)
-
-### P2 — после миграции Батча 3
-
-#### 1. Playwright e2e: 6–10 сценариев ✅ (2026-10-23)
-- [x] Логин→продукт+дубль→поход+спаренные даты→сводка план/факт/калории/humanize→фолбэк→смена режима+очистка кеша — `e2e/main-flow.spec.ts`, 8 сценариев, `npx playwright test` = 8 passed
-- [x] Ночной job + PR-прогон без блокировки: `.github/workflows/e2e-nightly.yml` (schedule 03:30 UTC — blocking; pull_request — `continue-on-error`). Локально кодер прогоняет `npx playwright test` и приносит вывод
-- Примечание: для стабильности в mock-режиме добавлены `data-testid`-атрибуты и GET /admin/prices в mockServer; исправлена передача токена `/auth/me` (парсинг ID из токена)
+### P2 — Playwright e2e ✅ ЗАКРЫТО (2026-10-23)
+- Детали — в разделе «Completed», Фаза 10/P2; спеки `e2e/main-flow.spec.ts` (8/8), ночной job `.github/workflows/e2e-nightly.yml`.
 
 ### P3 — бэклог v2 (не сейчас)
 
@@ -232,586 +263,65 @@
 - [ ] LoginPage кладёт accessToken/refreshToken в localStorage — XSS-вектор; долгосрочно — httpOnly cookie для refresh. Записать в P4 как архитектурное решение, не сейчас
 
 ### P4 — продуктовые идеи на расширение (не обязательства)
-- [ ] Пагинация/фильтрация на сервере для продуктов (ProductService.getProducts игнорирует параметр query — «упрощённая реализация», найдено при починке smoke-теста; при росте каталога потребуется нормальный поиск)
+- ~~Пагинация/фильтрация на сервере для продуктов~~ → **взято в работу: ФАЗА 11, Шаг 2** (аудит 2026-10-23 подтвердил: фильтры игнорируются полностью)
 - [ ] Soft-delete / архивация trips вместо физического удаления (если сейчас удаляется физически — проверить перед реализацией)
 - [ ] i18n: UI частично русско-английский — привести к одному языку или вынести строки
 - [ ] Экспорт shopping list (PDF/CSV) — частый запрос для походов
 
-### Задача 3: Усиление Mock-сервера и контрактных тестов
-
-- Проверить `calculatedCaloriesPerServing` в mockServer.ts (формула CR-1)
-- Убедиться, что PUT `/trips/:id/price-overrides` реально обновляет данные
-- Добавить тесты на граничные случаи в contract.test.ts
-
-### Задача 4: Реанимация интеграционных тестов (Backend)
-
-Файлы:
-- `AuthIntegrationTest.java` — починить `/auth/me` без токена (500 → 401)
-- `CatalogIntegrationTest.java` — разобраться с 403 Forbidden
-- `ConflictIntegrationTest.java` — убрать @Disabled
-- `SecurityIntegrationTest.java` — убрать @Disabled
-
-В SecurityConfig настроить `permitAll()` для публичных GET-запросов к каталогу.
-
-### Задача 5: Фикс бага агрегации стоимости
-
-**Проблема:** SummaryService берёт общее количество продукта за поход и умножает на цену на endDate. Если цена менялась во время похода, расчёт неверный.
-
-**Решение:** Переписать логику — стоимость должна считаться посуммно по дням:
-```
-for each day:
-  for each meal:
-    amount = calculateAmountForMeal(...)
-    price = getPriceForDate(day.date)
-    cost = amount * price
-    totalCost += cost
-```
-
-**Тест:** Вернуть `ShoppingListCostAggregationBugTest`, убрав `@Disabled`.
-
-### Задача 6: Гигиена CI и кода
-
-**Backend:**
-- Удалить/закомментировать неработающие `<repository>` из `backend/pom.xml`:
-  - spring-release (401)
-  - flyway-repo (Name or service not known)
-  - flyway-community-db-support (401)
-
-**Frontend:**
-- Пройтись по 7 warning'ам ESLint (react-hooks/exhaustive-deps)
-- Добавить недостающие зависимости в useEffect
-- Или обернуть функции в useCallback
-- Или убрать лишние зависимости
-
-### Задача 7: Полировка UI — единый дизайн-системный апгрейд
-
-**Приоритет:** P1 (после завершения фазы тестирования)
-**Оценка:** 4–6 часов
-**Зависимости:** завершена фаза тестирования
-
-**Описание:** Применить ко всем экранам визуальные улучшения из прототипа `proviant-products-v3.html`. Цель — превратить интерфейс в полированный SaaS-продукт без изменения палитры и структуры. Референс: файл `proviant-products-v3.html` (хранить в корне репо).
-
-**Чек-лист нововведений:**
-1. **Глубина и свет (Refined Glassmorphism):** CSS-переменные (`--surface-highlight`, `--glow-primary`), обновленные `.card`/`.glass` с `backdrop-filter`, hover-эффекты.
-2. **Микро-взаимодействия:** Глобальный `transition`, эффект нажатия `scale(0.97)`, улучшенный фокус полей, анимация модалок `slideUpFade`.
-3. **Бейджи (chips):** Полупрозрачный фон + цветная обводка для `.tag.off/.man/.fire/.ok/.dn`.
-4. **Таблицы:** Hover на строках, только горизонтальные разделители, плавный transition фона.
-5. **Типографика:** `letter-spacing` для заголовков и мелких подписей, сохранение `tabular-nums`.
-6. **Empty States:** SVG-иконки + описание + кнопка действия вместо текста.
-7. **Скелетоны:** Класс `.skeleton` с градиентом и анимацией `shimmer`.
-8. **Humanize units:** Словарь `UNIT_LABELS` (кг, л, шт, уп), функция `humanize()`, замена всех «PCS/KG/L/PACK» в UI.
-
-**Критерии готовности:**
-- Все 8 пунктов применены ко всем экранам.
-- Визуальная консистентность компонентов.
-- `npm run lint` — 0 errors, `npm run build` — SUCCESS.
-- Нет технических единиц измерения в интерфейсе.
-- Прототип остается в репо как референс.
-
-**Что НЕ делать:**
-- Менять цветовую палитру или структуру страниц.
-- Подключать новые фреймворки/библиотеки.
-- Писать отчёты (только правка PLAN.md).
-
-**Связанные задачи:**
-- CR-2 (единицы измерения) — завершить применение humanize везде.
-- Миграция Батча 3 — блокирующий предшественник.
-
 ## Known Bugs
 
-### 1. Агрегация стоимости по endDate
+### 1. Агрегация стоимости по endDate ✅ ИСПРАВЛЕН (2026-10-22)
+Считать стоимость для каждого дня отдельно (`findPriceForDate(day.date)`); ред-грин доказан `calculations.bug.test.ts`. Баг-тест на бэкенде остаётся @Disabled с TODO.
 
-**Симптом:** При изменении цен во время похода стоимость считается неверно.
+### 2. Maven repositories ⏳ В БЭКЛОГЕ (P3, см. выше)
+Ошибки 401/DNS от spring-release/flyway-repo в `<repositories>` backend/pom.xml. Чистка отложена как отдельный тикет.
 
-**Пример:**
-- Поход: 10-20 мая
-- Гречка: 180₽ до 15 мая, 250₽ с 15 мая
-- День 10 мая: 0.8 KG × 180₽ = 144₽ (правильно)
-- День 20 мая: 0.8 KG × 250₽ = 200₽ (правильно)
-- Итого: 344₽
+## Metrics (срез 2026-10-23)
 
-**Текущая реализация:**
-- Использует цену на endDate (20 мая) для всех дней
-- Результат: 1.6 KG × 250₽ = 400₽ (неправильно!)
+### Code
+- **Backend:** ~150 файлов Java · **Frontend:** ~50 файлов TS/TSX · **Миграции:** V1–V13 (V9 не существовало никогда)
+- **Тесты:** backend `mvn test` = 54 passed / 0 failed / 3 skipped (@Disabled баг-тест с TODO); frontend `npm run test` = 194+ passed; e2e Playwright = 8/8
+- **Coverage фронта (гейт R5):** все целевые файлы ≥80% lines; legacy вне гейта
 
-**Решение:** Считать стоимость для каждого дня отдельно.
-
-**Тест:** ShoppingListCostAggregationBugTest (сейчас @Disabled)
-
-### 2. Maven repositories
-
-**Симптом:** Ошибки 401 от spring-release и name-not-known от flyway-repo.
-
-**Решение:** Очистить `<repositories>` в pom.xml, использовать только Maven Central.
+### Статус фаз
+- Фазы 1–10: ✅ закрыты (миграция 13/13 компонентов, AppContext удалён, тестовая пирамида построена)
+- Бэклог P1, P2 (e2e), CI-фиксы: ✅ закрыты 2026-10-22/23
+- **Активна: ФАЗА 11** — исправление находок аудита бэкенда (P0/P1), см. Next Step
 
 ## Completed
 
-### Phase 1: Core Features ✅
-- CRUD продуктов с категориями
-- CRUD рецептов с ингредиентами
-- Создание походов с автогенерацией дней
-- Добавление приёмов пищи
-- Расчёт закупок (общий и по дням)
-- Расчёт стоимости (план/факт)
-- Сводка на человека
-
-### Phase 2: CR-1..CR-5 ✅
-- CR-1: Калорийность на 100 г/мл
-- CR-2: Единицы KG/L/PCS/PACK
-- CR-3: Зависимые дейт-пикеры
-- CR-4: Видимая иконка календаря
-- CR-5: API клиент + mock-адаптер
-
-### Phase 3: Advanced Features ✅
-- Оверрайды цен (план/факт)
-- Замены компонентов (trip-scoped)
-- Расчёт упаковок (ceil до pack_size)
-- Интеграция с Open Food Facts
-- Журнал синков с деталями
-
-### Phase 4: CI/CD & Quality ✅
-- Docker Compose для локальной разработки
-- GitHub Actions CI workflows
-- Backend unit tests
-- Frontend contract tests
-- Security scanning (Semgrep, Trivy, Dependency Review)
-- Lint rules (MODE-07)
-
-### Phase 5: Auth & Modes ✅
-- JWT authentication
-- Refresh tokens
-- ROLE-based access control
-- API режимы (AUTO/FORCE_API/FORCE_MOCK)
-- Watchdog для мониторинга backend
-- Бейдж режима в UI
-
-### Phase 6: Batch 1 Migration ✅
-- LoginPage → API клиент
-- ProtectedRoute → API клиент
-- Layout → API клиент
-- DashboardPage → API клиент
-
-### Phase 7: CI Fixes ✅
-- Mockito 5.14.2 для JDK 21
-- Lint правила и исключения
-- Контрактные тесты FIX-1/FIX-2
-- Happy-dom вместо jsdom
-- Trivy non-blocking
-- SHA пиннинг (потом откат на теги)
-- prefer-const и unused vars
-
-### Phase 8: Batch 2 Migration ✅
-- ProductsPage → API клиент
-- AdminPage → API клиент
-- IntegrationsPage → API клиент
-- BindingWizard → API клиент
-- Все файлы мигрированы, нет импортов AppContext/mockData
-- Build и lint проходят успешно
-
-## Metrics
-
-### Code
-- **Backend:** ~150 файлов Java
-- **Frontend:** ~50 файлов TypeScript/TSX
-- **Migrations:** 11 файлов SQL (V1-V11)
-- **Tests:** 9 backend + 3 frontend
-- **Total:** ~200 файлов
-
-### Coverage
-- **Backend:** ~70% (unit + integration отключены)
-- **Frontend:** ~30% (calc + mock + contract)
-- **E2E:** 0% (не начато)
-
-### Components Migration
-- **Total:** 13 компонентов
-- **Migrated:** 13 (Batch 1: 4, Batch 2: 4, Batch 3: 5) ✅ ЗАВЕРШЕНО
-- **In Progress:** 0
-- **Remaining:** 0
-
-### Testing Phase Status
-- **P0 задачи:** 2/5 завершено (calc.test.ts + mockServer.test.ts возвращены в vitest, lint ошибки исправлены)
-- **P1 задачи:** 3/3 завершено ✅ (баг агрегации стоимости; Contract расширить — 17 тестов contractExtension + без регрессий; Интеграционные бэкенд-тесты локально — 2026-10-22: mvn test = 48 passed / 0 failed, PostgreSQL 15 через LocalPgFallback без Docker, Java 17)
-- **P2 задачи:** 0/1 завершено
-- **P3 задачи:** 0/2 завершено
-- **Критерии готовности фазы:** 2/6 выполнено
-- **Опорные файлы:** proviant-products-v3.html создан (дизайн-система v3)
+- ✅ Фаза 1: Core Features (CRUD продуктов/рецептов/походов, расчёт закупок и стоимости)
+- ✅ Фаза 2: CR-1..CR-5 (калорийность, единицы KG/L/PCS/PACK, дейт-пикеры, API-клиент + mock-адаптер)
+- ✅ Фаза 3: Advanced Features (оверрайды цен, замены, упаковки, Open Food Facts, SYNC-логи)
+- ✅ Фаза 4: CI/CD & Quality (Docker Compose, GitHub Actions, Semgrep/Trivy, lint-стражи)
+- ✅ Фаза 5: Auth & Modes (JWT + refresh ротация, ROLE-доступ, AUTO/API/MOCK, watchdog, бейдж)
+- ✅ Фазы 6–9: Миграция Batch 1–3 (все 13 компонентов на API-клиент, AppContext удалён)
+- ✅ Фаза 7: CI Fixes (Mockito, happy-dom, prefer-const, Trivy non-blocking)
+- ✅ Фаза 10: Тестирование P0 (component-тесты R2, MODE-сьют 01–08, coverage-гейт R5, страж R4) — 2026-10-22
+- ✅ Бэклог P1: Contract расширить (17 contractExtension-тестов), баг агрегации стоимости (red-green), интеграционные бэкенд-тесты локально (LocalPgFallback без Docker, Java 17) — 2026-10-22
+- ✅ P2: Playwright e2e 8 сценариев + nightly job — 2026-10-23
+- ✅ CI Backend Tests починлен (ContainerSuite fallback, Java 17 в ci.yml, PGDG-fallback для postgresql-15) — 2026-10-23
+- ✅ HOTFIX: `ReferenceError: e is not defined` в продакшен-билде (client.ts env-опечатка) — 2026-10-23
+- ✅ Дизайн-система «Провиант» / полировка UI (PR #26) — референс `proviant-products-v3.html` в репо
+- ✅ P0-2 (2026-10-23): удалены миграции V14/V15, заменены на DevDataInitializer (@Profile(dev) + SEED_DEMO_USERS env)
 
 ## Timeline
 
-- **Week 1:** ✅ Batch 2 migration (4 компонента) — ЗАВЕРШЕНО
-- **Week 2:** ✅ Batch 3 migration (5/5 завершено) — ЗАВЕРШЕНО
-- **Week 3:** 🔄 Тестирование P0 (вернуть calc.test/mockServer.test, component-тесты, MODE-сьют) — В ПРОЦЕССЕ
-- **Week 4:** Тестирование P1 (contract расширить, баг агрегации, интеграционные бэкенд-тесты)
-- **Week 5:** Тестирование P2 (Playwright e2e)
-- **Week 6:** Полировка UI (дизайн-системный апгрейд)
-- **Week 7:** Гигиена CI и кода
+- **Weeks 1–5:** ✅ Batch 2/3 migration, тестирование P0/P1, Playwright e2e — ЗАВЕРШЕНО (2026-10-22/23)
+- **Week 6:** ✅ Дизайн-система / полировка UI (PR #26) — ЗАВЕРШЕНО
+- **Week 7 (текущая):** 🔄 ФАЗА 11 — исправление находок аудита бэкенда (P0/P1), см. Next Step
+- **Дальше:** гигиена CI/кода (P3-бэклог), остатка P1 из раздела «Что осталось нерешённым»
 
-## Тикет: Завершение Батча 3 миграции
+## Completed Tickets (архив тикетов, детали — в «Completed» и git-истории)
 
-### Цель
-Мигрировать оставшиеся 3 компонента на API клиент и удалить AppContext полностью.
+### Тикет: Завершение Батча 3 миграции ✅ (Фаза 9 закрыта)
+Все 13 компонентов переведены на API-клиент, AppContext удалён из продакшен-кода.
 
-### Компоненты для миграции
+### Тикет: Полировка UI — единый дизайн-системный апгрейд ✅ (закрыто, PR #26)
+Слои «Midnight Harbor v3»: glassmorphism-переменные, микро-взаимодействия, чипсы/бейджи, таблицы, empty states, скелетоны, humanize единиц (UNIT_LABELS). Референс `proviant-products-v3.html` сохранён в репо; палитра/структура не менялись. Гейты на момент закрытия: lint 0 errors, build SUCCESS.
 
-#### 1. PriceOverridesTab.tsx (494 строки) ✅ ЗАВЕРШЕНО
-**Сложность:** Высокая
-**Миграция завершена:**
-- ✅ Убран `useApp()` из AppContext
-- ✅ Добавлены локальные состояния: `trip`, `recipes`, `prices`, `loading`, `error`
-- ✅ Добавлена функция `loadData()` для загрузки данных через API
-- ✅ Обновлены функции расчёта для работы с локальными данными
-- ✅ Добавлены состояния loading/error
-- ✅ Build проходит успешно
-
-#### 2. SubstitutionModal.tsx (200+ строк) ✅ ЗАВЕРШЕНО
-**Сложность:** Средняя
-**Миграция завершена:**
-- ✅ Убран `useApp()` из AppContext
-- ✅ Добавлен импорт `api` из client.ts
-- ✅ Заменены все `fetch` вызовы на `api` клиент
-- ✅ Убраны ручные заголовки авторизации
-
-#### 3. RecipesPage.tsx (300+ строк) ✅ ЗАВЕРШЕНО
-**Сложность:** Средняя
-**Миграция завершена:**
-- ✅ Убран `useApp()` из AppContext
-- ✅ Добавлен импорт `api` из client.ts
-- ✅ Добавлены локальные состояния: `recipes`, `loading`, `error`
-- ✅ Добавлена функция `loadRecipes()` для загрузки данных через API
-- ✅ Обновлены все обращения к `state.recipes` на локальное состояние `recipes`
-- ✅ Добавлены состояния loading/error
-
-### После миграции всех компонентов
-
-#### Удаление AppContext
-1. Удалить файл `src/store/AppContext.tsx`
-2. Удалить папку `src/store/` (если пуста)
-3. Проверить, что нигде нет импортов AppContext:
-   ```bash
-   grep -r "AppContext" src/
-   ```
-4. Проверить, что нигде нет импортов useApp:
-   ```bash
-   grep -r "useApp" src/
-   ```
-
-#### Обновление ESLint конфигурации
-1. Открыть `.eslintrc.cjs`
-2. Убрать файлы из `excludedFiles`:
-   - `src/components/PriceOverridesTab.tsx`
-   - `src/components/SubstitutionModal.tsx`
-   - `src/pages/RecipesPage.tsx`
-3. Проверить, что правило MODE-07 снова строгое для всего проекта
-
-#### Финальная проверка
-1. Запустить `npm run lint` — должно быть 0 errors
-2. Запустить `npm run build` — должно быть BUILD SUCCESS
-3. Запустить `npm run test` — все тесты должны проходить
-4. Проверить в браузере:
-   - Страница "Закупка и чеки" работает
-   - Модалка замены ингредиентов работает
-   - Страница каталога рецептов работает
-
-### Критерии готовности
-- [ ] Все 3 компонента мигрированы на API клиент
-- [ ] Нет импортов AppContext или useApp в мигрированных файлах
-- [ ] AppContext.tsx удалён
-- [ ] Папка src/store/ удалена (если пуста)
-- [ ] ESLint конфигурация обновлена (файлы убраны из excludedFiles)
-- [ ] `npm run lint` — 0 errors
-- [ ] `npm run build` — BUILD SUCCESS
-- [ ] `npm run test` — все тесты проходят
-- [ ] Все страницы работают в браузере
-
-### Оценка времени
-- PriceOverridesTab.tsx: 2-3 часа (высокая сложность)
-- SubstitutionModal.tsx: 1-2 часа (средняя сложность)
-- RecipesPage.tsx: 1-2 часа (средняя сложность)
-- Удаление AppContext и проверка: 30 минут
-- **Итого:** 4.5-7.5 часов
-
-### Риски
-1. **Сложность расчётов в PriceOverridesTab** — может потребоваться рефакторинг утилит
-2. **Зависимости между компонентами** — нужно проверить, что все API endpoints реализованы в mockServer
-3. **Типы данных** — нужно убедиться, что API возвращает данные в правильном формате
-
-### Тестирование
-После миграции каждого компонента:
-1. Проверить в MOCK режиме — данные загружаются из mockServer
-2. Проверить в REAL режиме — данные загружаются из backend
-3. Проверить все CRUD операции — создание, чтение, обновление, удаление
-4. Проверить обработку ошибок — loading/error состояния
-
----
-
-## Тикет: Полировка UI — единый дизайн-системный апгрейд
-
-**Приоритет:** P1 (после завершения миграции Батча 3)  
-**Оценка:** 4–6 часов  
-**Зависимости:** завершена миграция Батча 3 (иначе правки будут конфликтовать с переносом компонентов)
-
-### Описание
-Применить ко всем экранам приложения визуальные улучшения из прототипа proviant-products-v3.html. Цель — превратить интерфейс из «функционального прототипа» в «полированный SaaS-продукт» без изменения цветовой палитры и структуры.
-
-**Референс:** файл proviant-products-v3.html (хранить в корне репо как эталон, не удалять).
-
-### Чек-лист нововведений
-
-#### 1. Глубина и свет (Refined Glassmorphism)
-- Добавить CSS-переменные: `--surface-highlight`, `--glow-primary`, `--border-subtle`, `--border-highlight`
-- Обновить `.card` / `.glass`: `backdrop-filter: blur(16px) saturate(120%)`, inset тень сверху + мягкая тень снизу
-- Добавить hover-эффект на карточки: подсветка границы + усиление тени
-
-#### 2. Микро-взаимодействия
-- Глобальный transition: `all 0.2s cubic-bezier(0.4, 0, 0.2, 1)` для кнопок, табов, чипов, полей
-- Эффект нажатия: `transform: scale(0.97)` на `:active` для кнопок
-- Улучшенный фокус полей: `box-shadow: 0 0 0 3px var(--glow-primary), inset 0 1px 2px rgba(0,0,0,0.2)`
-- Анимация появления модалок: `slideUpFade 0.25s cubic-bezier(0.16, 1, 0.3, 1)`
-
-#### 3. Бейджи (chips) с обводкой
-- Заменить сплошную заливку на полупрозрачный фон + цветную обводку
-- Стили для `.tag.off`, `.tag.man`, `.tag.fire`, `.tag.ok`, `.tag.dn` по образцу из прототипа
-
-#### 4. Таблицы
-- Hover на строках: `tr:hover td { background: var(--surface-highlight); }`
-- Убрать вертикальные разделители, оставить только горизонтальные `border-bottom`
-- Плавный transition: `background 0.15s ease` на ячейках
-
-#### 5. Типографика
-- `letter-spacing: -0.02em` для h1, h2 (плотность заголовков)
-- `letter-spacing: 0.03em` для `.mu` (читаемость мелких подписей)
-- Сохранить `font-variant-numeric: tabular-nums` для чисел (уже есть)
-
-#### 6. Empty States
-- Заменить текстовые «Ничего не найдено» на SVG-иконку + описание + кнопка действия
-- Единый стиль для всех пустых состояний (таблицы, списки, фильтры)
-
-#### 7. Скелетоны (shimmer)
-- Добавить класс `.skeleton` с градиентом и анимацией `shimmer 1.5s infinite`
-- Применить в состояниях загрузки таблиц и карточек
-
-#### 8. Humanize + русские лейблы единиц (CR-2, подтверждение)
-- Словарь `UNIT_LABELS = { KG: 'кг', L: 'л', PCS: 'шт', PACK: 'уп' }` — единый для всего UI
-- Функция `humanize(amount, unit)`: 0.8 KG → 800 г, 0.25 L → 250 мл, 2 PCS → 2 шт, 1 PACK → 1 уп
-- Применить во всех таблицах, фильтрах, модалках, сообщениях о дублях
-- В UI нигде не должно встречаться «PCS», «KG», «L», «PACK» — только русские лейблы
-
-### Критерии готовности
-- [ ] Все 8 пунктов чек-листа применены ко всем экранам (Продукты, Цены, Рецепты, Походы, Интеграции, Журнал синков, Дашборд)
-- [ ] Визуальная консистентность: карточки, кнопки, бейджи, модалки выглядят одинаково на всех страницах
-- [ ] `npm run lint` — 0 errors
-- [ ] `npm run build` — SUCCESS
-- [ ] В UI нигде нет «PCS»/«KG»/«L»/«PACK» (grep-проверка)
-- [ ] Прототип proviant-products-v3.html остаётся в репо как живой референс
-
-### Что НЕ делать
-- ❌ Менять цветовую палитру (`--w1`, `--w2`, `--bg`, `--sf` остаются)
-- ❌ Менять структуру страниц или логику компонентов
-- ❌ Создавать новые CSS-фреймворки или подключать внешние библиотеки
-- ❌ Писать отчёты в MD — только правка PLAN.md
-
-### Связанные задачи в бэклоге
-- **CR-2** (единицы кг/л/шт/уп) — уже реализован частично, эта задача завершает применение humanize везде
-- **Миграция Батча 3** — должна быть завершена до начала этой задачи, чтобы не править один и тот же код дважды
-- **Интеграционные тесты** — не блокируют, но после полировки стоит прогнать визуально (скриншоты ключевых экранов)
-
-
----
-
-## Тикет: Внедрение дизайн-системы «Провиант» (брендбук)
-
-**Приоритет:** P1
-**Оценка:** 8–12 часов
-**Зависимости:** завершена миграция Батча 3; согласование с тикетом «Полировка UI» (этот тикет заменяет палитру, полировка применяется поверх новых токенов)
-
-### ЗАДАЧА (DDD)
-Внедрить новую дизайн-систему "Провиант" (брендбук) в существующий фронтенд React/Vite/Tailwind.
-
-### КОНТЕКСТ
-У нас есть утвержденный HTML/CSS макет главной страницы с новой цветовой схемой, типографикой и стилями компонентов.
-Цель: применить эти стили ко всему приложению (Dashboard, Trips, Recipes, Admin), чтобы оно выглядело премиально и единообразно.
-
-### ИСТОЧНИК ИСТИНЫ (CSS Variables & Styles)
-Скопируй эти переменные и базовые стили из предоставленного брендбука:
-
-```css
-:root {
-  /* Backgrounds */
-  --bg-0: #0B141B;      /* Основной фон */
-  --bg-1: #101D27;      /* Фон панелей/карточек */
-  --bg-2: #162634;      /* Ховеры, второстепенные элементы */
-  --bg-3: #1E3243;      /* Активные состояния, бордеры */
-
-  /* Lines & Borders */
-  --line: rgba(148,199,214,.14);
-  --line-strong: rgba(148,199,214,.28);
-
-  /* Text */
-  --text-1: #EDF4F7;    /* Основной текст */
-  --text-2: #A9BEC9;    /* Второстепенный текст */
-  --text-3: #6F8895;    /* Приглушенный текст / placeholders */
-
-  /* Accents */
-  --amber-200: #FFD9A0;
-  --amber-300: #FFC46B;
-  --amber-500: #FF9E2C; /* Главный акцент (кнопки, активные табы) */
-  --flame-600: #E85D1F;
-  --wave-300: #7FD8CC;  /* Второй акцент (инфо, успех) */
-  --wave-400: #57C7B8;
-  --wave-600: #2E9C8E;
-  --snow: #F2F7F5;
-
-  /* Gradients */
-  --grad-brand: linear-gradient(135deg, #FFD08A 0%, #F2842B 52%, #E85D1F 100%);
-
-  /* Radii */
-  --r-sm: 12px;
-  --r-md: 18px;
-  --r-lg: 26px;
-
-  /* Shadows */
-  --shadow-1: 0 18px 50px rgba(3,10,16,.5);
-}
-
-/* Шрифты */
-font-family-display: "Unbounded", sans-serif;
-font-family-body: "Manrope", sans-serif;
-```
-
-### ЭТАП 1: Глобальная настройка
-
-1. Подключи шрифты в index.html:
-   ```html
-   <link rel="preconnect" href="https://fonts.googleapis.com">
-   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-   <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-   ```
-
-2. Обнови src/index.css (или global.css):
-   - Вставь блок `:root` с новыми переменными выше.
-   - Удали старые переменные цвета (`--primary`, `--secondary` и т.д.), если они конфликтуют.
-   - Добавь базовые стили body:
-     ```css
-     body {
-       background-color: var(--bg-0);
-       color: var(--text-1);
-       font-family: var(--font-body);
-       /* Опционально: добавить зерно плёнки из брендбука через pseudo-element ::before */
-     }
-     ```
-   - Настрой Tailwind config (tailwind.config.js/ts), чтобы утилиты `bg-background`, `text-primary` использовали новые переменные. Пример:
-     ```js
-     theme: {
-       extend: {
-         colors: {
-           background: 'var(--bg-0)',
-           surface: 'var(--bg-1)',
-           primary: 'var(--amber-500)',
-           secondary: 'var(--wave-400)',
-           muted: 'var(--text-3)',
-           border: 'var(--line)',
-         },
-         fontFamily: {
-           display: ['Unbounded', 'sans-serif'],
-           sans: ['Manrope', 'sans-serif'],
-         },
-         borderRadius: {
-           sm: 'var(--r-sm)',
-           md: 'var(--r-md)',
-           lg: 'var(--r-lg)',
-         }
-       }
-     }
-     ```
-
-### ЭТАП 2: Компоненты UI (Library)
-
-Обнови общие компоненты в `src/components/ui/` (Button, Card, Input, Badge, Tabs).
-
-1. **Button.tsx:**
-   - `variant="primary"`:
-     ```
-     background: var(--grad-brand);
-     color: #221204;
-     box-shadow: 0 0 0 1px rgba(255,158,44,.3), 0 16px 44px rgba(242,122,18,.28);
-     hover: transform translateY(-2px), brightness(1.07);
-     ```
-   - `variant="ghost"`:
-     ```
-     border: 1px solid var(--line-strong);
-     background: rgba(22,38,52,.4);
-     hover: background var(--bg-2);
-     ```
-
-2. **Card.tsx:**
-   ```
-   background: linear-gradient(160deg, rgba(22,38,52,.72), rgba(13,23,32,.78));
-   backdrop-filter: blur(12px);
-   border: 1px solid var(--line);
-   border-radius: var(--r-lg);
-   box-shadow: var(--shadow-1);
-   ```
-
-3. **Input.tsx / Select.tsx:**
-   ```
-   background: rgba(11,20,27,.7);
-   border: 1px solid var(--line-strong);
-   focus: outline 2px solid rgba(255,158,44,.5);
-   color: var(--text-1);
-   ```
-
-4. **Badge.tsx:**
-   - Для статусов используй цвета wave (teal) и amber.
-   - Например, badge-success: bg rgba(87,199,184,.12), border rgba(87,199,184,.34), color var(--wave-300).
-
-### ЭТАП 3: Страницы приложения
-
-Пройдись по основным страницам и примени новые классы.
-
-1. **Layout.tsx (Навигация):**
-   - Сделай шапку "плавающей пилюлей" как в брендбуке:
-     ```
-     position: sticky; top: 14px; z-index: 60;
-     background: rgba(16,29,39,.66);
-     backdrop-filter: blur(16px);
-     border-radius: 999px;
-     border: 1px solid var(--line);
-     ```
-   - Логотип: используй SVG из брендбука (`#pv-mark`) или простой текстовый логотип с font-display.
-
-2. **DashboardPage.tsx / TripsPage.tsx:**
-   - Карточки походов должны использовать стиль `.glass` из брендбука.
-   - Заголовки страниц: `font-family: var(--font-display); letter-spacing: -.015em;`
-   - Метрики (статы): используй стиль `.stat` (фон bg-1, бордер line, цифры amber-300).
-
-3. **TripDetailPage.tsx:**
-   - Табы (Меню, Список покупок, Цены): используй сегментированный контрол (`.seg`) из брендбука.
-     Активный таб: background var(--grad-brand), color #221204.
-     Неактивный: transparent, color var(--text-2).
-   - Списки блюд/продуктов: используй строки с dashed border-bottom (как в `.meal-row`).
-
-4. **RecipesPage.tsx / ProductsPage.tsx:**
-   - Фильтры и поиск: inputs в стиле новых Input.tsx.
-   - Категории: бейджи в стиле teal/wave.
-
-### ЭТАП 4: Детали и анимации
-
-1. Добавь эффект "зерна плёнки" на `body::before` (data-uri svg noise, opacity .05).
-2. Анимация появления контента: fade-in-up для основных секций.
-3. Hover-эффекты для интерактивных элементов (transform translateY).
-
-### ПРОВЕРКИ
-- [ ] `npm run build` — успешно.
-- [ ] Визуально открой http://localhost:3000.
-  - [ ] Проверь читаемость текста (contrast ratio).
-  - [ ] Проверь работу темной темы (все элементы должны быть видны на фоне #0B141B).
-  - [ ] Убедись, что нет "сиротливых" старых цветов (например, ярко-синий bootstrap blue или серый material gray).
-
-### ОТЧЁТ
-1. Список измененных файлов.
-2. Git diff для tailwind.config.js и src/index.css.
-3. Описание ключевых визуальных изменений (что стало выглядеть лучше).
-4. Если где-то старый дизайн ломается (например, кастомные компоненты не переписаны) — перечисли их.
+### Тикет: Внедрение дизайн-системы «Провиант» (брендбук) ✅ (закрыт вместе с полировкой UI)
+Глобальные CSS-переменные, библиотека компонентов, страницы, анимации по брендбуку.
 
 ## Notes
 
@@ -821,5 +331,4 @@ font-family-body: "Manrope", sans-serif;
 - Основная документация — в README.md
 - **Никаких новых MD-файлов!** Только обновление существующих.
 
-P0-2 ✅ ЗАКРЫТО (2026-10-23). Удалены миграции V14/V15, заменены на DevDataInitializer (@Profile(dev) + SEED_DEMO_USERS env).
 

@@ -10,6 +10,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
+import com.provision.specification.ProductSpecifications;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -71,13 +73,21 @@ public class ProductService {
             int page,
             int size
     ) {
-        // Упрощенная реализация - в продакшене использовать Specification
-        PageRequest pageRequest = PageRequest.of(page, size, 
-                Sort.by(Sort.Direction.fromString(direction != null ? direction : "asc"), 
+        // FIX P0 (аудит): раньше все фильтры игнорировались ("Упрощенная реализация")
+        // и возвращался весь справочник. Теперь фильтрация выполняется на БД через Specification.
+        PageRequest pageRequest = PageRequest.of(page, size,
+                Sort.by(Sort.Direction.fromString(direction != null ? direction : "asc"),
                         sort != null ? sort : "name"));
-        
-        Page<Ingredient> ingredients = ingredientRepository.findAll(pageRequest);
-        
+
+        Specification<Ingredient> spec = Specification.where(ProductSpecifications.matchesQuery(query))
+                .and(ProductSpecifications.hasCategoryIn(categoryIds))
+                .and(ProductSpecifications.hasUnitIn(units))
+                .and(ProductSpecifications.hasPriceStatus(priceStatus))
+                .and(ProductSpecifications.hasBindingStatus(bindingStatus))
+                .and(ProductSpecifications.hasUsageStatus(usageStatus));
+
+        Page<Ingredient> ingredients = ingredientRepository.findAll(spec, pageRequest);
+
         return ingredients.map(this::toProductResponse);
     }
 

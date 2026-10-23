@@ -103,7 +103,7 @@ class SecurityIntegrationTest {
 
         Map<String, Object> tripData = objectMapper.readValue(
                 tripResult.getResponse().getContentAsString(StandardCharsets.UTF_8), Map.class);
-        userTripId = ((Number) tripData.get("id")).longValue();
+        userTripId = Long.valueOf(tripData.get("id").toString());
     }
 
     @Test

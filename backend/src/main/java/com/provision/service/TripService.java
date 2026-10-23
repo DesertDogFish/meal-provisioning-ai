@@ -27,7 +27,23 @@ public class TripService {
 
     @Transactional(readOnly = true)
     public List<TripResponse> getUserTrips(Long userId) {
-        return tripRepository.findByUserId(userId).stream()
+        List<Trip> trips = tripRepository.findByUserId(userId);
+        if (trips.isEmpty()) {
+            return List.of();
+        }
+
+        // P1 (аудит ФАЗЫ 11, Шаг 4): было N+1 — lazy days/meals/recipe грузились
+        // по одному запросу на каждый поход/день. Теперь: ровно 2 batch-запроса,
+        // после чего коллекции уже в persistence context и toResponse не триггерит ленивую загрузку.
+        List<Long> tripIds = trips.stream().map(Trip::getId).toList();
+        List<TripDay> days = tripRepository.findDaysByTripIds(tripIds);
+
+        if (!days.isEmpty()) {
+            List<Long> dayIds = days.stream().map(TripDay::getId).toList();
+            tripRepository.findMealsWithRecipesByDayIds(dayIds);
+        }
+
+        return trips.stream()
                 .map(this::toResponse)
                 .toList();
     }
@@ -145,11 +161,12 @@ public class TripService {
 
     @Transactional
     public TripMealResponse updateMeal(Long tripId, Long dayId, Long mealId, TripMealRequest request, Long userId) {
+        // IDOR-защита: блюдо ищем только внутри загруженного похода текущего пользователя,
+        // а не через трип-агностичный tripMealRepository.findById(mealId).
         Trip trip = tripRepository.findByIdWithDaysAndMeals(tripId, userId)
                 .orElseThrow(() -> new NotFoundException("Trip not found or access denied"));
 
-        TripMeal meal = tripMealRepository.findById(mealId)
-                .orElseThrow(() -> new NotFoundException("Meal not found"));
+        TripMeal meal = findOwnedMeal(trip, dayId, mealId);
 
         Recipe recipe = recipeRepository.findById(request.recipeId())
                 .orElseThrow(() -> new NotFoundException("Recipe not found"));
@@ -165,10 +182,31 @@ public class TripService {
 
     @Transactional
     public void deleteMeal(Long tripId, Long dayId, Long mealId, Long userId) {
+        // IDOR-защита: удаляем блюдо из коллекции дня (orphanRemoval=true),
+        // а не через tripMealRepository.deleteById(mealId) без проверки принадлежности.
         Trip trip = tripRepository.findByIdWithDaysAndMeals(tripId, userId)
                 .orElseThrow(() -> new NotFoundException("Trip not found or access denied"));
 
-        tripMealRepository.deleteById(mealId);
+        TripMeal meal = findOwnedMeal(trip, dayId, mealId);
+        TripDay day = meal.getTripDay();
+        day.getMeals().remove(meal);
+        tripRepository.save(trip);
+        log.info("Deleted meal {} from day {} of trip {}", mealId, dayId, tripId);
+    }
+
+    /**
+     * Возвращает блюдо, гарантируя, что оно принадлежит дню dayId внутри данного trip
+     * (принадлежность trips уже проверена запросом findByIdWithDaysAndMeals с фильтром по userId).
+     */
+    private TripMeal findOwnedMeal(Trip trip, Long dayId, Long mealId) {
+        return trip.getDays().stream()
+                .filter(d -> d.getId().equals(dayId))
+                .findFirst()
+                .orElseThrow(() -> new NotFoundException("Day not found in this trip"))
+                .getMeals().stream()
+                .filter(m -> m.getId().equals(mealId))
+                .findFirst()
+                .orElseThrow(() -> new NotFoundException("Meal not found in this day/trip"));
     }
 
     private TripResponse toResponse(Trip trip) {
