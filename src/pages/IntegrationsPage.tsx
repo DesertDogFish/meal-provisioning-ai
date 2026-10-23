@@ -122,15 +122,26 @@ export default function IntegrationsPage() {
     try {
       const result = await api.post<any>(`/admin/integrations/${provider}/connect`);
       // FIX: раньше здесь было что-то вроде
-      //   if (result?.status !== 'CONNECTED' || result?.error) showError('Ошибка: ' + ...)
-      // и статус 'CONNECTED' в ответе бэкенда распознавался как ошибка
-      // ("Ошибка: Connected successfully"). Теперь: HTTP-ошибку ловит catch,
-      // а в теле проверяем только реальное поле ошибки.
-      if (isFailureEnvelope(result)) {
-        showError(extractErrorMessage(result));
-      } else if (result?.errorMessage) {
-        // Провайдер недоступен: бэкенд вернул 200 со статусом ERROR
-        showError(`Не удалось подключиться: ${result.errorMessage}`);
+      //   const errorMsg = result?.message || result?.error;
+      //   if (errorMsg) showError('Ошибка: ' + errorMsg);
+      // и успешный ответ OFF-бэкенда с message="Connected successfully"
+      // распознавался как ошибка ("Ошибка: Connected successfully").
+      //
+      // Теперь явная проверка статуса:
+      // - HTTP 2xx доходит сюда (не-ok ответы ApiClient бросает как ApiClientError → catch);
+      //   показываем зелёный тост и НЕ берём текст message/detail из тела.
+      // - Ошибочные тела (ProblemDetail с status>=400 или IntegrationDto со статусом
+      //   ERROR и errorMessage) — это реальные ошибки, их показываем красным.
+      const failedByStatus = result?.status === 'ERROR' || result?.available === false;
+      if (failedByStatus) {
+        // Бэкенд вернул 200, но интеграция в статусе ERROR — реальная ошибка.
+        showError(`Ошибка: ${result?.errorMessage || extractErrorMessage(result) || 'Неизвестная ошибка'}`);
+      } else if (isFailureEnvelope(result)) {
+        showError(`Ошибка: ${extractErrorMessage(result) || 'Неизвестная ошибка'}`);
+      } else if (result?.errorMessage && !/^connected successfully$/i.test(result.errorMessage)) {
+        // Поле errorMessage при успехе содержит служебное сообщение бэкенда
+        // ("Connected successfully") — игнорируем его, оно не является ошибкой.
+        showError(`Ошибка: Не удалось подключиться: ${result.errorMessage}`);
       } else {
         showSuccess('Успешно подключено');
       }
