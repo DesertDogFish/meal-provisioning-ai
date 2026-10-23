@@ -306,7 +306,13 @@ export default function IntegrationsPage() {
                   Последняя синхронизация: {new Date(offIntegration.lastSyncAt).toLocaleString('ru-RU')}
                 </p>
               )}
-              {offIntegration?.errorMessage && (
+              {/* FIX (баг «Ошибка: Connected successfully»): бэкенд сохранял в
+                  error_message служебное сообщение успеха ("Connected successfully"),
+                  и карточка показывала его как ошибку при статусе CONNECTED.
+                  Теперь бэкенд чистит поле при успехе; на всякий случай красным
+                  выводим ошибку только для статуса ERROR, а устаревшее текстовое
+                  поле при CONNECTED не показываем вовсе. */}
+              {offIntegration?.status === 'ERROR' && offIntegration.errorMessage && (
                 <p className="text-xs mt-1" style={{ color: 'var(--fire)' }}>
                   Ошибка: {offIntegration.errorMessage}
                 </p>

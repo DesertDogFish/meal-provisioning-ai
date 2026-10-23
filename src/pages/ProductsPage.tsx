@@ -3,6 +3,7 @@ import { useToast } from '../components/ToastProvider';
 import { Plus, Search, X } from 'lucide-react';
 import { NumberField } from '../components/NumberField';
 import { ProductTable, type ProductRow } from '../components/ProductTable';
+import Modal from '../components/Modal';
 import { api } from '../api/client';
 import type { UnitOfMeasure, ProductCategory } from '../types';
 import { humanizeUnit, recipesWord } from '../utils/text';
@@ -326,8 +327,8 @@ export default function ProductsPage() {
 
       {/* Modal */}
       {showModal && (
-        <div className="modal-overlay flex items-center justify-center p-4" onClick={() => setShowModal(false)}>
-          <div className="rounded-2xl shadow-xl w-full max-w-md p-6" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }} onClick={e => e.stopPropagation()}>
+        <Modal onClose={() => setShowModal(false)}>
+          <div className="rounded-2xl shadow-xl w-full max-w-md p-6" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
             <h2 className="text-xl font-bold mb-4" style={{ color: 'var(--text)' }}>
               {editingProduct ? 'Редактировать продукт' : 'Новый продукт'}
             </h2>
@@ -454,7 +455,7 @@ export default function ProductsPage() {
               </button>
             </div>
           </div>
-        </div>
+        </Modal>
       )}
     </div>
   );

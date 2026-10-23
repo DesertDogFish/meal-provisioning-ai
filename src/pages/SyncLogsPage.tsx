@@ -1,6 +1,7 @@
 ﻿import { useState, useEffect } from 'react';
 import { useToast } from '../components/ToastProvider';
 import { DatePicker } from '../components/DatePicker';
+import Modal from '../components/Modal';
 import { RefreshCw, X, AlertCircle } from 'lucide-react';
 import { api, ApiClientError } from '../api/client';
 
@@ -362,11 +363,10 @@ export default function SyncLogsPage() {
 
       {/* Drawer */}
       {selectedLog && (
-        <div className="modal-overlay flex justify-end" onClick={() => setSelectedLog(null)}>
+        <Modal onClose={() => setSelectedLog(null)}>
           <div
             className="w-full max-w-2xl h-full overflow-auto p-6"
             style={{ background: 'var(--surface)', borderLeft: '1px solid var(--border)' }}
-            onClick={e => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl font-bold" style={{ color: 'var(--text)' }}>
@@ -454,7 +454,7 @@ export default function SyncLogsPage() {
               </button>
             </div>
           </div>
-        </div>
+        </Modal>
       )}
     </div>
   );

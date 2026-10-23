@@ -5,6 +5,7 @@ import { formatRub } from '../utils/formatRub'; // Фаза 13: итоги — �
 import { ArrowLeft, Plus, Trash2, Users, ShoppingCart, BookOpen, TrendingUp, Calendar, ChevronDown, ChevronRight } from 'lucide-react';
 import { MealType } from '../types';
 import PriceOverridesTab from '../components/PriceOverridesTab';
+import Modal from '../components/Modal';
 import CustomSelect from '../components/CustomSelect';
 import { servingsWord } from '../utils/text';
 import { api, getRecipes } from '../api/client';
@@ -650,7 +651,7 @@ export default function TripDetailPage() {
 
       {/* Add meal modal */}
       {showAddMeal && (
-        <div className="modal-overlay flex items-center justify-center p-4">
+        <Modal>
           <div className="rounded-2xl shadow-xl w-full max-w-md p-6" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
             <h2 className="text-xl font-bold mb-4" style={{ color: 'var(--text)' }}>Добавить приём пищи</h2>
             <div className="space-y-4">
@@ -698,7 +699,7 @@ export default function TripDetailPage() {
               </button>
             </div>
           </div>
-        </div>
+        </Modal>
       )}
     </div>
   );

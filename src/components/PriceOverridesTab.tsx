@@ -4,6 +4,7 @@ import { Download } from 'lucide-react';
 import { formatAmount } from '../utils/calculations';
 import { mealsWord } from '../utils/text';
 import { NumberField } from './NumberField';
+import Modal from './Modal';
 import { api, getRecipes } from '../api/client';
 
 /** Фаза 13 (п.4): человекочитаемая единица для подписи цены «₽ / ед». */
@@ -514,8 +515,8 @@ export default function PriceOverridesTab({ tripId }: Props) {
 
       {/* Модалка "Ввести чек" */}
       {showModal && (
-        <div className="modal-overlay" onClick={() => setShowModal(false)}>
-          <div className="modal-sheet" onClick={e => e.stopPropagation()}>
+        <Modal onClose={() => setShowModal(false)}>
+          <div className="modal-sheet">
             <b style={{ fontFamily: 'Unbounded', fontSize: '15px', color: 'var(--text)' }}>Ввести чек</b>
             <p style={{ color: 'var(--muted)', fontSize: '12px', margin: '6px 0 14px' }}>
               Фактические цены за единицу (₽/кг, ₽/шт и т.д. — см. подпись в поле). Пусто = «= план».
@@ -566,7 +567,7 @@ export default function PriceOverridesTab({ tripId }: Props) {
               </button>
             </div>
           </div>
-        </div>
+        </Modal>
       )}
     </div>
   );

@@ -101,7 +101,12 @@ public class IntegrationService {
                         .build());
 
         integration.setStatus(status.available() ? "CONNECTED" : "ERROR");
-        integration.setErrorMessage(status.message());
+        // FIX (баг «Ошибка: Connected successfully»): раньше сюда писалось
+        // status.message() даже при успехе ("Connected successfully" из
+        // ConnectionStatus.success()). Поле error_message семантически — текст
+        // ошибки, и UI выводит его красным блоком на карточке интеграции, поэтому
+        // при успешном подключении errorMessage должен быть очищен (null).
+        integration.setErrorMessage(status.available() ? null : status.message());
         integration.setLastConnectedAt(status.available() ? LocalDateTime.now() : null);
 
         integration = integrationRepository.save(integration);

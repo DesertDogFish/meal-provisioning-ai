@@ -6,7 +6,8 @@
 // нативным <input type="date">). Особенности взаимодействия:
 //  - Целимся в input по id ('#start-date' / '#end-date'), который ставит DateRange;
 //    label связан через htmlFor, но у обоих пикеров одинаковый aria-label, поэтому
-//    getByLabelText ненадёжен — используем container.querySelector.
+//    getByLabelText ненадёжен — используем document.querySelector (модалка
+//    рендерится через createPortal в body, вне контейнера render()).
 //  - Значение input — ISO YYYY-MM-DD; fireEvent.change попадает в наш NativeInput
 //    (React-обработчик + колбэк onDateChange), т.е.onChange -> DateRange -> state формы.
 //  - Атрибут min присутствует на input как побочный эффект проброса minDate, но
@@ -26,7 +27,9 @@ function renderTripForm(props?: Partial<React.ComponentProps<typeof TripForm>>) 
     <TripForm onSubmit={vi.fn()} onCancel={vi.fn()} {...props} />
   );
   const dateInput = (id: 'start-date' | 'end-date') => {
-    const el = utils.container.querySelector<HTMLInputElement>(`input#${id}`);
+    // FIX: TripForm рендерится через <Modal> (createPortal в document.body),
+    // поэтому контейнер render() не содержит модалку — ищем по document.
+    const el = document.querySelector<HTMLInputElement>(`input#${id}`);
     if (!el) throw new Error(`DatePicker input #${id} not found`);
     return el;
   };
