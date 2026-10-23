@@ -18,6 +18,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -76,11 +77,16 @@ class OffRecipeSourceTest {
         when(syncLogRepository.findRunningByProvider("OFF")).thenReturn(Optional.empty());
         User user = User.builder().id(7L).email("admin@provision.app").build();
         when(userRepository.findById(7L)).thenReturn(Optional.of(user));
+        // FIX (P1, async-рефактор): syncPrices больше не держит БД-объекты в памяти —
+        // фоновая часть перезагружает SyncLog по id.
+        AtomicReference<SyncLog> saved = new AtomicReference<>();
         when(syncLogRepository.save(any(SyncLog.class))).thenAnswer(inv -> {
             SyncLog s = inv.getArgument(0);
             if (s.getId() == null) s.setId(100L);
+            saved.set(s);
             return s;
         });
+        when(syncLogRepository.findById(100L)).thenAnswer(inv -> Optional.ofNullable(saved.get()));
 
         Ingredient macaroni = Ingredient.builder()
                 .id(11L).name("Макароны").unit(UnitOfMeasure.KG).build();
@@ -101,10 +107,10 @@ class OffRecipeSourceTest {
 
         ArgumentCaptor<IngredientPrice> captor = ArgumentCaptor.forClass(IngredientPrice.class);
         verify(priceRepository).save(captor.capture());
-        IngredientPrice saved = captor.getValue();
+        IngredientPrice saved1 = captor.getValue();
         // 89.90 ₽ за 900 г -> 99.89 ₽/KG
-        assertThat(saved.getPricePerUnit()).isEqualByComparingTo(new BigDecimal("99.89"));
-        assertThat(saved.getSource()).isEqualTo("OFF");
+        assertThat(saved1.getPricePerUnit()).isEqualByComparingTo(new BigDecimal("99.89"));
+        assertThat(saved1.getSource()).isEqualTo("OFF");
         assertThat(log.getStatus()).isEqualTo("SUCCESS");
         assertThat(log.getCreatedCount()).isEqualTo(1);
     }

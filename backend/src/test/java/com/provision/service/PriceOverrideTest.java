@@ -12,11 +12,14 @@ import org.mockito.MockitoAnnotations;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
 @DisplayName("ADJ Tests: Price Overrides")
@@ -48,6 +51,13 @@ class PriceOverrideTest {
         
         priceResolutionService = new PriceResolutionService(priceRepository, overrideRepository);
         summaryService = new SummaryService(tripRepository, priceRepository, recipeRepository, priceResolutionService, substitutionRepository);
+
+        // FIX P1 (аудит): getShoppingList теперь грузит плановые цены пакетным запросом
+        // findLatestPricesAsOfForIngredients вместо per-ingredient findEffectivePrice.
+        // Дефолт: пустой набор цен (соль остаётся без цены). Тесты со сверхценностями
+        // переопределяют этот стаб своим when(...) — он не должен считаться неиспользованным.
+        lenient().when(priceRepository.findLatestPricesAsOfForIngredients(any(), anyCollection()))
+                .thenReturn(List.of());
 
         // Создаём компоненты
         grechka = Ingredient.builder().id(1L).name("Гречка").unit(UnitOfMeasure.KG).build();
@@ -147,9 +157,8 @@ class PriceOverrideTest {
                 .effectiveFrom(LocalDate.of(2026, 1, 1))
                 .build();
         
-        when(priceRepository.findEffectivePrice(eq(1L), any())).thenReturn(Optional.of(grechkaPrice));
-        when(priceRepository.findEffectivePrice(eq(2L), any())).thenReturn(Optional.of(tushenkaPrice));
-        when(priceRepository.findEffectivePrice(eq(3L), any())).thenReturn(Optional.empty());
+        when(priceRepository.findLatestPricesAsOfForIngredients(any(), anyCollection()))
+                .thenReturn(Arrays.asList(grechkaPrice, tushenkaPrice));
 
         // When
         ShoppingListResponse response = summaryService.getShoppingList(1L, 1L);
@@ -185,9 +194,8 @@ class PriceOverrideTest {
                 .effectiveFrom(LocalDate.of(2026, 1, 1))
                 .build();
         
-        when(priceRepository.findEffectivePrice(eq(1L), any())).thenReturn(Optional.of(grechkaPrice));
-        when(priceRepository.findEffectivePrice(eq(2L), any())).thenReturn(Optional.of(tushenkaPrice));
-        when(priceRepository.findEffectivePrice(eq(3L), any())).thenReturn(Optional.empty());
+        when(priceRepository.findLatestPricesAsOfForIngredients(any(), anyCollection()))
+                .thenReturn(Arrays.asList(grechkaPrice, tushenkaPrice));
 
         // When
         ShoppingListResponse response = summaryService.getShoppingList(1L, 1L);
@@ -239,9 +247,8 @@ class PriceOverrideTest {
                 .effectiveFrom(LocalDate.of(2026, 1, 1))
                 .build();
         
-        when(priceRepository.findEffectivePrice(eq(1L), any())).thenReturn(Optional.of(grechkaPrice));
-        when(priceRepository.findEffectivePrice(eq(2L), any())).thenReturn(Optional.of(tushenkaPrice));
-        when(priceRepository.findEffectivePrice(eq(3L), any())).thenReturn(Optional.empty());
+        when(priceRepository.findLatestPricesAsOfForIngredients(any(), anyCollection()))
+                .thenReturn(Arrays.asList(grechkaPrice, tushenkaPrice));
 
         // When
         ShoppingListResponse response = summaryService.getShoppingList(1L, 1L);

@@ -58,6 +58,31 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(error);
     }
 
+    /**
+     * FIX (P1, аудит Phase 11): PRODUCT_IN_USE — кладём список блокирующих ресурсов
+     * в поле usedIn ответа (раньше всегда был null из-за @JsonInclude(NON_NULL)).
+     */
+    @ExceptionHandler(com.provision.exception.ProductInUseConflictException.class)
+    public ResponseEntity<ErrorResponse> handleProductInUse(
+            com.provision.exception.ProductInUseConflictException ex,
+            HttpServletRequest request
+    ) {
+        log.warn("Conflict (PRODUCT_IN_USE): {} — usedIn={}", ex.getMessage(),
+                ex.getUsedIn() != null ? ex.getUsedIn().size() : 0);
+        ErrorResponse error = new ErrorResponse(
+                "about:blank",
+                "Conflict",
+                HttpStatus.CONFLICT.value(),
+                ex.getMessage(),
+                request.getRequestURI(),
+                LocalDateTime.now(),
+                null,
+                ex.getUsedIn(),
+                null
+        );
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(error);
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ErrorResponse> handleValidation(
             MethodArgumentNotValidException ex,

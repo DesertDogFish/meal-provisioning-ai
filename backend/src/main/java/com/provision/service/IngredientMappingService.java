@@ -26,14 +26,17 @@ public class IngredientMappingService {
 
     @Transactional(readOnly = true)
     public List<IngredientMappingResponse> getAllMappings() {
-        return mappingRepository.findAll().stream()
+        // FIX P2 (аудит): было findAll() + ленивый getInternalIngredient() на каждую
+        // строку (N+1). Берём JOIN FETCH; distinct — из-за дедупликации join'а.
+        return mappingRepository.findAllWithIngredients().stream()
                 .map(this::toResponse)
                 .toList();
     }
 
     @Transactional(readOnly = true)
     public List<IngredientMappingResponse> getMappingsBySource(RecipeSource source) {
-        return mappingRepository.findBySource(source).stream()
+        // FIX P2 (аудит): то же, что выше, но со фильтром по источнику.
+        return mappingRepository.findBySourceWithIngredients(source).stream()
                 .map(this::toResponse)
                 .toList();
     }

@@ -8,7 +8,9 @@ import com.provision.exception.NotFoundException;
 import com.provision.integration.*;
 import com.provision.repository.*;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
@@ -32,6 +34,10 @@ public class IntegrationService {
     private final IngredientRepository ingredientRepository;
     private final SyncLogRepository syncLogRepository;
     private final UserRepository userRepository;
+    // FIX (P1): self-injection через ObjectProvider — вызов @Async-метода должен идти
+    // через прокси Spring, иначе аннотация игнорируется при internal call.
+    // ObjectProvider нужен, чтобы unit-тесты конструировали сервис с null-бином.
+    private final org.springframework.beans.factory.ObjectProvider<IntegrationService> selfProvider;
 
     public IntegrationService(
             List<PriceProvider> providerList,
@@ -42,6 +48,21 @@ public class IntegrationService {
             IngredientRepository ingredientRepository,
             SyncLogRepository syncLogRepository,
             UserRepository userRepository) {
+        this(providerList, integrationRepository, externalProductRepository, mappingRepository,
+                priceRepository, ingredientRepository, syncLogRepository, userRepository, null);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public IntegrationService(
+            List<PriceProvider> providerList,
+            IntegrationRepository integrationRepository,
+            ExternalProductRepository externalProductRepository,
+            IngredientMappingRepository mappingRepository,
+            IngredientPriceRepository priceRepository,
+            IngredientRepository ingredientRepository,
+            SyncLogRepository syncLogRepository,
+            UserRepository userRepository,
+            org.springframework.beans.factory.ObjectProvider<IntegrationService> selfProvider) {
         this.providers = new HashMap<>();
         for (PriceProvider provider : providerList) {
             this.providers.put(provider.code(), provider);
@@ -53,6 +74,7 @@ public class IntegrationService {
         this.ingredientRepository = ingredientRepository;
         this.syncLogRepository = syncLogRepository;
         this.userRepository = userRepository;
+        this.selfProvider = selfProvider;
         log.info("Loaded {} price providers: {}", providers.size(), providers.keySet());
     }
 
@@ -165,7 +187,14 @@ public class IntegrationService {
         log.info("Deleted mapping for ingredient {} from provider {}", ingredientId, providerCode);
     }
 
-    @Transactional
+    /**
+     * FIX (P1, аудит Phase 11): синхронизация цен стала фоновой.
+     * Проверка провайдера/конкурентности и создание SyncLog(RUNNING) выполняются
+     * в потоке запроса; долгие внешние HTTP-вызовы к Open Food Facts уходят в пул
+     * "off-sync-*" через @Async-прокси (self via ObjectProvider — иначе internal call
+     * обошёл бы прокси Spring и аннотация не сработала).
+     * Контроллер по-прежнему отвечает 202 ACCEPTED + logId: прогресс виден в /sync-logs.
+     */
     public SyncLog syncPrices(String providerCode, Long userId) {
         Integration integration = integrationRepository.findByProvider(providerCode)
                 .orElseThrow(() -> new NotFoundException("Integration not found: " + providerCode));
@@ -198,9 +227,33 @@ public class IntegrationService {
                 .build();
         syncLog = syncLogRepository.save(syncLog);
 
-        PriceProvider provider = providers.get(providerCode);
-        
+        // FIX (P1): тяжёлая часть (внешний HTTP + запись цен) — в фоне.
+        // self == this для unit-тестов (ObjectProvider=null): синхронный вызов без прокси.
+        IntegrationService self = selfProvider != null ? selfProvider.getObject() : this;
+        self.executePriceSync(providerCode, syncLog.getId());
+
+        return syncLog;
+    }
+
+    /**
+     * Фоновая часть синхронизации: выполняется вне HTTP-потока и вне БД-транзакции.
+     * Исключения не выпрыгивают наружу (async) — статус пишется в SyncLog.
+     */
+    @Async("taskExecutor")
+    public void executePriceSync(String providerCode, Long syncLogId) {
+        SyncLog syncLog = syncLogRepository.findById(syncLogId).orElse(null);
+        if (syncLog == null) {
+            log.error("SyncLog {} vanished before async price sync started", syncLogId);
+            return;
+        }
+
+        int created = 0;
+        int updated = 0;
+        int errors = 0;
+
         try {
+            PriceProvider provider = providers.get(providerCode);
+
             // Получаем все маппинги для этого провайдера с внешним кодом.
             // FIX (P0): RecipeSource.valueOf("OFF") падал с
             // "No enum constant com.provision.entity.RecipeSource.OFF" —
@@ -214,10 +267,6 @@ public class IntegrationService {
                             .filter(m -> m.getExternalCode() != null)
                             .toList();
 
-            int created = 0;
-            int updated = 0;
-            int errors = 0;
-
             for (IngredientMapping mapping : mappings) {
                 try {
                     ExternalProduct product = mapping.getExternalProduct();
@@ -225,89 +274,110 @@ public class IntegrationService {
                         continue;
                     }
 
-                    // Получаем цены из внешнего источника
+                    // Внешний HTTP — ВНЕ транзакции БД (главная цель фикса)
                     List<ExternalPriceDto> prices = provider.fetchPrices(mapping.getExternalCode(), null);
 
-                    for (ExternalPriceDto externalPrice : prices) {
-                        // Фильтруем только RUB
-                        if (!"RUB".equals(externalPrice.currency())) {
-                            continue;
-                        }
-
-                        // Конвертируем цену в цену за единицу
-                        BigDecimal unitPrice = calculateUnitPrice(
-                                externalPrice.price(),
-                                product.getPackAmount(),
-                                product.getPackUnit(),
-                                mapping.getInternalIngredient().getUnit().name()
-                        );
-
-                        if (unitPrice == null || unitPrice.compareTo(BigDecimal.ZERO) <= 0) {
-                            continue;
-                        }
-
-                        // Проверяем, существует ли цена на эту дату
-                        Optional<IngredientPrice> existingPrice = priceRepository
-                                .findByIngredientIdAndEffectiveFrom(
-                                        mapping.getInternalIngredient().getId(),
-                                        externalPrice.date()
-                                );
-
-                        if (existingPrice.isPresent()) {
-                            IngredientPrice price = existingPrice.get();
-                            // Не перезаписываем ручные цены
-                            if (!"MANUAL".equals(price.getSource())) {
-                                price.setPricePerUnit(unitPrice);
-                                price.setSource(providerCode);
-                                priceRepository.save(price);
-                                updated++;
-                            }
-                        } else {
-                            // Создаём новую цену
-                            IngredientPrice newPrice = IngredientPrice.builder()
-                                    .ingredient(mapping.getInternalIngredient())
-                                    .pricePerUnit(unitPrice)
-                                    .currency("RUB")
-                                    .effectiveFrom(externalPrice.date())
-                                    .source(providerCode)
-                                    .build();
-                            priceRepository.save(newPrice);
-                            created++;
-                        }
-                    }
+                    // Запись цен — короткая отдельная транзакция на маппинг
+                    int[] counts = applyMappingPricesInTx(mapping, product, prices, providerCode);
+                    created += counts[0];
+                    updated += counts[1];
                 } catch (Exception e) {
                     log.error("Failed to sync prices for mapping {}: {}", mapping.getId(), e.getMessage());
                     errors++;
                 }
             }
 
-            // Обновляем лог
-            syncLog.setStatus("SUCCESS");
-            syncLog.setFinishedAt(LocalDateTime.now());
-            syncLog.setCreatedCount(created);
-            syncLog.setUpdatedCount(updated);
-            syncLog.setErrorCount(errors);
-            syncLogRepository.save(syncLog);
-
-            // Обновляем last_sync_at в интеграции
-            integration.setLastSyncAt(LocalDateTime.now());
-            integrationRepository.save(integration);
-
-            log.info("Sync completed for provider {}: created={}, updated={}, errors={}", 
+            finalizeSyncLog(syncLog.getId(), "SUCCESS", created, updated, errors);
+            log.info("Sync completed for provider {}: created={}, updated={}, errors={}",
                     providerCode, created, updated, errors);
 
         } catch (Exception e) {
-            syncLog.setStatus("FAILED");
-            syncLog.setFinishedAt(LocalDateTime.now());
-            syncLog.setErrorCount(syncLog.getErrorCount() + 1);
-            syncLogRepository.save(syncLog);
+            finalizeSyncLog(syncLog.getId(), "FAILED", created, updated, errors + 1);
             log.error("Sync failed for provider {}: {}", providerCode, e.getMessage());
-            throw e;
         }
-
-        return syncLog;
     }
 
+    /** Короткая транзакция на один маппинг: внешний HTTP к этому моменту уже выполнен. */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public int[] applyMappingPricesInTx(IngredientMapping mapping, ExternalProduct product,
+                                        List<ExternalPriceDto> prices, String providerCode) {
+        int created = 0;
+        int updated = 0;
+
+        for (ExternalPriceDto externalPrice : prices) {
+            // Фильтруем только RUB
+            if (!"RUB".equals(externalPrice.currency())) {
+                continue;
+            }
+
+            // Конвертируем цену в цену за единицу
+            BigDecimal unitPrice = calculateUnitPrice(
+                    externalPrice.price(),
+                    product.getPackAmount(),
+                    product.getPackUnit(),
+                    mapping.getInternalIngredient().getUnit().name()
+            );
+
+            if (unitPrice == null || unitPrice.compareTo(BigDecimal.ZERO) <= 0) {
+                continue;
+            }
+
+            // Проверяем, существует ли цена на эту дату
+            Optional<IngredientPrice> existingPrice = priceRepository
+                    .findByIngredientIdAndEffectiveFrom(
+                            mapping.getInternalIngredient().getId(),
+                            externalPrice.date()
+                    );
+
+            if (existingPrice.isPresent()) {
+                IngredientPrice price = existingPrice.get();
+                // Не перезаписываем ручные цены
+                if (!"MANUAL".equals(price.getSource())) {
+                    price.setPricePerUnit(unitPrice);
+                    price.setSource(providerCode);
+                    priceRepository.save(price);
+                    updated++;
+                }
+            } else {
+                // Создаём новую цену
+                IngredientPrice newPrice = IngredientPrice.builder()
+                        .ingredient(mapping.getInternalIngredient())
+                        .pricePerUnit(unitPrice)
+                        .currency("RUB")
+                        .effectiveFrom(externalPrice.date())
+                        .source(providerCode)
+                        .build();
+                priceRepository.save(newPrice);
+                created++;
+            }
+        }
+        return new int[]{created, updated};
+    }
+
+    /** Финализация лога и last_sync_at в отдельной короткой транзакции (фон без TX). */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void finalizeSyncLog(Long syncLogId, String status, int created, int updated, int errors) {
+        SyncLog syncLog = syncLogRepository.findById(syncLogId).orElse(null);
+        if (syncLog == null) {
+            return;
+        }
+        syncLog.setStatus(status);
+        syncLog.setFinishedAt(LocalDateTime.now());
+        if ("SUCCESS".equals(status)) {
+            syncLog.setCreatedCount(created);
+            syncLog.setUpdatedCount(updated);
+            syncLog.setErrorCount(errors);
+        } else {
+            syncLog.setErrorCount(syncLog.getErrorCount() + 1);
+        }
+        syncLogRepository.save(syncLog);
+
+        // Обновляем last_sync_at в интеграции
+        integrationRepository.findByProvider(syncLog.getProvider()).ifPresent(integration -> {
+            integration.setLastSyncAt(LocalDateTime.now());
+            integrationRepository.save(integration);
+        });
+    }
     @Transactional(readOnly = true)
     public List<SyncLogDto> getSyncLogs(String providerCode) {
         List<SyncLog> logs = providerCode != null

@@ -1,9 +1,11 @@
 package com.provision.service;
 
+import com.provision.dto.error.ErrorResponse;
 import com.provision.dto.product.*;
 import com.provision.entity.*;
 import com.provision.exception.ConflictException;
 import com.provision.exception.NotFoundException;
+import com.provision.exception.ProductInUseConflictException;
 import com.provision.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -16,7 +18,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 @Service
@@ -28,6 +32,7 @@ public class ProductService {
     private final ProductCategoryRepository categoryRepository;
     private final IngredientPriceRepository priceRepository;
     private final RecipeIngredientRepository recipeIngredientRepository;
+    private final RecipeRepository recipeRepository;
 
     @Transactional(readOnly = true)
     public List<ProductCategoryDto> getAllCategories() {
@@ -88,7 +93,23 @@ public class ProductService {
 
         Page<Ingredient> ingredients = ingredientRepository.findAll(spec, pageRequest);
 
-        return ingredients.map(this::toProductResponse);
+        // FIX P1 (аудит): раньше toProductResponse делал по 2 доп. запроса на каждый
+        // элемент страницы (эффективная цена + использование в рецептах) — классический N+1.
+        // Теперь цена и usageCount грузятся пакетно: по одному запросу на всю страницу.
+        List<Long> ids = ingredients.getContent().stream().map(Ingredient::getId).toList();
+        Map<Long, IngredientPrice> priceByIngredient = new HashMap<>();
+        for (IngredientPrice p : priceRepository.findLatestPricesAsOfForIngredients(LocalDate.now(), ids)) {
+            priceByIngredient.put(p.getIngredient().getId(), p);
+        }
+        Map<Long, Integer> usageCountByIngredient = new HashMap<>();
+        if (!ids.isEmpty()) {
+            for (Object[] row : recipeIngredientRepository.countRecipesByIngredientIds(ids)) {
+                usageCountByIngredient.put((Long) row[0], ((Number) row[1]).intValue());
+            }
+        }
+
+        return ingredients.map(i -> toProductResponse(i, priceByIngredient.get(i.getId()),
+                usageCountByIngredient.getOrDefault(i.getId(), 0)));
     }
 
     @Transactional
@@ -154,7 +175,11 @@ public class ProductService {
         if (isUsed) {
             // Занятый продукт: нельзя менять имя и единицу
             if (!ingredient.getNameNorm().equals(newNameNorm) || ingredient.getUnit() != request.unit()) {
-                throw new ConflictException("PRODUCT_IN_USE: Cannot change name or unit of product used in recipes");
+                // FIX (P1): PRODUCT_IN_USE теперь отдаёт заполненный usedIn (список рецептов),
+                // фронт показывает, что блокирует переименование.
+                throw new ProductInUseConflictException(
+                        "PRODUCT_IN_USE: Cannot change name or unit of product used in recipes",
+                        buildUsedInRecipes(recipeIds));
             }
         } else {
             // Свободный продукт: проверяем дубль при изменении имени/единицы
@@ -188,30 +213,47 @@ public class ProductService {
         // Проверка занятости
         List<Long> recipeIds = recipeIngredientRepository.findRecipeIdsByIngredientId(id);
         if (!recipeIds.isEmpty()) {
-            throw new ConflictException("PRODUCT_IN_USE: Product is used in recipes");
+            // FIX (P1): заполняем usedIn — фронт показывает список блокирующих рецептов.
+            throw new ProductInUseConflictException(
+                    "PRODUCT_IN_USE: Product is used in recipes",
+                    buildUsedInRecipes(recipeIds));
         }
 
         ingredientRepository.deleteById(id);
         log.info("Deleted product: {} (id={})", ingredient.getName(), id);
     }
 
+    /**
+     * FIX (P1, аудит Phase 11): один batch-запрос за названиями рецептов по id
+     * (не N+1) и сборка списка для ErrorResponse.usedIn.
+     */
+    private List<ErrorResponse.UsedInResource> buildUsedInRecipes(List<Long> recipeIds) {
+        return recipeRepository.findAllById(recipeIds).stream()
+                .map(r -> new ErrorResponse.UsedInResource("RECIPE", r.getId(), r.getName()))
+                .toList();
+    }
+
     private ProductResponse toProductResponse(Ingredient ingredient) {
-        // Получаем текущую цену
+        // Одиночный путь (create/update/get-by-id): 2 точечных запроса допустимы.
         Optional<IngredientPrice> currentPrice = priceRepository.findEffectivePrice(
                 ingredient.getId(), LocalDate.now());
-        
-        ProductResponse.CurrentPriceDto priceDto = currentPrice.map(p -> 
-                new ProductResponse.CurrentPriceDto(
-                        p.getPricePerUnit(),
-                        p.getCurrency(),
-                        p.getEffectiveFrom(),
-                        p.getSource() != null ? p.getSource() : "MANUAL"
-                )
-        ).orElse(null);
+        int usageCount = recipeIngredientRepository.findRecipeIdsByIngredientId(ingredient.getId()).size();
+        return toProductResponse(ingredient, currentPrice.orElse(null), usageCount);
+    }
 
-        // Подсчитываем использование в рецептах
-        List<Long> recipeIds = recipeIngredientRepository.findRecipeIdsByIngredientId(ingredient.getId());
-        int usageCount = recipeIds.size();
+    private ProductResponse toProductResponse(Ingredient ingredient, IngredientPrice currentPrice, int usageCount) {
+        // FIX P1 (аудит): N+1-версия этого метода делала findEffectivePrice +
+        // findRecipeIdsByIngredientId на каждый элемент страницы. Теперь цена и
+        // usageCount приходят параметрами (пакетная загрузка в getProducts).
+
+        ProductResponse.CurrentPriceDto priceDto = currentPrice != null ?
+                new ProductResponse.CurrentPriceDto(
+                        currentPrice.getPricePerUnit(),
+                        currentPrice.getCurrency(),
+                        currentPrice.getEffectiveFrom(),
+                        currentPrice.getSource() != null ? currentPrice.getSource() : "MANUAL"
+                )
+                : null;
 
         // Определяем статус привязки
         String bindingStatus = ingredient.getCode() != null ? "BOUND" : "UNBOUND";

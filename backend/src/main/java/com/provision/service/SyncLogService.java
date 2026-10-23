@@ -12,6 +12,8 @@ import com.provision.repository.SyncLogRepository;
 import com.provision.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,6 +28,20 @@ import java.util.Optional;
 @RequiredArgsConstructor
 @Slf4j
 public class SyncLogService {
+
+    // FIX (P1, аудит): раньше метод markRunningAsFailedOnStartup существовал, но не вызывался
+    // нигде — зависшие SYNC-логи вечно оставались в статусе RUNNING после рестарта.
+    // Привязка к ApplicationReadyEvent гарантирует выполнение при каждом старте приложения.
+    @EventListener(ApplicationReadyEvent.class)
+    public void onApplicationReady() {
+        try {
+            markRunningAsFailedOnStartup();
+        } catch (Exception e) {
+            // Не роняем старт приложения из-за гигиены логов синхронизаций.
+            log.error("Failed to mark running syncs as failed on startup", e);
+        }
+    }
+
 
     private final SyncLogRepository syncLogRepository;
     private final IntegrationRepository integrationRepository;
