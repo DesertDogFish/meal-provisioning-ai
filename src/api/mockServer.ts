@@ -21,6 +21,24 @@ let syncRunning = false;
 // Price overrides хранилище (tripId -> ingredientId -> override)
 const priceOverrides: Record<string, Record<string, { actualPrice: number; comment?: string }>> = {};
 
+// Фаза 13 (п.5): soft-disable позиций закупки в рамках похода (не удаляя продукт)
+const shoppingExcluded: Record<string, string[]> = {};
+
+// Фаза 13 (п.6): пер-походные замещения ингредиентов (TripIngredientSubstitution).
+// Хранят ДЛЬТУ черновика состава блюда относительно каталога: from/to/ratio и
+// добавленные вручную позиции (added=true). Закупка/дни/человек считают с ними.
+interface MockSubstitution {
+  id: string;
+  recipeId: string;
+  fromIngredientId: string | null; // null = позиция добавлена руками
+  toIngredientId: string;          // 'to' при замене или сам продукт при добавлении
+  amountPerServing: number;        // количество на порцию (для расчёта закупки)
+  ratio: number;
+  added: boolean;
+  comment?: string;
+}
+const substitutions: Record<string, MockSubstitution[]> = {};
+
 // Auth хранилище
 interface MockUser {
   id: string;
