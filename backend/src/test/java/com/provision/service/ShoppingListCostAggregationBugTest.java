@@ -441,16 +441,22 @@ class ShoppingListCostAggregationBugTest {
         // Проверяем, что стоимость корректно суммируется
         assertThat(result.items()).hasSize(1);
         assertThat(result.items().get(0).totalAmount()).isEqualByComparingTo(new BigDecimal("0.800")); // 0.4 + 0.4
-        // FIX P1 (актуальная семантика): ОБЩИЙ список getShoppingList считается по единому
-        // срезу цен на endDate (DISTINCT ON -> 150₽): 0.8 × 150 = 120. Это контракт ADJ
-        // (см. PriceOverrideTest). Корректная по-дневная агрегация — в getShoppingByDays,
-        // куда фронт перенёс расчёт стоимости (Фаза 10 п.7). Проверяем оба уровня.
-        assertThat(result.items().get(0).actualCost()).isEqualByComparingTo(new BigDecimal("120.00")); // 0.8 × 150
-        assertThat(result.totalActualCost()).isEqualByComparingTo(new BigDecimal("120.00"));
+        // FIX Known Bug #1: ОБЩИЙ список getShoppingList больше НЕ считает «одна цена на
+        // endDate для всего похода». Плановая стоимость = Σ qty_day × planPrice(day):
+        // день 1 (21 окт): 0.4 × 120 = 48; день 2 (22 окт): 0.4 × 150 = 60 => 108 ₽.
+        // Средневзвешенная плановая цена за единицу = 108 / 0.8 = 135 ₽/кг.
+        var grechkaItem = result.items().get(0);
+        assertThat(grechkaItem.plannedCost()).isEqualByComparingTo(new BigDecimal("108.00")); // 48 + 60
+        assertThat(grechkaItem.actualCost()).isEqualByComparingTo(new BigDecimal("108.00"));  // без оверрайдов == план
+        assertThat(grechkaItem.plannedUnitPrice()).isEqualByComparingTo(new BigDecimal("135.00")); // 108/0.8
+        assertThat(grechkaItem.actualUnitPrice()).isEqualByComparingTo(new BigDecimal("135.00"));
+        assertThat(result.totalPlannedCost()).isEqualByComparingTo(new BigDecimal("108.00"));
+        assertThat(result.totalActualCost()).isEqualByComparingTo(new BigDecimal("108.00"));
 
         // Кросс-проверка: по дням стоимость равна сумме дневных стоимостей
         // (день 1: 0.4 × 120 = 48, день 2: 0.4 × 150 = 60 => 108), т.е. исторический
-        // баг «одна цена на endDate для всех дней» в per-day расчёте отсутствует.
+        // баг «одна цена на endDate для всех дней» отсутствует на обоих уровнях —
+        // общий список и per-day теперь согласованы.
         when(priceRepository.findLatestPricesAsOfForIngredients(any(), anyCollection()))
                 .thenAnswer(inv -> List.of(priceDay2));
         when(priceRepository.findByIngredientIdInOrderByEffectiveFromDesc(anyCollection()))
@@ -467,5 +473,118 @@ class ShoppingListCostAggregationBugTest {
         System.out.println("✓ Текущая реализация корректно суммирует стоимости по дням!");
         System.out.println("✓ Ожидаемая стоимость: 108.00 ₽ (48 + 60)");
         System.out.println("✓ Фактическая стоимость: " + result.totalActualCost() + " ₽\n");
+    }
+
+    @Test
+    @DisplayName("KNOWN BUG #1 (сценарий PLAN): гречка 180→250₽ с 15 мая — общий список считает по ценам дней")
+    void shoppingList_usesPerDayPrices_whenPriceChangesMidTrip() {
+        // Сценарий из реестра Known Bugs: поход 12–17 мая, цена на гречку меняется
+        // в середине похода: 180₽/кг до 15 мая, 250₽/кг с 15 мая.
+        Ingredient grechka = Ingredient.builder().id(1L).name("Гречка").unit(UnitOfMeasure.KG).build();
+
+        IngredientPrice priceBefore = IngredientPrice.builder()
+                .ingredient(grechka)
+                .effectiveFrom(LocalDate.of(2026, 1, 1))
+                .pricePerUnit(new BigDecimal("180.00"))
+                .build();
+        IngredientPrice priceAfter = IngredientPrice.builder()
+                .ingredient(grechka)
+                .effectiveFrom(LocalDate.of(2026, 5, 15))
+                .pricePerUnit(new BigDecimal("250.00"))
+                .build();
+
+        Recipe recipe = Recipe.builder().id(1L).name("Каша").baseServings(1).build();
+        recipe.setIngredients(Arrays.asList(RecipeIngredient.builder()
+                .ingredient(grechka).amount(new BigDecimal("0.1")).build())); // 100 г на человека в день
+
+        Trip trip = Trip.builder().id(1L)
+                .startDate(LocalDate.of(2026, 5, 12))
+                .endDate(LocalDate.of(2026, 5, 17))
+                .defaultPeople(1)
+                .build();
+
+        java.util.Set<TripDay> days = new java.util.LinkedHashSet<>();
+        for (int i = 0; i < 6; i++) { // 12,13,14 — по 180₽; 15,16,17 — по 250₽
+            TripDay day = TripDay.builder().id((long) i).trip(trip)
+                    .dayDate(LocalDate.of(2026, 5, 12 + i)).build();
+            day.setMeals(new java.util.LinkedHashSet<>(Arrays.asList(
+                    TripMeal.builder().id((long) i).tripDay(day).recipe(recipe).build())));
+            days.add(day);
+        }
+        trip.setDays(days);
+
+        when(tripRepository.findByIdWithDaysAndMeals(1L, 1L)).thenReturn(java.util.Optional.of(trip));
+        // DISTINCT ON на endDate (17 мая) возвращает самую свежую цену — 250₽; ряд — обе DESC.
+        when(priceRepository.findLatestPricesAsOfForIngredients(any(), anyCollection()))
+                .thenAnswer(inv -> List.of(priceAfter));
+        when(priceRepository.findByIngredientIdInOrderByEffectiveFromDesc(anyCollection()))
+                .thenAnswer(inv -> Arrays.asList(priceAfter, priceBefore));
+
+        var result = summaryService.getShoppingList(1L, 1L);
+        var item = result.items().get(0);
+
+        // Старый баг: 0.6 × 250 = 150 (одна цена на endDate для всех шести дней).
+        // Корректно: Σ qty_day × planPrice(day) = 0.3×180 + 0.3×250 = 54 + 75 = 129.
+        assertThat(item.totalAmount()).isEqualByComparingTo(new BigDecimal("0.600"));
+        assertThat(item.plannedCost()).isEqualByComparingTo(new BigDecimal("129.00"));
+        assertThat(result.totalPlannedCost()).isEqualByComparingTo(new BigDecimal("129.00"));
+        assertThat(result.totalActualCost()).isEqualByComparingTo(new BigDecimal("129.00"));
+        // Средневзвешенная цена за единицу: 129 / 0.6 = 215 ₽/кг (не 250 и не 180).
+        assertThat(item.plannedUnitPrice()).isEqualByComparingTo(new BigDecimal("215.00"));
+
+        // Согласованность с по-дневным расчётом: сумма плановых стоимостей по дням == общий план.
+        var byDays = summaryService.getShoppingByDays(1L, 1L);
+        BigDecimal sumOfDayPlanned = byDays.stream()
+                .map(d -> d.plannedCost())
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        assertThat(sumOfDayPlanned).isEqualByComparingTo(new BigDecimal("129.00"));
+    }
+
+    @Test
+    @DisplayName("KNOWN BUG #1 + оверрайд: фактическая цена заменяет плановую каждого дня, но поштучно")
+    void shoppingList_overrideAppliesPerDayQuantity() {
+        // Тот же сценарий 12–17 мая (180→250 с 15 мая), но добавлен ручной оверрайд 200₽/кг.
+        Ingredient grechka = Ingredient.builder().id(1L).name("Гречка").unit(UnitOfMeasure.KG).build();
+        IngredientPrice priceBefore = IngredientPrice.builder()
+                .ingredient(grechka).effectiveFrom(LocalDate.of(2026, 1, 1))
+                .pricePerUnit(new BigDecimal("180.00")).build();
+        IngredientPrice priceAfter = IngredientPrice.builder()
+                .ingredient(grechka).effectiveFrom(LocalDate.of(2026, 5, 15))
+                .pricePerUnit(new BigDecimal("250.00")).build();
+
+        Recipe recipe = Recipe.builder().id(1L).name("Каша").baseServings(1).build();
+        recipe.setIngredients(Arrays.asList(RecipeIngredient.builder()
+                .ingredient(grechka).amount(new BigDecimal("0.1")).build()));
+
+        Trip trip = Trip.builder().id(1L)
+                .startDate(LocalDate.of(2026, 5, 12)).endDate(LocalDate.of(2026, 5, 17))
+                .defaultPeople(1).build();
+        java.util.Set<TripDay> days = new java.util.LinkedHashSet<>();
+        for (int i = 0; i < 6; i++) {
+            TripDay day = TripDay.builder().id((long) i).trip(trip)
+                    .dayDate(LocalDate.of(2026, 5, 12 + i)).build();
+            day.setMeals(new java.util.LinkedHashSet<>(Arrays.asList(
+                    TripMeal.builder().id((long) i).tripDay(day).recipe(recipe).build())));
+            days.add(day);
+        }
+        trip.setDays(days);
+
+        when(tripRepository.findByIdWithDaysAndMeals(1L, 1L)).thenReturn(java.util.Optional.of(trip));
+        when(priceRepository.findLatestPricesAsOfForIngredients(any(), anyCollection()))
+                .thenAnswer(inv -> List.of(priceAfter));
+        when(priceRepository.findByIngredientIdInOrderByEffectiveFromDesc(anyCollection()))
+                .thenAnswer(inv -> Arrays.asList(priceAfter, priceBefore));
+        when(priceResolutionService.getAllOverrides(1L)).thenReturn(Map.of(1L, new BigDecimal("200.00")));
+
+        var result = summaryService.getShoppingList(1L, 1L);
+        var item = result.items().get(0);
+
+        // План остаётся по ценам дней: 129 ₽. Факт: оверрайд действует на все дни =>
+        // 0.6 × 200 = 120 ₽; actualUnitPrice = 120/0.6 = 200 (совпадает с оверрайдом).
+        assertThat(item.plannedCost()).isEqualByComparingTo(new BigDecimal("129.00"));
+        assertThat(item.actualCost()).isEqualByComparingTo(new BigDecimal("120.00"));
+        assertThat(item.actualUnitPrice()).isEqualByComparingTo(new BigDecimal("200.00"));
+        assertThat(item.overridden()).isTrue();
+        assertThat(result.overriddenCount()).isEqualTo(1);
     }
 }
