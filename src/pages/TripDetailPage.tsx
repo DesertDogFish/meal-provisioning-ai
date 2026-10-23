@@ -5,7 +5,8 @@ import { ArrowLeft, Plus, Trash2, Users, ShoppingCart, BookOpen, TrendingUp, Cal
 import { MealType } from '../types';
 import PriceOverridesTab from '../components/PriceOverridesTab';
 import { servingsWord } from '../utils/text';
-import { api } from '../api/client';
+import { api, getRecipes } from '../api/client';
+import { useToast } from '../components/ToastProvider';
 
 interface Trip {
   id: string;
@@ -70,6 +71,7 @@ const mealTypeColors: Record<MealType, string> = {
 type TabType = 'menu' | 'shopping' | 'dayShopping' | 'person' | 'overrides';
 
 export default function TripDetailPage() {
+  const { showError } = useToast();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<TabType>('menu');
@@ -97,7 +99,7 @@ export default function TripDetailPage() {
       setError(null);
       const [tripData, recipesData, pricesData] = await Promise.all([
         api.get<Trip>(`/trips/${id}`),
-        api.get<Recipe[]>('/recipes'),
+        getRecipes(),
         // P0-3: GET /admin/prices не существовало на бэкенде; цены доступны всем
         // аутентифицированным пользователям на GET /prices (UserPriceController)
         api.get<Price[]>('/prices')
@@ -105,9 +107,12 @@ export default function TripDetailPage() {
       setTrip(tripData);
       setRecipes(recipesData);
       setPrices(pricesData);
-    } catch (err) {
-      console.error('Failed to load ', err);
+    } catch (err: any) {
+      console.error('Failed to load trip:', err);
+      // ЗАДАЧА 3: тост; устаревшие данные не сбрасываем намеренно —
+      // показываем ошибку поверх, страница похода остаётся читаемой.
       setError('Не удалось загрузить данные');
+      showError(err?.detail || 'Не удалось загрузить данные похода');
     } finally {
       setLoading(false);
     }
@@ -155,6 +160,9 @@ export default function TripDetailPage() {
       await loadData();
     } catch (err: any) {
       console.error('Failed to add meal:', err);
+      // ЗАДАЧА 3: пользователь должен видеть сбой действия, а не молча
+      // остающийся тот же список приёмов пищи.
+      showError(err?.detail || 'Не удалось добавить приём пищи');
     }
   };
 
@@ -164,6 +172,7 @@ export default function TripDetailPage() {
       await loadData();
     } catch (err: any) {
       console.error('Failed to delete meal:', err);
+      showError(err?.detail || 'Не удалось удалить приём пищи');
     }
   };
 
@@ -178,6 +187,8 @@ export default function TripDetailPage() {
       await loadData();
     } catch (err: any) {
       console.error('Failed to update day:', err);
+      // ЗАДАЧА 3: действие пользователя должно давать видимый отклик
+      showError(err?.detail || 'Не удалось обновить количество людей на день');
     }
   };
 

@@ -3,7 +3,8 @@ import { Search, Utensils, X } from 'lucide-react';
 import { MealType } from '../types';
 import { formatAmount } from '../utils/calculations';
 import { humanizeCategory, servingsWord } from '../utils/text';
-import { api } from '../api/client';
+import { getRecipes } from '../api/client';
+import { useToast } from '../components/ToastProvider';
 
 interface Recipe {
   id: string;
@@ -25,6 +26,7 @@ const mealTypeLabels: Record<MealType, string> = {
 };
 
 export default function RecipesPage() {
+  const { showError } = useToast();
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -43,11 +45,14 @@ export default function RecipesPage() {
     try {
       setLoading(true);
       setError(null);
-      const data = await api.get<Recipe[]>('/recipes');
+      const data = await getRecipes();
       setRecipes(data);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to load recipes:', err);
+      // ЗАДАЧА 3: тост + сброс устаревшего каталога
+      setRecipes([]);
       setError('Не удалось загрузить рецепты');
+      showError(err?.detail || 'Не удалось загрузить рецепты');
     } finally {
       setLoading(false);
     }

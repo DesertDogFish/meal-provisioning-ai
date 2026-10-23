@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
+import { useToast } from '../components/ToastProvider';
 
 interface User {
   id: string;
@@ -22,6 +23,7 @@ interface Trip {
 
 export default function DashboardPage() {
   const navigate = useNavigate();
+  const { showError } = useToast();
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [trips, setTrips] = useState<Trip[]>([]);
   const [loading, setLoading] = useState(true);
@@ -41,6 +43,10 @@ export default function DashboardPage() {
       setTrips(tripsData);
     } catch (error) {
       console.error('Failed to load ', error);
+      // ЗАДАЧА 3: раньше ошибка только писалась в консоль — пользователь видел
+      // пустой дашборд без объяснения.
+      setTrips([]);
+      showError('Не удалось загрузить данные дашборда');
     } finally {
       setLoading(false);
     }

@@ -109,6 +109,8 @@ export default function ProductsPage() {
       }
     } catch (error) {
       console.error('Failed to check duplicate:', error);
+      // ЗАДАЧА 3: пользователь узнаёт, что проверка дубля не выполнена
+      showError('Не удалось проверить наличие такого же продукта');
     }
   };
 

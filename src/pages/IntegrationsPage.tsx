@@ -87,7 +87,9 @@ export default function IntegrationsPage() {
       setIntegrations(data);
     } catch (error) {
       console.error('Failed to load integrations:', error);
-      showError('Failed to load integrations');
+      // ЗАДАЧА 3: тост по-русски + сброс устаревшего списка
+      setIntegrations([]);
+      showError('Не удалось загрузить список интеграций');
     }
   };
 
@@ -97,6 +99,10 @@ export default function IntegrationsPage() {
       setSyncLogs(data);
     } catch (error) {
       console.error('Failed to load sync logs:', error);
+      // ЗАДАЧА 3: пользователь должен видеть сбой загрузки, а UI не должен
+      // показывать устаревший список.
+      setSyncLogs([]);
+      showError('Не удалось загрузить журнал синков');
     }
   };
 
@@ -106,6 +112,8 @@ export default function IntegrationsPage() {
       setIngredients(data.content || data);
     } catch (error) {
       console.error('Failed to load ingredients:', error);
+      setIngredients([]);
+      showError('Не удалось загрузить список ингредиентов');
     }
   };
 
@@ -193,11 +201,13 @@ export default function IntegrationsPage() {
       );
       setSearchResults(data);
       if (data.length === 0) {
-        showError('No products found');
+        showError('Ничего не найдено');
       }
     } catch (error: any) {
       console.error('Failed to search products:', error);
-      handleApiError(error, 'Failed to search products');
+      // ЗАДАЧА 3: сброс результатов + русское сообщение
+      setSearchResults([]);
+      handleApiError(error, 'Не удалось выполнить поиск товаров');
     }
   };
 
@@ -215,10 +225,10 @@ export default function IntegrationsPage() {
       setSearchResults([]);
       setSearchQuery('');
       setSelectedIngredient(null);
-      showSuccess('Product mapping created successfully');
+      showSuccess('Связь с товаром создана');
     } catch (error: any) {
       console.error('Failed to create mapping:', error);
-      handleApiError(error, 'Failed to create mapping');
+      handleApiError(error, 'Не удалось создать связь с товаром');
     }
   };
 

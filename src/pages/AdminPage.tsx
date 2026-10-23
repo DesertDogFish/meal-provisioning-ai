@@ -5,7 +5,7 @@ import { ConflictError, ValidationError } from '../utils/errors';
 import { validateRecipe } from '../utils/validation';
 import { useToast } from '../components/ToastProvider';
 import { servingsWord, ingredientsWord } from '../utils/text';
-import { api } from '../api/client';
+import { api, getRecipes } from '../api/client';
 
 type AdminTab = 'prices' | 'recipes' | 'import';
 
@@ -84,7 +84,7 @@ export default function AdminPage() {
       
       const [ingredientsData, recipesData, pricesData, stagingData] = await Promise.all([
         api.get<any>('/admin/products'),
-        api.get<Recipe[]>('/recipes'),
+        getRecipes(),
         // P0-3: чтение цен — общий GET /prices (доступен и ADMIN); запись осталась на админском пути
         api.get<Price[]>('/prices'),
         api.get<StagingRecipe[]>('/admin/staging')
@@ -109,6 +109,9 @@ export default function AdminPage() {
       return trips.some(t => t.days?.some((d: any) => d.meals?.some((m: any) => m.recipeId === recId)));
     } catch (err) {
       console.error('Failed to check recipe usage:', err);
+      // ЗАДАЧА 3: раньше ошибка была невидима — удаление «используемого» рецепта
+      // могло пройти молча. Предупреждаем, что проверку выполнить не удалось.
+      showError('Не удалось проверить использование рецепта в походах');
       return false;
     }
   };

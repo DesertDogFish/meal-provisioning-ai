@@ -3,6 +3,7 @@ import { Compass, LogOut, Menu, Mountain, Ship } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import ApiModeBadge from './ApiModeBadge';
 import { api } from '../api/client';
+import { useToast } from './ToastProvider';
 
 interface User {
   id: string;
@@ -14,6 +15,7 @@ interface User {
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
+  const { showError } = useToast();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
 
@@ -27,6 +29,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       setCurrentUser(user);
     } catch (error) {
       console.error('Failed to load user:', error);
+      // ЗАДАЧА 3: сбой загрузки профиля должен быть виден пользователю,
+      // UI при этом остаётся в состоянии «не авторизован» (currentUser = null).
+      setCurrentUser(null);
+      showError('Не удалось загрузить профиль пользователя');
     }
   };
 
@@ -41,6 +47,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       }
     } catch (error) {
       console.error('Logout error:', error);
+      // ЗАДАЧА 3: локальный выход всё равно выполнится (finally), но пользователю
+      // честно сообщаем, что серверная сессия (refresh-токен) не была отозвана.
+      showError('Не удалось завершить сессию на сервере, выполнен локальный выход');
     } finally {
       localStorage.removeItem('accessToken');
       localStorage.removeItem('refreshToken');
