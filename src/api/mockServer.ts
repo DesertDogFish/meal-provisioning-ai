@@ -6,6 +6,8 @@
 import { mockIngredients, mockRecipes, mockTrips, mockProductCategories, mockPrices } from '../data/mockData';
 import { Ingredient, Recipe, Trip, ProductCategory, IngredientPrice } from '../types';
 import { calculateRecipeKcal } from '../utils/calc';
+// BUGFIX (284 046 ₽): стоимость = базовые единицы × цена за базовую единицу.
+import { costOf } from '../utils/calculations';
 
 // In-memory хранилище
 const products: Ingredient[] = [...mockIngredients];
@@ -62,6 +64,12 @@ function applyTripEditsToRows<T extends { ingredientId: string; catalogId?: stri
   if (!edits.length) return rows;
   const idOf = (r: T) => String(r.catalogId ?? r.ingredientId);
   const out: T[] = rows.map(r => ({ ...r }));
+  /** Пересчёт стоимостей строки: costOf учитывает г/мл против ₽/кг (баг «284 046 ₽»). */
+  const recalc = (r: T & { unit?: string }) => {
+    const u = r.unit || 'KG';
+    r.plannedCost = r.plannedUnitPrice != null ? costOf(r.totalAmount, u, r.plannedUnitPrice) : null;
+    r.actualCost = r.actualUnitPrice != null ? costOf(r.totalAmount, u, r.actualUnitPrice) : null;
+  };
   for (const e of edits) {
     const srcIdx = e.fromIngredientId == null ? -1 : out.findIndex(r => idOf(r) === String(e.fromIngredientId));
     if (e.toIngredientId == null) {
@@ -86,18 +94,13 @@ function applyTripEditsToRows<T extends { ingredientId: string; catalogId?: stri
       const dstIdx = out.findIndex(r => idOf(r) === String(e.toIngredientId));
       if (dstIdx >= 0) {
         const dst = out[dstIdx];
-        const p = dst.plannedUnitPrice;
-        const a = dst.actualUnitPrice;
-        out[dstIdx] = {
-          ...dst,
-          totalAmount: dst.totalAmount + amount,
-          plannedCost: p != null ? p * (dst.totalAmount + amount) : dst.plannedCost,
-          actualCost: a != null ? a * (dst.totalAmount + amount) : dst.actualCost,
-        };
+        dst.totalAmount = dst.totalAmount + amount;
+        recalc(dst as T & { unit?: string });
       } else {
         const product = products.find(pr => pr.id === String(e.toIngredientId));
         const p = product?.price ?? null;
-        out.push({
+        const o = ovFor(tripId, String(e.toIngredientId));
+        const addedRow = {
           ...src,
           ingredientId: String(e.toIngredientId),
           catalogId: String(e.toIngredientId),
@@ -105,14 +108,12 @@ function applyTripEditsToRows<T extends { ingredientId: string; catalogId?: stri
           unit: product?.unit ?? src.unit,
           totalAmount: amount,
           plannedUnitPrice: p,
-          actualUnitPrice: ovFor(tripId, String(e.toIngredientId))?.actualPrice ?? p,
-          plannedCost: p != null ? p * amount : null,
-          actualCost: (ovFor(tripId, String(e.toIngredientId))?.actualPrice ?? p) != null
-            ? ((ovFor(tripId, String(e.toIngredientId))?.actualPrice ?? p) as number) * amount
-            : null,
-          overridden: !!ovFor(tripId, String(e.toIngredientId)),
+          actualUnitPrice: o?.actualPrice ?? p,
+          overridden: !!o,
           hasPlannedPrice: p != null,
-        } as unknown as T);
+        } as unknown as T;
+        recalc(addedRow as T & { unit?: string });
+        out.push(addedRow);
       }
     } else {
       // позиция добавлена руками (from=null либо 'from' отсутствует в базовых строках)
@@ -121,7 +122,7 @@ function applyTripEditsToRows<T extends { ingredientId: string; catalogId?: stri
       const product = products.find(pr => pr.id === String(e.toIngredientId));
       const p = product?.price ?? null;
       const o = ovFor(tripId, String(e.toIngredientId));
-      out.push({
+      const manualRow = {
         ingredientId: String(e.toIngredientId),
         catalogId: String(e.toIngredientId),
         ingredientName: product?.name ?? 'Новый продукт',
@@ -129,11 +130,11 @@ function applyTripEditsToRows<T extends { ingredientId: string; catalogId?: stri
         totalAmount: amount,
         plannedUnitPrice: p,
         actualUnitPrice: o?.actualPrice ?? p,
-        plannedCost: p != null ? p * amount : null,
-        actualCost: (o?.actualPrice ?? p) != null ? ((o?.actualPrice ?? p) as number) * amount : null,
         overridden: !!o,
         hasPlannedPrice: p != null,
-      } as unknown as T);
+      } as unknown as T;
+      recalc(manualRow as T & { unit?: string });
+      out.push(manualRow);
     }
   }
   return out;
