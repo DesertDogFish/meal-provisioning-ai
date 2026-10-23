@@ -89,13 +89,13 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4" style={{
-      background: 'radial-gradient(1100px 500px at 85% -10%, rgba(56, 189, 248, 0.09), transparent), radial-gradient(900px 500px at -10% 30%, rgba(45, 212, 191, 0.07), transparent), var(--bg)'
+      background: 'radial-gradient(1100px 500px at 85% -10%, rgba(87, 199, 184, 0.09), transparent), radial-gradient(900px 500px at -10% 30%, rgba(87, 199, 184, 0.07), transparent), var(--bg)'
     }}>
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-4" style={{
             background: 'linear-gradient(135deg, var(--w1), var(--w2))',
-            boxShadow: '0 8px 30px rgba(45, 212, 191, 0.35)'
+            boxShadow: '0 8px 30px rgba(87, 199, 184, 0.35)'
           }}>
             <svg width="32" height="32" viewBox="0 0 96 96">
               <path d="M48 18 L70 70 H26 Z" fill="#fff"/>
@@ -112,7 +112,7 @@ export default function LoginPage() {
           </h2>
 
           {error && (
-            <div className="px-4 py-3 rounded-lg mb-4 text-sm" style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)', color: '#FCA5A5' }}>
+            <div className="px-4 py-3 rounded-lg mb-4 text-sm" style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)', color: '#FFB4A2' }}>
               {error}
             </div>
           )}
@@ -194,8 +194,8 @@ export default function LoginPage() {
               disabled={loading}
               className="w-full py-3 font-semibold rounded-full transition-all"
               style={{ 
-                background: 'linear-gradient(90deg, var(--w1), var(--w2))', 
-                color: '#04121A',
+                background: 'var(--grad-brand)', 
+                color: '#221204',
                 opacity: loading ? 0.6 : 1,
                 cursor: loading ? 'not-allowed' : 'pointer'
               }}
