@@ -85,6 +85,12 @@ jobs:
       
       - run: npm run lint
       
+      # T0 (зелёный main): typecheck как blocking-гейт CI.
+      # tsc --noEmit ловит ошибки типов (напр. parseDate в DatePicker),
+      # которые vite build (esbuild) пропускает.
+      - name: Typecheck
+        run: npm run typecheck
+      
       - run: npm run build
       
       - name: Frontend tests

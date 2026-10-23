@@ -16,12 +16,13 @@ export function calculateKcal(
   let grams: number;
   
   if (unit === 'KG' || unit === 'L') {
-    // FIX (2026-10-24, единая семантика единиц): для KG/L количество в
-    // рецептах хранится в ГРАММАХ/МИЛЛИЛИТРАХ — так же, как стоимость
-    // считается через toBaseUnits (g/1000 × ₽/кг). Раньше здесь было
-    // amount*1000 («кг→г»), что при уже gram-значении завышало ккал в
-    // 1000 раз (падал тест CR-1: 250186 вместо 436). Берём как есть.
-    grams = amount;
+    // FIX (2026-10-24, T0 «вернуть main зелёным»): каноническая формула ядра —
+    // grams = amount × 1000 (amount в базовых единицах кг/л). Согласовано с:
+    //   - бэкендом KcalCalculator.java (amount.multiply(1000));
+    //   - seed-фикстурами src/data/mockData.ts (Овсянка: 0.08 кг → 344 ккал);
+    //   - контрактом CR-1 (src/test/contract.test.ts) и calc.test.ts KCAL-01..04.
+    // Вариант «grams = amount» из кросс-мерджа PR #32/#33 ломал эти 5 проверок.
+    grams = amount * 1000;
   } else if (unit === 'PCS' || unit === 'PACK') {
     // шт/уп → граммы: умножаем на piece_weight_g
     if (pieceWeightG == null) return null;

@@ -6,7 +6,9 @@ module.exports = {
     'plugin:@typescript-eslint/recommended',
     'plugin:react-hooks/recommended',
   ],
-  ignorePatterns: ['dist', '.eslintrc.cjs'],
+  // provisions/ — дизайн-паки (статические сниппеты, не рабочий код приложения):
+  // исключены из линта (T0: 2 ошибки в provisions/design-pack/react/Input.tsx).
+  ignorePatterns: ['dist', '.eslintrc.cjs', 'provisions/'],
   parser: '@typescript-eslint/parser',
   plugins: ['react-refresh'],
   overrides: [
