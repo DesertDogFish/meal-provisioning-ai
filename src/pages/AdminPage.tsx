@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react';
+﻿import { useState, useEffect } from 'react';
 import { DollarSign, BookOpen, Download, Plus, Trash2, Check, X } from 'lucide-react';
 import { UnitOfMeasure, MealType } from '../types';
 import { ConflictError, ValidationError } from '../utils/errors';
 import { validateRecipe } from '../utils/validation';
+import { DatePicker } from '../components/DatePicker';
 import { useToast } from '../components/ToastProvider';
 import { servingsWord, ingredientsWord } from '../utils/text';
 import { api } from '../api/client';
@@ -292,8 +293,8 @@ export default function AdminPage() {
                 </select>
                 <input type="number" placeholder="Цена" value={priceForm.pricePerUnit} onChange={e => setPriceForm({ ...priceForm, pricePerUnit: e.target.value })}
                   className="px-3 py-2 rounded-lg text-sm outline-none" style={{ background: 'var(--elev)', border: '1px solid var(--border)', color: 'var(--text)' }} />
-                <input type="date" value={priceForm.effectiveFrom} onChange={e => setPriceForm({ ...priceForm, effectiveFrom: e.target.value })}
-                  className="px-3 py-2 rounded-lg text-sm outline-none" style={{ background: 'var(--elev)', border: '1px solid var(--border)', color: 'var(--text)' }} />
+                <DatePicker value={priceForm.effectiveFrom || null} onChange={(v) => setPriceForm({ ...priceForm, effectiveFrom: v })} placeholder="Дата" />
+'
                 <select value={priceForm.currency} onChange={e => setPriceForm({ ...priceForm, currency: e.target.value })}
                   className="px-3 py-2 rounded-lg text-sm outline-none" style={{ background: 'var(--elev)', border: '1px solid var(--border)', color: 'var(--text)' }}>
                   <option value="RUB">₽ RUB</option>

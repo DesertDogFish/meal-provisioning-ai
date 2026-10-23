@@ -1,0 +1,151 @@
+/* react-datepicker — стили под тёмную тему приложения */
+
+/* --- Поле ввода --- */
+.date-picker-input {
+  width: 100%;
+  padding: 8px 12px;
+  background-color: var(--elev, #1a2233);
+  color: var(--text, #e6edf7);
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.08));
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-family: Manrope, system-ui, sans-serif;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  cursor: pointer;
+}
+
+.date-picker-input:hover:not(.disabled):not(.error) {
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.date-picker-input:focus {
+  border-color: var(--w2, #38bdf8);
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2);
+}
+
+.date-picker-input.error {
+  border-color: #ef4444;
+}
+
+.date-picker-input.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* --- Календарь (попапер) --- */
+.dark-calendar {
+  background-color: var(--surface, #121826);
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.08));
+  border-radius: 12px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
+  font-family: Manrope, system-ui, sans-serif;
+  color: var(--text, #e6edf7);
+  padding: 0;
+  overflow: hidden;
+}
+
+.dark-calendar * {
+  box-sizing: border-box;
+}
+
+/* --- Шапка календаря --- */
+.dark-calendar .react-datepicker__header {
+  background-color: transparent;
+  border-bottom: 1px solid var(--border, rgba(255, 255, 255, 0.08));
+  border-radius: 0;
+  padding-top: 12px;
+}
+
+.dark-calendar .react-datepicker__current-month,
+.dark-calendar .react-datepicker__day-name {
+  color: var(--text, #e6edf7);
+  font-family: Unbounded, Manrope, sans-serif;
+}
+
+.dark-calendar .react-datepicker__current-month {
+  font-size: 0.9rem;
+  margin-bottom: 8px;
+}
+
+.dark-calendar .react-datepicker__day-name {
+  font-size: 0.75rem;
+  color: var(--muted, #8b98ac);
+}
+
+/* --- Дни --- */
+.dark-calendar .react-datepicker__day {
+  color: var(--text, #e6edf7);
+  border-radius: 6px;
+  width: 36px;
+  height: 36px;
+  line-height: 36px;
+  margin: 0;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.dark-calendar .react-datepicker__day:hover {
+  background-color: var(--elev, #1a2233);
+  color: var(--text, #e6edf7);
+}
+
+.dark-calendar .react-datepicker__day--selected,
+.dark-calendar .react-datepicker__day--keyboard-selected {
+  background-color: var(--w2, #38bdf8) !important;
+  color: #0b0f17 !important;
+  font-weight: 600;
+}
+
+.dark-calendar .react-datepicker__day--selected:hover,
+.dark-calendar .react-datepicker__day--keyboard-selected:hover {
+  background-color: var(--w1, #2dd4bf) !important;
+  color: #0b0f17 !important;
+}
+
+.dark-calendar .react-datepicker__day--outside-month {
+  color: var(--muted, #8b98ac);
+  opacity: 0.4;
+}
+
+.dark-calendar .react-datepicker__day--disabled {
+  color: var(--muted, #8b98ac);
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.dark-calendar .react-datepicker__day--today {
+  font-weight: 700;
+  color: var(--w1, #2dd4bf);
+}
+
+/* --- Стрелки навигации --- */
+.dark-calendar .react-datepicker__navigation {
+  top: 12px;
+}
+
+.dark-calendar .react-datepicker__navigation-icon::before {
+  border-color: var(--text, #e6edf7);
+}
+
+.dark-calendar .react-datepicker__navigation:hover::before {
+  border-color: var(--w2, #38bdf8);
+}
+
+/* --- Подвал календаря --- */
+.dark-calendar .react-datepicker__footer {
+  padding: 8px 12px;
+}
+
+.dark-calendar .react-datepicker__current-month a {
+  color: var(--w2, #38bdf8);
+}
+
+/* --- Скрыть стандартный чекбокс --- */
+.react-datepicker__close-picker {
+  color: var(--w2, #38bdf8);
+  opacity: 0.7;
+}
+
+.react-datepicker__close-picker:hover {
+  opacity: 1;
+}

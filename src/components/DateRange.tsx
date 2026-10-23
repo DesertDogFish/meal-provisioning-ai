@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+﻿import { useState, useEffect } from 'react';
+import { DatePicker } from './DatePicker';
 
 interface DateRangeProps {
   startDate: string;
@@ -29,6 +30,11 @@ export function DateRange({
   endPlaceholder = 'Выберите дату'
 }: DateRangeProps) {
   const [internalEndDate, setInternalEndDate] = useState(endDate);
+
+  // Синхронизируем internalEndDate с prop endDate при изменении
+  useEffect(() => {
+    setInternalEndDate(endDate);
+  }, [endDate]);
 
   // При первом рендере, если startDate есть, а endDate нет — ставим endDate = startDate
   useEffect(() => {
@@ -61,39 +67,25 @@ export function DateRange({
         <label htmlFor="start-date" className="block text-sm font-medium mb-1" style={{ color: 'var(--muted)' }}>
           {startLabel}
         </label>
-        <input
-          id="start-date"
-          type="date"
-          value={startDate}
-          onChange={e => handleStartDateChange(e.target.value)}
-          max={internalEndDate || undefined}
+        <DatePicker
+          value={startDate || null}
+          onChange={handleStartDateChange}
+          maxDate={internalEndDate ? new Date(internalEndDate) : undefined}
           placeholder={startPlaceholder}
-          className="w-full px-3 py-2.5 rounded-lg outline-none"
-          style={{ 
-            background: 'var(--elev)', 
-            border: '1px solid var(--border)', 
-            color: 'var(--text)' 
-          }}
+          id="start-date"
         />
       </div>
       <div>
         <label htmlFor="end-date" className="block text-sm font-medium mb-1" style={{ color: 'var(--muted)' }}>
           {endLabel}
         </label>
-        <input
-          id="end-date"
-          type="date"
-          value={internalEndDate}
-          onChange={e => handleEndDateChange(e.target.value)}
-          min={startDate || undefined}
+        <DatePicker
+          value={internalEndDate || null}
+          onChange={handleEndDateChange}
+          minDate={startDate ? new Date(startDate) : undefined}
           disabled={!startDate}
           placeholder={endPlaceholder}
-          className="w-full px-3 py-2.5 rounded-lg outline-none disabled:opacity-50"
-          style={{ 
-            background: 'var(--elev)', 
-            border: '1px solid var(--border)', 
-            color: 'var(--text)' 
-          }}
+          id="end-date"
         />
       </div>
     </div>
