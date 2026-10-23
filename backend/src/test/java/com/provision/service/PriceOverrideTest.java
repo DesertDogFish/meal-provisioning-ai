@@ -164,9 +164,17 @@ class PriceOverrideTest {
         ShoppingListResponse response = summaryService.getShoppingList(1L, 1L);
 
         // Then
+        // FIX (аудит P1): раньше тест проходил «вхолостую» — моки не совпадали с пакетным
+        // запросом сервиса, стоимости были нулевыми и равенство 0==0 выполнялось всегда.
+        // Теперь ассерты усиливаем конкретными числами: гречка 1.8×200=360, тушёнка 9×210=1890.
+        assertThat(response.totalPlannedCost()).isEqualByComparingTo(new BigDecimal("2250.00"));
+        assertThat(response.totalActualCost()).isEqualByComparingTo(new BigDecimal("2250.00"));
         assertThat(response.totalPlannedCost()).isEqualByComparingTo(response.totalActualCost());
         assertThat(response.overriddenCount()).isEqualTo(0);
         assertThat(response.deltaPercent()).isEqualByComparingTo(BigDecimal.ZERO);
+        // Соль остаётся без плановой цены — помечается как отсутствующая (не «вхолостую»).
+        assertThat(response.hasMissingPrices()).isTrue();
+        assertThat(response.missingIngredients()).containsExactly("Соль");
     }
 
     @Test
