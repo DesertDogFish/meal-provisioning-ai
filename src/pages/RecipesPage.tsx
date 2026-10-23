@@ -5,6 +5,7 @@ import { formatAmount } from '../utils/calculations';
 import { humanizeCategory, servingsWord } from '../utils/text';
 import { getRecipes } from '../api/client';
 import { useToast } from '../components/ToastProvider';
+import Modal from '../components/Modal';
 
 interface Recipe {
   id: string;
@@ -339,8 +340,8 @@ export default function RecipesPage() {
 
       {/* Модалка деталей рецепта */}
       {selected && (
-        <div className="modal-overlay flex items-center justify-center p-4" onClick={() => setSelectedRecipe(null)}>
-          <div className="rounded-2xl shadow-xl w-full max-w-lg p-6 max-h-[80vh] overflow-y-auto" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }} onClick={e => e.stopPropagation()}>
+        <Modal onClose={() => setSelectedRecipe(null)}>
+          <div className="rounded-2xl shadow-xl w-full max-w-lg p-6 max-h-[80vh] overflow-y-auto" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
             <div className="flex items-start justify-between mb-4">
               <div>
                 <h2 className="text-xl font-bold" style={{ color: 'var(--text)' }}>{selected.name}</h2>
@@ -376,7 +377,7 @@ export default function RecipesPage() {
               Закрыть
             </button>
           </div>
-        </div>
+        </Modal>
       )}
     </div>
   );

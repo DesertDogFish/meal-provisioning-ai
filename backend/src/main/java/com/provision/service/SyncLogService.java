@@ -20,6 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -196,37 +197,89 @@ public class SyncLogService {
 
     @SuppressWarnings("unchecked")
     private SyncLogResponse.SyncDetails parseDetails(Map<String, Object> detailsMap) {
-        Integer requestCount = (Integer) detailsMap.get("requestCount");
-        
+        // FIX ("Не удалось загрузить журнал синков" сразу при открытии):
+        // раньше здесь были слепые касты ((Integer) ...), ((Number) item.get("productId")).longValue(),
+        // (Boolean) ... . Один неожиданный элемент в jsonb (item без productId -> NPE,
+        // requestCount как Long/строка -> ClassCastException) ронял весь GET /admin/sync-logs в 500,
+        // и страница не открывалась целиком. Теперь парсим defensively: битые поля => null,
+        // битый элемент списка => skip + warning в лог.
+        Integer requestCount = asInteger(detailsMap.get("requestCount"));
+
         List<Map<String, Object>> itemsList = (List<Map<String, Object>>) detailsMap.get("items");
         List<SyncLogResponse.SyncItem> items = null;
         if (itemsList != null) {
-            items = itemsList.stream()
-                    .map(item -> new SyncLogResponse.SyncItem(
-                            ((Number) item.get("productId")).longValue(),
-                            (String) item.get("productName"),
-                            (String) item.get("externalCode"),
-                            item.get("priceDate") != null ? LocalDate.parse((String) item.get("priceDate")) : null,
-                            item.get("oldPrice") != null ? new BigDecimal(item.get("oldPrice").toString()) : null,
-                            item.get("newPrice") != null ? new BigDecimal(item.get("newPrice").toString()) : null,
-                            (String) item.get("action"),
-                            (String) item.get("reason"),
-                            (Boolean) item.get("anomaly")
-                    ))
-                    .toList();
+            items = new ArrayList<>();
+            for (Map<String, Object> item : itemsList) {
+                try {
+                    Number productId = asNumber(item.get("productId"));
+                    items.add(new SyncLogResponse.SyncItem(
+                            productId != null ? productId.longValue() : null,
+                            asString(item.get("productName")),
+                            asString(item.get("externalCode")),
+                            parseLocalDate(item.get("priceDate")),
+                            asBigDecimal(item.get("oldPrice")),
+                            asBigDecimal(item.get("newPrice")),
+                            asString(item.get("action")),
+                            asString(item.get("reason")),
+                            asBoolean(item.get("anomaly"))
+                    ));
+                } catch (Exception e) {
+                    log.warn("Skipping malformed sync log item: {}", e.getMessage());
+                }
+            }
         }
 
         List<Map<String, Object>> errorsList = (List<Map<String, Object>>) detailsMap.get("errors");
         List<SyncLogResponse.SyncError> errors = null;
         if (errorsList != null) {
-            errors = errorsList.stream()
-                    .map(err -> new SyncLogResponse.SyncError(
-                            (String) err.get("externalCode"),
-                            (String) err.get("message")
-                    ))
-                    .toList();
+            errors = new ArrayList<>();
+            for (Map<String, Object> err : errorsList) {
+                try {
+                    errors.add(new SyncLogResponse.SyncError(
+                            asString(err.get("externalCode")),
+                            asString(err.get("message"))
+                    ));
+                } catch (Exception e) {
+                    log.warn("Skipping malformed sync log error entry: {}", e.getMessage());
+                }
+            }
         }
 
         return new SyncLogResponse.SyncDetails(requestCount, items, errors);
+    }
+
+    // --- defensive helpers для парсинга jsonb (см. FIX выше) ---
+    private static String asString(Object v) {
+        return v == null ? null : String.valueOf(v);
+    }
+
+    private static Number asNumber(Object v) {
+        return v instanceof Number n ? n : null;
+    }
+
+    private static Integer asInteger(Object v) {
+        if (v instanceof Number n) return n.intValue();
+        if (v instanceof String s && !s.isBlank()) {
+            try { return Integer.valueOf(s.trim()); } catch (NumberFormatException ignored) { }
+        }
+        return null;
+    }
+
+    private static Boolean asBoolean(Object v) {
+        if (v instanceof Boolean b) return b;
+        if (v instanceof String s) return Boolean.valueOf(s);
+        return null;
+    }
+
+    private static BigDecimal asBigDecimal(Object v) {
+        if (v == null) return null;
+        if (v instanceof BigDecimal bd) return bd;
+        if (v instanceof Number n) return new BigDecimal(n.toString());
+        try { return new BigDecimal(v.toString().trim()); } catch (NumberFormatException e) { return null; }
+    }
+
+    private static LocalDate parseLocalDate(Object v) {
+        if (v == null) return null;
+        try { return LocalDate.parse(v.toString()); } catch (Exception e) { return null; }
     }
 }

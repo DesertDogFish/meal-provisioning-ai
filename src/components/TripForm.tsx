@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { DateRange } from './DateRange';
 import { validateTrip } from '../utils/validation';
+import Modal from './Modal';
 import type { FieldError } from '../types/errors';
 
 export interface TripFormData {
@@ -62,11 +63,10 @@ export function TripForm({ onSubmit, onCancel, externalErrors = [], submitLabel 
     formErrors.find(e => e.field === field) || externalErrors.find(e => e.field === field);
 
   return (
-    <div className="modal-overlay flex items-center justify-center p-4" onClick={onCancel}>
+    <Modal onClose={onCancel}>
       <div
         className="rounded-2xl shadow-xl w-full max-w-md p-6"
         style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
-        onClick={e => e.stopPropagation()}
       >
         <h2 className="text-xl font-bold mb-4" style={{ color: 'var(--text)' }}>{title}</h2>
 
@@ -167,6 +167,6 @@ export function TripForm({ onSubmit, onCancel, externalErrors = [], submitLabel 
           </button>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }

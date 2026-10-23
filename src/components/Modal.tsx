@@ -1,0 +1,42 @@
+import { useEffect } from 'react';
+import { createPortal } from 'react-dom';
+
+/**
+ * FIX (модалки «уезжают вниз»): раньше .modal-overlay рендерился внутри
+ * <main className="... overflow-auto"> в Layout. У элемента с overflow:auto
+ * создаётся собственный scroll-контейнер, и position:fixed внутри него
+ * позиционируется не по окну браузера, а по этому контейнеру. На длинных
+ * страницах (каталог блюд, продукты) контейнер растягивается на всю высоту
+ * контента, и центрированная модалка оказывалась посередине прокрутки —
+ * визуально «внизу». Решение: портал в document.body + overflow-y:auto на
+ * оверлее, чтобы высокая модалка скроллилась сама, а не уезжала за экран.
+ */
+export default function Modal({
+  children,
+  onClose,
+}: {
+  children: React.ReactNode;
+  /** Вызывается при клике по затемнённому фону и по Escape. */
+  onClose?: () => void;
+}) {
+  useEffect(() => {
+    if (!onClose) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  return createPortal(
+    <div
+      className="modal-overlay"
+      style={{ overflowY: 'auto' }}
+      onClick={onClose}
+    >
+      {/* Клик по самой карточке не должен закрывать окно (прежнее поведение). */}
+      <div onClick={(e) => e.stopPropagation()}>{children}</div>
+    </div>,
+    document.body,
+  );
+}
