@@ -1,9 +1,12 @@
 package com.provision.integration;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
+import org.springframework.web.client.HttpServerErrorException;
 import org.springframework.web.client.RestClient;
 
 import java.math.BigDecimal;
@@ -29,10 +32,70 @@ public class OpenFoodFactsProvider implements PriceProvider {
     @Value("${integration.off.prices-url:https://prices.openfoodfacts.org}")
     private String pricesUrl;
 
+    // Учётная запись на world.openfoodfacts.org для обхода лимитов анонимных
+    // запросов (503/429). Пустые значения => анонимный режим.
+    // Значения приходят только из ENV (OFF_USER_ID / OFF_PASSWORD), не из git.
+    @Value("${integration.off.user-id:${OFF_USER_ID:}}")
+    private String offUserId;
+
+    @Value("${integration.off.password:${OFF_PASSWORD:}}")
+    private String offPassword;
+
     public OpenFoodFactsProvider() {
         this.restClient = RestClient.builder()
                 .defaultHeader("User-Agent", "Provision/1.0 (admin@provision.app)")
                 .build();
+    }
+
+    private boolean hasCredentials() {
+        return StringUtils.hasText(offUserId) && StringUtils.hasText(offPassword);
+    }
+
+    /**
+     * Добавляет user_id/password к query-string, если креды заданы.
+     * Спецсимволы в email/пароле обязательно URL-кодируются.
+     */
+    private String appendAuthParams(StringBuilder urlBuilder) {
+        if (hasCredentials()) {
+            urlBuilder.append("&user_id=").append(URLEncoder.encode(offUserId, StandardCharsets.UTF_8));
+            urlBuilder.append("&password=").append(URLEncoder.encode(offPassword, StandardCharsets.UTF_8));
+        }
+        return urlBuilder.toString();
+    }
+
+    @PostConstruct
+    void logAuthMode() {
+        if (hasCredentials()) {
+            log.info("Open Food Facts provider running in AUTHENTICATED mode (user: {})",
+                    offUserId.replaceAll("(^.).*(@.*)", "$1***$2"));
+        } else {
+            log.warn("OFF credentials not set, running in anonymous mode");
+        }
+    }
+
+    /**
+     * Формирует человекочитаемое сообщение о сбое внешнего API OFF
+     * (5xx/429) с учётом наличия учётных записей.
+     */
+    private String describeOffFailure(Exception e) {
+        int status = -1;
+        if (e instanceof HttpServerErrorException hse) {
+            status = hse.getStatusCode().value();
+        } else if (e instanceof org.springframework.web.client.HttpStatusCodeException hce) {
+            status = hce.getStatusCode().value();
+        }
+        boolean rateLimited = status == 503 || status == 429;
+
+        if (rateLimited && !hasCredentials()) {
+            return "Open Food Facts отклонил анонимный запрос (" + status
+                    + "). Требуется регистрация на world.openfoodfacts.org и настройка"
+                    + " OFF_USER_ID/OFF_PASSWORD.";
+        }
+        if (rateLimited) {
+            return "Сервис Open Food Facts временно перегружен (" + status
+                    + "), попробуйте позже.";
+        }
+        return "Open Food Facts недоступен: " + e.getMessage();
     }
 
     @Override
@@ -59,10 +122,12 @@ public class OpenFoodFactsProvider implements PriceProvider {
         List<ExternalProductDto> results = new ArrayList<>();
         try {
             String encodedQuery = URLEncoder.encode(query, StandardCharsets.UTF_8);
-            String url = productsUrl + "/cgi/search.pl?search_simple=1&action=process&json=1"
-                    + "&page_size=" + limit
-                    + "&fields=code,product_name,brands,quantity,image_url"
-                    + "&search_terms=" + encodedQuery;
+            StringBuilder urlBuilder = new StringBuilder(productsUrl)
+                    .append("/cgi/search.pl?search_simple=1&action=process&json=1")
+                    .append("&page_size=").append(limit)
+                    .append("&fields=code,product_name,brands,quantity,image_url")
+                    .append("&search_terms=").append(encodedQuery);
+            String url = appendAuthParams(urlBuilder);
 
             JsonNode response = restClient.get()
                     .uri(url)
@@ -91,7 +156,9 @@ public class OpenFoodFactsProvider implements PriceProvider {
                 }
             }
         } catch (Exception e) {
-            log.error("Failed to search products: {}", e.getMessage());
+            String reason = describeOffFailure(e);
+            log.error("Failed to search products: {}", reason);
+            throw new RuntimeException(reason, e);
         }
         return results;
     }
