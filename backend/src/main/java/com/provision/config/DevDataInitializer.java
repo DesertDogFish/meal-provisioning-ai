@@ -7,6 +7,7 @@ import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Profile;
+import org.springframework.core.annotation.Order;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 @Configuration
@@ -14,6 +15,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 public class DevDataInitializer {
 
     @Bean
+    @Order(1)
     CommandLineRunner seedDevUsers(UserRepository userRepository, PasswordEncoder passwordEncoder) {
         return args -> {
             String seedEnabled = System.getenv("SEED_DEMO_USERS");

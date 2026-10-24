@@ -1,11 +1,13 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
-import { Search, Utensils, X } from 'lucide-react';
+import { Pencil, Plus, Search, Trash2, Utensils, X } from 'lucide-react';
 import { MealType } from '../types';
 import { formatAmount } from '../utils/calculations';
 import { humanizeCategory, servingsWord } from '../utils/text';
-import { getRecipes } from '../api/client';
+import { api, getRecipes } from '../api/client';
 import { useToast } from '../components/ToastProvider';
 import Modal from '../components/Modal';
+import RecipeEditorModal from '../components/RecipeEditorModal';
+import { ConflictError } from '../utils/errors';
 
 interface Recipe {
   id: string;
@@ -27,7 +29,7 @@ const mealTypeLabels: Record<MealType, string> = {
 };
 
 export default function RecipesPage() {
-  const { showError } = useToast();
+  const { showError, showSuccess } = useToast();
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -37,6 +39,52 @@ export default function RecipesPage() {
   const [noFireOnly, setNoFireOnly] = useState(false);
   const [selectedRecipe, setSelectedRecipe] = useState<string | null>(null);
   const [visibleCount, setVisibleCount] = useState(24);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [editingRecipe, setEditingRecipe] = useState<Recipe | null>(null);
+
+  // Роль нужна для админ-действий каталога (создание/правка/удаление блюд).
+  // Ошибка /auth/me означает «не админ», а не поломку страницы.
+  useEffect(() => {
+    api.get<{ role?: string }>('/auth/me')
+      .then(u => setIsAdmin((u?.role ?? '').toUpperCase() === 'ADMIN'))
+      .catch(() => setIsAdmin(false));
+  }, []);
+
+  const openCreate = () => {
+    setEditingRecipe(null);
+    setEditorOpen(true);
+  };
+
+  const openEdit = (recipe: Recipe) => {
+    setEditingRecipe(recipe);
+    setSelectedRecipe(null);
+    setEditorOpen(true);
+  };
+
+  const handleDelete = async (recipe: Recipe) => {
+    let used = false;
+    try {
+      const trips = await api.get<Array<{ days?: Array<{ meals?: Array<{ recipeId: string | number }> }> }>>('/trips');
+      used = trips.some(t => t.days?.some(d => d.meals?.some(m => String(m.recipeId) === String(recipe.id))));
+    } catch {
+      showError('Не удалось проверить использование рецепта в походах');
+      return;
+    }
+    if (used) {
+      showError(new ConflictError(`Рецепт «${recipe.name}» используется в походах и не может быть удалён`).toProblemDetail());
+      return;
+    }
+    if (!window.confirm(`Удалить рецепт «${recipe.name}»? Действие необратимо.`)) return;
+    try {
+      await api.del(`/admin/recipes/${recipe.id}`);
+      showSuccess('Рецепт удалён');
+      setSelectedRecipe(null);
+      await loadRecipes();
+    } catch (err: any) {
+      showError(err?.detail || err?.message || 'Не удалось удалить рецепт');
+    }
+  };
 
   const loadRecipes = useCallback(async () => {
     try {
@@ -61,7 +109,7 @@ export default function RecipesPage() {
 
   // Получить уникальные категории
   const categories = useMemo(() => {
-    const cats = new Set(recipes.map(r => r.category).filter(Boolean));
+    const cats = new Set(recipes.map(r => r.category).filter((c): c is string => Boolean(c)));
     return Array.from(cats).sort();
   }, [recipes]);
 
@@ -143,6 +191,15 @@ export default function RecipesPage() {
         <p className="mt-1" style={{ color: 'var(--muted)' }}>
           Завтрак {counts.breakfast} · Обед {counts.lunch} · Ужин {counts.dinner} · Перекус {counts.snack} | без огня {counts.noFire}
         </p>
+        {isAdmin && (
+          <button
+            onClick={openCreate}
+            className="mt-3 px-5 py-2.5 rounded-full font-bold flex items-center gap-2"
+            style={{ background: 'var(--grad-brand)', color: '#221204' }}
+          >
+            <Plus size={16} /> Создать блюдо
+          </button>
+        )}
       </div>
 
       {/* Фильтры */}
@@ -301,15 +358,40 @@ export default function RecipesPage() {
                     </span>
                   )}
                 </div>
-                <div className="mt-auto pt-3 flex items-center justify-between" style={{ borderTop: '1px solid var(--border)' }}>
+                <div className="mt-auto pt-3 flex items-center justify-between gap-2" style={{ borderTop: '1px solid var(--border)' }}>
                   <span className="text-sm" style={{ color: 'var(--muted)' }}>
                     {recipe.ingredients.length} ингр.
                   </span>
-                  <button
-                    className="px-4 py-2 rounded-full text-xs font-bold"
-                                      >
-                    В меню
-                  </button>
+                  <span className="flex items-center gap-1">
+                    {isAdmin && (
+                      <>
+                        <button
+                          aria-label={`Редактировать ${recipe.name}`}
+                          title="Редактировать"
+                          onClick={e => { e.stopPropagation(); openEdit(recipe); }}
+                          className="px-2 py-2 rounded-lg"
+                          style={{ color: 'var(--muted)' }}
+                        >
+                          <Pencil size={15} />
+                        </button>
+                        <button
+                          aria-label={`Удалить ${recipe.name}`}
+                          title="Удалить"
+                          onClick={e => { e.stopPropagation(); handleDelete(recipe); }}
+                          className="px-2 py-2 rounded-lg"
+                          style={{ color: 'var(--fire)' }}
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </>
+                    )}
+                    <button
+                      className="px-4 py-2 rounded-full text-xs font-bold"
+                      style={{ background: 'var(--grad-brand)', color: '#221204' }}
+                    >
+                      В меню
+                    </button>
+                  </span>
                 </div>
               </div>
             ))}
@@ -369,15 +451,43 @@ export default function RecipesPage() {
               ))}
             </div>
             
+            {isAdmin && (
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={() => openEdit(selected)}
+                  className="flex-1 px-4 py-2.5 rounded-full font-semibold flex items-center justify-center gap-2"
+                  style={{ border: '1px solid var(--wave-600)', color: 'var(--wave-300)' }}
+                >
+                  <Pencil size={15} /> Редактировать
+                </button>
+                <button
+                  onClick={() => handleDelete(selected)}
+                  className="flex-1 px-4 py-2.5 rounded-full font-semibold flex items-center justify-center gap-2"
+                  style={{ border: '1px solid var(--fire)', color: 'var(--fire)' }}
+                >
+                  <Trash2 size={15} /> Удалить
+                </button>
+              </div>
+            )}
+
             <button
               onClick={() => setSelectedRecipe(null)}
-              className="w-full mt-6 px-4 py-2.5 rounded-full"
+              className="w-full mt-3 px-4 py-2.5 rounded-full"
               style={{ border: '1px solid var(--border)', color: 'var(--text)' }}
             >
               Закрыть
             </button>
           </div>
         </Modal>
+      )}
+
+      {editorOpen && (
+        <RecipeEditorModal
+          recipe={editingRecipe}
+          categories={categories}
+          onClose={() => setEditorOpen(false)}
+          onSaved={() => { loadRecipes(); }}
+        />
       )}
     </div>
   );

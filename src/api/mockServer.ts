@@ -293,6 +293,10 @@ export const mockServer = {
       setTimeout(() => { syncRunning = false; }, 1500);
       return { status: 'RUNNING', startedAt: new Date().toISOString() } as T;
     }
+    // CONTRACT-P1: CRUD рецептов админа живёт в handleRecipes (POST/PUT/DELETE /admin/recipes)
+    if (pathWithoutQuery.startsWith('/admin/recipes')) {
+      return this.handleRecipes(method, pathWithoutQuery, body) as T;
+    }
     if (pathWithoutQuery.startsWith('/recipes')) {
       return this.handleRecipes(method, path, body) as T;
     }
@@ -600,6 +604,73 @@ export const mockServer = {
         })),
       };
       return this.recipeToResponse(recipes[idx]);
+    }
+
+    // CONTRACT-P1: POST /admin/recipes — создание блюда (паритет валидации с бэкендом:
+    // 400 c errors[] по полям RecipeRequest)
+    if (method === 'POST' && url.pathname === '/admin/recipes') {
+      const errs: Array<{ field: string; message: string }> = [];
+      if (!body || typeof body.name !== 'string' || !body.name.trim()) {
+        errs.push({ field: 'name', message: 'must not be blank' });
+      }
+      if (!['BREAKFAST', 'LUNCH', 'DINNER', 'SNACK'].includes(body?.mealType)) {
+        errs.push({ field: 'mealType', message: 'must be one of BREAKFAST, LUNCH, DINNER, SNACK' });
+      }
+      if (!body?.baseServings || body.baseServings < 1) {
+        errs.push({ field: 'baseServings', message: 'must be >= 1' });
+      }
+      const items = Array.isArray(body?.ingredients) ? body.ingredients : [];
+      if (items.length === 0) {
+        errs.push({ field: 'ingredients', message: 'must contain at least one ingredient' });
+      }
+      for (const it of items) {
+        if (!products.some(p => p.id === String(it?.ingredientId))) {
+          errs.push({ field: 'ingredients', message: `ingredient ${it?.ingredientId} not found` });
+        }
+        if (!(Number(it?.amount) > 0)) {
+          errs.push({ field: 'ingredients', message: 'amount must be > 0' });
+        }
+      }
+      if (errs.length > 0) {
+        throw { status: 400, title: 'Validation Failed', detail: 'Recipe payload is invalid', errors: errs } as any;
+      }
+      const rec: any = {
+        id: `rec_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+        name: String(body.name).trim(),
+        mealType: body.mealType,
+        category: body.category ?? undefined,
+        cookMinutes: body.cookMinutes ?? 0,
+        baseServings: body.baseServings,
+        caloriesPerServing: body.caloriesPerServing ?? undefined,
+        source: 'MANUAL',
+        ingredients: items.map((it: any) => ({
+          ingredientId: String(it.ingredientId),
+          amount: Number(it.amount),
+        })),
+      };
+      recipes.push(rec);
+      return this.recipeToResponse(rec);
+    }
+
+    // CONTRACT-P1: DELETE /admin/recipes/:id — 404 на неизвестный, 409 RECIPE_IN_USE
+    // с usedIn, если рецепт занят приёмами пищи походов (как бэкенд)
+    if (method === 'DELETE' && url.pathname.startsWith('/admin/recipes/')) {
+      const id = url.pathname.split('/')[3];
+      const idx = recipes.findIndex(r => r.id === id);
+      if (idx === -1) throw { status: 404, message: 'Not found', detail: `Recipe ${id} not found` } as any;
+      const usedBy = trips.filter(t =>
+        (t as any).days?.some((d: any) => d.meals?.some((m: any) => String(m.recipeId) === String(id)))
+      );
+      if (usedBy.length > 0) {
+        throw {
+          status: 409,
+          title: 'Conflict',
+          detail: 'Recipe is used in trip meals and cannot be deleted',
+          usedIn: usedBy.map(t => ({ resourceType: 'TRIP', resourceId: t.id, resourceName: t.name })),
+        } as any;
+      }
+      recipes.splice(idx, 1);
+      return null;
     }
 
     if (method === 'GET') {

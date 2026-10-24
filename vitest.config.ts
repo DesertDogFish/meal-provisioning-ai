@@ -46,6 +46,8 @@ export default defineConfig({
         'src/components/ApiModeBadge.tsx',
         'src/components/DateRange.tsx',
         'src/components/NumberField.tsx',
+        // админ-редактор блюд (экран «Каталог блюд»)
+        'src/components/RecipeEditorModal.tsx',
       ],
     },
   },
