@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-**✅ Все фазы 1–13 закрыты (последняя проверка: 2026-10-23).** Фаза 11 (аудит бэкенда P0/P1) закоммичена (`8880928`, `898552a`). Фаза 12 (P1-остатки аудита: usedIn, packsToBuy, @Async sync, N+1 ProductService/SummaryService, startup-хилл логов, дубль ingredientId) выполнена 2026-10-23 — **диффы в рабочем дереве, не коммитятся** (проверяются вручную). Гейты зелёные: `mvn test` = 66 run / 0 failed / 3 skipped, `npm run build` = SUCCESS. Открытые пункты: P2/P3 в «Next Step» и Backlog. Протоколы предыдущих фаз — в конце файла (Backlog / Completed / Timeline).
+**✅ Все фазы 1–13 закрыты (последняя проверка: 2026-10-23).** Фаза 14 открыта (блюда: каталог, правки в походе, бэкенд-агрегация — см. PLAN_PHASE14.md). Фаза 11 (аудит бэкенда P0/P1) закоммичена (`8880928`, `898552a`). Фаза 12 (P1-остатки аудита: usedIn, packsToBuy, @Async sync, N+1 ProductService/SummaryService, startup-хилл логов, дубль ingredientId) выполнена 2026-10-23 — **диффы в рабочем дереве, не коммитятся** (проверяются вручную). Гейты зелёные: `mvn test` = 66 run / 0 failed / 3 skipped, `npm run build` = SUCCESS. Открытые пункты: P2/P3 в «Next Step» и Backlog. Протоколы предыдущих фаз — в конце файла (Backlog / Completed / Timeline).
 
 > **HOTFIX 2026-10-23: `ReferenceError: e is not defined` на старте продакшен-билда.**
 > Причина: в `src/api/client.ts` (конструктор `ApiClient`, строка чтения env) при правке канала инъекции `VITE_API_MODE` (`window.meta`-обход для тестов) опечатка `e.VITE_API_MODE` вместо `env.VITE_API_MODE`. Vite/esbuild не резолвят идентификаторы — в минифицированном бандле остаётся голодная `e`, ReferenceError при создании синглтона `api` (модуль грузится на старте). Dockerfile.frontend (ARG/ENV VITE_API_URL/VITE_API_MODE) — ни при чём; `mode.ts`, `main.tsx`, `App.tsx` проверены, чисто.
@@ -52,7 +52,7 @@
 Активных планов кода нет; ниже — верифицированные открытые пункты P2/P3 (состояние проверено grep'ом, 2026-10-23).
 
 ### ✅ OFF-авторизация (выполнено 2026-10-23, сессия «Интеграция авторизации OpenFoodFacts»)
-- ~~Анонимные запросы к OFF упираются в 503 без объяснения причины~~ → ✅ `OpenFoodFactsProvider`: креды из ENV (`OFF_USER_ID`/`OFF_PASSWORD` → `integration.off.user-id/password`, `application.yml:52–55`), `appendAuthParams()` c `URLEncoder` добавляет `user_id`/`password` к `searchProducts`; `@PostConstruct logAuthMode()` — WARN «OFF credentials not set, running in anonymous mode»; `describeOffFailure()`: 503/429 без кредитов → «Требуется регистрация на OFF», с кредитами → «Сервис временно перегружен». `docker-compose.yml:38–41` + `.env.example` (закомментированный шаблон, реальные секреты не коммитятся). Гейты после правок: `mvn test` = 66/0 failed/3 skipped, BUILD SUCCESS.
+- ~~Анонимные запросы к OFF упираются в 503 без объяснения причины~~ → ✅ `OpenFoodFactsProvider`: READ-запросы (search/testConnection) **НЕ содержат user_id/password** (учётная запись не нужна для чтения); User-Agent в формате "AppName/Version (ContactEmail)"; `@PostConstruct logAuthMode()` — WARN «OFF credentials not set, running in anonymous mode`; `@PostConstruct logAuthMode()` — WARN «OFF credentials not set, running in anonymous mode»; `describeOffFailure()`: 503/429 без кредитов → «Требуется регистрация на OFF», с кредитами → «Сервис временно перегружен». `docker-compose.yml:38–41` + `.env.example` (закомментированный шаблон, реальные секреты не коммитятся). Гейты после правок: `mvn test` = 66/0 failed/3 skipped, BUILD SUCCESS.
 - ⚠️ Обнаружено при сверке контракта: бэк кладёт в `usedIn` список **строк** (names), а фронт (`src/api/client.ts:16`, mockServer) ожидает `Array<{resourceType, resourceId, resourceName}>` — рассинхрон формата (отдельная задача, см. ниже).
 - ❌ Не найдено: метода `getProductByBarcode` / отдельного эндпоинта product-by-code в провайдере нет (только search+prices API) — пункт задачи неприменим.
 
@@ -80,7 +80,7 @@ GitHub Actions `npm run lint` падал с exit 1. Разбор:
 - [ ] Формат `usedIn`: привести бэкенд к контрактному `{resourceType, resourceId, resourceName}[]` (сейчас `List<String>` names — фронт не сможет отрендерить). См. `ErrorResponse.java` / `GlobalExceptionHandler.java:63–70`.
 - [ ] Отзыв access-токена при logout (короткий TTL — частичный митигейт уже есть); переход на RFC7807 `ProblemDetail`; `DataIntegrityViolationException` (CHECK по датам) → 400 вместо generic 500 в GlobalExceptionHandler.
 - [ ] Неиспользуемый MapStruct в `pom.xml` (ни одного `@Mapper` в проде) — удалить зависимости+процессор или начать использовать.
-- [ ] Мёртвые эндпоинты (не вызываются фронтом): `/prices/relevant-to-trips`, `/admin/ingredients` (deprecated), `/sync-logs/{id}` — инвентаризировать и удалить.
+- [ ] Мёртвые эндпоинты (не вызываются фронтом, `[DEPRECATED]`): `/prices/relevant-to-trips`, `/admin/ingredients` (deprecated), `/sync-logs/{id}` — инвентаризировать и удалить.
 - [ ] Даты: `LocalDateTime` без таймзоны в сущностях/SQL (TIMESTAMP WITHOUT TZ) — задокументировать соглашение UTC или мигрировать на TIMESTAMPTZ.
 
 ### Известные падения фронтенд-тестов (pre-existing, не регресс Фазы 11)
@@ -215,7 +215,7 @@ GitHub Actions `npm run lint` падал с exit 1. Разбор:
 - [ ] Проверено: backend/Dockerfile = `COPY pom.xml . && COPY src ./src && RUN mvn clean package -DskipTests` — промежуточного слоя `mvn dependency:go-offline` нет
 - [ ] Добавить слой go-offline между COPY pom.xml и COPY src — ускорит пользовательский `--build`
 
-#### 5. Healthcheck `/api/v1/meta` — заглушка, не проверяет БД ✅ ИСПРАВЛЕНО 2026-10-23 (в рабочем дереве)
+#### 5. Healthcheck `/api/v1/meta` — заглушка, не проверяет БД ✅ ИСПРАВЛЕНО 2026-10-23 (**в рабочем дереве, не в коммите** — HEAD `7c2f8dd`)
 - [x] MetaController теперь реально проверяет БД: `DataSource.getConnection()` + `connection.isValid(2)`; при недоступной БД — HTTP 503 с `"db":"down"` (healthcheck контейнера это ловит), при доступной — 200 `"db":"ok"`
 - [x] Существующие тесты (`MetaControllerTest`, SMOKE-01) ожидаются зелёными: в них БД доступна → 200+`"db":"ok"` (проверка невозможна локально: нет JDK 21/Docker — гейт `mvn test`)
 - [ ] Гейт: `mvn test -Dtest=MetaControllerTest,DockerStackSmokeTest` пользователем
@@ -253,7 +253,10 @@ GitHub Actions `npm run lint` падал с exit 1. Разбор:
 ### 1. Агрегация стоимости по endDate ✅ ИСПРАВЛЕН (2026-10-22)
 Считать стоимость для каждого дня отдельно (`findPriceForDate(day.date)`); ред-грин доказан `calculations.bug.test.ts`. Баг-тест на бэкенде остаётся @Disabled с TODO.
 
-### 2. Maven repositories ⏳ В БЭКЛОГЕ (P3, см. выше)
+### 2. E2E-ECON-01: Контракт консистентности стоимости/калорийности ✅ РЕАЛИЗОВАН (2026-10-23)
+Тест `EconomicConsistencyTest.java` проверяет: стоимость по дням = стоимость закупки = стоимость на человека; калорийность на человека = сумма калорийности приёмов пищи. Инварианты: `Σ(day.cost) = shopping.totalCost`, `Σ(meal.kcal) = totalCalories`. Тест требует Docker/Testcontainers для запуска.
+
+### 3. Maven repositories ⏳ В БЭКЛОГЕ (P3, см. выше)
 Ошибки 401/DNS от spring-release/flyway-repo в `<repositories>` backend/pom.xml. Чистка отложена как отдельный тикет.
 
 ## Metrics (срез 2026-10-23, HEAD `898552a`)
@@ -295,6 +298,7 @@ GitHub Actions `npm run lint` падал с exit 1. Разбор:
 - **Week 7:** ✅ ФАЗА 11 — исправление находок аудита бэкенда (P0/P1): IDOR, фильтры, Long→String, N+1 trips, findAll() цен — ЗАВЕРШЕНО 2026-10-23 (коммиты `8880928`, `898552a`; гейты: mvn test 66/0, build SUCCESS)
 - **Week 7+:** ✅ ФАЗА 12 — P1-остатки аудита (usedIn, packsToBuy/leftoverAmount, @Async syncPrices, пакетные цены ProductService/SummaryService, startup-хилл sync-логов, дубль ingredientId) — ЗАВЕРШЕНО 2026-10-23; гейты: mvn test 66/0/3skipped, npm build SUCCESS, npm test 196/201 (5 pre-existing TripForm)
 - **Дальше:** P2 (RFC7807, MapStruct, мёртвые эндпоинты, таймзоны), затем гигиена CI/кода (P3-бэклог)
+- **Фаза 14:** Открита 2026-10-24 — блюда: каталог, правки в походе, бэкенд-агрегация (см. PLAN_PHASE14.md)
 
 ## Completed Tickets (архив тикетов, детали — в «Completed» и git-истории)
 

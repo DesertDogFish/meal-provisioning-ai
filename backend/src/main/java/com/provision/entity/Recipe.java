@@ -43,6 +43,14 @@ public class Recipe {
     @Column(nullable = false, length = 20)
     private RecipeSource source;
 
+    // V20: trip_id NULL = глобальный справочник; иначе trip-scoped снепшот для похода
+    @Column(name = "trip_id")
+    private Long tripId;
+
+    // V20: ссылка на исходную запись справочника (ON DELETE SET NULL на уровне БД)
+    @Column(name = "snapshot_of")
+    private Long snapshotOf;
+
     @OneToMany(mappedBy = "recipe", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
     private List<RecipeIngredient> ingredients = new ArrayList<>();

@@ -56,7 +56,9 @@ public class UserPriceController {
         // P1 (аудит): было priceRepository.findAll() — вся история цен в памяти.
         // Теперь последний срез на каждый ингредиент считается СУБД (DISTINCT ON),
         // а JOIN FETCH убирает N+1 на ingredient при маппинге.
-        return toSortedResponses(priceRepository.findLatestPricesAsOf(cutoff));
+        // V20: справочник цен — только глобальные продукты;
+        // цены конкретного похода отдаёт GET /api/v1/trips/{tripId}/prices
+        return toSortedResponses(priceRepository.findLatestGlobalPricesAsOf(cutoff));
     }
 
     /**

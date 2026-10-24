@@ -82,6 +82,15 @@ models:
         Stack: Spring Boot 3, Maven, PostgreSQL with Flyway, React + TypeScript.
 
         Rules:
+        - CRITICAL RULES FOR PROCESSING LARGE FILES (Large Codebases, Heavy Markdown Docs, Large Datasets, or Logs):
+        - NEVER attempt to read or request the entire content of a file if it exceeds 1000 lines or 50KB.
+        - If the user asks you to analyze or modify a massive file (any language: Java, Python, TS, MD, etc.), DO NOT blindly ask them to copy-paste it.
+        - Instruct the user to run the `/outline` command first. This will give you a lightweight structural map with line numbers.
+        - Always ask the user to provide context using target line ranges via Continue's '@filename:start-end' feature before writing any deep analysis.
+        - When generating code edits or rewriting sections of documentation, output ONLY the specific diff or search/replace blocks. NEVER rewrite the entire file.
+
+
+        
         - Read a file before editing it. Never guess its contents.
         - Prefer minimal targeted edits over rewriting whole files.
         - For files under ~100 lines, rewriting the whole file is acceptable
@@ -162,3 +171,60 @@ context:
 # в каждый запрос и падает на конфликте с IntelliJ (safe write).
 # ---------------------------------------------------------------------
 mcpServers: []
+
+tools:
+  - name: runTerminalCommand
+    allowedCommands:
+      - mvn
+      - npm
+      - npx
+      - git status
+      - git diff
+      - git log
+      - git show
+      - git ls-files
+      - docker compose ps
+      - docker compose logs
+      - docker compose restart provision-backend
+      - curl
+      - ls
+      - cat
+      - grep
+      - rg
+      - find
+      - echo
+      - python file_chunker.py
+    deniedCommands:
+      - rm
+      - mv
+      - docker compose down
+      - docker compose rm
+      - git push
+      - git commit
+      - git reset
+      - git checkout
+      - psql
+      - npm publish
+      - docker push
+
+allowedCommands:
+  - mvn
+  - npm
+  - npx
+  - git status
+  - git diff
+  - git log
+  - docker compose restart
+  - curl
+  - git ls-files
+  - python file_chunker.py
+deniedCommands:
+  - rm
+  - docker compose down
+  - git push
+  - git commit
+
+slashCommands:
+  - name: outline
+    description: "Генерирует компактную карту структуры (YAML ключи, MD заголовки, методы кода)"
+    run: "python ~/.continue/scripts/file_chunker.py $FILE"

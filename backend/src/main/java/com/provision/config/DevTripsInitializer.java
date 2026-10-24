@@ -13,8 +13,10 @@ import com.provision.repository.IngredientRepository;
 import com.provision.repository.RecipeRepository;
 import com.provision.repository.TripIngredientSubstitutionRepository;
 import com.provision.repository.TripPriceOverrideRepository;
+import com.provision.repository.TripMealRepository;
 import com.provision.repository.TripRepository;
 import com.provision.repository.UserRepository;
+import com.provision.service.TripCatalogSnapshotService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Bean;
@@ -58,8 +60,10 @@ public class DevTripsInitializer {
                                     RecipeRepository recipeRepository,
                                     IngredientRepository ingredientRepository,
                                     TripRepository tripRepository,
+                                    TripMealRepository tripMealRepository,
                                     TripPriceOverrideRepository priceOverrideRepository,
-                                    TripIngredientSubstitutionRepository substitutionRepository) {
+                                    TripIngredientSubstitutionRepository substitutionRepository,
+                                    TripCatalogSnapshotService snapshotService) {
         return args -> {
             String seedEnabled = System.getenv("SEED_DEMO_USERS");
             if (!"true".equalsIgnoreCase(seedEnabled)) {
@@ -82,21 +86,21 @@ public class DevTripsInitializer {
                 return;
             }
 
-            Trip mountains = createTrip(admin, tripRepository, recipes,
+            Trip mountains = createTrip(admin, tripRepository, tripMealRepository, snapshotService, recipes,
                     "Осенний Кавказ: Архыз — Софийские озёра",
                     LocalDate.of(2026, 10, 10), LocalDate.of(2026, 10, 14), 4,
                     "Пеший, автономка 5 дней. Нитка: поляна Таулу — Софийские озёра — перевал — спуск к морю.",
                     mountainsMenu());
-            seedPriceOverrides(mountains, ingredientRepository, priceOverrideRepository, admin);
-            seedSubstitution(mountains, recipes, ingredientRepository, substitutionRepository, admin);
+            seedPriceOverrides(mountains, ingredientRepository, priceOverrideRepository, snapshotService, admin);
+            seedSubstitution(mountains, recipes, ingredientRepository, substitutionRepository, snapshotService, admin);
 
-            createTrip(admin, tripRepository, recipes,
+            createTrip(admin, tripRepository, tripMealRepository, snapshotService, recipes,
                     "Яхта Хорватия: Сплит — Хвар — Вис",
                     LocalDate.of(2026, 11, 14), LocalDate.of(2026, 11, 20), 6,
                     "Переход ок. 60 миль. Свежие продукты — на первые 2 дня (есть холодильник), дальше только стабильный запас.",
                     yachtMenu());
 
-            createTrip(user, tripRepository, recipes,
+            createTrip(user, tripRepository, tripMealRepository, snapshotService, recipes,
                     "ПВД Карелия: Ладожские шхеры",
                     LocalDate.of(2026, 11, 7), LocalDate.of(2026, 11, 8), 2,
                     "Поход выходного дня, лёгкая раскладка на горелке.",
@@ -193,6 +197,8 @@ public class DevTripsInitializer {
     // ---------------------------------------------------------------- сборка Trip-графа
     private Trip createTrip(User owner,
                             TripRepository tripRepository,
+                            TripMealRepository tripMealRepository,
+                            TripCatalogSnapshotService snapshotService,
                             Map<String, Recipe> recipes,
                             String name,
                             LocalDate start,
@@ -211,33 +217,41 @@ public class DevTripsInitializer {
                 .build();
 
         for (DayPlan plan : dayPlans) {
-            TripDay day = TripDay.builder()
+            trip.getDays().add(TripDay.builder()
                     .trip(trip)
                     .dayDate(plan.date())
                     .peopleOverride(plan.peopleOverride())
                     .meals(new LinkedHashSet<>())
-                    .build();
+                    .build());
+        }
+        // V20: сохраняем поход и дни ДО блюд — снепшотам нужен trip.id
+        trip = tripRepository.save(trip);
+
+        for (DayPlan plan : dayPlans) {
+            TripDay day = trip.getDays().stream()
+                    .filter(d -> d.getDayDate().equals(plan.date()))
+                    .findFirst()
+                    .orElseThrow();
             int sort = 0;
             for (String item : plan.items()) {
-                int eq = item.indexOf('=');
                 MealType mealType = mealTypeOf(item.charAt(0));
-                String recipeName = item.substring(eq + 1);
-                Recipe recipe = recipes.get(recipeName);
-                if (recipe == null) {
+                String recipeName = item.substring(item.indexOf('=') + 1);
+                Recipe global = recipes.get(recipeName);
+                if (global == null) {
                     log.warn("Demo trip '{}': recipe '{}' not found in catalog — meal skipped", name, recipeName);
                     continue;
                 }
-                TripMeal meal = TripMeal.builder()
+                // V20: демо-походы, как и пользовательские, работают со снепшот-копиями
+                Recipe copy = snapshotService.snapshotRecipeForTrip(trip, global);
+                tripMealRepository.save(TripMeal.builder()
                         .tripDay(day)
                         .mealType(mealType)
-                        .recipe(recipe)
+                        .recipe(copy)
                         .sortOrder(sort++)
-                        .build();
-                day.getMeals().add(meal);
+                        .build());
             }
-            trip.getDays().add(day);
         }
-        return tripRepository.save(trip);
+        return trip;
     }
 
     private static MealType mealTypeOf(char prefix) {
@@ -253,6 +267,7 @@ public class DevTripsInitializer {
     private void seedPriceOverrides(Trip trip,
                                     IngredientRepository ingredientRepository,
                                     TripPriceOverrideRepository overrideRepository,
+                                    TripCatalogSnapshotService snapshotService,
                                     User admin) {
         record PriceOverrideSeed(String code, String price, String comment) {}
         List<PriceOverrideSeed> overrides = List.of(
@@ -262,15 +277,17 @@ public class DevTripsInitializer {
                 new PriceOverrideSeed("tea", "1250.00", null)
         );
         for (PriceOverrideSeed o : overrides) {
-            ingredientRepository.findByCode(o.code()).ifPresent(ing ->
-                    overrideRepository.save(TripPriceOverride.builder()
+            ingredientRepository.findByCode(o.code()).ifPresent(global -> {
+                Ingredient ing = snapshotService.snapshotIngredient(trip, global);
+                overrideRepository.save(TripPriceOverride.builder()
                             .trip(trip)
                             .ingredient(ing)
                             .actualPrice(new BigDecimal(o.price()))
                             .currency("RUB")
                             .comment(o.comment())
                             .updatedBy(admin)
-                            .build()));
+                            .build());
+            });
         }
     }
 
@@ -278,16 +295,21 @@ public class DevTripsInitializer {
                                   Map<String, Recipe> recipes,
                                   IngredientRepository ingredientRepository,
                                   TripIngredientSubstitutionRepository substitutionRepository,
+                                  TripCatalogSnapshotService snapshotService,
                                   User admin) {
-        Recipe recipe = recipes.get("Спагетти по-флотски с томатной пастой");
-        if (recipe == null) {
+        Recipe globalRecipe = recipes.get("Спагетти по-флотски с томатной пастой");
+        if (globalRecipe == null) {
             return;
         }
-        Ingredient from = ingredientRepository.findByCode("beef_stew").orElse(null);
-        Ingredient to = ingredientRepository.findByCode("chicken_stew").orElse(null);
-        if (from == null || to == null) {
+        Ingredient fromGlobal = ingredientRepository.findByCode("beef_stew").orElse(null);
+        Ingredient toGlobal = ingredientRepository.findByCode("chicken_stew").orElse(null);
+        if (fromGlobal == null || toGlobal == null) {
             return;
         }
+        // V20: замены в походе указывают на trip-scoped копии (их же видит UI в закупках)
+        Recipe recipe = snapshotService.snapshotRecipeForTrip(trip, globalRecipe);
+        Ingredient from = snapshotService.snapshotIngredient(trip, fromGlobal);
+        Ingredient to = snapshotService.snapshotIngredient(trip, toGlobal);
         substitutionRepository.save(TripIngredientSubstitution.builder()
                 .trip(trip)
                 .recipe(recipe)

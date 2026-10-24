@@ -48,6 +48,14 @@ public class Ingredient {
     @Builder.Default
     private Boolean roundToPacks = false;
 
+    // V20: trip_id NULL = глобальный справочник; иначе копия продукта для похода
+    @Column(name = "trip_id")
+    private Long tripId;
+
+    // V20: ссылка на исходный продукт справочника (ON DELETE SET NULL на уровне БД)
+    @Column(name = "snapshot_of")
+    private Long snapshotOf;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 

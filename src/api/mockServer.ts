@@ -303,11 +303,16 @@ export const mockServer = {
     // P0-3: чтение цен — GET /prices ≡ POST /admin/ingredient-prices (реальный путь бэкенда).
     // (E2E-05: TripDetailPage/AdminPage/PriceOverridesTab грузили список цен и ловили 404)
     if (pathWithoutQuery === '/prices' && method === 'GET') {
-      return [...prices] as T;
+      // V20: справочник цен — только глобальные продукты; цены похода — /trips/:id/prices.
+      // Паритет с UserPriceController: последний действующий срез на каждый продукт.
+      return this.latestPerIngredient(prices.filter(pr => {
+        const p = products.find(x => x.id === pr.ingredientId);
+        return p && !(p as any).tripId;
+      })) as T;
     }
     // Обратная совместимость со старыми тестами/кодом на /admin/prices (только чтение)
     if (pathWithoutQuery === '/admin/prices' && method === 'GET') {
-      return [...prices] as T;
+      return this.latestPerIngredient([...prices]) as T;
     }
     // P0-3: POST /admin/ingredient-prices (плоский путь реального бэкенда) —
     // эквивалентен legacy POST /admin/products/:id/prices, контракт DUPLICATE_PRICE_DATE тот же.
@@ -396,14 +401,14 @@ export const mockServer = {
 
       const normalizedName = normalize(name);
       const existing = products.find(p =>
-        normalize(p.name) === normalizedName && p.unit === unit
+        !(p as any).tripId && normalize(p.name) === normalizedName && p.unit === unit
       );
 
       if (existing) {
         return { duplicate: true, existingId: existing.id, existingName: existing.name, sameUnit: true };
       }
 
-      const softDuplicate = products.find(p => normalize(p.name) === normalizedName && p.unit !== unit);
+      const softDuplicate = products.find(p => !(p as any).tripId && normalize(p.name) === normalizedName && p.unit !== unit);
       if (softDuplicate) {
         return { duplicate: true, existingId: softDuplicate.id, existingName: softDuplicate.name, sameUnit: false };
       }
@@ -442,7 +447,7 @@ export const mockServer = {
     if (method === 'GET' && isCollection && !idSegment) {
       const page = Number(url.searchParams.get('page') ?? 0);
       const size = Number(url.searchParams.get('size') ?? 100);
-      const content = products.map(p => ({
+      const content = products.filter(p => !(p as any).tripId).map(p => ({
         ...p,
         unitLabel: UNIT_LABELS[p.unit] || p.unit,
         categoryName: p.category,
@@ -467,7 +472,7 @@ export const mockServer = {
     // POST коллекции — создание продукта
     if (method === 'POST' && isCollection && !idSegment) {
       const nameNorm = normalize(body.name);
-      const duplicate = products.find(p => normalize(p.name) === nameNorm && p.unit === body.unit);
+      const duplicate = products.find(p => !(p as any).tripId && normalize(p.name) === nameNorm && p.unit === body.unit);
 
       if (duplicate) {
         throw { status: 409, message: 'DUPLICATE_PRODUCT', detail: 'Product with this name and unit already exists' } as any;
@@ -567,13 +572,14 @@ export const mockServer = {
     // (используется поиском блюд в модалке «Добавить приём пищи»).
     if (method === 'GET' && url.searchParams.get('search')) {
       const q = normalize(url.searchParams.get('search')!);
+      // V20: каталог — только глобальные рецепты
       const hit = (r: Recipe) =>
         normalize(r.name).includes(q) ||
         r.ingredients.some(ri => {
           const ing = products.find(p => p.id === ri.ingredientId) ?? ri.ingredient;
           return ing ? normalize(ing.name).includes(q) : false;
         });
-      return recipes.filter(hit).map(r => this.recipeToResponse(r));
+      return recipes.filter(r => !(r as any).tripId).filter(hit).map(r => this.recipeToResponse(r));
     }
 
     // PUT /admin/recipes/:id — правка состава блюда прямо из окна добавления
@@ -674,7 +680,7 @@ export const mockServer = {
     }
 
     if (method === 'GET') {
-      return recipes.map(r => this.recipeToResponse(r));
+      return recipes.filter(r => !(r as any).tripId).map(r => this.recipeToResponse(r));
     }
 
     throw { status: 405, message: 'Method not allowed' };
@@ -712,8 +718,74 @@ export const mockServer = {
   },
 
   // Походы
+  // V20 (mock-паритет): copy-on-write снепшоты каталога для похода.
+  // Идентификаторы копий детерминированные: `${origId}::t${tripId}` — findOrCreate идемпотентен.
+  latestPerIngredient(rows: any[]): any[] {
+    const latest = new Map<string, any>();
+    for (const pr of rows) {
+      const cur = latest.get(pr.ingredientId);
+      if (!cur || pr.effectiveFrom >= cur.effectiveFrom) latest.set(pr.ingredientId, pr);
+    }
+    return [...latest.values()];
+  },
+
+  snapProductForTrip(tripId: string, p: any): any {
+    const id = `${p.id}::t${tripId}`;
+    let copy: any = products.find(x => x.id === id);
+    if (!copy) {
+      copy = { ...p, id, tripId, snapshotOf: p.id, code: null };
+      products.push(copy);
+      const latest = prices
+        .filter(pr => pr.ingredientId === p.id)
+        .sort((a, b) => (a.effectiveFrom < b.effectiveFrom ? 1 : -1))[0];
+      if (latest) {
+        prices.push({ ...latest, id: `pr_${id}`, ingredientId: id });
+      }
+    }
+    return copy;
+  },
+
+  snapRecipeForTrip(tripId: string, r: any): any {
+    const id = `${r.id}::t${tripId}`;
+    let copy: any = recipes.find(x => x.id === id);
+    if (!copy) {
+      copy = {
+        ...r,
+        id,
+        tripId,
+        snapshotOf: r.id,
+        ingredients: (r.ingredients || []).map((ri: any) => {
+          const gp = products.find(p => p.id === ri.ingredientId);
+          const sp = gp ? this.snapProductForTrip(tripId, gp) : null;
+          return { ingredientId: sp ? sp.id : ri.ingredientId, amount: ri.amount };
+        }),
+      };
+      recipes.push(copy);
+    }
+    return copy;
+  },
+
   handleTrips(method: string, path: string, body?: any): any {
     const parts = path.split('/').filter(Boolean);
+
+    // V20: цены похода — по trip-scoped копиям продуктов; если снепшотов нет
+    // (legacy/сид-походы) — фолбэк на глобальный срез, как TripPriceController
+    if (method === 'GET' && parts.length === 3 && parts[2] === 'prices') {
+      const tripId = parts[1];
+      if (!trips.find(t => t.id === tripId)) {
+        throw { status: 404, message: 'Not found', detail: `Trip ${tripId} not found` } as any;
+      }
+      const snapIds = new Set(products.filter(p => (p as any).tripId === tripId).map(p => p.id));
+      const rows = snapIds.size === 0
+        ? prices.filter(pr => products.find(p => p.id === pr.ingredientId && !(p as any).tripId))
+        : prices.filter(pr => snapIds.has(pr.ingredientId));
+      const latestByIng = new Map<string, any>();
+      for (const pr of rows) {
+        const cur = latestByIng.get(pr.ingredientId);
+        if (!cur || pr.effectiveFrom >= cur.effectiveFrom) latestByIng.set(pr.ingredientId, pr);
+      }
+      return [...latestByIng.values()];
+    }
 
     // CONTRACT-P1 (E2E): POST/DELETE /trips/:id/days/:dayId/meals — раньше роута не
     // было, TripDetailPage ловил 405 и добавленный приём пищи не появлялся в списке.
@@ -734,11 +806,17 @@ export const mockServer = {
         if (!body?.recipeId) {
           throw { status: 400, message: 'Bad request', detail: 'recipeId is required' };
         }
+        // V20: приём пищи ссылается на trip-scoped копию блюда, а не на справочник
+        const globalRecipe: any = recipes.find(r => r.id === body.recipeId && !(r as any).tripId);
+        const snap = globalRecipe ? this.snapRecipeForTrip(tripId, globalRecipe) : recipes.find(r => r.id === body.recipeId);
+        if (!snap) {
+          throw { status: 404, message: 'Not found', detail: `Recipe ${body.recipeId} not found` } as any;
+        }
         const meal = {
           id: `m-${Date.now()}`,
           tripDayId: dayId,
           mealType: body.mealType ?? 'LUNCH',
-          recipeId: body.recipeId,
+          recipeId: snap.id,
           peopleOverride: body.peopleOverride,
           sortOrder: body.sortOrder ?? day.meals.length + 1,
         };
@@ -780,6 +858,17 @@ export const mockServer = {
       return trip;
     }
     
+    // V20: trip-scoped копии блюд похода (паритет с GET /api/v1/trips/{id}/recipes)
+    if (parts.length === 3 && parts[2] === 'recipes' && method === 'GET') {
+      const tripId = parts[1];
+      if (!trips.find(t => t.id === tripId)) {
+        throw { status: 404, message: 'Not found', detail: `Trip ${tripId} not found` } as any;
+      }
+      return recipes
+        .filter(r => (r as any).tripId === tripId)
+        .map(r => this.recipeToResponse(r));
+    }
+
     // GET /trips/:id/summary/shopping
     if (parts.length === 4 && parts[2] === 'summary' && parts[3] === 'shopping' && method === 'GET') {
       const tripId = parts[1];
@@ -1263,6 +1352,19 @@ export const mockServer = {
         notes: body.notes,
         createdAt: new Date().toISOString(),
       };
+      // Паритет с бэкендом (TripService.createTrip): дни создаются автоматически
+      const days: any[] = [];
+      const start = new Date(`${newTrip.startDate}T00:00:00`);
+      const end = new Date(`${newTrip.endDate}T00:00:00`);
+      for (let d = new Date(start), i = 0; d <= end; d.setDate(d.getDate() + 1), i++) {
+        days.push({
+          id: `d-${newTrip.id}-${i}`,
+          tripId: newTrip.id,
+          dayDate: d.toISOString().slice(0, 10),
+          meals: [],
+        });
+      }
+      (newTrip as any).days = days;
       trips.push(newTrip);
       return newTrip;
     }

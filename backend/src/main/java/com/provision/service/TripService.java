@@ -24,6 +24,7 @@ public class TripService {
     private final TripMealRepository tripMealRepository;
     private final UserRepository userRepository;
     private final RecipeRepository recipeRepository;
+    private final TripCatalogSnapshotService snapshotService;
 
     @Transactional(readOnly = true)
     public List<TripResponse> getUserTrips(Long userId) {
@@ -145,6 +146,10 @@ public class TripService {
 
         Recipe recipe = recipeRepository.findById(request.recipeId())
                 .orElseThrow(() -> new NotFoundException("Recipe not found"));
+
+        // V20: поход работает со снепшотом блюда, а не с глобальным справочником —
+        // правки/удаления каталога и цен больше не затрагивают спланированный поход.
+        recipe = snapshotService.snapshotRecipeForTrip(trip, recipe);
 
         TripMeal meal = TripMeal.builder()
                 .tripDay(day)

@@ -34,6 +34,9 @@ export interface ProductCategory {
 
 export interface Ingredient {
   id: string;
+  /** V20: trip-scoped копия продукта; undefined/null = глобальный справочник */
+  tripId?: string | null;
+  snapshotOf?: string | null;
   name: string;
   unit: UnitOfMeasure;
   unitLabel?: string;
@@ -68,6 +71,9 @@ export interface RecipeIngredient {
 export interface Recipe {
   id: string;
   name: string;
+  /** V20: trip-scoped снепшот (копия для похода); undefined/null = глобальный справочник */
+  tripId?: string | null;
+  snapshotOf?: string | null;
   mealType: MealType;
   category?: string;
   cookMinutes?: number;

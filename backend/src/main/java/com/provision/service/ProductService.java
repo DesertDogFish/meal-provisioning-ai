@@ -84,7 +84,8 @@ public class ProductService {
                 Sort.by(Sort.Direction.fromString(direction != null ? direction : "asc"),
                         sort != null ? sort : "name"));
 
-        Specification<Ingredient> spec = Specification.where(ProductSpecifications.matchesQuery(query))
+        Specification<Ingredient> spec = Specification.where(ProductSpecifications.isGlobal())
+                .and(ProductSpecifications.matchesQuery(query))
                 .and(ProductSpecifications.hasCategoryIn(categoryIds))
                 .and(ProductSpecifications.hasUnitIn(units))
                 .and(ProductSpecifications.hasPriceStatus(priceStatus))

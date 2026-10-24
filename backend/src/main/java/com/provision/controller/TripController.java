@@ -17,6 +17,7 @@ import java.util.List;
 public class TripController {
 
     private final TripService tripService;
+    private final com.provision.service.RecipeService recipeService;
 
     @GetMapping
     public List<TripResponse> getUserTrips(@AuthenticationPrincipal User user) {
@@ -26,6 +27,15 @@ public class TripController {
     @GetMapping("/{id}")
     public TripResponse getTrip(@PathVariable Long id, @AuthenticationPrincipal User user) {
         return tripService.getTrip(id, user.getId());
+    }
+
+    /** V20: trip-scoped копии блюд похода (меню ссылается на них, а не на справочник). */
+    @GetMapping("/{id}/recipes")
+    public java.util.List<com.provision.dto.recipe.RecipeResponse> getTripRecipes(
+            @PathVariable Long id,
+            @AuthenticationPrincipal User user
+    ) {
+        return recipeService.getTripRecipes(id, user.getId());
     }
 
     @PostMapping

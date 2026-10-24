@@ -1,5 +1,8 @@
 # Список изменений под новый дизайн-код (design-pack v1.1)
 
+> **Сверка:** 2026-10-24, HEAD `7c2f8dd`
+> **Статус:** невыполненный чек-лист — все пункты [ ] ожидают реализации
+
 Источник правды: `provisions/design-pack/` — `AGENTS.md` (инструкции агентам),
 `tokens.css` / `tokens.json` (токены двух тем), `components.md` (спеки 17 компонентов),
 `react/Button.tsx|Input.tsx` (+ CSS-Modules), `assets/` (знак v4), `og/`.
@@ -11,15 +14,15 @@
 
 ## 0. Подключение пакета (без этого остальные пункты невозможны)
 
-- [ ] **0.1** Подключить `provisions/design-pack/tokens.css` в `src/main.tsx`
+- [x] ~~0.1~~ ✅ Подключить `provisions/design-pack/tokens.css` в `src/main.tsx` — выполнено (коммит с DESIGN_MIGRATION)
       **до** `src/index.css` (по README пак «подключается первым»).
-- [ ] **0.2** Из `src/index.css` (строки ~8–63) удалить блок `:root` с дублированием
+- [x] ~~0.2~~ ✅ Из `src/index.css` блок `:root` с дублированием удалён — только алиасы совместимости
       токенов; оставить только алиасы старой системы (`--bg`, `--surface`, `--fire` и т.д.),
       перемаппив их на новые токены design-pack (в т.ч. добавить `--on-fire`, `--danger*`, `--success*`).
-- [ ] **0.3** В Tailwind v4-блоке `@theme` (src/index.css ~66–95) убрать hex-литералы —
+- [x] ~~0.3~~ ✅ В Tailwind v4-блоке `@theme` hex-литералы убраны — ссылки на токены —
       завести цвета как отсылки к переменным токенов, чтобы утилиты (`bg-background` и пр.)
       наследовали тему, а не были привязаны к dark-значениям.
-- [ ] **0.4** Ссылку на пакет закрепить в корневом `AGENTS.md`: перед любыми правками UI
+- [x] ~~0.4~~ ✅ Ссылка на пакет закреплена в корневом `AGENTS.md`: перед любыми правками UI
       агент читает `provisions/design-pack/AGENTS.md` → `tokens.json` → `brand.md` → `components.md`.
 
 ## 1. Тёмная тема по умолчанию + светлая тема (двойная тема через `data-theme`)
@@ -28,10 +31,10 @@
 По design-pack: dark = дефолт (`:root`), light = `html[data-theme="light"]`, ветвление
 тем в компонентах запрещено — только токены.
 
-- [ ] **1.1** Добавить компонент `ThemeToggle`: кнопка с `aria-label`, запись
+- [x] ~~1.1~~ ✅ Компонент `ThemeToggle` добавлен (.ibtn в index.css): кнопка с `aria-label`, запись
       `document.documentElement.dataset.theme`, персист в `localStorage['pv-theme']` в try/catch
       (механизм описан в `tokens.json → themeSwitch`). Разместить в шапке `Layout.tsx`.
-- [ ] **1.2** Убрать жёсткий `color-scheme: dark` из `:root` (переезжает в tokens.css,
+- [x] ~~1.2~~ ✅ Жёсткий `color-scheme: dark` убран из `:root` — теперь из tokens.css (переезжает в tokens.css,
       где тема сама ставит `color-scheme`).
 - [ ] **1.3** Проверить/починить нативные контролы (календарь, select, скроллбары —
       «ФИКС 4» в src/index.css): они должны следовать теме через `color-scheme`, а не быть всегда тёмными.
@@ -51,7 +54,7 @@
       на `var(--danger)` / `var(--danger-soft)` (в design-pack появилась семантика состояний,
       которой нет в текущем index.css).
 - [ ] **2.3** Заменить `#22C55E` (ApiModeBadge, свечение статуса) на `var(--success)`/`var(--shadow-glow)`.
-- [ ] **2.4** Фон-градиент карточки в `DashboardPage.tsx:131`
+- [ ] **2.4** Фон-градиент карточки в `DashboardPage.tsx:131` — **ОСТАЛОСЬ**: `--card-hull: linear-gradient(180deg, #2B4A6F, #0B1626)` в `index.css` — hex-литерал, не токен
       (`linear-gradient(180deg, #2B4A6F, #0B1626)`) — выразить через токены
       (`--bg-3`, `--grad-dusk`) или завести новый токен одновременно в `tokens.css` и `tokens.json`
       (договорённость README: новые токены добавляются в оба файла).
@@ -87,7 +90,7 @@
 
 Сейчас знак перерисован руками прямо в коде — прямое нарушение («Знак не перерисовывается»).
 
-- [ ] **4.1** `Layout.tsx:78–82`: убрать инлайн-`<svg>` с путями `M48 18 L70 70 H26 Z` и
+- [x] ~~4.1~~ ✅ Инлайн-`<svg>` убран из Layout.tsx — знак из `BrandMark.tsx` (assets/mark.svg) с путями `M48 18 L70 70 H26 Z` и
       `stroke="#0B141B"`; подключить `assets/mark.svg` (dark) / `mark-light.svg` (light) —
       переключение только через `data-theme` (CSS-mask/img по токену либо два `<img>` с display по атрибуту темы).
 - [ ] **4.2** Соблюдать охранное поле 1/6 ширины, минимальный размер 24 px; ниже 24 px —

@@ -17,7 +17,8 @@ public interface RecipeRepository extends JpaRepository<Recipe, Long> {
     
     List<Recipe> findByCookMinutes(Integer cookMinutes);
     
-    @Query("SELECT r FROM Recipe r ORDER BY r.name")
+    // V20: каталог — только глобальные рецепты (trip_id IS NULL)
+    @Query("SELECT r FROM Recipe r WHERE r.tripId IS NULL ORDER BY r.name")
     List<Recipe> findAllOrderByName();
     
     // FIX (скрытый N+1): ingredient.category — LAZY @ManyToOne; при сериализации DTO
@@ -40,21 +41,22 @@ public interface RecipeRepository extends JpaRepository<Recipe, Long> {
     List<Recipe> findAllWithIngredientsByIds(@Param("ids") java.util.Collection<Long> ids);
     
     @Query("SELECT r FROM Recipe r LEFT JOIN FETCH r.ingredients ri LEFT JOIN FETCH ri.ingredient i " +
-           "LEFT JOIN FETCH i.category ORDER BY r.name")
+           "LEFT JOIN FETCH i.category WHERE r.tripId IS NULL ORDER BY r.name")
     List<Recipe> findAllWithIngredients();
     
     // NOTE: DISTINCT здесь нельзя — Hibernate не умеет DISTINCT + FETCH (ошибка кеша Second Level).
     // Дедупликация — в service-слое через LinkedHashSet (поиск по join на ingredients даёт дубли).
     @Query("SELECT r FROM Recipe r LEFT JOIN r.ingredients ri LEFT JOIN ri.ingredient " +
-           "WHERE LOWER(r.name) LIKE LOWER(CONCAT('%', :search, '%')) " +
-           "OR LOWER(ri.ingredient.name) LIKE LOWER(CONCAT('%', :search, '%')) ORDER BY r.name")
+           "WHERE r.tripId IS NULL AND (LOWER(r.name) LIKE LOWER(CONCAT('%', :search, '%')) " +
+           "OR LOWER(ri.ingredient.name) LIKE LOWER(CONCAT('%', :search, '%'))) ORDER BY r.name")
     List<Recipe> searchByNameOrIngredient(@Param("search") String search);
     
     // NOTE: CAST(:search AS string) типизирует параметр — при search == null PostgreSQL
     // иначе выводит lower(bytea) на не типизированном NULL и падает (500).
     @Query("SELECT r FROM Recipe r LEFT JOIN FETCH r.ingredients ri LEFT JOIN FETCH ri.ingredient i " +
            "LEFT JOIN FETCH i.category " +
-           "WHERE (:mealType IS NULL OR r.mealType = :mealType) " +
+           "WHERE r.tripId IS NULL " +
+           "AND (:mealType IS NULL OR r.mealType = :mealType) " +
            "AND (:category IS NULL OR r.category = :category) " +
            "AND (:cookMinutes IS NULL OR r.cookMinutes = :cookMinutes) " +
            "AND (CAST(:search AS string) IS NULL OR (" +
@@ -68,11 +70,17 @@ public interface RecipeRepository extends JpaRepository<Recipe, Long> {
             @Param("search") String search);
     
     @Query("SELECT COUNT(DISTINCT r) FROM Recipe r " +
-           "WHERE (:mealType IS NULL OR r.mealType = :mealType) " +
+           "WHERE r.tripId IS NULL " +
+           "AND (:mealType IS NULL OR r.mealType = :mealType) " +
            "AND (:category IS NULL OR r.category = :category) " +
            "AND (:cookMinutes IS NULL OR r.cookMinutes = :cookMinutes)")
     long countWithFilters(
             @Param("mealType") MealType mealType,
             @Param("category") String category,
             @Param("cookMinutes") Integer cookMinutes);
+
+    // V20: trip-scoped снепшоты рецептов
+    java.util.Optional<Recipe> findByTripIdAndSnapshotOf(Long tripId, Long snapshotOf);
+
+    List<Recipe> findByTripId(Long tripId);
 }

@@ -212,17 +212,20 @@ export default function PriceOverridesTab({ tripId }: Props) {
         (serverOvs || []).map(o => [String(o.ingredientId), { price: o.actualPrice, total: 0 } as ActualPriceDraft])
       );
 
-      const [tripData, recipesData, pricesData] = await Promise.all([
+      const [tripData, recipesData, pricesData, tripRecipesData] = await Promise.all([
         api.get<Trip>(`/trips/${tripId}`),
         getRecipes(),
-        // P0-3: чтение цен — общий эндпоинт для всех ролей (см. UserPriceController)
-        api.get<Price[]>('/prices')
+        // V20: цены похода — trip-scoped копии (план заморожен на момент планирования)
+        api.get<Price[]>(`/trips/${tripId}/prices`),
+        // V20: копии блюд похода — расчёт закупок идёт по ним
+        api.get<any[]>(`/trips/${tripId}/recipes`).catch(() => [])
       ]);
 
       setTrip(tripData);
 
       // Расчёт списка закупок
-      calculateShoppingData(tripData, recipesData, pricesData);
+      // V20: расчёт по объединённому набору: справочник (пикер) + копии блюд похода
+      calculateShoppingData(tripData, [...recipesData, ...tripRecipesData], pricesData);
     } catch (err) {
       console.error('Failed to load ', err);
       setError('Не удалось загрузить данные');

@@ -22,6 +22,11 @@ public final class ProductSpecifications {
     }
 
     /** ILIKE %query% по name ИЛИ code. */
+    // V20: справочник продуктов — только глобальные записи (trip_id IS NULL)
+    public static Specification<Ingredient> isGlobal() {
+        return (root, query, cb) -> cb.isNull(root.get("tripId"));
+    }
+
     public static Specification<Ingredient> matchesQuery(String query) {
         return (root, cq, cb) -> {
             if (query == null || query.isBlank()) {

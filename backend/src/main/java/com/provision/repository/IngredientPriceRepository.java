@@ -36,6 +36,15 @@ public interface IngredientPriceRepository extends JpaRepository<IngredientPrice
            nativeQuery = true)
     List<IngredientPrice> findLatestPricesAsOf(@Param("date") LocalDate date);
 
+    /** V20: то же, но только глобальные продукты (справочник цен, GET /prices). */
+    @Query(value = "SELECT DISTINCT ON (ip.ingredient_id) ip.* " +
+                   "FROM ingredient_prices ip " +
+                   "JOIN ingredients i ON i.id = ip.ingredient_id " +
+                   "WHERE i.trip_id IS NULL AND ip.effective_from <= CAST(:date AS DATE) " +
+                   "ORDER BY ip.ingredient_id, ip.effective_from DESC",
+           nativeQuery = true)
+    List<IngredientPrice> findLatestGlobalPricesAsOf(@Param("date") LocalDate date);
+
     /** То же, но только по выбранному набору id ингредиентов (для /prices/relevant-to-trips). */
     @Query(value = "SELECT DISTINCT ON (ip.ingredient_id) ip.* " +
                    "FROM ingredient_prices ip " +

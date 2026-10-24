@@ -6,11 +6,18 @@
 
 **Строго запрещено** создавать новые MD-файлы вне белого списка.
 
-**Белый список (ровно 4 файла):**
+**Белый список (11 файлов):**
 - `README.md` — запуск, стек, ссылки
 - `ARCHITECTURE.md` — слои данных, режимы, расчёты, контракт
 - `PLAN.md` — единственный живой статус, текущая фаза, бэклог, баги
 - `AGENTS.md` — этот файл (правила для агентов)
+- `PLAN_PHASE14.md` — статус Фазы 14 (блюда: каталог, правки в походе)
+- `DESIGN_MIGRATION.md` — чек-лист миграции UI на design-pack v1.1
+- `backend/README.md` — документация бэкенда
+- `provisions/design-pack/README.md` — описание пакета айдентики
+- `provisions/design-pack/AGENTS.md` — инструкции кодинг-агентам для design-pack
+- `provisions/design-pack/brand.md` — знак и палитра
+- `provisions/design-pack/components.md` — спецификации UI-компонентов
 
 **Запрещено:**
 - `*_REPORT.md`
@@ -151,7 +158,7 @@ npm run build           # ✅ BUILD SUCCESS
 npm run test            # ✅ Все тесты проходят
 
 # Проверка MD-файлов
-git ls-files '*.md'     # ✅ Ровно 4 файла (+ backend/README.md)
+git ls-files '*.md'     # ✅ Ровно 11 файлов (4 root + backend/README.md + 4 design-pack)
 ```
 
 **Запрещено коммитить если:**
@@ -183,11 +190,9 @@ git ls-files '*.md'     # ✅ Ровно 4 файла (+ backend/README.md)
      continue-on-error: true
    ```
 
-4. **Интеграционные тесты** — временно отключены
+4. **Интеграционные тесты** — требуют Docker/Testcontainers или LocalPgFallback (без Docker: `LocalPgFallback` поднимает PostgreSQL через initdb/pg_ctl)
    ```xml
-   <excludes>
-     <exclude>**/*IntegrationTest.java</exclude>
-   </excludes>
+   <!-- Integration-тесты НЕ исключены — ContainerSuite/LocalPgFallback поднимает БД автоматически -->
    ```
 
 ### 8. Миграция компонентов
@@ -349,7 +354,7 @@ Red-green: <название теста> упал на старом → прош
 ```yaml
 - name: Check MD files
   run: |
-    count=$(git ls-files '*.md' | grep -v '^backend/README.md$' | wc -l)
+    count=$(git ls-files '*.md' | grep -v '^backend/README.md$' | grep -v '^provisions/design-pack/' | wc -l)
     if [ "$count" -ne 4 ]; then
       echo "::error::Expected 4 MD files (README.md, ARCHITECTURE.md, PLAN.md, AGENTS.md), found $count"
       git ls-files '*.md'

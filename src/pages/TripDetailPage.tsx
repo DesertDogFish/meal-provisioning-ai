@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { calculateMenuByDays, calculateShoppingList, calculateDayShopping, calculatePersonSummary, formatAmount } from '../utils/calculations';
 import { formatRub } from '../utils/formatRub'; // Фаза 13: итоги — целые рубли
@@ -95,6 +95,14 @@ export default function TripDetailPage() {
   const [dayPeopleOverride, setDayPeopleOverride] = useState('');
   const [trip, setTrip] = useState<Trip | null>(null);
   const [recipes, setRecipes] = useState<Recipe[]>([]);
+  // V20: копии блюд похода (snowshot) — нужны для рендера меню и расчётов
+  const [tripRecipes, setTripRecipes] = useState<Recipe[]>([]);
+  // V20: меню ищет блюдо и по глобальному id (пикер), и по id копии (приёмы пищи)
+  const recipesMap = useMemo(
+    () => new Map([...recipes, ...tripRecipes].map((r: Recipe) => [r.id, r])),
+    [recipes, tripRecipes]
+  );
+
   const [prices, setPrices] = useState<Price[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -151,15 +159,18 @@ export default function TripDetailPage() {
     try {
       setLoading(true);
       setError(null);
-      const [tripData, recipesData, pricesData] = await Promise.all([
+      const [tripData, recipesData, pricesData, tripRecipesData] = await Promise.all([
         api.get<Trip>(`/trips/${id}`),
         getRecipes(),
-        // P0-3: GET /admin/prices не существовало на бэкенде; цены доступны всем
-        // аутентифицированным пользователям на GET /prices (UserPriceController)
-        api.get<Price[]>('/prices')
+        // V20: цены КОНКРЕТНОГО похода (trip-scoped копии продуктов, замороженный план);
+        // глобальный справочник цен — GET /prices (экраны админа/каталога)
+        api.get<Price[]>(`/trips/${id}/prices`),
+        // V20: trip-scoped копии блюд (меню похода ссылается на них)
+        api.get<Recipe[]>(`/trips/${id}/recipes`).catch(() => [] as Recipe[])
       ]);
       setTrip(tripData);
       setRecipes(recipesData);
+      setTripRecipes(tripRecipesData);
       setPrices(pricesData);
     } catch (err: any) {
       console.error('Failed to load trip:', err);
@@ -230,7 +241,6 @@ export default function TripDetailPage() {
     );
   }
 
-  const recipesMap = new Map(recipes.map((r: Recipe) => [r.id, r]));
 
   const toggleDay = (dayId: string) => {
     const next = new Set(expandedDays);

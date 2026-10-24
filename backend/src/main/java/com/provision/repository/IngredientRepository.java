@@ -21,7 +21,8 @@ public interface IngredientRepository extends JpaRepository<Ingredient, Long>, J
     
     boolean existsByName(String name);
     
-    @Query("SELECT i FROM Ingredient i WHERE i.nameNorm = :nameNorm")
+    // V20: проверка дублей — только среди глобальных продуктов
+    @Query("SELECT i FROM Ingredient i WHERE i.nameNorm = :nameNorm AND i.tripId IS NULL")
     List<Ingredient> findByNameNorm(@Param("nameNorm") String nameNorm);
     
     Optional<Ingredient> findByCode(String code);
@@ -32,9 +33,15 @@ public interface IngredientRepository extends JpaRepository<Ingredient, Long>, J
     // «select ... from product_categories where id=?» на ингредиент. Fetch-join
     // решает это одним запросом (категорий мало, раздувание строк незначимо).
     @EntityGraph(attributePaths = {"category"})
-    @Query("SELECT i FROM Ingredient i ORDER BY i.name")
+    // V20: справочник продуктов — только глобальные
+    @Query("SELECT i FROM Ingredient i WHERE i.tripId IS NULL ORDER BY i.name")
     List<Ingredient> findAllOrderByname();
     
     @Query("SELECT COUNT(i) FROM Ingredient i WHERE i.category.id = :categoryId")
     long countByCategoryId(@Param("categoryId") Long categoryId);
+
+    // V20: trip-scoped копии продуктов
+    java.util.List<Ingredient> findByTripId(Long tripId);
+
+    java.util.Optional<Ingredient> findByTripIdAndSnapshotOf(Long tripId, Long snapshotOf);
 }

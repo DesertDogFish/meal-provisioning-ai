@@ -197,8 +197,8 @@ class ConflictIntegrationTest {
 
     @Test
     @Order(3)
-    @DisplayName("REC-07: Cannot delete recipe used in trip meals - returns 409")
-    void rec07_cannotDeleteUsedRecipe() throws Exception {
+    @DisplayName("REC-07 (V20): recipe used by trip is deletable — trip keeps snapshot copy")
+    void rec07_usedRecipeDeletableViaSnapshot() throws Exception {
         // Create ingredient
         IngredientRequest ingredientRequest = new IngredientRequest(
                 null,  // code
@@ -276,11 +276,21 @@ class ConflictIntegrationTest {
                         .content(objectMapper.writeValueAsString(mealRequest)))
                 .andExpect(status().isCreated());
 
-        // Try to delete recipe - should fail with 409
+        // V20 (семантика снепшотов): приём пищи держит trip-scoped КОПИЮ рецепта,
+        // поэтому глобальное блюдо больше не заблокировано походом: delete = 204,
+        // а поход продолжает считаться из копии (409 RECIPE_IN_USE ушёл в историю).
         mockMvc.perform(delete("/api/v1/admin/recipes/" + recipeId)
                         .header("Authorization", "Bearer " + adminToken))
-                .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.status").value(409))
-                .andExpect(jsonPath("$.detail").exists());
+                .andExpect(status().isNoContent());
+
+        // поход жив: summary/shopping отвечает 200 и считает из копии
+        mockMvc.perform(get("/api/v1/trips/" + tripId + "/summary/shopping")
+                        .header("Authorization", "Bearer " + userToken))
+                .andExpect(status().isOk());
+
+        // из глобального каталога блюдо исчезло
+        mockMvc.perform(get("/api/v1/recipes/" + recipeId)
+                        .header("Authorization", "Bearer " + userToken))
+                .andExpect(status().isNotFound());
     }
 }

@@ -20,6 +20,7 @@ import java.util.List;
 public class RecipeService {
 
     private final RecipeRepository recipeRepository;
+    private final com.provision.repository.TripRepository tripRepository;
     private final IngredientRepository ingredientRepository;
     private final TripMealRepository tripMealRepository;
 
@@ -142,6 +143,26 @@ public class RecipeService {
 
         recipeRepository.deleteById(id);
         log.info("Deleted recipe: {}", recipe.getName());
+    }
+
+    /**
+     * V20: trip-scoped копии блюд похода (для рендера меню и клиентских расчётов
+     * страниц похода: meal.recipeId указывает на копию, которой нет в глобальном
+     * каталоге GET /recipes).
+     */
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public java.util.List<RecipeResponse> getTripRecipes(Long tripId, Long userId) {
+        tripRepository.findByIdAndUserId(tripId, userId)
+                .orElseThrow(() -> new com.provision.exception.NotFoundException("Trip not found or access denied"));
+        java.util.List<Long> copyIds = recipeRepository.findByTripId(tripId).stream()
+                .map(Recipe::getId)
+                .toList();
+        if (copyIds.isEmpty()) {
+            return java.util.List.of();
+        }
+        return recipeRepository.findAllWithIngredientsByIds(copyIds).stream()
+                .map(this::toResponse)
+                .toList();
     }
 
     private RecipeResponse toResponse(Recipe recipe) {

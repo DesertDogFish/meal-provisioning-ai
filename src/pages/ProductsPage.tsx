@@ -5,7 +5,7 @@ import { NumberField } from '../components/NumberField';
 import { ProductTable, type ProductRow } from '../components/ProductTable';
 import Modal from '../components/Modal';
 import { api } from '../api/client';
-import type { UnitOfMeasure, ProductCategory } from '../types';
+import type { UnitOfMeasure, ProductCategory, IngredientPrice } from '../types';
 import { humanizeUnit, recipesWord } from '../utils/text';
 
 type Product = ProductRow;
@@ -36,6 +36,11 @@ export default function ProductsPage() {
   const [formRoundToPacks, setFormRoundToPacks] = useState(false);
   const [formCalories, setFormCalories] = useState<number | null>(null);
   const [formPieceWeightG, setFormPieceWeightG] = useState<number | null>(null);
+  // V20-ux: цена продукта правится прямо из карточки продукта (ранее — только отдельной
+  // вкладкой «Цены» в админке, из-за чего цену «невозможно было установить» на месте)
+  const [formPrice, setFormPrice] = useState('');
+  const [formPriceDate, setFormPriceDate] = useState('');
+  const [priceByIngredient, setPriceByIngredient] = useState<Record<string, number>>({});
   const [duplicateWarning, setDuplicateWarning] = useState<{ type: 'hard' | 'soft'; message: string } | null>(null);
 
   // Загрузка данных
@@ -49,10 +54,14 @@ export default function ProductsPage() {
       setLoading(true);
       setError(null);
       
-      const [productsData, categoriesData] = await Promise.all([
+      const [productsData, categoriesData, pricesData] = await Promise.all([
         api.get<any>('/admin/products?size=1000'),
-        api.get<ProductCategory[]>('/product-categories')
+        api.get<ProductCategory[]>('/product-categories'),
+        api.get<IngredientPrice[]>('/prices').catch(() => [] as IngredientPrice[])
       ]);
+      const pmap: Record<string, number> = {};
+      (pricesData || []).forEach(pr => { pmap[String(pr.ingredientId)] = pr.pricePerUnit; });
+      setPriceByIngredient(pmap);
 
       // FIX: бэкенд (/api/v1/admin/products) возвращает Spring Page (список в content),
       // mock-сервер — обычный массив. Нормализуем оба варианта.
@@ -143,12 +152,35 @@ export default function ProductsPage() {
         pieceWeightG: formPieceWeightG
       };
 
+      let savedId: string | number | undefined = editingProduct?.id;
       if (editingProduct) {
         await api.put(`/admin/products/${editingProduct.id}`, body);
         showSuccess('Продукт обновлён');
       } else {
-        await api.post('/admin/products', body);
+        const created = await api.post<{ id?: string | number }>('/admin/products', body);
+        savedId = created?.id ?? savedId;
         showSuccess('Продукт создан');
+      }
+
+      // Цена (новый срез ingredient_prices): отдельно от карточки продукта,
+      // чтобы ошибка цены не откатывала сохранение самого продукта
+      const priceVal = Number(formPrice.replace(',', '.'));
+      if (formPrice.trim() && savedId != null) {
+        if (!(priceVal > 0)) {
+          showError('Цена должна быть числом больше нуля');
+        } else {
+          try {
+            await api.post('/admin/ingredient-prices', {
+              ingredientId: savedId,
+              pricePerUnit: priceVal,
+              currency: 'RUB',
+              effectiveFrom: formPriceDate || new Date().toISOString().slice(0, 10),
+            });
+            showSuccess('Цена установлена');
+          } catch (priceErr: any) {
+            showError(priceErr?.error?.detail || priceErr?.detail || 'Продукт сохранён, но цену установить не удалось');
+          }
+        }
       }
 
       setShowModal(false);
@@ -191,6 +223,8 @@ export default function ProductsPage() {
     setFormRoundToPacks(product.roundToPacks ?? false);
     setFormCalories(product.kcalPer100g ?? null);
     setFormPieceWeightG(product.pieceWeightG ?? null);
+    setFormPrice('');
+    setFormPriceDate(new Date().toISOString().slice(0, 10));
     setShowModal(true);
   };
 
@@ -203,6 +237,8 @@ export default function ProductsPage() {
     setFormRoundToPacks(false);
     setFormCalories(null);
     setFormPieceWeightG(null);
+    setFormPrice('');
+    setFormPriceDate('');
     setDuplicateWarning(null);
   };
 
@@ -432,6 +468,40 @@ export default function ProductsPage() {
                   </p>
                 </div>
               )}
+
+              <div>
+                <label className="block text-sm font-medium mb-1" style={{ color: 'var(--muted)' }}>
+                  {editingProduct
+                    ? `Цена, ₽ за ${formUnit === 'KG' ? 'кг' : formUnit === 'L' ? 'л' : formUnit === 'PCS' ? 'шт' : 'уп'}${
+                        priceByIngredient[String(editingProduct.id)] != null
+                          ? ` (сейчас ${priceByIngredient[String(editingProduct.id)]})`
+                          : ' (сейчас не задана)'
+                      }`
+                    : `Цена при создании, ₽ за ${formUnit === 'KG' ? 'кг' : formUnit === 'L' ? 'л' : formUnit === 'PCS' ? 'шт' : 'уп'} (опционально)`}
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={formPrice}
+                    onChange={e => setFormPrice(e.target.value)}
+                    placeholder="например, 210"
+                    className="flex-1 px-3 py-2 rounded-lg outline-none"
+                    style={{ background: 'var(--elev)', border: '1px solid var(--border)', color: 'var(--text)' }}
+                  />
+                  <input
+                    type="date"
+                    aria-label="Дата действия цены"
+                    value={formPriceDate}
+                    onChange={e => setFormPriceDate(e.target.value)}
+                    className="px-3 py-2 rounded-lg outline-none"
+                    style={{ background: 'var(--elev)', border: '1px solid var(--border)', color: 'var(--text)' }}
+                  />
+                </div>
+                <p className="text-xs mt-1" style={{ color: 'var(--muted)' }}>
+                  Пусто = не менять. Новая цена добавляется срезом с даты (история сохраняется).
+                </p>
+              </div>
             </div>
 
             <div className="flex gap-3 mt-6">
