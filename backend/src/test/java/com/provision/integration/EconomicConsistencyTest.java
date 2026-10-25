@@ -101,27 +101,30 @@ class EconomicConsistencyTest {
     @Autowired private MockMvc mockMvc;
     @Autowired private ObjectMapper objectMapper;
     @Autowired private org.springframework.jdbc.core.JdbcTemplate jdbc;
+    @Autowired private org.flywaydb.core.Flyway flyway;
 
     private String userToken;
 
     @BeforeEach
     void setUp() throws Exception {
+        // E2E-ECON-01: фикстуры (Гречка/buckwheat, Тушёнка/tushonka, Масло/butter, Рис/rice,
+        // Соль/salt) пересекаются с каталогом, накатываемым Flyway-сидом V3__seed_catalog.sql
+        // (одноимённые записи с теми же code), а IngredientService отдаёт ConflictException ->
+        // POST /admin/ingredients возвращал 409 вместо 201. Как в ConflictIntegrationTest,
+        // пересоздаём БД из миграций перед каждым тестом; @Transactional на классе затем
+        // откатывает фикстуры после каждого метода.
+        TestDataIsolation.reset(jdbc, flyway);
+
         // Ингредиентами (POST /api/v1/admin/ingredients) и рецептами (/api/v1/admin/recipes)
         // управляет только ADMIN — register-API роль задать не даёт, поэтому заводим
         // админа через TestUsers.createAdmin (raw SQL + логин), как в ConflictIntegrationTest.
         userToken = TestUsers.createAdmin(mockMvc, objectMapper, jdbc, "e2econ@test.com");
 
-        createIngredient("Гречка", "buckwheat", "KG", 100);
-        createIngredient("Тушёнка", "tushonka", "KG", 200);
-        createIngredient("Масло", "butter", "KG", 400);
-        createIngredient("Рис", "rice", "KG", 50);
-        createIngredient("Соль", "salt", "KG", 0);
-
-        grechkaId = getIngredientIdByName("Гречка");
-        tushenkaId = getIngredientIdByName("Тушёнка");
-        butterId = getIngredientIdByName("Масло");
-        riceId = getIngredientIdByName("Рис");
-        saltId = getIngredientIdByName("Соль");
+        grechkaId = createIngredient("Гречка", "buckwheat", "KG", 100);
+        tushenkaId = createIngredient("Тушёнка", "tushonka", "KG", 200);
+        butterId = createIngredient("Масло", "butter", "KG", 400);
+        riceId = createIngredient("Рис", "rice", "KG", 50);
+        saltId = createIngredient("Соль", "salt", "KG", 0);
 
         recipe1Id = createRecipe("Каша гречневая с тушёнкой", recipeIngredients(
                 grechkaId, new BigDecimal("0.1"),
@@ -543,41 +546,25 @@ class EconomicConsistencyTest {
         return text(objectMapper.readTree(body(loginResult)), "accessToken", true);
     }
 
-    private void createIngredient(String name, String code, String unit, int kcal) throws Exception {
+    /** Создаёт ингредиент и возвращает его id из ответа 201. */
+    private Long createIngredient(String name, String code, String unit, int kcal) throws Exception {
         String body = String.format(
                 "{\"name\":\"%s\",\"code\":\"%s\",\"unit\":\"%s\",\"category\":\"E2E\",\"kcalPer100g\":%d}",
                 name, code, unit, kcal);
-        mockMvc.perform(post("/api/v1/admin/ingredients")
+        MvcResult result = mockMvc.perform(post("/api/v1/admin/ingredients")
                         .header("Authorization", "Bearer " + userToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body))
-                .andExpect(status().isCreated());
-    }
-
-    private Long getIngredientIdByName(String name) throws Exception {
-        MvcResult result = mockMvc.perform(get("/api/v1/admin/ingredients")
-                        .header("Authorization", "Bearer " + userToken))
-                .andExpect(status().isOk())
+                .andExpect(status().isCreated())
                 .andReturn();
-        JsonNode root = objectMapper.readTree(body(result));
-        // поддержка и массива, и Page{content:[...]}
-        JsonNode arr = root.isArray() ? root : root.path("content");
-        if (!arr.isArray()) {
-            throw new AssertionError("Ожидался массив/Page ингредиентов; тело: " + truncate(body(result)));
-        }
-        for (JsonNode n : arr) {
-            if (name.equals(text(n, "name", true))) {
-                return lng(n, "id", true);
-            }
-        }
-        throw new AssertionError("Ingredient not found: " + name);
+        return lng(objectMapper.readTree(body(result)), "id", true);
     }
 
     private Long createRecipe(String name, String ingredientsJson, int baseServings, int kcal) throws Exception {
         String body = String.format(
                 "{\"name\":\"%s\",\"mealType\":\"BREAKFAST\",\"baseServings\":%d,\"caloriesPerServing\":%d,\"ingredients\":%s}",
                 name, baseServings, kcal, ingredientsJson);
-        MvcResult result = mockMvc.perform(post("/api/v1/recipes")
+        MvcResult result = mockMvc.perform(post("/api/v1/admin/recipes") // рецепты создаёт только ADMIN
                         .header("Authorization", "Bearer " + userToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body))
@@ -628,7 +615,7 @@ class EconomicConsistencyTest {
         String body = String.format(
                 "{\"mealType\":\"%s\",\"recipeId\":%d,\"peopleOverride\":%d}",
                 mealType, recipeId, servings);
-        mockMvc.perform(post("/api/v1/trips/" + dayId + "/meals")
+        mockMvc.perform(post("/api/v1/trips/" + tripId + "/days/" + dayId + "/meals") // путь с tripId + dayId
                         .header("Authorization", "Bearer " + userToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body))
@@ -639,7 +626,7 @@ class EconomicConsistencyTest {
         String body = String.format(
                 "{\"ingredientId\":%d,\"pricePerUnit\":%s,\"effectiveFrom\":\"2026-01-01\",\"currency\":\"RUB\"}",
                 ingredientId, price);
-        mockMvc.perform(post("/api/v1/prices")
+        mockMvc.perform(post("/api/v1/admin/ingredient-prices") // цены создаёт только ADMIN
                         .header("Authorization", "Bearer " + userToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body))
