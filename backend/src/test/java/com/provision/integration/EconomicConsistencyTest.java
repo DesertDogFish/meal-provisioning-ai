@@ -29,7 +29,6 @@ import com.provision.integration.LocalPgFallback;
 import com.provision.integration.TestUsers;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -166,46 +165,36 @@ class EconomicConsistencyTest {
         // админа через TestUsers.createAdmin (raw SQL + логин), как в ConflictIntegrationTest.
         userToken = TestUsers.createAdmin(mockMvc, objectMapper, jdbc, "e2econ@test.com");
 
-        // Корень 409: TestDataIsolation.reset() пересоздаёт схему ПОЛНЫМ прогоном миграций
-        // V1..V20, включая сид каталога V3__seed_catalog.sql, где уже есть строки с именами
-        // Гречка/Тушёнка/Масло/Рис/Соль (коды buckwheat/tushonka/butter/rice/salt).
-        // IngredientService.createIngredient проверяет existsByName -> ConflictException.
-        // Поэтому фикстуры заводятся под test-only именами GRECHK/TUSH/BUTT/RICE/SALT, после
-        // чего сидовые строки переименовываются в канонические имена, а E2E-дубли удаляются
-        // (renameSeed/deleteIngredient ниже) — ассерты экранов ищут позиции по именам.
+        // FIX (409, раунд 3): предыдущий план «создать E2E-дубли, переименовать сиды и
+        // удалить дубли» падал с EmptyResultDataAccessException в seedIngredientId():
+        // в сиде V3__seed_catalog.sql НЕТ кода tushonka (там beef_stew/chicken_stew), а
+        // reset() пересоздаёт схему полным прогоном V1..V20, поэтому lookup по кодам
+        // "tushonka"/"butter"... нестабилен. Теперь схема проще: фикстуры заводятся под
+        // уникальными test-only именами/кодами (GRECHK/e2e_grechka и т.д.) — они никогда
+        // не пересекаются с сидами V3/V17 по name_norm/code (отсюда 409 первых раундов),
+        // а канонические имена для ассертов экранов ("Гречка", "Тушёнка", ...) ставим
+        // самим фикстурам одним UPDATE до создания рецептов (PUT /admin запрещён, когда
+        // ингредиент уже в рецептах; raw SQL работает всегда). Никаких renameSeed/
+        // deleteIngredient/seedIngredientId больше не нужно.
         grechkaId = createIngredient(GRECHK, GRECHK_CODE, "KG", 100);
         tushenkaId = createIngredient(TUSH, TUSH_CODE, "KG", 200);
         butterId = createIngredient(BUTT, BUTT_CODE, "KG", 400);
         riceId = createIngredient(RICE, RICE_CODE, "KG", 50);
         saltId = createIngredient(SALT, SALT_CODE, "KG", 0);
 
-        // Ассерты экранов ищут позиции по каноническим именам ("Гречка" и т.п.), а DTO
-        // отдаёт ingredientName — переименовываем сидовые строки V3 (buckwheat/tushonka/
-        // butter/rice/salt) в эти имена; созданные выше E2E-дубли удаляем (DELETE доступен
-        // только пока ингредиент не используется в рецептах — рецепты заводятся после).
-        renameSeed("buckwheat", "Гречка");
-        renameSeed("tushonka", "Тушёнка");
-        renameSeed("butter", "Масло");
-        renameSeed("rice", "Рис");
-        renameSeed("salt", "Соль");
-        // Сид V13__seed_price_history сеет на сидовые ингредиенты месячные срезы цен за
-        // 2024-2026 (включая даты дней похода), а IngredientPriceService.addPrice даёт 409
-        // при existsByIngredientIdAndEffectiveFrom — чистим ряд, чтобы baseline-цены
-        // фикстур (setPrice ниже) были единственными эффективными.
-        for (String code : new String[]{"buckwheat", "tushonka", "butter", "rice", "salt"}) {
-            jdbc.update("DELETE FROM ingredient_prices WHERE ingredient_id = " +
-                    "(SELECT id FROM ingredients WHERE code = ?)", code);
-        }
-        deleteIngredient(grechkaId);
-        deleteIngredient(tushenkaId);
-        deleteIngredient(butterId);
-        deleteIngredient(riceId);
-        deleteIngredient(saltId);
-        grechkaId = seedIngredientId("buckwheat");
-        tushenkaId = seedIngredientId("tushonka");
-        butterId = seedIngredientId("butter");
-        riceId = seedIngredientId("rice");
-        saltId = seedIngredientId("salt");
+        // Переименовываем фикстуры в канонические имена, которые ассертят экраны
+        // (позиции закупок отдаются по ingredientName). name_norm пересчитываем так же,
+        // как IngredientService: lower + ё->е.
+        renameFixture(grechkaId, "Гречка");
+        renameFixture(tushenkaId, "Тушёнка");
+        renameFixture(butterId, "Масло");
+        renameFixture(riceId, "Рис");
+        renameFixture(saltId, "Соль");
+
+        // Сид V13__seed_price_history/V17 сеет на сидовые ингредиенты месячные срезы цен,
+        // но наши фикстуры — ОТДЕЛЬНЫЕ строки (свои id), их истории нет; setPrice ниже
+        // даёт единственную baseline-цену на дату старта похода. Чистка строк сида не
+        // нужна: расчёты экрана идут по id/именам фикстур, сиды в рецептах не участвуют.
 
         recipe1Id = createRecipe("Каша гречневая с тушёнкой", recipeIngredients(
                 grechkaId, new BigDecimal("0.1"),
@@ -642,33 +631,14 @@ class EconomicConsistencyTest {
     }
 
     /**
-     * id сидовой строки каталога V3 по коду (buckwheat/tushonka/butter/rice/salt).
-     * Сидовые ingredients не имеют history-строк в ingredient_price_history (V13 сеет
-     * историю для продуктов V17), поэтому baseline-цена для них заводится setPrice()
-     * через POST /admin/ingredient-prices — как делали бы на UI.
+     * Переименовывает фикстуру в каноническое имя, которое ассертят экраны
+     * ("Гречка"/"Тушёнка"/"Масло"/"Рис"/"Соль"). Только raw SQL: вызывается ДО
+     * создания рецептов; name_norm пересчитывается как в IngredientService
+     * (lower + ё->е), чтобы поиск по ингредиенту работал корректно.
      */
-    private Long seedIngredientId(String code) {
-        return jdbc.queryForObject(
-                "SELECT id FROM ingredients WHERE code = ?", Long.class, code);
-    }
-
-    /**
-     * Переименовывает сидовый ингредиент в каноническое имя фикстуры ("Гречка" и т.п.).
-     * Только raw SQL: PUT /admin/ingredients/{id} запрещает любые изменения, если
-     * ингредиент уже используется в рецептах (ConflictException в IngredientService.update),
-     * а после renameSeed() рецепты ссылаются именно на сидовые id. name_norm пересчитывается
-     * так же, как в IngredientService (lower + ё->е).
-     */
-    private void renameSeed(String code, String newName) {
-        jdbc.update("UPDATE ingredients SET name = ?, name_norm = ? WHERE code = ?",
-                newName, newName.toLowerCase().replace('ё', 'е'), code);
-    }
-
-    /** Удаляет E2E-дубль фикстуры (DELETE доступен до linkа с рецептами). */
-    private void deleteIngredient(Long id) throws Exception {
-        mockMvc.perform(delete("/api/v1/admin/ingredients/" + id)
-                        .header("Authorization", "Bearer " + userToken))
-                .andExpect(status().isNoContent());
+    private void renameFixture(Long id, String newName) {
+        jdbc.update("UPDATE ingredients SET name = ?, name_norm = ? WHERE id = ?",
+                newName, newName.toLowerCase().replace('ё', 'е'), id);
     }
 
     private Long createRecipe(String name, String ingredientsJson, int baseServings, int kcal) throws Exception {
