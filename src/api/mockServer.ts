@@ -949,12 +949,73 @@ export const mockServer = {
     const keepExtra = new Set<string>();
     const keepExcluded = new Set<string>();
 
+    // Desired-набор замен собираем ДО основного цикла: он определяет, какие
+    // from-позиции «замещаются» (их SCALE-правки снимаются — количество
+    // переносит замена, §3), и не зависит от порядка записей в list.
+    type DesiredSub = { from: string; to: string; ratio: number };
+    const desiredMap = new Map<string, DesiredSub>();
+    const takenTos = new Set<string>();
+    for (const dto of subs) {
+      const from = editIngredientKey(String(dto.fromIngredientId));
+      const to = editIngredientKey(String(dto.toIngredientId));
+      if (desiredMap.has(from)) continue; // дубль from → 400 в валидации; на всякий случай первая wins
+      if (takenTos.has(to)) continue; // to уже занят другой заменой
+      takenTos.add(to);
+      desiredMap.set(from, { from, to, ratio: Number(dto.ratio ?? 1) || 1 });
+    }
+    const desiredSubs = [...desiredMap.values()];
+
+    // УДАЛЕНИЕ старых правок выполняем ДО записи новых: иначе freshly-pushed
+    // SCALE/SUBST-правки этого же PUT попадают в cleanup-скан и удаляются
+    // (keep*-множества заполняются только ниже). Идемпотентность batch PUT
+    // при этом сохраняется: повтор тела upsert'ит существующие правки.
+    const isSubstEdit = (s: MockSubstitution) =>
+      !s.added && !s.removed && s.fromIngredientId != null && s.toIngredientId != null &&
+      String(s.fromIngredientId) !== String(s.toIngredientId);
+    for (const s of editsOf()) {
+      const from = s.fromIngredientId == null ? null : String(s.fromIngredientId);
+      const to = s.toIngredientId == null ? null : String(s.toIngredientId);
+      const fromKey = from == null ? null : editIngredientKey(from);
+      const toKey = to == null ? null : editIngredientKey(to);
+      if (s.added || from == null) {
+        if (toKey != null && !desiredMap.has(toKey) && !(subs.length === 0)) {
+          // EXTRA-правка останется живой только если её to снова придёт как EXTRA
+          // в основном цикле ниже — здесь ещё не знаем; см. keepExtra-проход после.
+        }
+      } else if (from === to) {
+        // SCALE: снимаем, если позиция замещается (substTarget) или более не SCALED
+        const substTarget = desiredMap.get(fromKey!);
+        if ((substTarget && substTarget.to !== fromKey)) removeEdit(s);
+      } else if (isSubstEdit(s)) {
+        const target = toKey == null ? undefined : desiredMap.get(fromKey!);
+        if (!target || target.to !== toKey) removeEdit(s); // изменённый/снятый SUBST
+      } else if (s.removed || to == null) {
+        // EXCLUDE: снимаем, если позиция больше не исключена (решает основной цикл)
+      }
+    }
+    // Дедуп SUBST по from (§4.2): одна активная замена на from; лишние снимаем.
+    const seenSubFrom = new Set<string>();
+    for (const s of editsOf().filter(x => isSubstEdit(x))) {
+      const fk = editIngredientKey(String(s.fromIngredientId));
+      if (seenSubFrom.has(fk)) removeEdit(s);
+      else seenSubFrom.add(fk);
+    }
+    // Второй проход cleanup для EXTRA/EXCLUDED/SCALE без замены — после основного
+    // цикла, по keep*-множествам (см. ниже). Здесь только предварительная чистка
+    // дублей SUBST и конфликтующих SCALE.
+
     for (const it of items) {
       const ingId = String(it.ingredientId);
       const st = String(it.state);
       if (st === 'SCALED') {
-        keepScaled.add(editIngredientKey(ingId));
         const ingKey = editIngredientKey(ingId); // правки храним под каталожным id (composition-расчёты идут по базовому рецепту)
+        // §3: если этот же from заменяется на другой to — SCALE-правка НЕ нужна
+        // (замена сама перенесёт масштабированное количество на to), и её запись
+        // здесь создала бы конфликтующий дубль. Такой from остаётся RECIPE-строкой,
+        // которую цикл замен обнулит после переноса.
+        const substTarget = desiredMap.get(ingKey);
+        if (substTarget && substTarget.to !== ingKey) continue;
+        keepScaled.add(ingKey);
         const ex = editsOf().find(s => !s.added && s.fromIngredientId != null && s.toIngredientId == null && editIngredientKey(s.fromIngredientId) === ingKey);
         if (ex) removeEdit(ex); // SCALED поверх EXCLUDED снимает исключение
         const existing = editsOf().find(s => s.fromIngredientId != null && editIngredientKey(s.fromIngredientId) === ingKey && editIngredientKey(s.toIngredientId) === ingKey);
@@ -1009,23 +1070,9 @@ export const mockServer = {
         if (fromKey != null && !keepScaled.has(fromKey)) removeEdit(s);
       }
     }
-    // Замены: полная замена набора from→to. Собираем целевой набор сначала (по
-    // каталожным ключам), затем одним проходом удаляем ВСЕ старые SUBST-правки —
-    // иначе итерация по живому массиву с splice внутри removeEdit пропускает
-    // элементы (идемпотентность batch PUT: повтор тела не должен оставлять дубль).
-    // Desired-набор: уникальность по from (последнее wins). Если два from идут
-    // на один to — первая замена выигрывает, вторая игнорируется (§4.2).
-    const desiredMap = new Map<string, DesiredSub>();
-    const takenTos = new Set<string>();
-    for (const dto of subs) {
-      const from = editIngredientKey(String(dto.fromIngredientId));
-      const to = editIngredientKey(String(dto.toIngredientId));
-      if (desiredMap.has(from)) continue; // дубль from → 400 в валидации; на всякий случай первая wins
-      if (takenTos.has(to)) continue; // to уже занят другой заменой
-      takenTos.add(to);
-      desiredMap.set(from, { from, to, ratio: Number(dto.ratio ?? 1) || 1 });
-    }
-    const desiredSubs = [...desiredMap.values()];
+    // Замены: полная замена набора from→to. Desired-набор собран выше (до
+    // основного цикла). Если два from идут на один to — первая замена
+    // выигрывает, вторая игнорируется (§4.2).
     const isSubst = (s: MockSubstitution) =>
       !s.added && !s.removed && s.fromIngredientId != null && s.toIngredientId != null &&
       String(s.fromIngredientId) !== String(s.toIngredientId);
