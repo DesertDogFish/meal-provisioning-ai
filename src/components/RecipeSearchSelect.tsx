@@ -17,6 +17,8 @@ interface Props {
   emptyText?: string;
   ariaLabel?: string;
   autoFocus?: boolean;
+  /** FORM-meal-composition-spec §2.1: проброс текущего запроса наружу (для серверного поиска с debounce) */
+  onQueryChange?: (query: string) => void;
 }
 
 /**
@@ -36,6 +38,7 @@ export default function RecipeSearchSelect({
   emptyText = 'Ничего не найдено',
   ariaLabel,
   autoFocus,
+  onQueryChange,
 }: Props) {
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
@@ -75,6 +78,7 @@ export default function RecipeSearchSelect({
     if (!opt) return;
     onChange(opt.value);
     setQuery('');
+    onQueryChange?.('');
     setOpen(false);
   };
 
@@ -137,7 +141,7 @@ export default function RecipeSearchSelect({
           style={{ color: 'var(--text)', minWidth: 0 }}
           placeholder={placeholder}
           value={displayValue}
-          onChange={e => { setQuery(e.target.value); setOpen(true); }}
+          onChange={e => { setQuery(e.target.value); onQueryChange?.(e.target.value); setOpen(true); }}
           onFocus={() => setOpen(true)}
           onKeyDown={onKeyDown}
         />

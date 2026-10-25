@@ -4,7 +4,7 @@
  * Выбор режима: localStorage → VITE_API_MODE → auto-пинг GET /api/v1/meta
  */
 
-import type { Recipe, UnitOfMeasure } from '../types';
+import type { MealType, Recipe, UnitOfMeasure } from '../types';
 
 export interface ApiError {
   status: number;
@@ -360,6 +360,80 @@ export async function updateRecipeIngredients(
   return normalizeRecipe(data ?? { ...recipe, ingredients: ingredients as any });
 }
 
+/* =====================================================================
+ * FORM-meal-composition-spec §4.2: эндпоинты состава приёма (Модалка B)
+ * Типы — паритет с бэкендом MealCompositionDtos.java.
+ * ===================================================================== */
+
+/** Строка состава приёма; state: RECIPE | SCALED | EXTRA | EXCLUDED (§3). */
+export interface CompositionItem {
+  ingredientId: string;
+  name: string;
+  unit: UnitOfMeasure;
+  packSize?: number | null;
+  pieceWeightG?: number | null;
+  kcalPer100g?: number | null;
+  /** из рецепта на порцию (null для EXTRA) */
+  baseAmountPerServing?: number | null;
+  /** base/baseServings×people×ratio (null для EXTRA/EXCLUDED) */
+  derivedAmount?: number | null;
+  /** итог на приём (0 для EXCLUDED) */
+  effectiveAmount: number;
+  state: 'RECIPE' | 'SCALED' | 'EXTRA' | 'EXCLUDED';
+  /** только для SCALED */
+  ratio?: number | null;
+  /** имя from-продукта для строки-получателя замены */
+  substitutedFrom?: string | null;
+  kcalTotal: number;
+}
+
+export interface CompositionSubstitution {
+  id: string;
+  fromIngredientId: string;
+  fromName: string;
+  toIngredientId: string;
+  toName: string;
+  ratio: number;
+}
+
+export interface CompositionResponse {
+  mealId: string;
+  dayDate: string;
+  mealType: MealType;
+  people: number;
+  baseServings: number;
+  recipeId: string;
+  recipeName: string;
+  items: CompositionItem[];
+  substitutions: CompositionSubstitution[];
+  totals: { kcal: number; weightGrams: number; plannedCost: number };
+}
+
+/** Тело PUT composition: полный желаемый диф-состав (§4.2, атомарный batch-коммит). */
+export interface CompositionPutRequest {
+  items: Array<{
+    ingredientId: string;
+    state: 'RECIPE' | 'SCALED' | 'EXTRA' | 'EXCLUDED';
+    amount?: number | null;
+    ratio?: number | null;
+  }>;
+  substitutions: Array<{ fromIngredientId: string; toIngredientId: string; ratio?: number | null }>;
+}
+
+/** GET /trips/{t}/meals/{m}/composition — сервер считает ВСЁ масштабирование. */
+export async function getMealComposition(tripId: string, mealId: string): Promise<CompositionResponse> {
+  return api.get<CompositionResponse>(`/trips/${tripId}/meals/${mealId}/composition`);
+}
+
+/** PUT того же пути — атомарный диф-коммит; ответ = новый GET composition. */
+export async function putMealComposition(
+  tripId: string,
+  mealId: string,
+  body: CompositionPutRequest,
+): Promise<CompositionResponse> {
+  return api.put<CompositionResponse>(`/trips/${tripId}/meals/${mealId}/composition`, body);
+}
+
 // Утилиты для контракта
 export const UNIT_LABELS: Record<UnitOfMeasure, string> = {
   KG: 'кг',
@@ -387,4 +461,30 @@ export function humanize(amount: number, unit: UnitOfMeasure): string {
 export function formatMoney(value: number | null | undefined, currency = 'RUB'): string {
   if (value == null) return '—';
   return `${value.toLocaleString('ru-RU', { maximumFractionDigits: 2 })} ${currency === 'RUB' ? '₽' : currency}`;
+}
+
+/**
+ * FORM-meal-composition-spec §2.2: подсказка фасовки под инпутом количества —
+ * «≈ 3 упак × 50 г» (packSize в кг/л → граммы на упаковку) или «1 шт = 250 г» (pieceWeightG).
+ */
+export function packHint(item: { unit?: UnitOfMeasure | string; packSize?: number | null; pieceWeightG?: number | null }): string | null {
+  const pack = Number(item.packSize);
+  if (pack > 0) {
+    const label = UNIT_LABELS[item.unit as UnitOfMeasure] ?? String(item.unit ?? '');
+    if (item.unit === 'KG' || item.unit === 'L') {
+      const perPack = Math.round(pack * 1000); // кг/л → г/мл на упаковку
+      return `≈ ${perPack.toLocaleString('ru-RU')} ${item.unit === 'L' ? 'мл' : 'г'} / упаковка (${pack} ${label})`;
+    }
+    return `≈ упаковка × ${pack.toLocaleString('ru-RU')} ${label}`;
+  }
+  const pw = Number(item.pieceWeightG);
+  if (pw > 0) return `1 шт = ${pw.toLocaleString('ru-RU')} г`;
+  return null;
+}
+
+/** Humanize веса итогов: <1000 г → «N г», иначе «N,NNN кг». */
+export function humanizeWeight(grams: number | null | undefined): string {
+  if (grams == null || isNaN(grams)) return '—';
+  if (Math.abs(grams) < 1000) return `${Math.round(grams)} г`;
+  return `${(grams / 1000).toLocaleString('ru-RU', { maximumFractionDigits: 3 })} кг`;
 }
