@@ -1003,11 +1003,21 @@ export const mockServer = {
           // в основном цикле ниже — здесь ещё не знаем; см. keepExtra-проход после.
         }
       } else if (from === to) {
-        // SCALE: снимаем, если позиция замещается (substTarget) или более не SCALED
-        const substTarget = desiredMap.get(fromKey!);
-        if ((substTarget && substTarget.to !== fromKey)) removeEdit(s);
+        // §3 carry-over: SCALE замещаемой позиции НЕ снимается — замена переносит
+        // масштабированное количество на to. Снятие живёт в substFromScaled-логике,
+        // а «полная очистка» ниже сохранит её через keepScaled (см. основной цикл).
+        if (!substFromScaled.has(fromKey!)) {
+          // SCALE: снимаем, если позиция замещается (substTarget) или более не SCALED
+          const substTarget = desiredMap.get(fromKey!);
+          if ((substTarget && substTarget.to !== fromKey)) removeEdit(s);
+        }
       } else if (isSubstEdit(s)) {
-        const target = toKey == null ? undefined : desiredMap.get(fromKey!);
+        // §3: замена от live-SCALE позиции живёт в substFromScaled — она сохраняется,
+        // только если её to снова приходит как SCALED-строка в ТЕЛЕ этого PUT
+        // (carry-over из live SCALE). Иначе desired для неё нет — снимаем.
+        const inBody = toKey != null && items.some(itx =>
+          String(itx.ingredientId) === toKey && String(itx.state ?? '') === 'SCALED');
+        const target = toKey == null ? undefined : (desiredMap.get(fromKey!) ?? (inBody ? substFromScaled.get(fromKey!) : undefined));
         if (!target || target.to !== toKey) removeEdit(s); // изменённый/снятый SUBST
       } else if (s.removed || to == null) {
         // EXCLUDE: снимаем, если позиция больше не исключена (решает основной цикл)
@@ -1035,6 +1045,12 @@ export const mockServer = {
           String(s.fromIngredientId) === String(s.toIngredientId) &&
           editIngredientKey(String(s.fromIngredientId)) === editIngredientKey(ingId));
         if (sc) { it = { ...it, state: 'SCALED', ratio: sc.ratio }; st = 'SCALED'; }
+      }
+      // §3 carry-over: если позиция в теле PUT явно SCALED и при этом заменяется
+      // (substFromScaled), нормализуем её к SCALED — иначе cleanup ниже ошибочно
+      // снимет живую SCALE-правка (keepScaled не заполнится для этого from).
+      if (st === 'SCALED' && substFromScaled.has(editIngredientKey(ingId))) {
+        keepScaled.add(editIngredientKey(ingId));
       }
       if (st === 'SCALED') {
         const ingKey = editIngredientKey(ingId); // правки храним под каталожным id (composition-расчёты идут по базовому рецепту)
@@ -1121,7 +1137,7 @@ export const mockServer = {
     // Замена ОТ масштабированной позиции: сама SCALE-правка остаётся живой
     // (её from обнуляется в build через replacements), а SUBST from→to записывается
     // upsert'ом — при идемпотентном повторе существующая идентичная правка сохраняется.
-    for (const d of desiredSubs) {
+    for (const d of [...desiredSubs, ...substFromScaled.values()]) {
       if (keptFroms.has(d.from)) continue;
       list.push({
         id: `sub-${substitutionSeq++}`, recipeId,
