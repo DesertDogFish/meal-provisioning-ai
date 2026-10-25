@@ -193,7 +193,8 @@ export default function MealCompositionModal({
       const next = { ...prev };
       if (patch === null) { delete next[ingId]; return next; }
       // патч всегда несёт явный state — он имеет приоритет над прежним черновиком
-      next[ingId] = { state: 'SCALED', ...(next[ingId] ?? {}), ...patch, state: patch.state } as RowDraft;
+      const existing = next[ingId] ?? {};
+      next[ingId] = { ...existing, ...patch, state: patch.state ?? existing.state ?? 'SCALED' } as RowDraft;
       return next;
     });
   };

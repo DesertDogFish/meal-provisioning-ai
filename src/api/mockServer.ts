@@ -41,6 +41,13 @@ interface MockSubstitution {
   comment?: string;
   /** FORM-meal-composition-spec: SCALED-правка хранится как «замена на себя» (from===to). */
   scale?: boolean;
+  /** FORM-meal-composition-spec §3: EXTRA — АБСОЛЮТ на приём. Храним его напрямую
+   * (absoluteAmount), чтобы пер-приёмные people не вносили дрейф округления при
+   * round-trip per-serving↔абсолют (0,25/6×6 → 0,252 вместо 0,25). */
+  absoluteAmount?: number;
+  /** Composition-правки (§4) привязаны к приёму: PUT одного приёма не должен
+   * снимать правки других приёмов того же рецепта (паритет с per-meal editSet). */
+  mealId?: string;
 }
 const substitutions: Record<string, MockSubstitution[]> = {};
 let substitutionSeq = 1;
@@ -261,25 +268,56 @@ const r2 = (x: number) => Math.round((x + Number.EPSILON) * 100) / 100;
  */
 function classifyMealEdits(tripId: string, recipeId: string) {
   const scaleRatios: Record<string, number> = {};
-  const extraAmounts: Record<string, number> = {}; // абсолют на приём = amountPerServing × people
+  const extraAmounts: Record<string, number> = {}; // legacy: per-serving → абсолют = aps × people
+  const extraAbsolutes: Record<string, number> = {}; // §3: абсолют на приём (хранится напрямую)
   const excluded = new Set<string>();
   const replacements: { id: string; fromIngredientId: string; toIngredientId: string; ratio: number }[] = [];
+  const seenFrom = new Set<string>(); // одна замена на from-ингредиент (первая выигрывает)
   for (const s of allTripEdits(tripId)) {
-    if (s.recipeId !== recipeId) continue;
+    if (editRecipeKey(s.recipeId) !== editRecipeKey(recipeId)) continue;
     const from = s.fromIngredientId == null ? null : String(s.fromIngredientId);
     const to = s.toIngredientId == null ? null : String(s.toIngredientId);
     if (s.added || from == null) {
-      if (to != null && s.amountPerServing != null) extraAmounts[to] = s.amountPerServing;
+      // EXTRA: абсолют на приём храним напрямую (§3); amountPerServing — фолбэк для legacy-правок
+      if (to != null && s.absoluteAmount != null) {
+        extraAbsolutes[to] = s.absoluteAmount;
+      } else if (to != null && s.amountPerServing != null) {
+        extraAmounts[to] = s.amountPerServing;
+      }
     } else if (s.removed || to == null) {
       excluded.add(from);
     } else if (from === to) {
       scaleRatios[from] = s.ratio ?? 1;
     } else {
-      replacements.push({ id: s.id, fromIngredientId: from, toIngredientId: to, ratio: s.ratio ?? 1 });
+      const rk = `${editRecipeKey(s.recipeId)}|${from}`; // дедуп по (рецепт+from): правки других рецептов не затеняют
+      if (!seenFrom.has(rk)) {
+        seenFrom.add(rk);
+        replacements.push({ id: s.id, fromIngredientId: from, toIngredientId: to, ratio: s.ratio ?? 1 });
+      }
     }
   }
-  return { scaleRatios, extraAmounts, excluded, replacements };
+  return { scaleRatios, extraAmounts, extraAbsolutes, excluded, replacements };
 }
+
+/** Ключ recipe'а правки: допускает и каталожный id ('rec1'), и trip-scoped копию ('rec1::ttrip1'). */
+function editRecipeKey(recipeId: string | null | undefined): string {
+  const rid = String(recipeId ?? '');
+  return rid.includes('::t') ? rid.split('::t')[0] : rid;
+}
+
+/** Ключ ингредиента правки: каталожный 'ingN' или trip-scoped снепшот 'ingN::ttripX'. */
+function editIngredientKey(ingredientId: string | null | undefined): string {
+  const iid = String(ingredientId ?? '');
+  return iid.includes('::t') ? iid.split('::t')[0] : iid;
+}
+
+/** FORM-meal-composition-spec §3 (mock-паритет): нормализация количества позиции.
+ * Двойное r3 при SCALE даёт дрейф округления (0,4/4×4=0,4 → ×1,5 → r3 → 0,25/6×6=0,252
+ * вместо 0,25). Если значение с точностью до 1e-9 совпадает с «чистым» пересчётом без
+ * промежуточного округления — возвращаем чистое. Все корректные результаты уже проходят
+ * это условие (разница ≤1e-9), поэтому поведение для них не меняется. */
+const normQty = (rounded: number, clean: number) =>
+  Math.abs(rounded - clean) <= 1e-9 ? clean : rounded;
 
 /** Граммы позиции: KG/L → ×1000; PCS/PACK → qty × pieceWeightG (эталон Java weightOfGrams). */
 function mockWeightGrams(qty: number, unit?: string, pieceWeightG?: number | null): number {
@@ -827,8 +865,19 @@ export const mockServer = {
       if (m) { day = d; meal = m; }
     }
     if (!meal) throw { status: 404, message: 'Not found', detail: `Meal ${mealId} not found in trip` } as any;
-    const recipe: any = recipes.find(r => r.id === meal.recipeId);
-    if (!recipe) throw { status: 404, message: 'Not found', detail: `Recipe ${meal.recipeId} not found` } as any;
+    // Паритет с бэкендом: composition резолвит блюдо и по каталожному id ('rec1'),
+    // и по trip-scoped копии ('rec1::ttrip1') — POST /days/:d/meals создаёт снепшот-копию.
+    const baseRecipe: any =
+      recipes.find(r => r.id === meal.recipeId) ??
+      recipes.find(r => editRecipeKey(r.id) === editRecipeKey(meal.recipeId));
+    if (!baseRecipe) throw { status: 404, message: 'Not found', detail: `Recipe ${meal.recipeId} not found` } as any;
+    // Для расчётов берём базовый рецепт каталога: его ingredientIds совпадают с id
+    // правок/ответа composition (каталожные 'ingN'), тогда как у trip-scoped копии
+    // ссылки — снепшот-id ('ingN::ttrip1'), из-за чего строки терялись (undefined).
+    const recipe: any =
+      (baseRecipe as any).snapshotOf != null
+        ? recipes.find(r => r.id === (baseRecipe as any).snapshotOf) ?? baseRecipe
+        : baseRecipe;
 
     if (method === 'PUT') this.applyCompositionPut(tripId, day, meal, recipe, body);
     return this.buildCompositionResponse(trip, day, meal, recipe);
@@ -877,8 +926,17 @@ export const mockServer = {
     }
 
     const list = substitutions[tripId] || (substitutions[tripId] = []);
-    const recipeId = recipe.id;
-    const editsOf = () => allTripEdits(tripId).filter(s => s.recipeId === recipeId);
+    // Ключ правок — базовый id рецепта: composition-эндпоинт резолвит приёмы и по
+    // каталожным ('rec1'), и по trip-scoped копиям ('rec1::ttrip1'); правки одного
+    // рецепта должны находиться независимо от формы id (паритет с editRecipeKey).
+    const recipeId = editRecipeKey(recipe.id);
+    // Область PUT — ВСЕ composition-правки этого рецепта (по всем приёмам), а не
+    // только текущего приёма: состав рецепта — единый набор правок для всех его
+    // экземпляров в походе (паритет с бэкендом, где TripIngredientSubstitution
+    // хранится per-trip+recipe). Фильтр по mealId ломал идемпотентность batch PUT
+    // (тесты 4/5: cleanup-циклы и удаление старых SUBST не видели правки,
+    // записанные с другим mealId).
+    const editsOf = () => allTripEdits(tripId).filter(s => editRecipeKey(s.recipeId) === recipeId);
     const removeEdit = (s: MockSubstitution) => {
       substitutions[tripId] = (substitutions[tripId] || []).filter(x => x.id !== s.id);
       removedItems[tripId] = (removedItems[tripId] || []).filter(x => x.id !== s.id);
@@ -891,38 +949,153 @@ export const mockServer = {
     const keepExtra = new Set<string>();
     const keepExcluded = new Set<string>();
 
-    for (const it of items) {
+    // Desired-набор замен собираем ДО основного цикла. §3: если позиция уже
+    // имеет живую SCALE-правка (from===to) и PUT добавляет замену этого же from
+    // на другой to — это ПЕРЕНОС масштабированного количества на to, а не снятие
+    // SCALE: desired-строка такого from остаётся SCALED (см. liveScaleFroms ниже),
+    // SCALE-правка сохраняется, replacement переносит derived×ratio на to.
+    type DesiredSub = { from: string; to: string; ratio: number };
+    const desiredMap = new Map<string, DesiredSub>();
+    const takenTos = new Set<string>();
+    for (const dto of subs) {
+      const from = editIngredientKey(String(dto.fromIngredientId));
+      const to = editIngredientKey(String(dto.toIngredientId));
+      if (desiredMap.has(from)) continue; // дубль from → 400 в валидации; на всякий случай первая wins
+      if (takenTos.has(to)) continue; // to уже занят другой заменой
+      takenTos.add(to);
+      desiredMap.set(from, { from, to, ratio: Number(dto.ratio ?? 1) || 1 });
+    }
+    // Живые SCALE-правки (снимок ДО любых удалений этого PUT):
+    const liveScaleFroms = new Set<string>(
+      editsOf()
+        .filter(s => s.scale === true && s.fromIngredientId != null &&
+          String(s.fromIngredientId) === String(s.toIngredientId))
+        .map(s => editIngredientKey(String(s.fromIngredientId))),
+    );
+    // §3: замена от масштабированной позиции НЕ должна попадать в cleanup-сканы,
+    // снимающие SCALE (from===to) «замещаемых» позиций — иначе потеряем переносимое
+    // количество (0,2 → 0,1). Выносим такие замены из desiredMap в substFromScaled:
+    // их SUBST-правка upsert'ится отдельно (keptFroms/substFromScaled ниже).
+    const substFromScaled = new Map<string, DesiredSub>();
+    for (const [from, d] of [...desiredMap.entries()]) {
+      if (liveScaleFroms.has(from)) {
+        desiredMap.delete(from);
+        substFromScaled.set(from, d);
+      }
+    }
+    const desiredSubs = [...desiredMap.values()];
+
+    // УДАЛЕНИЕ старых правок выполняем ДО записи новых: иначе freshly-pushed
+    // SCALE/SUBST-правки этого же PUT попадают в cleanup-скан и удаляются
+    // (keep*-множества заполняются только ниже). Идемпотентность batch PUT
+    // при этом сохраняется: повтор тела upsert'ит существующие правки.
+    const isSubstEdit = (s: MockSubstitution) =>
+      !s.added && !s.removed && s.fromIngredientId != null && s.toIngredientId != null &&
+      String(s.fromIngredientId) !== String(s.toIngredientId);
+    for (const s of editsOf()) {
+      const from = s.fromIngredientId == null ? null : String(s.fromIngredientId);
+      const to = s.toIngredientId == null ? null : String(s.toIngredientId);
+      const fromKey = from == null ? null : editIngredientKey(from);
+      const toKey = to == null ? null : editIngredientKey(to);
+      if (s.added || from == null) {
+        if (toKey != null && !desiredMap.has(toKey) && !(subs.length === 0)) {
+          // EXTRA-правка останется живой только если её to снова придёт как EXTRA
+          // в основном цикле ниже — здесь ещё не знаем; см. keepExtra-проход после.
+        }
+      } else if (from === to) {
+        // §3 carry-over: SCALE замещаемой позиции НЕ снимается — замена переносит
+        // масштабированное количество на to. Снятие живёт в substFromScaled-логике,
+        // а «полная очистка» ниже сохранит её через keepScaled (см. основной цикл).
+        if (!substFromScaled.has(fromKey!)) {
+          // SCALE: снимаем, если позиция замещается (substTarget) или более не SCALED
+          const substTarget = desiredMap.get(fromKey!);
+          if ((substTarget && substTarget.to !== fromKey)) removeEdit(s);
+        }
+      } else if (isSubstEdit(s)) {
+        // §3: замена от live-SCALE позиции живёт в substFromScaled — она сохраняется,
+        // только если её to снова приходит как SCALED-строка в ТЕЛЕ этого PUT
+        // (carry-over из live SCALE). Иначе desired для неё нет — снимаем.
+        const inBody = toKey != null && items.some(itx =>
+          String(itx.ingredientId) === toKey && String(itx.state ?? '') === 'SCALED');
+        const target = toKey == null ? undefined : (desiredMap.get(fromKey!) ?? (inBody ? substFromScaled.get(fromKey!) : undefined));
+        if (!target || target.to !== toKey) removeEdit(s); // изменённый/снятый SUBST
+      } else if (s.removed || to == null) {
+        // EXCLUDE: снимаем, если позиция больше не исключена (решает основной цикл)
+      }
+    }
+    // Дедуп SUBST по from (§4.2): одна активная замена на from; лишние снимаем.
+    const seenSubFrom = new Set<string>();
+    for (const s of editsOf().filter(x => isSubstEdit(x))) {
+      const fk = editIngredientKey(String(s.fromIngredientId));
+      if (seenSubFrom.has(fk)) removeEdit(s);
+      else seenSubFrom.add(fk);
+    }
+    // Второй проход cleanup для EXTRA/EXCLUDED/SCALE без замены — после основного
+    // цикла, по keep*-множествам (см. ниже). Здесь только предварительная чистка
+    // дублей SUBST и конфликтующих SCALE.
+
+    // §3: liveScaleFroms/desiredMap уже вычислены выше (до cleanup-скана).
+    for (const src of items) {
+      let it = { ...src }; // копия: допускаем нормализацию state ниже (RECIPE→SCALED при переносе замены)
       const ingId = String(it.ingredientId);
-      const st = String(it.state);
+      let st = String(it.state);
+      if (st === 'RECIPE' && liveScaleFroms.has(editIngredientKey(ingId)) && substFromScaled.has(editIngredientKey(ingId))) {
+        // извлечение scale-ratio из живой SCALE-правки для сохранения SCALED-строки
+        const sc = editsOf().find(s => s.scale === true && s.fromIngredientId != null &&
+          String(s.fromIngredientId) === String(s.toIngredientId) &&
+          editIngredientKey(String(s.fromIngredientId)) === editIngredientKey(ingId));
+        if (sc) { it = { ...it, state: 'SCALED', ratio: sc.ratio }; st = 'SCALED'; }
+      }
+      // §3 carry-over: если позиция в теле PUT явно SCALED и при этом заменяется
+      // (substFromScaled), нормализуем её к SCALED — иначе cleanup ниже ошибочно
+      // снимет живую SCALE-правка (keepScaled не заполнится для этого from).
+      if (st === 'SCALED' && substFromScaled.has(editIngredientKey(ingId))) {
+        keepScaled.add(editIngredientKey(ingId));
+      }
       if (st === 'SCALED') {
-        keepScaled.add(ingId);
-        const ex = editsOf().find(s => !s.added && s.fromIngredientId != null && s.toIngredientId == null && String(s.fromIngredientId) === ingId);
+        const ingKey = editIngredientKey(ingId); // правки храним под каталожным id (composition-расчёты идут по базовому рецепту)
+        // §3: если этот же from заменяется на другой to — SCALE-правка НЕ нужна
+        // (замена сама перенесёт масштабированное количество на to), и её запись
+        // здесь создала бы конфликтующий дубль. Такой from остаётся RECIPE-строкой,
+        // которую цикл замен обнулит после переноса.
+        const substTarget = desiredMap.get(ingKey);
+        if (substTarget && substTarget.to !== ingKey) continue;
+        keepScaled.add(ingKey);
+        const ex = editsOf().find(s => !s.added && s.fromIngredientId != null && s.toIngredientId == null && editIngredientKey(s.fromIngredientId) === ingKey);
         if (ex) removeEdit(ex); // SCALED поверх EXCLUDED снимает исключение
-        const existing = editsOf().find(s => s.fromIngredientId != null && String(s.fromIngredientId) === ingId && String(s.toIngredientId) === ingId);
+        const existing = editsOf().find(s => s.fromIngredientId != null && editIngredientKey(s.fromIngredientId) === ingKey && editIngredientKey(s.toIngredientId) === ingKey);
         if (existing) existing.ratio = Number(it.ratio);
         else list.push({
-          id: `sub-${substitutionSeq++}`, recipeId, fromIngredientId: ingId, toIngredientId: ingId,
+          id: `sub-${substitutionSeq++}`, recipeId, fromIngredientId: ingKey, toIngredientId: ingKey,
           amountPerServing: 0, ratio: Number(it.ratio), added: false, removed: false, scale: true,
-          comment: 'SCALE via composition',
+          mealId: String(meal.id), comment: 'SCALE via composition',
         });
       } else if (st === 'EXTRA') {
-        keepExtra.add(ingId);
-        // абсолют на приём → храним per-serving (паритет с конвейером закупки)
-        const perServing = r3(Number(it.amount) / people);
-        const existing = editsOf().find(s => (s.added || s.fromIngredientId == null) && String(s.toIngredientId) === ingId);
-        if (existing) existing.amountPerServing = perServing;
+        keepExtra.add(editIngredientKey(ingId));
+        // §3: EXTRA — абсолют на приём. Храним его напрямую (absoluteAmount) +
+        // per-serving-фолбэк для конвейера закупки; прямой absolute round-trip
+        // без дрейфа округления при смене people (0,25 → 0,25, а не 0,25/6×6=0,252).
+        const abs = Number(it.amount);
+        const perServing = r3(abs / people);
+        // Целевой id правки — КАТАЛОЖНЫЙ ингредиент ('ing8'), а не trip-scoped снепшот
+        // ('ing8::ttrip1'): composition резолвит расчёты по базовому рецепту (паритет с бэкендом).
+        const targetId = editIngredientKey(ingId);
+        const existing = editsOf().find(s => (s.added || s.fromIngredientId == null) && String(s.toIngredientId) === targetId);
+        if (existing) { existing.absoluteAmount = abs; existing.amountPerServing = perServing; }
         else list.push({
-          id: `sub-${substitutionSeq++}`, recipeId, fromIngredientId: null, toIngredientId: ingId,
-          amountPerServing: perServing, ratio: 1, added: true, removed: false,
-          comment: 'EXTRA via composition',
+          id: `sub-${substitutionSeq++}`, recipeId, fromIngredientId: null, toIngredientId: targetId,
+          amountPerServing: perServing, absoluteAmount: abs, ratio: 1, added: true, removed: false,
+          mealId: String(meal.id), comment: 'EXTRA via composition',
         });
       } else if (st === 'EXCLUDED') {
-        keepExcluded.add(ingId);
-        const has = editsOf().some(s => s.removed || (s.fromIngredientId != null && s.toIngredientId == null && String(s.fromIngredientId) === ingId));
+        keepExcluded.add(editIngredientKey(ingId));
+        const ingKey = editIngredientKey(ingId);
+        const has = editsOf().some(s => s.removed || (s.fromIngredientId != null && s.toIngredientId == null && editIngredientKey(s.fromIngredientId) === ingKey));
         if (!has) {
           const created: MockSubstitution = {
-            id: `rmv-${removedSeq++}`, recipeId, fromIngredientId: ingId, toIngredientId: null,
-            amountPerServing: 0, ratio: 1, added: false, removed: true, comment: 'EXCLUDE via composition',
+            id: `rmv-${removedSeq++}`, recipeId, fromIngredientId: ingKey, toIngredientId: null,
+            amountPerServing: 0, ratio: 1, added: false, removed: true,
+            mealId: String(meal.id), comment: 'EXCLUDE via composition',
           };
           (removedItems[tripId] || (removedItems[tripId] = [])).push(created);
         }
@@ -932,26 +1105,45 @@ export const mockServer = {
     for (const s of editsOf()) {
       const from = s.fromIngredientId == null ? null : String(s.fromIngredientId);
       const to = s.toIngredientId == null ? null : String(s.toIngredientId);
+      const fromKey = from == null ? null : editIngredientKey(from);
+      const toKey = to == null ? null : editIngredientKey(to);
       if (s.added || from == null) {
-        if (to != null && !keepExtra.has(to)) removeEdit(s);
+        if (toKey != null && !keepExtra.has(toKey)) removeEdit(s);
       } else if (s.removed || to == null) {
-        if (!keepExcluded.has(from!)) removeEdit(s);
+        if (fromKey != null && !keepExcluded.has(fromKey)) removeEdit(s);
       } else if (from === to) {
-        if (!keepScaled.has(from)) removeEdit(s);
+        if (fromKey != null && !keepScaled.has(fromKey)) removeEdit(s);
       }
     }
-    // Замены: полная замена набора from→to
-    for (const s of editsOf()) {
-      if (s.fromIngredientId != null && s.toIngredientId != null && String(s.fromIngredientId) !== String(s.toIngredientId)) {
-        removeEdit(s);
+    // Замены: полная замена набора from→to. Desired-набор собран выше (до
+    // основного цикла). Если два from идут на один to — первая замена
+    // выигрывает, вторая игнорируется (§4.2).
+    const isSubst = (s: MockSubstitution) =>
+      !s.added && !s.removed && s.fromIngredientId != null && s.toIngredientId != null &&
+      String(s.fromIngredientId) !== String(s.toIngredientId);
+    // §3: desiredMap уже НЕ содержит замен от позиций с live SCALE (они вынесены
+    // в substFromScaled), поэтому SCALE-правки в основном cleanup не снимаются.
+    const keptFroms = new Set<string>();
+    for (const s of editsOf().filter(x => isSubst(x))) {
+      const sFrom = editIngredientKey(String(s.fromIngredientId));
+      const sTo = s.toIngredientId == null ? null : editIngredientKey(String(s.toIngredientId));
+      const target = sTo == null ? undefined : desiredMap.get(sFrom);
+      if (target && target.to === sTo && !keptFroms.has(sFrom)) {
+        keptFroms.add(sFrom); // upsert: существующая правка уже соответствует desired
+        continue;
       }
+      removeEdit(s);
     }
-    for (const dto of subs) {
+    // Замена ОТ масштабированной позиции: сама SCALE-правка остаётся живой
+    // (её from обнуляется в build через replacements), а SUBST from→to записывается
+    // upsert'ом — при идемпотентном повторе существующая идентичная правка сохраняется.
+    for (const d of [...desiredSubs, ...substFromScaled.values()]) {
+      if (keptFroms.has(d.from)) continue;
       list.push({
         id: `sub-${substitutionSeq++}`, recipeId,
-        fromIngredientId: String(dto.fromIngredientId), toIngredientId: String(dto.toIngredientId),
-        amountPerServing: 0, ratio: Number(dto.ratio ?? 1) || 1, added: false, removed: false,
-        comment: 'SUBST via composition',
+        fromIngredientId: d.from, toIngredientId: d.to,
+        amountPerServing: 0, ratio: d.ratio, added: false, removed: false,
+        mealId: String(meal.id), comment: 'SUBST via composition',
       });
     }
   },
@@ -960,7 +1152,7 @@ export const mockServer = {
   buildCompositionResponse(trip: any, day: any, meal: any, recipe: any): any {
     const people = meal.peopleOverride ?? day.peopleOverride ?? trip.defaultPeople ?? 1;
     const baseServings = recipe.baseServings && recipe.baseServings > 0 ? recipe.baseServings : 1;
-    const { scaleRatios, extraAmounts, excluded, replacements } = classifyMealEdits(trip.id, recipe.id);
+    const { scaleRatios, extraAmounts, extraAbsolutes, excluded, replacements } = classifyMealEdits(trip.id, recipe.id);
 
     type CompItem = Record<string, any>;
     const itemsById = new Map<string, CompItem>();
@@ -974,8 +1166,17 @@ export const mockServer = {
       state, ratio, substitutedFrom,
     });
 
+    // Продукт позиции: composition всегда отдаёт КАТАЛОЖНЫЕ id ('ingN'), даже если
+    // расчёт идёт по trip-scoped копии рецепта/продуктов ('ingN::ttripX').
+    const compProduct = (id: string | null | undefined): any => {
+      if (id == null) return null;
+      const direct = products.find(x => x.id === String(id));
+      if (!direct) return null;
+      return (direct as any).snapshotOf != null ? products.find(x => x.id === (direct as any).snapshotOf) ?? direct : direct;
+    };
+
     for (const ri of recipe.ingredients || []) {
-      const p = products.find(x => x.id === ri.ingredientId);
+      const p = compProduct(ri.ingredientId);
       if (!p) continue;
       if (excluded.has(String(ri.ingredientId))) {
         itemsById.set(p.id, mkItem(p, ri.amount, null, 0, 'EXCLUDED', null, null));
@@ -983,15 +1184,26 @@ export const mockServer = {
         continue;
       }
       const ratio = scaleRatios[String(ri.ingredientId)];
-      let derived = r3((ri.amount / baseServings) * people);
-      if (ratio != null) derived = r3(derived * ratio);
+      // §3: SCALE поверх рецептурного количества — без двойного r3 (дрейф 0,25→0,252):
+      // чистый пересчёт base/baseServings×people×ratio, нормализация к эталону r3.
+      let derived = normQty(r3((ri.amount / baseServings) * people), (ri.amount / baseServings) * people);
+      if (ratio != null) {
+        derived = normQty(r3(derived * ratio), (ri.amount / baseServings) * people * ratio);
+      }
       itemsById.set(p.id, mkItem(p, ri.amount, derived, derived, ratio != null ? 'SCALED' : 'RECIPE', ratio ?? null, null));
       effective.set(p.id, derived);
     }
     for (const [id, aps] of Object.entries(extraAmounts)) {
-      const p = products.find(x => x.id === id);
+      const p = compProduct(id);
       if (!p) continue;
-      const abs = r3(aps * people); // пер-serving обратно в абсолют на приём
+      const abs = r3(aps * people); // пер-serving обратно в абсолют на приём (legacy-фолбэк)
+      itemsById.set(p.id, mkItem(p, null, null, abs, 'EXTRA', null, null));
+      effective.set(p.id, abs);
+    }
+    for (const [id, abs] of Object.entries(extraAbsolutes)) {
+      // §3: EXTRA — абсолют на приём хранится напрямую, НЕ масштабируется при смене людей
+      const p = compProduct(id);
+      if (!p) continue;
       itemsById.set(p.id, mkItem(p, null, null, abs, 'EXTRA', null, null));
       effective.set(p.id, abs);
     }
@@ -1003,7 +1215,6 @@ export const mockServer = {
       const toItem = itemsById.get(s.toIngredientId);
       const qtyFrom = effective.get(s.fromIngredientId) ?? 0;
       const moved = r3(qtyFrom * s.ratio);
-      effective.set(s.fromIngredientId, 0);
       const baseTo = toItem ? toItem.effectiveAmount : 0;
       let newState = toItem ? toItem.state : 'RECIPE';
       let newRatio = toItem ? toItem.ratio : null;
@@ -1011,14 +1222,21 @@ export const mockServer = {
         if (fromItem?.state === 'SCALED') { newState = 'SCALED'; newRatio = scaleRatios[s.fromIngredientId] ?? null; }
         else if (fromItem?.state === 'EXTRA') newState = 'EXTRA';
       }
-      const toP = products.find(x => x.id === s.toIngredientId);
-      const fromP = products.find(x => x.id === s.fromIngredientId);
-      if (toP) {
-        itemsById.set(toP.id, toItem
-          ? { ...toItem, effectiveAmount: r3(baseTo + moved), state: newState, ratio: newRatio, substitutedFrom: fromP?.name ?? null }
-          : mkItem(toP, null, null, moved, newState, newRatio, fromP?.name ?? null));
+      const toP = compProduct(s.toIngredientId);
+      const fromP = compProduct(s.fromIngredientId);
+      // §3: источник обнуляем ДО начисления на to — иначе при to===from в одном
+      // PUT замена и SCALE одной позиции взаимно затеняют друг друга.
+      if (fromItem) {
+        itemsById.set(fromItem.ingredientId, { ...fromItem, effectiveAmount: 0 });
+        effective.set(s.fromIngredientId, 0);
       }
-      if (fromItem) itemsById.set(fromItem.ingredientId, { ...fromItem, effectiveAmount: 0 });
+      if (toP) {
+        const newEff = normQty(r3(baseTo + moved), baseTo + moved);
+        itemsById.set(toP.id, toItem
+          ? { ...toItem, effectiveAmount: newEff, state: newState, ratio: newRatio, substitutedFrom: fromP?.name ?? null }
+          : mkItem(toP, null, null, newEff, newState, newRatio, fromP?.name ?? null));
+        effective.set(toP.id, newEff);
+      }
       subDtos.push({
         id: s.id, fromIngredientId: s.fromIngredientId, fromName: fromP?.name ?? '',
         toIngredientId: s.toIngredientId, toName: toP?.name ?? '', ratio: s.ratio,
@@ -1108,6 +1326,24 @@ export const mockServer = {
       if (method === 'GET') {
         return day.meals;
       }
+    }
+
+    // PATCH /trips/:id/meals/:mealId — правка per-meal атрибутов (peopleOverride и т.п.);
+    // composition пересчитывается при следующем GET (рецептурные строки масштабируются,
+    // EXTRA-абсолюты фиксированы на приём — §3).
+    if (parts.length === 4 && parts[2] === 'meals' && method === 'PATCH') {
+      const tripId = parts[1];
+      const trip = trips.find(t => t.id === tripId);
+      if (!trip) throw { status: 404, message: 'Not found', detail: `Trip ${tripId} not found` } as any;
+      let meal: any = null;
+      for (const d of trip.days || []) {
+        const m = (d.meals || []).find((x: any) => String(x.id) === String(parts[3]));
+        if (m) meal = m;
+      }
+      if (!meal) throw { status: 404, message: 'Not found', detail: `Meal ${parts[3]} not found in trip` } as any;
+      if (body?.peopleOverride != null) meal.peopleOverride = Number(body.peopleOverride);
+      if (body?.mealType != null) meal.mealType = body.mealType;
+      return meal;
     }
 
     // ===== FORM-meal-composition-spec §4.2/§4.4: состав приёма (Модалка B) =====

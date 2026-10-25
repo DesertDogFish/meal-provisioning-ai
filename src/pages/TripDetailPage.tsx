@@ -9,7 +9,6 @@ import AddMealModal, { type AddMealDayContext } from '../components/AddMealModal
 import MealCompositionModal from '../components/MealCompositionModal';
 import { servingsWord } from '../utils/text';
 import { api, getRecipes } from '../api/client';
-import type { Ingredient } from '../types';
 import { useToast } from '../components/ToastProvider';
 import { Button } from '../components/Button';
 
@@ -106,7 +105,6 @@ export default function TripDetailPage() {
   const [error, setError] = useState<string | null>(null);
 
   // ===== FORM-meal-composition-spec §2: Модалка A (добавление приёма) + Модалка B (состав) =====
-  const [products, setProducts] = useState<Ingredient[]>([]);
   const [isEditorAdmin, setIsEditorAdmin] = useState<boolean | null>(null);
   /** A: { dayId, dayIndex, mealType } — контекст карточки дня (§2.1) */
   const [addMealCtx, setAddMealCtx] = useState<(AddMealDayContext & { mealType?: MealType }) | null>(null);
@@ -178,24 +176,18 @@ export default function TripDetailPage() {
     }
   };
 
-  // Справочник продуктов и роль пользователя — подгружаются один раз:
-  // нужны для строки добавления продукта в Модалке B и ссылки админа в справочник (T7).
+  // Роль пользователя — подгружается один раз: нужна для ссылки админа в
+  // справочник из Модалки B (T7). Сам справочник продуктов модалка грузит сама.
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const [prods, me] = await Promise.all([
-          api.get<any>('/admin/products').catch(() => []),
-          localStorage.getItem('accessToken')
-            ? api.get<{ role?: string }>('/auth/me').catch(() => null)
-            : Promise.resolve(null),
-        ]);
+        const me = localStorage.getItem('accessToken')
+          ? await api.get<{ role?: string }>('/auth/me').catch(() => null)
+          : null;
         if (cancelled) return;
-        // Ответ /admin/products — PageResponse или массив (mock/бэкенд)
-        const list = Array.isArray(prods) ? prods : (prods?.content ?? []);
-        setProducts(list as Ingredient[]);
         setIsEditorAdmin(String(me?.role ?? '').toUpperCase() === 'ADMIN');
-      } catch { /* не критично: строка добавления просто останется без справочника */ }
+      } catch { /* не критично: ссылка админа просто не появится */ }
     })();
     return () => { cancelled = true; }
   }, []);
