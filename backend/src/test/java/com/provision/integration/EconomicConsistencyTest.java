@@ -19,9 +19,12 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.transaction.annotation.Transactional;
+import org.testcontainers.containers.PostgreSQLContainer;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -54,14 +57,26 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
-// IMPORT: @ContainerSuite — добавьте импорт по образцу MetaControllerTest.java
-// (аннотация объявлена в test-support пакете проекта; здесь она без импорта,
-//  чтобы не выдумывать пакет).
 @ContainerSuite
 @ActiveProfiles("test")
 @Transactional
 @DisplayName("E2E-ECON-01: Economic consistency across all screens")
 class EconomicConsistencyTest {
+
+    /** Docker есть -> Testcontainers; нет -> локальный PG-fallback (LocalPgFallback), как в остальных @ContainerSuite-тестах. */
+    private static final boolean LOCAL_PG = !LocalPgFallback.dockerAvailable();
+
+    static PostgreSQLContainer<?> postgres = LOCAL_PG ? null : new PostgreSQLContainer<>("postgres:15-alpine")
+            .withDatabaseName("provision_test_econ")
+            .withUsername("test")
+            .withPassword("test");
+
+    @DynamicPropertySource
+    static void configureProperties(DynamicPropertyRegistry registry) {
+        registry.add("spring.datasource.url", () -> LOCAL_PG ? LocalPgFallback.jdbcUrl("provision_test_econ") : postgres.getJdbcUrl());
+        registry.add("spring.datasource.username", () -> LOCAL_PG ? "test" : postgres.getUsername());
+        registry.add("spring.datasource.password", () -> LOCAL_PG ? "test" : postgres.getPassword());
+    }
 
     // === FIXTURES ===
     private static final LocalDate START_DATE = LocalDate.of(2026, 7, 1);
