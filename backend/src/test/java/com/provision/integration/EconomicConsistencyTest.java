@@ -367,7 +367,7 @@ class EconomicConsistencyTest {
         // FIX (раунд 6): ассерты только по позициям фикстур — сид-строки каталога V3/V17/V18,
         // не участвующие в блюдах похода, в закупку не входят; фильтр по id (fixtureItems)
         // гарантирует это даже при другой реализации экрана.
-        List<ShoppingItem> fixtureLines = list.fixtureItems();
+        List<ShoppingItem> fixtureLines = fixtureItems(list);
         assertThat(fixtureLines).hasSize(5); // соль с 0 ккал присутствует
         assertThat(list.totalPlannedCost()).isEqualByComparingTo("806.30");
         assertThat(list.totalActualCost()).isEqualByComparingTo("806.30"); // без оверрайдов
@@ -521,7 +521,7 @@ class EconomicConsistencyTest {
 
         // 4. Каждая строка закупки == сумма этой строки по дням (по каждому ингредиенту)
         // FIX (раунд 6): сравнение только для позиций фикстур (см. fixtureItems).
-        for (ShoppingItem shopItem : shopping.fixtureItems()) {
+        for (ShoppingItem shopItem : fixtureItems(shopping)) {
             BigDecimal sumByDays = BigDecimal.ZERO;
             for (DayShopping d : dayShopping) {
                 for (ShoppingItem dayItem : d.items()) {
@@ -582,28 +582,13 @@ class EconomicConsistencyTest {
 
     private record MenuIngredient(String name, BigDecimal amount, String unit) {}
 
-    private record ShoppingList(List<ShoppingItem> items, BigDecimal totalPlannedCost,
-            BigDecimal totalActualCost, BigDecimal deltaPercent, Integer overriddenCount) {
-
-        /** Только позиции тестовых фикстур (по id) — сид-строки с теми же именами отсекаются. */
-        private List<ShoppingItem> fixtureItems() {
-            return items.stream().filter(i -> isFixtureId(i.ingredientId())).toList();
-        }
-
-        BigDecimal itemAmount(String name) {
-            return fixtureItems().stream().filter(i -> i.ingredientName().equals(name))
-                    .findFirst().orElseThrow().totalAmount();
-        }
-        BigDecimal itemPlannedCost(String name) {
-            return fixtureItems().stream().filter(i -> i.ingredientName().equals(name))
-                    .findFirst().orElseThrow().plannedCost();
-        }
-        BigDecimal itemActualCost(String name) {
-            return fixtureItems().stream().filter(i -> i.ingredientName().equals(name))
-                    .findFirst().orElseThrow().actualCost();
-        }
-    }
-
+    // FIX (раунд 7): fixtureItems()/isFixtureId() перенесены ИЗ записи ShoppingList в класс теста.
+    // Внутренний static-класс (record) не может обращаться к нестатическому методу внешнего
+    // класса — компилятор падал с "non-static method isFixtureId(java.lang.Long) cannot be
+    // referenced from a static context" (CI, testCompile). Вызывающие места (368/370/524 и
+    // itemAmount/itemPlannedCost/itemActualCost внутри записи) остаются валидными: экземпляр
+    // записи создаётся Jackson'ом внутри методов этого же класса, а simple-name `fixtureItems`
+    // резолвится сначала в методы внешней записи (itemXxx), затем во внешний метод класса.
     /** id ∈ {5 фикстур} или trip-scoped снепшот одной из них (V20 copy-on-write). */
     private boolean isFixtureId(Long id) {
         if (id == null) return false;
@@ -615,6 +600,28 @@ class EconomicConsistencyTest {
                 "SELECT count(*) FROM ingredients WHERE id = ? AND snapshot_of IN (?, ?, ?, ?, ?)",
                 Integer.class, id, grechkaId, tushenkaId, butterId, riceId, saltId);
         return cnt != null && cnt > 0;
+    }
+
+    /** Только позиции тестовых фикстур (по id) — сид-строки с теми же именами отсекаются. */
+    private List<ShoppingItem> fixtureItems(ShoppingList list) {
+        return list.items().stream().filter(i -> isFixtureId(i.ingredientId())).toList();
+    }
+
+    private record ShoppingList(List<ShoppingItem> items, BigDecimal totalPlannedCost,
+            BigDecimal totalActualCost, BigDecimal deltaPercent, Integer overriddenCount) {
+
+        BigDecimal itemAmount(String name) {
+            return items.stream().filter(i -> i.ingredientName().equals(name))
+                    .findFirst().orElseThrow().totalAmount();
+        }
+        BigDecimal itemPlannedCost(String name) {
+            return items.stream().filter(i -> i.ingredientName().equals(name))
+                    .findFirst().orElseThrow().plannedCost();
+        }
+        BigDecimal itemActualCost(String name) {
+            return items.stream().filter(i -> i.ingredientName().equals(name))
+                    .findFirst().orElseThrow().actualCost();
+        }
     }
 
     private record ShoppingItem(
