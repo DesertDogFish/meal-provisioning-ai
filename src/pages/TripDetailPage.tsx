@@ -89,8 +89,6 @@ export default function TripDetailPage() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<TabType>('menu');
   const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set());
-  const [showAddMeal, setShowAddMeal] = useState<{ dayId: string } | null>(null);
-  const [newMeal, setNewMeal] = useState({ mealType: 'LUNCH' as MealType, recipeId: '', peopleOverride: '' });
   const [editingDay, setEditingDay] = useState<string | null>(null);
   const [dayPeopleOverride, setDayPeopleOverride] = useState('');
   const [trip, setTrip] = useState<Trip | null>(null);
@@ -107,16 +105,13 @@ export default function TripDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // ===== UX: окно «Добавить приём пищи» =====
-  // Поиск по блюдам (вместо выпадающего списка на сотню строк) + правка
-  // состава выбранного блюда (замена/добавление продукта) прямо в этом окне.
+  // ===== FORM-meal-composition-spec §2: Модалка A (добавление приёма) + Модалка B (состав) =====
   const [products, setProducts] = useState<Ingredient[]>([]);
   const [isEditorAdmin, setIsEditorAdmin] = useState<boolean | null>(null);
-  const [mealQuery, setMealQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<Recipe[] | null>(null);
-  const [searching, setSearching] = useState(false);
-  const [draftIngredients, setDraftIngredients] = useState<DraftIngredient[] | null>(null);
-  const [savingComposition, setSavingComposition] = useState(false);
+  /** A: { dayId, dayIndex, mealType } — контекст карточки дня (§2.1) */
+  const [addMealCtx, setAddMealCtx] = useState<(AddMealDayContext & { mealType?: MealType }) | null>(null);
+  /** B: существующий приём (id + день) — состав редактируется только для него (§2.2) */
+  const [compositionMeal, setCompositionMeal] = useState<{ dayId: string; mealId: string } | null>(null);
 
   // ===== Фаза 13 (п.6/7): общий стейдж фактических цен и исключений =====
   // Поднят на уровень страницы: вкладки «Закупка», «По дням», «На человека» и
@@ -184,7 +179,7 @@ export default function TripDetailPage() {
   };
 
   // Справочник продуктов и роль пользователя — подгружаются один раз:
-  // нужны для редактора состава блюда в окне «Добавить приём пищи».
+  // нужны для строки добавления продукта в Модалке B и ссылки админа в справочник (T7).
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -200,29 +195,10 @@ export default function TripDetailPage() {
         const list = Array.isArray(prods) ? prods : (prods?.content ?? []);
         setProducts(list as Ingredient[]);
         setIsEditorAdmin(String(me?.role ?? '').toUpperCase() === 'ADMIN');
-      } catch { /* не критично: редактор просто останется без справочника */ }
+      } catch { /* не критично: строка добавления просто останется без справочника */ }
     })();
-    return () => { cancelled = true; };
+    return () => { cancelled = true; }
   }, []);
-
-  // Серверный поиск блюд с debounce (при открытии окна или вводе запроса).
-  useEffect(() => {
-    if (!showAddMeal) return;
-    const q = mealQuery.trim();
-    if (!q) { setSearchResults(null); setSearching(false); return; }
-    setSearching(true);
-    const t = setTimeout(async () => {
-      try {
-        const found = await getRecipes(q);
-        setSearchResults(found);
-      } catch {
-        setSearchResults([]);
-      } finally {
-        setSearching(false);
-      }
-    }, 250);
-    return () => clearTimeout(t);
-  }, [mealQuery, showAddMeal]);
 
   if (loading) {
     return (
@@ -249,66 +225,17 @@ export default function TripDetailPage() {
     setExpandedDays(next);
   };
 
-  const closeAddMeal = () => {
-    setShowAddMeal(null);
-    setNewMeal({ mealType: 'LUNCH', recipeId: '', peopleOverride: '' });
-    setMealQuery('');
-    setSearchResults(null);
-    setDraftIngredients(null);
-  };
+  // ===== FORM-meal-composition-spec §2: обработчики Модалок A/B =====
 
-  /**
-   * UX: сохранение изменённого состава блюда прямо из окна «Добавить приём пищи».
-   * PUT /admin/recipes/:id обновляет блюдо в каталоге (оно переиспользуется и в
-   * других походах), поэтому перед записью просим подтверждение.
-   */
-  const handleSaveComposition = async () => {
-    if (!showAddMeal || !newMeal.recipeId || !draftIngredients) return;
-    const recipe = recipesMap.get(newMeal.recipeId);
-    if (!recipe) return;
-    if (draftIngredients.length === 0 || draftIngredients.some(i => !i.ingredientId || i.amount <= 0)) {
-      showError('Состав неполный: у каждого продукта должно быть количество больше нуля');
-      return;
-    }
-    if (!window.confirm(
-      `Изменить состав блюда «${recipe.name}» в общем каталоге? ` +
-      'Это затронет все походы, где оно используется.'
-    )) return;
-    try {
-      setSavingComposition(true);
-      const updated = await updateRecipeIngredients(recipe as any, draftIngredients);
-      // Обновляем локальные копии — список блюд и данные для расчётов сразу «поедут»
-      setRecipes(prev => prev.map(r => (r.id === updated.id ? (updated as unknown as Recipe) : r)));
+  /** A закрыта; если шорткат «добавить и настроить состав» — открываем B для созданного приёма. */
+  const handleMealAdded = (meal: { id: string }, opts: { openComposition: boolean }) => {
+    if (!addMealCtx) return;
+    const dayId = addMealCtx.dayId;
+    setAddMealCtx(null);
+    void (async () => {
       await loadData();
-      setDraftIngredients(null);
-    } catch (err: any) {
-      console.error('Failed to update recipe:', err);
-      showError(err?.detail || 'Не удалось сохранить состав блюда');
-    } finally {
-      setSavingComposition(false);
-    }
-  };
-
-  const handleAddMeal = async () => {
-    if (!showAddMeal || !newMeal.recipeId) return;
-    const day = trip.days?.find((d: TripDay) => d.id === showAddMeal.dayId);
-    if (!day) return;
-    
-    try {
-      await api.post(`/trips/${trip.id}/days/${showAddMeal.dayId}/meals`, {
-        mealType: newMeal.mealType,
-        recipeId: newMeal.recipeId,
-        peopleOverride: newMeal.peopleOverride ? parseInt(newMeal.peopleOverride) : undefined,
-        sortOrder: (day.meals?.length || 0) + 1,
-      });
-      closeAddMeal();
-      await loadData();
-    } catch (err: any) {
-      console.error('Failed to add meal:', err);
-      // ЗАДАЧА 3: пользователь должен видеть сбой действия, а не молча
-      // остающийся тот же список приёмов пищи.
-      showError(err?.detail || 'Не удалось добавить приём пищи');
-    }
+      if (opts.openComposition) setCompositionMeal({ dayId, mealId: meal.id });
+    })();
   };
 
   const handleDeleteMeal = async (dayId: string, mealId: string) => {
@@ -521,7 +448,7 @@ export default function TripDetailPage() {
                       <Users size={16} />
                     </button>
                     <button
-                      onClick={(e) => { e.stopPropagation(); setShowAddMeal({ dayId: tripDay.id }); setNewMeal({ mealType: 'LUNCH', recipeId: '', peopleOverride: '' }); setMealQuery(''); setSearchResults(null); setDraftIngredients(null); }}
+                      onClick={(e) => { e.stopPropagation(); setAddMealCtx({ dayId: tripDay.id, dayDate: tripDay.dayDate, dayIndex: idx + 1 }); }}
                       className="p-1.5 rounded transition-colors"
                       style={{ color: 'var(--muted)' }}
                       onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--w1)'; e.currentTarget.style.background = 'color-mix(in srgb, var(--wave-400) 10%, transparent)'; }}
@@ -566,15 +493,30 @@ export default function TripDetailPage() {
                             <span className="font-medium" style={{ color: 'var(--text)' }}>{meal.recipeName}</span>
                             <span className="text-xs" style={{ color: 'var(--muted)' }}>({meal.servings} {servingsWord(meal.servings)})</span>
                           </div>
-                          <button
-                            onClick={() => tripMeal && handleDeleteMeal(tripDay.id, tripMeal.id)}
-                            className="p-1 rounded transition-colors"
-                            style={{ color: 'var(--muted)' }}
-                            onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--danger)'; }}
-                            onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--muted)'; }}
-                          >
-                            <Trash2 size={14} />
-                          </button>
+                          <div className="flex items-center gap-1">
+                            {/* FORM-meal-composition-spec §2.2: кнопка-иконка «Состав» на карточке приёма → Модалка B */}
+                            <button
+                              onClick={() => tripMeal && setCompositionMeal({ dayId: tripDay.id, mealId: tripMeal.id })}
+                              disabled={!tripMeal}
+                              className="p-1 rounded transition-colors"
+                              style={{ color: 'var(--muted)' }}
+                              onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--w1)'; }}
+                              onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--muted)'; }}
+                              title="Состав приёма"
+                              aria-label={`Состав приёма: ${meal.recipeName ?? ''}`}
+                            >
+                              <ListChecks size={14} />
+                            </button>
+                            <button
+                              onClick={() => tripMeal && handleDeleteMeal(tripDay.id, tripMeal.id)}
+                              className="p-1 rounded transition-colors"
+                              style={{ color: 'var(--muted)' }}
+                              onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--danger)'; }}
+                              onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--muted)'; }}
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
                         </div>
                         <div className="flex flex-wrap gap-2 mt-2">
                           {meal.ingredients.map((ing, i) => (
@@ -749,97 +691,32 @@ export default function TripDetailPage() {
         <PriceOverridesTab tripId={trip.id} />
       )}
 
-      {/* Add meal modal */}
-      {showAddMeal && (() => {
-        // Источник блюд для поиска: серверные результаты (при запросе) + весь каталог,
-        // с дедупликацией по id — поиск мгновенный даже без серверного ?search=.
-        const searchPool = searchResults != null
-          ? [...searchResults.map(r => r as Recipe), ...recipes.filter(r => !searchResults.some(sr => sr.id === r.id))]
-          : recipes;
-        const selectedRecipe = newMeal.recipeId
-          ? (recipesMap.get(newMeal.recipeId) ?? (searchResults ?? []).find(r => r.id === newMeal.recipeId))
-          : undefined;
-        return (
-        <Modal onClose={closeAddMeal}>
-          <div className="rounded-2xl shadow-xl w-full max-w-lg p-6 my-8" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
-            <h2 className="text-xl font-bold mb-4" style={{ color: 'var(--text)' }}>Добавить приём пищи</h2>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium mb-1" style={{ color: 'var(--muted)' }}>Тип приёма</label>
-                <CustomSelect
-                  value={newMeal.mealType}
-                  onChange={(v) => setNewMeal({ ...newMeal, mealType: v as MealType })}
-                  options={[
-                    { value: 'BREAKFAST', label: 'Завтрак' },
-                    { value: 'LUNCH', label: 'Обед' },
-                    { value: 'DINNER', label: 'Ужин' },
-                    { value: 'SNACK', label: 'Перекус' },
-                  ]}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1" style={{ color: 'var(--muted)' }}>Блюдо</label>
-                {/* UX: удобный поиск по блюдам вместо списка на сотню строк */}
-                <RecipeSearchSelect
-                  value={newMeal.recipeId}
-                  onChange={(v) => { setNewMeal({ ...newMeal, recipeId: v }); setDraftIngredients(null); }}
-                  options={searchPool.map((r: Recipe) => ({
-                    value: r.id,
-                    label: r.name,
-                    hint: `${mealTypeLabels[r.mealType]} • ${r.ingredients?.length || 0} продуктов`,
-                  }))}
-                  placeholder="Начните вводить название блюда или продукта…"
-                  emptyText={searching ? 'Ищем…' : 'Блюдо не найдено'}
-                  ariaLabel="Поиск блюда"
-                  autoFocus
-                />
-                {searching && (
-                  <p className="mt-1 text-xs" style={{ color: 'var(--muted)' }}>Ищем по каталогу…</p>
-                )}
-              </div>
+      {/* Модалка A — «Добавить приём пищи» (FORM-spec §2.1): одна commit-кнопка,
+          контекст дня, превью блюда; состав здесь НЕ редактируется */}
+      {addMealCtx && trip && (
+        <AddMealModal
+          tripId={trip.id}
+          tripName={trip.name}
+          defaultPeople={trip.defaultPeople}
+          day={{ dayId: addMealCtx.dayId, dayDate: addMealCtx.dayDate, dayIndex: addMealCtx.dayIndex }}
+          initialMealType={addMealCtx.mealType ?? 'LUNCH'}
+          onClose={() => setAddMealCtx(null)}
+          onAdded={handleMealAdded}
+        />
+      )}
 
-              {/* Правка состава блюда прямо здесь: замена/добавление продукта */}
-              {selectedRecipe && (
-                <RecipeIngredientsEditor
-                  key={selectedRecipe.id}
-                  recipe={selectedRecipe as unknown as any}
-                  products={products as any}
-                  disabled={isEditorAdmin === false || savingComposition}
-                  onChange={setDraftIngredients}
-                />
-              )}
-              {selectedRecipe && isEditorAdmin === false && (
-                <p className="text-xs" style={{ color: 'var(--muted)' }}>
-                  Менять состав блюд может только администратор.
-                </p>
-              )}
-
-              <div>
-                <label className="block text-sm font-medium mb-1" style={{ color: 'var(--muted)' }}>Количество человек (опционально)</label>
-                <input
-                  type="number"
-                  min={1}
-                  value={newMeal.peopleOverride}
-                  onChange={e => setNewMeal({ ...newMeal, peopleOverride: e.target.value })}
-                  className="w-full px-3 py-2.5 rounded-lg outline-none"
-                  style={{ background: 'var(--elev)', border: '1px solid var(--border)', color: 'var(--text)' }}
-                  placeholder={`По умолчанию: ${trip.defaultPeople}`}
-                />
-              </div>
-            </div>
-            <div className="flex flex-wrap gap-3 mt-6">
-              <Button variant="ghost" size="sm" onClick={closeAddMeal} aria-label="Отмена">Отмена</Button>
-              {selectedRecipe && draftIngredients && (
-                <Button variant="primary" size="sm" onClick={handleSaveComposition} disabled={isEditorAdmin === false || savingComposition} aria-label="Сохранить состав блюда" title="Сохранить новый состав блюда в каталоге">
-                                  <Save size={15} /> {savingComposition ? 'Сохраняем…' : 'Сохранить состав'}
-                                </Button>
-              )}
-              <Button variant="primary" size="sm" onClick={handleAddMeal} disabled={!newMeal.recipeId} aria-label="Добавить в приём пищи">Добавить в приём пищи</Button>
-            </div>
-          </div>
-        </Modal>
-        );
-      })()}
+      {/* Модалка B — «Состав приёма» (FORM-spec §2.2): только для существующего приёма,
+          batch PUT composition + refetch summary после сохранения */}
+      {compositionMeal && trip && (
+        <MealCompositionModal
+          tripId={trip.id}
+          mealId={compositionMeal.mealId}
+          isAdmin={isEditorAdmin === true}
+          onClose={() => setCompositionMeal(null)}
+          onSaved={() => { void loadData(); }}
+          onEditCatalogRecipe={(recipeId) => { navigate(`/recipes?edit=${recipeId}`); }}
+        />
+      )}
     </div>
   );
 }
