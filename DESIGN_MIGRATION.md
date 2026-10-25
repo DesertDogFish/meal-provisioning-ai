@@ -34,7 +34,11 @@
 
 - [x] ~~1.1~~ ✅ Компонент `ThemeToggle` добавлен (.ibtn в index.css): кнопка с `aria-label`, запись
       `document.documentElement.dataset.theme`, персист в `localStorage['pv-theme']` в try/catch
-      (механизм описан в `tokens.json → themeSwitch`). Разместить в шапке `Layout.tsx`.
+      (механизм описан в `tokens.json → themeSwitch`). Размещён в шапке `Layout.tsx`.
+      **Доп. 25.10:** ранее кнопка рендерилась только в мобильном header (`lg:hidden`) — на десктопе
+      переключателя не было видно. Добавлен `<ThemeToggle />` в верхнюю область desktop-сайдбара
+      (рядом с BrandMark, `Layout.tsx:90`). Иконки Sun/Moon переключаются по `data-theme="light"`
+      (index.css:176–178). tsc/lint/build зелёные.
 - [x] ~~1.2~~ ✅ Жёсткий `color-scheme: dark` убран из `:root` — теперь из tokens.css (переезжает в tokens.css,
       где тема сама ставит `color-scheme`).
 - [x] ~~1.3~~ ✅ Нативные контролы (календарь, select, скроллбары) следуют теме через `color-scheme`.
