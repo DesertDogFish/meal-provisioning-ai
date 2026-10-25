@@ -52,6 +52,11 @@ public class TripIngredientEditService {
             TripIngredientSubstitution edit = editsByFrom.get(ing.getId());
             if (edit == null) {
                 result.add(new EffectiveLine(ing, ri.getAmount(), null));
+            } else if (isScaleInPlace(edit)) {
+                // FORM-meal-composition-spec §3: SCALED — правка количества «замена на себя»
+                // (from==to): строка остаётся одна, количество умножается на ratio.
+                BigDecimal ratio = edit.getRatio() != null ? edit.getRatio() : BigDecimal.ONE;
+                result.add(new EffectiveLine(ing, ri.getAmount().multiply(ratio), ing.getName()));
             } else if (edit.isRemoved() || edit.getToIngredient() == null) {
                 // мягкое удаление: позиция остаётся видимой (для UI), но с нулевой суммой не участвует
                 result.add(new EffectiveLine(ing, BigDecimal.ZERO, ing.getName()));
@@ -69,6 +74,16 @@ public class TripIngredientEditService {
             }
         }
         return result;
+    }
+
+    /**
+     * FORM-meal-composition-spec §3: SCALED — «замена на себя» (from==to, не added/removed):
+     * правка количества рецептурной строки через ratio, новой строки в составе нет.
+     */
+    private static boolean isScaleInPlace(TripIngredientSubstitution edit) {
+        return !edit.isAdded() && !edit.isRemoved()
+                && edit.getFromIngredient() != null && edit.getToIngredient() != null
+                && edit.getToIngredient().getId().equals(edit.getFromIngredient().getId());
     }
 
     /** Группировка правок по типу для конкретного рецепта. */
