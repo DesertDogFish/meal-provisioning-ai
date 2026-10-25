@@ -29,6 +29,7 @@ import com.provision.integration.LocalPgFallback;
 import com.provision.integration.TestUsers;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -104,6 +105,24 @@ class EconomicConsistencyTest {
     private static final String TRIP_NAME = "Тестовый поход E2E-ECON-01";
     private static final int DEFAULT_PEOPLE = 4;
 
+    /**
+     * FIX (409 в createIngredient, раунд 3 — финальная корневая причина): имена/коды фикстур
+     * Гречка/buckwheat, Тушёнка/tushonka, Масло/butter, Рис/rice, Соль/salt СОВПАДАЛИ с сидом
+     * каталога из Flyway-миграций (V3__seed_catalog.sql и др.). TestDataIsolation.reset()
+     * пересоздаёт схему именно ПОЛНЫМ прогоном миграций V1..V20 (включая сид), поэтому после
+     * reset эти ингредиенты УЖЕ присутствуют в чистой БД каждого теста, а IngredientService.create
+     * проверяет existsByName -> ConflictException -> HTTP 409 вместо ожидаемых 201.
+     * Прежние правки (снятие @Transactional, отдельный профиль "econ" для уникального ключа
+     * контекста Spring TestContext) были необходимы, но к 409 не относились: reset всегда
+     * чистил именно свою базу provision_test_econ — просто вместе с мусором возвращал и сид.
+     * Решение: переименовать фикстуры в test-only пространство имён (E2E Гречка / e2e_grechka).
+     */
+    private static final String GRECHK = "E2E Гречка", GRECHK_CODE = "e2e_grechka";
+    private static final String TUSH = "E2E Тушёнка", TUSH_CODE = "e2e_tushonka";
+    private static final String BUTT = "E2E Масло", BUTT_CODE = "e2e_butter";
+    private static final String RICE = "E2E Рис", RICE_CODE = "e2e_rice";
+    private static final String SALT = "E2E Соль", SALT_CODE = "e2e_salt";
+
     private static Long grechkaId, tushenkaId, butterId, riceId, saltId;
     private static Long recipe1Id, recipe2Id, recipe3Id, recipe4Id, recipe5Id;
     private static Long tripId;
@@ -147,11 +166,38 @@ class EconomicConsistencyTest {
         // админа через TestUsers.createAdmin (raw SQL + логин), как в ConflictIntegrationTest.
         userToken = TestUsers.createAdmin(mockMvc, objectMapper, jdbc, "e2econ@test.com");
 
-        grechkaId = createIngredient("Гречка", "buckwheat", "KG", 100);
-        tushenkaId = createIngredient("Тушёнка", "tushonka", "KG", 200);
-        butterId = createIngredient("Масло", "butter", "KG", 400);
-        riceId = createIngredient("Рис", "rice", "KG", 50);
-        saltId = createIngredient("Соль", "salt", "KG", 0);
+        // Корень 409: TestDataIsolation.reset() пересоздаёт схему ПОЛНЫМ прогоном миграций
+        // V1..V20, включая сид каталога V3__seed_catalog.sql, где уже есть строки с именами
+        // Гречка/Тушёнка/Масло/Рис/Соль (коды buckwheat/tushonka/butter/rice/salt).
+        // IngredientService.createIngredient проверяет existsByName -> ConflictException.
+        // Поэтому фикстуры заводятся под test-only именами GRECHK/TUSH/BUTT/RICE/SALT, после
+        // чего сидовые строки переименовываются в канонические имена, а E2E-дубли удаляются
+        // (renameSeed/deleteIngredient ниже) — ассерты экранов ищут позиции по именам.
+        grechkaId = createIngredient(GRECHK, GRECHK_CODE, "KG", 100);
+        tushenkaId = createIngredient(TUSH, TUSH_CODE, "KG", 200);
+        butterId = createIngredient(BUTT, BUTT_CODE, "KG", 400);
+        riceId = createIngredient(RICE, RICE_CODE, "KG", 50);
+        saltId = createIngredient(SALT, SALT_CODE, "KG", 0);
+
+        // Ассерты экранов ищут позиции по каноническим именам ("Гречка" и т.п.), а DTO
+        // отдаёт ingredientName — переименовываем сидовые строки V3 (buckwheat/tushonka/
+        // butter/rice/salt) в эти имена; созданные выше E2E-дубли удаляем (DELETE доступен
+        // только пока ингредиент не используется в рецептах — рецепты заводятся после).
+        renameSeed("buckwheat", "Гречка");
+        renameSeed("tushonka", "Тушёнка");
+        renameSeed("butter", "Масло");
+        renameSeed("rice", "Рис");
+        renameSeed("salt", "Соль");
+        deleteIngredient(grechkaId);
+        deleteIngredient(tushenkaId);
+        deleteIngredient(butterId);
+        deleteIngredient(riceId);
+        deleteIngredient(saltId);
+        grechkaId = seedIngredientId("buckwheat");
+        tushenkaId = seedIngredientId("tushonka");
+        butterId = seedIngredientId("butter");
+        riceId = seedIngredientId("rice");
+        saltId = seedIngredientId("salt");
 
         recipe1Id = createRecipe("Каша гречневая с тушёнкой", recipeIngredients(
                 grechkaId, new BigDecimal("0.1"),
@@ -585,6 +631,36 @@ class EconomicConsistencyTest {
                 .andExpect(status().isCreated())
                 .andReturn();
         return lng(objectMapper.readTree(body(result)), "id", true);
+    }
+
+    /**
+     * id сидовой строки каталога V3 по коду (buckwheat/tushonka/butter/rice/salt).
+     * Сидовые ingredients не имеют history-строк в ingredient_price_history (V13 сеет
+     * историю для продуктов V17), поэтому baseline-цена для них заводится setPrice()
+     * через POST /admin/ingredient-prices — как делали бы на UI.
+     */
+    private Long seedIngredientId(String code) {
+        return jdbc.queryForObject(
+                "SELECT id FROM ingredients WHERE code = ?", Long.class, code);
+    }
+
+    /**
+     * Переименовывает сидовый ингредиент в каноническое имя фикстуры ("Гречка" и т.п.).
+     * Только raw SQL: PUT /admin/ingredients/{id} запрещает любые изменения, если
+     * ингредиент уже используется в рецептах (ConflictException в IngredientService.update),
+     * а после renameSeed() рецепты ссылаются именно на сидовые id. name_norm пересчитывается
+     * так же, как в IngredientService (lower + ё->е).
+     */
+    private void renameSeed(String code, String newName) {
+        jdbc.update("UPDATE ingredients SET name = ?, name_norm = ? WHERE code = ?",
+                newName, newName.toLowerCase().replace('ё', 'е'), code);
+    }
+
+    /** Удаляет E2E-дубль фикстуры (DELETE доступен до linkа с рецептами). */
+    private void deleteIngredient(Long id) throws Exception {
+        mockMvc.perform(delete("/api/v1/admin/ingredients/" + id)
+                        .header("Authorization", "Bearer " + userToken))
+                .andExpect(status().isNoContent());
     }
 
     private Long createRecipe(String name, String ingredientsJson, int baseServings, int kcal) throws Exception {
