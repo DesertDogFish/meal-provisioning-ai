@@ -41,7 +41,7 @@ models:
     defaultCompletionOptions:
       # ДОЛЖНО совпадать с -c в start-qwen36-3060.bat (там 131072).
       # Дефолт Continue -- 2048/8192, то есть агент снова начнёт резать проект.
-      contextLength: 131072
+      contextLength: 32768
 
       # Совпадает с --n-predict 8192 на сервере.
       # Ограничивает вырожденную генерацию, из-за которой Cline рвал
