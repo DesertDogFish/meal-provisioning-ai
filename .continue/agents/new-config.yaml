@@ -46,7 +46,7 @@ models:
       # Совпадает с --n-predict 8192 на сервере.
       # Ограничивает вырожденную генерацию, из-за которой Cline рвал
       # соединение по undici bodyTimeout (300 с).
-      maxTokens: 8192
+      maxTokens: 18192
 
       # Официальный non-thinking набор Qwen3.6.
       # Совпадает с тем, что задано в .bat, чтобы клиент не переопределил сервер.
@@ -90,7 +90,7 @@ models:
         - When generating code edits or rewriting sections of documentation, output ONLY the specific diff or search/replace blocks. NEVER rewrite the entire file.
 
 
-        
+        - Никогда не читай большие файлы целиком за раз, пользуйся `/outline` и другими инструментами. 
         - Read a file before editing it. Never guess its contents.
         - Prefer minimal targeted edits over rewriting whole files.
         - For files under ~100 lines, rewriting the whole file is acceptable
@@ -141,7 +141,27 @@ models:
     embedOptions:
       maxChunkSize: 512
       maxBatchSize: 64
-
+      
+  - name: Qwen3.5-9B (LM Studio)
+    provider: openai
+    apiBase: http://localhost:1234/v1     # дефолт LM Studio, обязательно с /v1
+    apiKey: lm-studio
+    model: qwen3.5-9b                     # сверьте с curl http://localhost:1234/v1/models
+    roles: [chat, edit, apply]
+    capabilities: [tool_use]
+    defaultCompletionOptions:
+      contextLength: 65536
+      maxTokens: 18192
+      temperature: 0.7
+      topP: 0.8
+      topK: 20
+      reasoning: false
+    requestOptions:
+      timeout: 900000
+      extraBodyProperties:
+        presence_penalty: 0.0
+        repeat_penalty: 1.0
+        min_p: 0.0
 # ---------------------------------------------------------------------
 # Контекст-провайдеры: что агент может подтягивать в разговор.
 # Держите список коротким -- каждый провайдер добавляет токены.
@@ -175,54 +195,58 @@ mcpServers: []
 tools:
   - name: runTerminalCommand
     allowedCommands:
+      # --- Maven / тесты ---
       - mvn
+      - ./mvnw
+      # --- Node / фронт ---
       - npm
       - npx
+      - yarn
+      # --- Docker read-only ---
+      - docker ps
+      - docker logs
+      - docker compose ps
+      - docker compose logs
+      - docker compose restart
+      - docker inspect
+      # --- Git read-only ---
       - git status
       - git diff
       - git log
       - git show
-      - git ls-files
-      - docker compose ps
-      - docker compose logs
-      - docker compose restart provision-backend
+      # --- PowerShell read-only / build ---
+      - Select-String
+      - Get-ChildItem
+      - Get-Content
+      - Test-Path
+      - Measure-Object
+      # --- curl read-only ---
       - curl
+      # --- Прочее ---
       - ls
       - cat
       - grep
       - rg
       - find
       - echo
-      - python file_chunker.py
+      - printf
+      - pwd
+      - whoami
+      - date
     deniedCommands:
       - rm
       - mv
       - docker compose down
       - docker compose rm
+      - docker exec
+      - docker run
+      - docker push
       - git push
       - git commit
       - git reset
       - git checkout
       - psql
       - npm publish
-      - docker push
-
-allowedCommands:
-  - mvn
-  - npm
-  - npx
-  - git status
-  - git diff
-  - git log
-  - docker compose restart
-  - curl
-  - git ls-files
-  - python file_chunker.py
-deniedCommands:
-  - rm
-  - docker compose down
-  - git push
-  - git commit
 
 slashCommands:
   - name: outline

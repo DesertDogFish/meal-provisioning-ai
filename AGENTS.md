@@ -1,41 +1,24 @@
 # Agents
 
-## Правила для AI-агентов
+Правила для AI-агентов, работающих в репозитории. Статус задач — в `PLAN.md`, формулы и контракты — в `ARCHITECTURE.md`, дизайн — в `provisions/design-pack/` и `DESIGN_MIGRATION.md`.
 
-### 1. Запрет на создание MD-файлов
+## 1. MD-файлы: белый список
 
-**Строго запрещено** создавать новые MD-файлы вне белого списка.
+Разрешено редактировать ровно следующие файлы и создавать новые MD запрещено:
 
-**Белый список (11 файлов):**
-- `README.md` — запуск, стек, ссылки
-- `ARCHITECTURE.md` — слои данных, режимы, расчёты, контракт
-- `PLAN.md` — единственный живой статус, текущая фаза, бэклог, баги
-- `AGENTS.md` — этот файл (правила для агентов)
-- `PLAN_PHASE14.md` — статус Фазы 14 (блюда: каталог, правки в походе)
-- `DESIGN_MIGRATION.md` — чек-лист миграции UI на design-pack v1.1
+- `README.md` — запуск, стек, демо-данные, траблшутинг
+- `ARCHITECTURE.md` — слои, режимы, расчёты, контракты, снепшоты, тест-стратегия
+- `PLAN.md` — единственный живой статус: фаза, CI, бэклог, known bugs
+- `AGENTS.md` — этот файл
 - `backend/README.md` — документация бэкенда
-- `provisions/design-pack/README.md` — описание пакета айдентики
-- `provisions/design-pack/AGENTS.md` — инструкции кодинг-агентам для design-pack
-- `provisions/design-pack/brand.md` — знак и палитра
-- `provisions/design-pack/components.md` — спецификации UI-компонентов
+- `DESIGN_MIGRATION.md` — ведётся владельцем дизайна; **агентам не редактировать**
+- `provisions/design-pack/**.md` — источник правды дизайна (brand/components/AGENTS); агентам — только читать
 
-**Запрещено:**
-- `*_REPORT.md`
-- `FINAL_*.md`
-- `*_SUMMARY.md`
-- `*_FIX.md`
-- `*_IMPLEMENTATION.md`
-- `MIGRATION_PLAN.md`
-- `MODE_AUDIT_AND_MIGRATION.md`
-- Любые другие MD-файлы вне белого списка
+CI-чек количества MD (`ci.yml`, non-blocking) должен исключать `backend/README.md`, `DESIGN_MIGRATION.md` и `provisions/**`; переводить в blocking — после синхронизации счётчика.
 
-**Исключение:** `backend/README.md` разрешён (документация для backend).
+Отчёты, `_REPORT.md`, `FINAL_*.md`, `*_SUMMARY.md` и прочие новые MD — запрещены. Отчёт пишется в ответе (формат — раздел 2).
 
-### 2. Формат отчёта
-
-**Никаких файлов с отчётами!**
-
-Отчёт пишется прямо в ответе в формате:
+## 2. Формат отчёта
 
 ```
 Commit: <hash>
@@ -46,383 +29,133 @@ docker: passed/failed
 security: passed/warning/failed
 test: passed/failed
 
-<3-5 строк что сделано>
+<3-5 строк: что сделано, что проверено, что осталось>
 ```
 
-**Обязательно:**
-- Ссылка на зелёный workflow run (без неё статус "не проверено")
-- Статусы всех джобов
-- Краткое описание изменений (3-5 строк)
+Обязательно: ссылка на workflow run (без неё статус «не проверено»), статусы всех джобов, честное указание baseline-красных сьютов (см. PLAN «Статус CI»). Запрещено: дублировать PLAN.md, писать длинные простыни, приписывать гейты, которые не прогонял.
 
-**Запрещено:**
-- Создавать MD-файлы с отчётами
-- Писать длинные отчёты в файлах
-- Дублировать информацию из PLAN.md
+## 3. Запрет на генерацию SHA
 
-### 3. Запрет на генерацию SHA
+SHA для actions указывать только из GitHub UI (Releases/коммит) или официальных документов; рукописные/придуманные SHA запрещены. Предпочтительны версии по тегам (`@v4`).
 
-**Строго запрещено** генерировать SHA для GitHub Actions вручную.
+## 4. Запрет на смену архитектуры в фикс-тикетах
 
-**Разрешённые способы получения SHA:**
-1. Через GitHub UI: открыть action → Releases → нажать на коммит → скопировать SHA
-2. Через утилиту `pin-github-action`
-3. Через Dependabot/Renovate
+Фикс-тикет меняет поведение только в рамках заявленного дефекта. Новые сущности/эндпоинты/слои — через отдельную задачу с описанием в PLAN. Исключение: защитные проверки (ownership, валидации) в том же тикете.
 
-**Безопасная альтернатива:**
-- Использовать теги (`@v4`, `@master`) вместо SHA
-- Это менее безопасно, но работает без генерации SHA
+## 5. Баг-тесты и @Disabled
 
-**Примеры запрещённых SHA:**
-```yaml
-uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # ❌ Выдуманный
-uses: actions/setup-java@8df10367165c4f5c0fb5e5d5e2f7b3c7a5a3a3a3  # ❌ Выдуманный
-```
+- На каждый баг — сначала падающий тест (red), затем фикс (green). Ссылка на тест в коммите.
+- `@Disabled`/`it.skip` допустимы только с TODO-комментарием и ссылкой на задачу в PLAN; страж R4 грепает глушилки без следа.
+- Baseline-красные сьюты (например, `EconomicConsistencyTest` до CI-1) не «чинятся» попутно в неродных тикетах и не маскируются: указываются в отчёте как baseline.
 
-**Примеры разрешённых:**
-```yaml
-uses: actions/checkout@v4  # ✅ Тег
-uses: actions/setup-java@v4  # ✅ Тег
-```
-
-### 4. Запрет на изменение архитектуры в тикетах на фикс
-
-**Тикеты на фикс** — только для исправления ошибок CI, багов, lint.
-
-**Запрещено в тикетах на фикс:**
-- Менять архитектуру
-- Добавлять новые фичи
-- Рефакторить код без необходимости
-- Создавать новые файлы (кроме исправления багов)
-
-**Разрешено в тикетах на фикс:**
-- Исправлять ошибки компиляции
-- Исправлять ошибки lint
-- Исправлять ошибки тестов
-- Добавлять `@Disabled` для баг-тестов со ссылкой на TODO в PLAN.md
-- Исправлять CI workflows (non-blocking для security)
-
-**Пример:**
-```
-Тикет: "Починить CI — 11 ошибок компиляции"
-
-✅ Исправить конструкторы в тестах
-✅ Добавить моки для новых зависимостей
-✅ Добавить @Disabled для ShoppingListCostAggregationBugTest
-❌ Рефакторить SummaryService
-❌ Добавлять новую фичу "Кладовая"
-```
-
-### 5. Баг-тесты и @Disabled
-
-**Баг-тесты** — тесты, которые документируют известные баги.
-
-**Правила:**
-- Помечать `@Disabled` с комментарием
-- Ссылка на TODO в PLAN.md
-- Не удалять тест (он документирует баг)
-- Вернуть тест после фикса бага
-
-**Пример:**
-```java
-@Disabled("Legacy bug-demo test: агрегация стоимости по endDate. TODO: PLAN.md#known-bugs-1")
-@Test
-void testCostAggregationBug() {
-    // Тест документирует баг
-}
-```
-
-**В PLAN.md:**
-```markdown
-## Known Bugs
-
-### 1. Агрегация стоимости по endDate
-
-**Симптом:** При изменении цен во время похода стоимость считается неверно.
-**Тест:** ShoppingListCostAggregationBugTest (@Disabled)
-**Решение:** Считать стоимость для каждого дня отдельно
-```
-
-### 6. Проверка перед коммитом
-
-**Обязательные проверки перед коммитом:**
+## 6. Проверка перед коммитом (ритуал)
 
 ```bash
-# Backend
-cd backend
-mvn -B -ntp clean test  # ✅ BUILD SUCCESS
-
+# Backend (PowerShell 5.1: использовать ; вместо &&)
+# ВАЖНО: всегда использовать -o (offline), чтобы Maven не проверял обновления
+# и не зависал на сетевых операциях при старте тестов
+cd backend; JWT_SECRET=<32+ символов> mvn -B -o test
 # Frontend
-cd ..
-npm run lint            # ✅ 0 errors
-npm run build           # ✅ BUILD SUCCESS
-npm run test            # ✅ Все тесты проходят
-
-# Проверка MD-файлов
-git ls-files '*.md'     # ✅ Ровно 11 файлов (4 root + backend/README.md + 4 design-pack)
+npx tsc --noEmit          # typecheck (гейт CI с T0)
+npm run lint
+npm run test
+npm run test:coverage     # R5: lines ≥80% per-file на зоне изменения
+# MD-файлы
+git ls-files '*.md'       # сверить с белым списком раздела 1
 ```
 
-**Запрещено коммитить если:**
-- Backend тесты падают
-- Frontend lint показывает errors
-- Frontend build падает
-- Появились новые MD-файлы вне белого списка
-- Выдуманы SHA для GitHub Actions
+Затронуты эндпоинты с mock-паритетом → `CONTRACT_TARGET=mock npm run test:contract` и сверка форм ответов с бэком (раздел 9, триггеры). E2E-зона → `npm run test:e2e` (mock) и, для real-сценариев, против поднятого compose-стека.
 
-### 7. Работа с CI
+## 7. Работа с CI
 
-**Правила для CI workflows:**
+- Не мержить при красном CI по собственной вине; кросс-веточные конфликты ловятся обновлением ветки перед merge (up-to-date before merge).
+- Non-blocking джобы (security scans, contract nightly, e2e на PR) не оправдывают игнор их падений: падения разбираются и закрываются задачами в PLAN.
+- Новые workflow-шаги с внешними зависимостями (apt, docker hub) писать с фолбэками и комментариями-причинами (урок: PGDG-fallback, `-U` для Maven Central 502).
 
-1. **Security сканеры** — non-blocking по умолчанию
-   ```yaml
-   - name: Semgrep
-     continue-on-error: true
-   ```
+## 8. Миграции и схема
 
-2. **Dependency Review** — non-blocking (может быть отключён в приватных репо)
-   ```yaml
-   - name: Dependency Review
-     continue-on-error: true
-   ```
+- Только новые номера (следующий — V21). Применённые миграции НЕ править и НЕ удалять (урок V14/V15: удаление ломает существующие БД и чужие деплои).
+- Бэкфил данных допустим внутри новой миграции; повторный прогон обязан быть безопасен (IF NOT EXISTS / ON CONFLICT / DROP temp-таблиц в начале — урок V20 и TestDataIsolation, перенакатывающей Flyway в той же сессии).
+- `ddl-auto=validate`: любая колонка в JPA-сущности обязана существовать в миграции до старта приложения.
+- Сид-данные каталога — только миграциями (V3/V17/V18-паттерн): код, имя, единица, kcal/100 г, piece_weight_g для PCS/PACK, pack_size+round_to_packs, цена RUB на 2026-01-01 + 24 мес. истории.
 
-3. **Trivy** — non-blocking (rate limit 429 от Maven Central)
-   ```yaml
-   - name: Trivy FS scan
-     continue-on-error: true
-   ```
+## 9. Снепшоты каталога (V20): обязательные следствия для нового кода
 
-4. **Интеграционные тесты** — требуют Docker/Testcontainers или LocalPgFallback (без Docker: `LocalPgFallback` поднимает PostgreSQL через initdb/pg_ctl)
-   ```xml
-   <!-- Integration-тесты НЕ исключены — ContainerSuite/LocalPgFallback поднимает БД автоматически -->
-   ```
+- Каталожные выборки (UI-справочники, админ, дубль-чеки) фильтруют `trip_id IS NULL`; расчётные выборки по id ингредиентов похода — НЕ фильтруют (копии).
+- Страницы похода читают блюда/цены только через `GET /trips/{id}/recipes` и `GET /trips/{id}/prices`; глобальные `/recipes`, `/prices` — для каталога и админа.
+- Новые ссылки «поход → продукт/блюдо» (фичи, правки) обязаны указывать на trip-scoped копию (создавать через `TripCatalogSnapshotService`), иначе возвращаем блокировки справочника.
+- Уникальность имён продуктов — только среди глобальных (partial-индекс); копии создаются с `code = NULL`.
+- Mock-паритет: новые эндпоинты и семантики (latest-срез цен, снепшоты при добавлении приёма, дни при создании похода) реализуются в `mockServer.ts` в том же тикете + contract-тест.
 
-### 8. Миграция компонентов
+## 10. Правила кодинга фич (R1–R7)
 
-**Паттерн миграции компонента на API клиент:**
+- **R1.** Тест до кода (red-green) для любого бага и новой математики/логики.
+- **R2.** Слой теста = слой изменения (unit/service/integration/component/e2e — без «страховочных» дублей).
+- **R3.** Фича не готова без своего теста и без mock-паритета, если затронут эндпоинты.
+- **R4.** Запрет глушить тесты без следа (@Disabled + TODO + задача).
+- **R5.** Coverage на новом коде: lines ≥80% per-file; новый компонент добавляется в `coverage.include` vitest.config.
+- **R6.** Кодер НЕ утверждает: «CI зелёный» без ссылки на run; «контракт не сломан» без прогона contract; «миграция безопасна» без прогона на существующей БД.
+- **R7.** Отчёт — формат раздела 2, без новых MD.
 
-```typescript
-// БЫЛО (с AppContext):
-import { useApp } from '../store/AppContext';
+## 11. Полнота изменения: системный подход
 
-export default function MyComponent() {
-  const { state, dispatch } = useApp();
-  const products = state.ingredients;
-  
-  const handleCreate = () => {
-    dispatch({ type: 'ADD_INGREDIENT', payload: newProduct });
-  };
-}
+### Матрица сопряжённых слоёв
 
-// СТАЛО (с API клиентом):
-import { api } from '../api/client';
-import { useState, useEffect } from 'react';
+| Меняю | Проверить |
+|---|---|
+| DTO/контракт ответа | mockServer-форму, contract-тесты, типы фронта (`number` для id/денег в новом коде), e2e-ассерты |
+| Расчёт в SummaryService | by-days/shopping/person/kpi согласованность (инвариант сумм), mock-расчёт, contract-фикстуры |
+| Схема/миграция | JPA-сущность (validate), existing-DB прогон, TestDataIsolation-перенакат, сид-тесты CatalogIntegration |
+| Эндпоинт похода | ownership/IDOR-тест (чужой поход → 404), swagger, mock-роут, права ролей |
+| Продукт/рецепт (справочник) | каталожные фильтры `trip_id IS NULL`, usedIn-проверки, снепшот-копии не затронуты |
 
-export default function MyComponent() {
-  const [products, setProducts] = useState([]);
-  const [loading, setLoading] = useState(true);
-  
-  useEffect(() => {
-    loadProducts();
-  }, []);
-  
-  const loadProducts = async () => {
-    try {
-      setLoading(true);
-      const data = await api.get('/admin/products');
-      setProducts(data.content || data);
-    } catch (error) {
-      console.error('Failed to load products:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-  
-  const handleCreate = async (newProduct) => {
-    try {
-      await api.post('/admin/products', newProduct);
-      await loadProducts();
-    } catch (error) {
-      console.error('Failed to create product:', error);
-    }
-  };
-}
-```
+### Триггеры «если → то»
 
-**После миграции:**
-1. Убрать компонент из `excludedFiles` в `.eslintrc.cjs`
-2. Проверить `npm run lint` — должно быть 0 errors
-3. Проверить работу в режимах AUTO/FORCE_API/FORCE_MOCK
+- Новый эндпоинт → + mock-роут + contract-тест + ownership-тест + swagger-проверка.
+- Новая математика денег/ккал → эталон округлений ARCHITECTURE + unit-фикстуры + contract.
+- Новый компонент фронта → тесты + coverage include + дизайн-токены (не хардкод-цвета).
+- Правка сида каталога → обновление чисел в README/ARCHITECTURE и ожиданий CatalogIntegrationTest (счётчики сверять с БД-запросом, не хардкодить).
 
-### 9. Правила кодинга фич (R1-R7)
+## 12. Тест-гигиена (уроки аудита)
 
-#### R1. Тест до кода (red-green) — для любого бага и любой новой мате/логики
-1. Пишешь тест на новое поведение / на баг.
-2. Запускаешь ЛОКАЛЬНО на старом коде: `npm run test` (или `mvn -B -ntp test -Dtest=...`)
-3. Тест ДОЛЖЕН упасть. Если прошёл на старом коде — тест бесполезен, переписать.
-4. Только после этого пишешь код фичи/фикса.
-5. Снова локально: тест проходит.
-
-**Доказательство в отчёте:** строки «упал на старом» → «прошёл на новом» (вывод vitest/mvn).
-
-#### R2. Слой теста = где живёт изменение (не «хоть что-нибудь»)
-- чистая функция / математика (calc.ts, humanize, парсеры) → unit-тест (vitest)
-- поведение UI-компонента (даты, поля, таблицы, модалки, бейдж) → component-тест (RTL + vitest)
-- форма ответа API / DTO / эндпоинт → contract-тест (mock) + integration (бэк)
-- клиент / режимы / watchdog / фолбэк → component-тест (MODE-сьют)
-- миграция БД / Flyway → integration-тест (бэк)
-
-Если изменение затрагивает несколько строк — тестируешь каждый затронутый слой.
-
-#### R3. Фича не готова без своего теста
-DoD фичи = фича + тест по R2 + локально зелёные:
-```bash
-npm run lint   # 0 errors
-npm run test   # failed: 0
-npm run build  # success
-```
-Для бэка: `mvn -B -ntp test` (Failures: 0, Errors: 0)
-
-#### R4. Запрет глушить тесты без следа
-- `@Disabled` / `it.skip` / `@Ignore` — только со ссылкой на пункт в PLAN.md в той же строке.
-- Локальный страж (запускаешь перед пушем):
-  ```bash
-  grep -rnE "@Disabled|it\.skip|test\.skip|@Ignore" src backend/src
-  ```
-  Каждая находка без `// TODO PLAN.md: ...` = красный, чинить.
-
-#### R5. Coverage на новом коде
-- После vitest-изменений: `npx vitest run --coverage`
-- Порог lines ≥ 80% на `src/utils/**`, `src/api/**` и новых компонентах.
-- Legacy-страницы не душим — гейт только на зоне изменения.
-
-#### R6. Что кодер НЕ утверждает
-- Не писать «CI зелёный» / «regression исключена» — ты не видишь ран.
-- Формулировать так: «локально зелёно, red-green доказан, хеш <...>».
-- Финальную сверку с Actions делаю я (Олег).
-
-#### R7. Отчёт о работе (без новых MD)
-В ответе, не в файле:
-```
-Хеш коммита: <...>
-Локально: lint=0err, test=N passed/0 failed, build=ok, coverage=X%
-Red-green: <название теста> упал на старом → прошёл на новом
-Затронутые слои (R2): <перечислить>
-Обновил PLAN.md: да/нет (что перенёс)
-```
-
-### 10. Полнота изменения: системный подход
-
-**Инвариант:** Изменение = все слои, которые оно сопрягает, а не только тот, что в тикете.
-
-#### Матрица сопряжённых слоёв
-- **UI/экран** → DTO-поля, хуки клиента, unitLabel/humanize, loading/error/empty, PLAN.md
-- **DTO/ответ API** → TS-типы фронта, mock-ответ, contract-тест, интеграционные бэка, ARCHITECTURE.md (если контракт)
-- **Эндпоинт** → client.ts + mockServer.ts + contract-тест (три одновременно), SecurityConfig, PLAN.md
-- **Схема БД** → новая Vn__ (не правь применённую), entity, репо-запросы, сид, ARCHITECTURE.md
-- **Конфиг/env/pom/package** → Dockerfile, compose, workflow, README (те же ключи/порты/версии)
-- **Докер-контур** → application.yml (URL внутри сети), workflow docker-job, README, ARCHITECTURE.md
-- **Workflow** → локальная воспроизводимость, теги vs SHA (не генерировать SHA), README бейджи, PLAN.md
-- **Граница/слой/источник данных** → ARCHITECTURE.md обязателен, AGENTS.md (если правила), PLAN.md
-
-#### Триггеры «если → то»
-- новое/переименованное поле DTO → синхронизируй тип фронта + mock + contract; grep старого имени
-- новый эндпоинт → client.ts + mockServer.ts + contract-тест в одном коммите (одно без двух = рассинхрон)
-- изменение схемы → Vn__ + entity + сид + ARCHITECTURE.md; grep нового поля в migration
-- тронул конфиг/env/pom/package → открой Dockerfile, compose, оба workflow, README и сверь ключи/порты/версии
-- меняешь докер-контур или границу слоя → ARCHITECTURE.md в том же коммите
-- закрыл/начал фичу или нашёл регрессию → PLAN.md (статус/бэклог/постмортем), новый MD не создавать
-- меняешь `<repositories>`/зависимости Maven → flyway-repo и spring-release снаружи недоступны (не browseable / JS / 401): не добавляй репы «на глаз», не поломай существующие, сверяй локально через `mvn dependency:tree`
-
-#### Ритуал перед пушем (локально, без GitHub)
-1. `npm run lint` (0 err) && `npm run test` (failed 0) && `npm run build` (ok)
-   `cd backend && mvn -B -ntp test` (Failures 0, Errors 0)
-2. grep нового имени/эндпоинта/поля по src и backend/src — сверить со строками матрицы
-3. grep нового env-ключа/порта/сервиса по .github, backend, compose, README
-4. `grep -rnE "@Disabled|it\.skip|test\.skip|@Ignore"` — находки только с TODO-ссылкой в PLAN.md
-5. PLAN.md актуален; ARCHITECTURE.md обновлён, если менялся контракт/граница/слой/докер; README обновлён, если менялся запуск/стек/переменные
-
-#### Чего НЕ делать
-- ❌ Не считать задачу закрытой по одному файлу из тикета.
-- ❌ Не добавлять эндпоинт/поле в один слой, оставляя другие рассинхроненными.
-- ❌ Не править применённую миграцию вместо создания новой.
-- ❌ Не создавать новые MD-файлы — статус в PLAN.md, правила в AGENTS.md, границы в ARCHITECTURE.md.
-- ❌ Не утверждать «CI зелёный» (ты не видишь ран) — приноси вывод локальных команд + хеш.
-
-### 10. Проверка MD-файлов в CI
-
-**Добавить в CI job для проверки MD-файлов:**
-
-```yaml
-- name: Check MD files
-  run: |
-    count=$(git ls-files '*.md' | grep -v '^backend/README.md$' | grep -v '^provisions/design-pack/' | wc -l)
-    if [ "$count" -ne 4 ]; then
-      echo "::error::Expected 4 MD files (README.md, ARCHITECTURE.md, PLAN.md, AGENTS.md), found $count"
-      git ls-files '*.md'
-      exit 1
-    fi
-```
-
-**Через неделю** перевести в blocking (exit 1).
-
-### 10. Документация
-
-**Правила документирования:**
-
-1. **README.md** — только запуск, стек, ссылки
-2. **ARCHITECTURE.md** — архитектура, слои, расчёты, контракт
-3. **PLAN.md** — единственный живой статус, бэклог, баги
-4. **AGENTS.md** — этот файл (правила для агентов)
-
-**Запрещено:**
-- Дублировать информацию между файлами
-- Создавать новые MD-файлы
-- Писать длинные отчёты в файлах
-
-**Разрешено:**
-- Обновлять существующие файлы из белого списка
-- Добавлять комментарии в код
-- Создавать документацию в виде комментариев
+- Интеграционные тесты — только `@ContainerSuite`/`LocalPgFallback` (или Testcontainers); голый `localhost:5432` в тестах запрещён (урок EconomicConsistencyTest).
+- Тесты не зависят от коллации/порядка имён: выбор целей структурный (первый подходящий по форме), а не по точному имени сида; счётчики каталога сверять с независимым SQL-запросом.
+- Payload-ы тестов соответствуют актуальным DTO (обязательные поля: `categoryId` у продукта, `pieceWeightG` для PCS/PACK с kcal).
+- Кириллица в тестах: файлы в UTF-8, сравнения строк — через данные ответа, не через литералы, где можно.
 
 ## Checklist перед коммитом
 
-- [ ] Backend тесты проходят (`mvn -B -ntp test`)
-- [ ] Frontend lint проходит (`npm run lint`)
-- [ ] Frontend build проходит (`npm run build`)
-- [ ] Frontend тесты проходят (`npm run test`)
-- [ ] Нет новых MD-файлов вне белого списка
-- [ ] Нет выдуманных SHA для GitHub Actions
-- [ ] Отчёт в формате Commit/Workflow run/статусы
-- [ ] Ссылка на зелёный workflow run
+- [ ] Ритуал раздела 6 зелёный (с указанием baseline-красных)
+- [ ] Новый код покрыт (R5), глушилок без TODO нет (R4)
+- [ ] Mock-паритет и contract для затронутых эндпоинтов
+- [ ] Миграции: новый номер, повторный прогон безопасен, existing-DB проверена
+- [ ] MD: правки только в белом списке; числа/статусы синхронизированы (README/ARCHITECTURE/PLAN)
+- [ ] Отчёт по форме раздела 2 приложен к PR
 
 ## Примеры
 
 ### Правильный отчёт
 
 ```
-Commit: abc123def456
-Workflow run: https://github.com/DesertDogFish/meal-provisioning-ai/actions/runs/12345
-backend: passed
+Commit: 8b88fc55
+Workflow run: https://github.com/.../runs/...
+backend: passed (baseline: EconomicConsistencyTest red, PLAN CI-1)
 frontend: passed
-docker: passed
-security: warning (Semgrep non-blocking)
+docker: failed (baseline CI-2, логи запрошены)
+security: warning (trivy non-blocking, 0 CRITICAL unfixed)
 test: passed
 
-Исправлены 11 ошибок компиляции в backend тестах (обновлены конструкторы SummaryService, IngredientRequest, RecipeRequest). Удалены unused imports в 8 frontend файлах. Добавлены исключения для немигрированных компонентов в .eslintrc.cjs.
+V20 снепшоты: миграция с бэкфилом, snapshot-сервис, trip-scoped /recipes и /prices.
+Проверено: SnapshotIsolationIntegrationTest 3/3, mock-паритет, existing-DB прогон.
+Осталось: T6 (фронт на /summary), CI-2 логи раннера.
 ```
 
 ### Неправильный отчёт
 
-```
-❌ Создан файл CI_FIX_REPORT.md с подробным описанием
-❌ Нет ссылки на workflow run
-❌ Нет статусов джобов
-❌ Длинное описание на 10 страниц
-```
+«Всё готово, тесты зелёные, можно мерджить» (без ссылок, без baseline, без списка проверок).
 
 ## Контакты
 
-Если есть вопросы по правилам — обновить этот файл (AGENTS.md).
+Владелец репозитория — DesertDogFish; дизайн — владелец DESIGN_MIGRATION.md; архитектурные споры фиксируются в PLAN.md до реализации, а не в коде.
 
-Если нужно добавить новую фичу — создать тикет в PLAN.md.
 
-Если найден баг — добавить в PLAN.md#known-bugs.

@@ -29,7 +29,12 @@ module.exports = {
             { group: ['**/mockSeed'], message: 'Запрещено вне src/api/' }
           ]
         }],
-        'react-refresh/only-export-components': 'off'
+        'react-refresh/only-export-components': 'off',
+        // DESIGN_MIGRATION 2.7: запрет hex-литералов в компонентах
+        '@typescript-eslint/no-restricted-syntax': ['error', {
+          selector: 'Literal[value=/^#[0-9a-fA-F]{3,8}$/]',
+          message: 'Используйте var(--...) из design-pack, а не hex-литералы'
+        }]
       }
     }
   ],

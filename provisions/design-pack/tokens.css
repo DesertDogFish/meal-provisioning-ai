@@ -54,6 +54,11 @@
     radial-gradient(900px 480px at 8% 108%, rgba(87, 199, 184, .10), transparent 60%),
     var(--bg-0);
 
+  /* Витрина-карточки (DashboardPage) — тёмная тема */
+  --card-hull-dark: #2B4A6F;
+  --card-deep-dark: #33465e;
+  --card-forest-dark: #1d3326;
+
   /* Форма */
   --r-sm: 12px;
   --r-md: 18px;
@@ -135,3 +140,4 @@
 .pv-text-acc  { color: var(--amber-300); }
 .pv-text-water{ color: var(--wave-300); }
 .pv-focus:focus-visible { outline: 2px solid var(--amber-500); outline-offset: 2px; }
+

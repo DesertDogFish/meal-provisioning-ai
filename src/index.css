@@ -30,13 +30,14 @@
      В dark — прежние значения (визуал не меняется); в light — переопределены
      ниже по data-theme, чтобы поверхности не оставались «написанными под dark» (п.1.4).
      Значения — только отсылающие к токенам наслоения color-mix (hex вне токенов запрещён). */
-  --card-hull: linear-gradient(180deg, #2B4A6F, #0B1626);
-  --card-deep: linear-gradient(180deg, #33465e, #101c2b 70%);
-  --card-forest: linear-gradient(180deg, #1d3326, #0c1512);
+  --card-hull: linear-gradient(180deg, var(--card-hull-dark), var(--bg-0));
+  --card-deep: linear-gradient(180deg, var(--card-deep-dark), var(--bg-0) 70%);
+  --card-forest: linear-gradient(180deg, var(--card-forest-dark), var(--bg-0));
 }
 
 /* Светлая тема: те же роли — светлыми поверхностями пакета (bg-2/bg-3/snow) */
 :root[data-theme="light"] {
+  color-scheme: light;
   --card-hull: linear-gradient(180deg, color-mix(in srgb, var(--wave-400) 18%, var(--bg-2)), var(--bg-1));
   --card-deep: linear-gradient(180deg, var(--bg-3), var(--bg-1) 70%);
   --card-forest: linear-gradient(180deg, color-mix(in srgb, var(--success) 14%, var(--bg-2)), var(--bg-1));
@@ -409,6 +410,11 @@ input[type=number]::-webkit-outer-spin-button {
   filter: invert(0.75);
   opacity: 0.75;
   cursor: pointer;
+}
+
+:root[data-theme="light"] input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: none;
+  opacity: 1;
 }
 
 input[type="date"]::-webkit-calendar-picker-indicator:hover {

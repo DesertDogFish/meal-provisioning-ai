@@ -195,7 +195,7 @@ export default function RecipesPage() {
           <button
             onClick={openCreate}
             className="mt-3 px-5 py-2.5 rounded-full font-bold flex items-center gap-2"
-            style={{ background: 'var(--grad-brand)', color: '#221204' }}
+            style={{ background: 'var(--grad-brand)', color: 'var(--on-fire)' }}
           >
             <Plus size={16} /> Создать блюдо
           </button>
@@ -387,7 +387,7 @@ export default function RecipesPage() {
                     )}
                     <button
                       className="px-4 py-2 rounded-full text-xs font-bold"
-                      style={{ background: 'var(--grad-brand)', color: '#221204' }}
+                      style={{ background: 'var(--grad-brand)', color: 'var(--on-fire)' }}
                     >
                       В меню
                     </button>

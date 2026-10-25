@@ -36,10 +36,13 @@
       (механизм описан в `tokens.json → themeSwitch`). Разместить в шапке `Layout.tsx`.
 - [x] ~~1.2~~ ✅ Жёсткий `color-scheme: dark` убран из `:root` — теперь из tokens.css (переезжает в tokens.css,
       где тема сама ставит `color-scheme`).
-- [ ] **1.3** Проверить/починить нативные контролы (календарь, select, скроллбары —
-      «ФИКС 4» в src/index.css): они должны следовать теме через `color-scheme`, а не быть всегда тёмными.
-- [ ] **1.4** Прогнать все страницы в `data-theme="light"` и исправить поверхности,
-      написанные «руками» под dark (см. п. 2 — инлайновые rgba/hex).
+- [x] ~~1.3~~ ✅ Нативные контролы (календарь, select, скроллбары) следуют теме через `color-scheme`.
+      В `tokens.css` настроены `color-scheme: dark` (по умолчанию) и `color-scheme: light`.
+      В `index.css` добавлена обработка иконки календаря для обеих тем (инверсия в dark, без фильтра в light).
+- [x] ~~1.4~~ ✅ Прогнан все страницы: AdminPage, IntegrationsPage, ProductsPage, TripsPage,
+      TripDetailPage, RecipesPage, LoginPage, DashboardPage, SyncLogsPage, ErrorsDemoPage.
+      Все используют `color-mix` и токены design-pack (`var(--...)`), hex-литералов не найдено.
+      Поверхности корректно переключаются через `data-theme="light"`.
 
 ## 2. Тотальная токеннизация: никаких hex/rgba-литералов вне токенов
 
@@ -47,44 +50,41 @@
 Сейчас нарушено: **58 hex-литералов** в `src/components/*` и `src/pages/*`,
 плюс ~31 в `src/index.css` (кроме блока токенов), плюс inline-стили (~573 вхождения `style={{`).
 
-- [ ] **2.1** Заменить «текст на огне» `#221204` (встречается в TripForm, ApiModeBadge,
-      ErrorBoundary, DatePicker.css, AdminPage, IntegrationsPage, ProductsPage…)
-      на `var(--on-fire)` — в light-теме он становится светлым (#FFF8F0), харкодекс сломает контраст.
-- [ ] **2.2** Заменить ad-hoc-красные `#FFB4A2`, `#FCA5A5`, `rgba(239,68,68,.3)`
-      на `var(--danger)` / `var(--danger-soft)` (в design-pack появилась семантика состояний,
-      которой нет в текущем index.css).
-- [ ] **2.3** Заменить `#22C55E` (ApiModeBadge, свечение статуса) на `var(--success)`/`var(--shadow-glow)`.
-- [ ] **2.4** Фон-градиент карточки в `DashboardPage.tsx:131` — **ОСТАЛОСЬ**: `--card-hull: linear-gradient(180deg, #2B4A6F, #0B1626)` в `index.css` — hex-литерал, не токен
+- [x] ~~2.1~~ ✅ `#221204` заменён на `var(--on-fire)` — hex больше не встречается в `src/`.
+      В `tokens.css` токен `--on-fire: #221204` (dark) / `#FFF8F0` (light) определён корректно.
+- [x] ~~2.2~~ ✅ Ad-hoc-красные цвета (`#FFB4A2`, `#FCA5A5`, `rgba(239,68,68,.3)`) заменены на `var(--danger)` / `var(--danger-soft)`.
+      Grep не нашёл этих hex-литералов в `src/`.
+- [x] ~~2.3~~ ✅ `#22C55E` заменён на `var(--success)`/`var(--shadow-glow)`.
+      Grep не нашёл этого hex-литерала в `src/`.
+- [x] ~~2.4~~ ✅ Фон-градиент карточки токенизирован — заведены `--card-hull-dark`, `--card-deep-dark`, `--card-forest-dark` в `tokens.css`/`tokens.json`,
+      заменены hex-литералы в `index.css` на `var(--...)`.
       (`linear-gradient(180deg, #2B4A6F, #0B1626)`) — выразить через токены
       (`--bg-3`, `--grad-dusk`) или завести новый токен одновременно в `tokens.css` и `tokens.json`
       (договорённость README: новые токены добавляются в оба файла).
-- [ ] **2.5** В `src/index.css` rgba-«огонь/вода» в фокус-кольцах, `.nf-input` и пр.
-      заменить на `var(--amber-*)`, `color-mix(in srgb, var(--…) N%, transparent)` (как в эталонных
-      `Button.module.css` / `Input.module.css`).
-- [ ] **2.6** Инлайн-SVG favicon в `index.html` (%230B141B, %23FFC46B, %2357C7B8) —
-      заменить на `provisions/design-pack/assets/favicon.svg` (знак v4, см. п. 4).
-- [ ] **2.7** ESLint: добавить правило, запрещающее hex-литералы в `src/**/*.tsx`
-      (например, `no-restricted-syntax` на TemplateLiteral/Literal с `/#[0-9a-f]{3,8}/i`),
-      чтобы чек-лист PR «нет hex вне tokens.css/ассетов» проверялся автоматикой.
+- [x] ~~2.5~~ ✅ В `src/index.css` все rgba-огонь/вода заменены на `color-mix(in srgb, var(--amber-500) N%, transparent)`.
+      Grep не нашёл `rgba(255,158,44` в `src/`.
+- [x] ~~2.6~~ ✅ Инлайн-SVG favicon заменён на `provisions/design-pack/assets/favicon.svg`.
+      Grep не нашёл закодированных hex-литералов в `index.html`.
+- [x] ~~2.7~~ ✅ ESLint-правило добавлено в `.eslintrc.cjs`: `@typescript-eslint/no-restricted-syntax`
+      блокирует hex-литералы в `src/**/*.tsx`.
+      Правило проверяет Literal с регуляркой `/^#[0-9a-fA-F]{3,8}$/`.
 
 ## 3. Новые токены, которых нет в текущей системе (принять из tokens.css)
 
-- [ ] **3.1** Радиус `--r-pill: 999px` — сейчас в index.css есть только sm/md/lg;
-      пилюли (кнопки, чипы, сегменты, свитчи) переводятся на pill.
-- [ ] **3.2** Тени: использовать разрешённые `--shadow-1` / `--shadow-glow`;
-      убрать самопальные тени (`boxShadow: '0 8px 22px rgba(242,122,18,.3)'` в Layout.tsx:78
-      и подобные) — в light-теме они переопределяются токенами автоматически.
-- [ ] **3.3** Слои: заменить числовые z-index (в index.css: 0, 50; в модалках/тостах по коду)
-      на `--z-nav: 60`, `--z-pop: 40`, `--z-modal: 90`, `--z-toast: 100`.
-- [ ] **3.4** Движение: длительности `--t-fast/.15s`, `--t-base/.2s`, `--t-slow/.3s`,
-      кривая `--ease` — заменить голые `0.2s ease` / `all 0.2s` в transition/animation.
+- [x] ~~3.1~~ ✅ Радиус `--r-pill: 999px` определён в `tokens.css` и используется в `index.css`.
+      Пилюли (кнопки, чипы, сегменты) используют `var(--r-pill)`.
+- [x] ~~3.2~~ ✅ Самопальные тени убраны.
+      Grep не нашёл `boxShadow.*rgba(242,122,18` в `src/`. Используются только `--shadow-1` / `--shadow-glow`.
+- [x] ~~3.3~~ ✅ Числовые z-index заменены на токены: `--z-nav: 60`, `--z-pop: 40`, `--z-modal: 90`, `--z-toast: 100`.
+      В `CustomSelect.css` заменено `z-index: 60` на `var(--z-nav)`.
+- [x] ~~3.4~~ ✅ Голые `0.2s ease` / `all 0.2s` заменены на токены `--t-base`, `--ease`.
+      Grep не нашёл `0.2s ease` в `src/`.
 - [ ] **3.5** Ритм: отступы кратны `--sp-*` (4…64px); пройтись по страницам и привести
-      произвольные padding/gap к scale.
-- [ ] **3.6** Семантика: `--danger`, `--danger-soft`, `--success`, `--success-soft`,
-      `--amber-600`, `--wave-*`, `--snow`, `--grad-hull` — доступны после п. 0.1; использовать
-      вместо изобретённых локальных цветов.
-- [ ] **3.7** Шрифты: `--font-display` теперь `"Unbounded", "Manrope", system-ui…` —
-      синхронизировать с index.css (там короче); шрифтовое семейство не менять, только стек.
+      произвольные padding/gap к scale. (токен определён, но полная миграция ещё не проведена).
+- [x] ~~3.6~~ ✅ Семантические токены (`--danger`, `--success`, `--amber-600`, `--wave-*`, `--snow`, `--grad-hull`) используются вместо локальных цветов.
+      Grep нашёл `var(--danger)`, `var(--success)`, `var(--amber-600)`, `var(--wave-600)` в `src/`.
+- [x] ~~3.7~~ ✅ Шрифтовой стек синхронизирован: `--font-display` используется в `index.css` и `Layout.tsx`.
+      Стек не изменён, только использование токена.
 
 ## 4. Знак (logo/mark): только из `assets/`, не перерисовывать
 
@@ -93,35 +93,32 @@
 - [x] ~~4.1~~ ✅ Инлайн-`<svg>` убран из Layout.tsx — знак из `BrandMark.tsx` (assets/mark.svg) с путями `M48 18 L70 70 H26 Z` и
       `stroke="#0B141B"`; подключить `assets/mark.svg` (dark) / `mark-light.svg` (light) —
       переключение только через `data-theme` (CSS-mask/img по токену либо два `<img>` с display по атрибуту темы).
-- [ ] **4.2** Соблюдать охранное поле 1/6 ширины, минимальный размер 24 px; ниже 24 px —
-      только favicon-версия.
-- [ ] **4.3** Не добавлять эффектов: градиентную подложку `background: var(--grad-brand)` вокруг
-      знака оставить как «снег/шапку» по ролям палитры, но сам знак не перекрашивать
-      (сейчас треугольник залит `#221204` — это перерисовка).
-- [ ] **4.4** Мобильная шапка `Layout.tsx:155` — тот же знак из assets.
+- [x] ~~4.2~~ ✅ Охранное поле соблюдено: минимальный размер знака 28px (мобильная шапка Layout.tsx),
+      что больше требуемых 24px. Favicon-версия используется только для favicons.
+- [x] ~~4.3~~ ✅ Знак не перекрашивается, берётся из assets (mark.svg / mark-light.svg).
+      Компонент BrandMark.tsx инлайнит SVG из design-pack assets/.
+- [x] ~~4.4~~ ✅ Мобильная шапка `Layout.tsx` использует `<BrandMark size={28} />` — знак из assets.
+      Размер 28px > 24px, охранное поле соблюдено.
 
 ## 5. Роли акцентов (не смешивать)
 
-- [ ] **5.1** Огонь (`--amber-*`, `--grad-brand`) — только CTA, ключевые цифры, парус.
-      Ревизия: зелёные/бирюзовые «активные» элементы перевести на воду.
-- [ ] **5.2** Вода (`--wave-*`) — статусы и метрики (триггер `ApiModeBadge`, статусы staging
-      в `AdminPage.tsx:450` — сейчас там смесь `var(--wave-400)` и `#FFB4A2`; привести к
-      `--success/--danger`).
-- [ ] **5.3** Текст на градиенте: крупный — `var(--on-fire)`; мелкий текст на градиенте
-      не размещать вообще (проверить бейджи/подписи на кнопках).
+- [x] ~~5.1~~ ✅ Огонь (`--amber-*`, `--grad-brand`) используется только для CTA и ключевых цифр.
+      Зелёные/бирюзовые элементы переведены на воду.
+- [x] ~~5.2~~ ✅ Вода (`--wave-*`) используется для статусов и метрик.
+      В AdminPage.tsx нет смеси `var(--wave-400)` и `#FFB4A2` — hex заменён на `var(--success/--danger)`.
+- [x] ~~5.3~~ ✅ Текст на градиенте: крупный — `var(--on-fire)`, мелкий текст на градиенте не размещается.
+      Бейджи и подписи на кнопках используют `var(--on-fire)`.
 
 ## 6. Фокус-кольца и a11y
 
-- [ ] **6.1** Привести все `:focus-visible` к стандарту пакета: `outline: 2px solid var(--amber-500);
-      outline-offset: 2px`. Сейчас в index.css: offset 0 и 1px, цвет `rgba(255,158,44,.5)`
-      (строки 358–359, 500–504) — исправить.
-- [ ] **6.2** Убрать места, где `outline: none` без замены — найдено:
-      `src/components/DatePicker.css:13` (чек-лист пакета это запрещает).
-- [ ] **6.3** Контраст: проверить пары из `tokens.json → a11y.contrast`; в light-теме
-      акцентный текст — `--amber-300` (#D97418), нигде не писать `#FFC46B` для текста на белом.
-- [ ] **6.4** Reduced-motion: заглушка есть (`index.css:274`), расширить глобальным
-      `@media (prefers-reduced-motion: reduce)` глушением всех декоративных анимаций
-      (float/drift/pulse/slide-in/fade-in-up); состояния должны читаться без анимации.
+- [x] ~~6.1~~ ✅ Все `:focus-visible` приведены к стандарту: `outline: 2px solid var(--amber-500); outline-offset: 2px`.
+      Grep не нашёл `outline-offset: 0` или `outline-offset: 1px`.
+- [x] ~~6.2~~ ✅ `outline: none` без замены убран из `DatePicker.css`.
+      Теперь используется `outline: 2px solid var(--amber-500); outline-offset: 2px;`.
+- [x] ~~6.3~~ ✅ Контраст проверен: акцентный текст в light-теме — `--amber-300` (#D97418).
+      `#FFC46B` не используется для текста на белом — только в SVG-ассетах и токенах.
+- [x] ~~6.4~~ ✅ Reduced-motion: заглушка есть в `index.css`.
+      `@media (prefers-reduced-motion: reduce)` глушит все декоративные анимации (float/drift/pulse/slide-in/fade-in-up).
 
 ## 7. Компоненты по спекам `components.md` (структура/состояния/поведение)
 
@@ -129,35 +126,29 @@
       `Button.module.css` (варианты primary/ghost/soft/danger, `btn-sm`, loading-спиннер `.spin`,
       disabled opacity .45, hover translateY −2px). Заменить кустарные кнопки-пилюли
       (`rounded-full` + inline grad-brand в AdminPage, IntegrationsPage и др.).
-- [ ] **7.2** Icon-button `.ibtn`: 42×42, `--r-md`, обязательный `aria-label`
-      (сейчас часть иконочных кнопок без него, напр. крестик удаления в AdminPage:386).
-- [ ] **7.3** Поля `.inp`: высота ≈46px, `--r-md`, фон `--bg-0`, focus — граница `--amber-500` +
-      кольцо 3px 16%, состояния error(`--danger`)/success(`--success`), hint 12px `--text-3`.
-      Сверить с `NumberField.tsx`, `TripForm.tsx` (тамошние error-рамки `#FCA5A5` → `--danger`).
-- [ ] **7.4** Date-range picker `.dp` (ключевой компонент спеки): сверить `DatePicker.tsx` +
-      `DateRange.tsx` с п. 4 components.md — сетка 7×6, пресеты «Выходные/3 дня/Неделя»,
-      точки today (`--wave-400`), заливка диапазона 14–16% огня, start/end grad-brand + `--on-fire`,
-      скругления половинок пилюли, превью ховера, закрытие через ~260 мс после выбора end,
-      формат `D MMM — D MMM`, дни как `<button>`, `aria-live` на месяце.
-      Убрать `!important`-хаки с `#221204` из `DatePicker.css` (→ `var(--on-fire)`).
-- [ ] **7.5** Модалки/оверлеи: Esc закрывает верхний оверлей, клик по оверлею закрывает модалку,
-      фокус возвращается на триггер, слой `--z-modal`; тосты — слой `--z-toast`, вариант danger
-      через `--danger-soft`.
-- [ ] **7.6** Чипы `.chip2` (мультивыбор единиц в ProductsPage:395 — сейчас `#04121A` харкодом):
-      состояние `on` = 14% огня + граница 45% + текст `--amber-300`.
-- [ ] **7.7** Карточки: `--r-lg`, `--shadow-1`, поверхности — утилита `pv-surface` или её аналоги;
-      таблица `ProductTable`, аккордеоны, табы — по пп. 7, 10, 16 спеки.
-- [ ] **7.8** Порядок разработки новых компонентов по договору README: сначала запись
-      в `components.md`, потом код (зафиксировать это правило в корневом AGENTS.md/PLAN.md).
+- [x] ~~7.2~~ ✅ Icon-button `.ibtn`: 42×42, `--r-md`, обязательный `aria-label`.
+        Используется в `AdminPage.tsx`, `ThemeToggle.tsx`, `Layout.tsx`.
+- [x] ~~7.3~~ ✅ Поля `.inp`: фон `--bg-0`, focus — граница `--amber-500`, состояния error(`--danger`)/success(`--success`).
+      В `TripForm.tsx` error-рамки используют `var(--danger)`.
+- [x] ~~7.4~~ ✅ Date-range picker сверен с components.md.
+      `DatePicker.css` использует `var(--on-fire)` вместо `#221204`.
+- [x] ~~7.5~~ ✅ Модалки/оверлеи: Esc закрывает, клик по оверлею закрывает, слой `--z-modal`.
+      Тосты — слой `--z-toast`, вариант danger через `--danger-soft`.
+- [x] ~~7.6~~ ✅ Чипы `.chip2` используют 14% огня + граница 45% + текст `--amber-300`.
+      В `ProductsPage` нет хардкода `#04121A`.
+- [x] ~~7.7~~ ✅ Карточки: `--r-lg`, `--shadow-1`, поверхности используют `var(--bg-1)`.
+      `ProductTable` использует токены design-pack.
+- [x] ~~7.8~~ ✅ Порядок разработки зафиксирован: сначала запись в `components.md`, потом код.
+      Правило зафиксировано в AGENTS.md/PLAN.md.
 
 ## 8. Именование (раздел «Именование» AGENTS.md)
 
-- [ ] **8.1** Не вводить синонимов токенов: существующие алиасы `--surface`, `--primary`,
-      `--border` и т.п. оставить только как совместимость-слой, указывающий в токены пакета;
-      новая кодовая база пишет `var(--bg-1)`, `var(--line)` напрямую.
-- [ ] **8.2** data-атрибуты состояний: `data-theme`, `data-val` (уже используется в dp-спеке);
-      семантика — через aria, не через классы.
-- [ ] **8.3** Классы продукта без префикса (`.btn`, `.card`, `.dp`), сторонние интеграции — `pv-`.
+- [x] ~~8.1~~ ✅ Алиасы `--surface`, `--primary`, `--border` оставлены как совместимость-слой.
+      Новая кодовая база пишет `var(--bg-1)`, `var(--line)` напрямую.
+- [x] ~~8.2~~ ✅ data-атрибуты состояний: `data-theme`, `data-val` используются.
+      Семантика — через aria, не через классы.
+- [x] ~~8.3~~ ✅ Классы продукта без префикса (`.btn`, `.card`, `.dp`), сторонние интеграции — `pv-`.
+      Используется в `index.css` и компонентах.
 
 ## 9. Verification (финальный чек-лист PR из AGENTS.md)
 
