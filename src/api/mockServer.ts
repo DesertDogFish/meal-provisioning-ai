@@ -949,9 +949,11 @@ export const mockServer = {
     const keepExtra = new Set<string>();
     const keepExcluded = new Set<string>();
 
-    // Desired-набор замен собираем ДО основного цикла: он определяет, какие
-    // from-позиции «замещаются» (их SCALE-правки снимаются — количество
-    // переносит замена, §3), и не зависит от порядка записей в list.
+    // Desired-набор замен собираем ДО основного цикла. §3: если позиция уже
+    // имеет живую SCALE-правка (from===to) и PUT добавляет замену этого же from
+    // на другой to — это ПЕРЕНОС масштабированного количества на to, а не снятие
+    // SCALE: desired-строка такого from остаётся SCALED (см. liveScaleFroms ниже),
+    // SCALE-правка сохраняется, replacement переносит derived×ratio на to.
     type DesiredSub = { from: string; to: string; ratio: number };
     const desiredMap = new Map<string, DesiredSub>();
     const takenTos = new Set<string>();
@@ -962,6 +964,24 @@ export const mockServer = {
       if (takenTos.has(to)) continue; // to уже занят другой заменой
       takenTos.add(to);
       desiredMap.set(from, { from, to, ratio: Number(dto.ratio ?? 1) || 1 });
+    }
+    // Живые SCALE-правки (снимок ДО любых удалений этого PUT):
+    const liveScaleFroms = new Set<string>(
+      editsOf()
+        .filter(s => s.scale === true && s.fromIngredientId != null &&
+          String(s.fromIngredientId) === String(s.toIngredientId))
+        .map(s => editIngredientKey(String(s.fromIngredientId))),
+    );
+    // §3: замена от масштабированной позиции НЕ должна попадать в cleanup-сканы,
+    // снимающие SCALE (from===to) «замещаемых» позиций — иначе потеряем переносимое
+    // количество (0,2 → 0,1). Выносим такие замены из desiredMap в substFromScaled:
+    // их SUBST-правка upsert'ится отдельно (keptFroms/substFromScaled ниже).
+    const substFromScaled = new Map<string, DesiredSub>();
+    for (const [from, d] of [...desiredMap.entries()]) {
+      if (liveScaleFroms.has(from)) {
+        desiredMap.delete(from);
+        substFromScaled.set(from, d);
+      }
     }
     const desiredSubs = [...desiredMap.values()];
 
@@ -1004,9 +1024,18 @@ export const mockServer = {
     // цикла, по keep*-множествам (см. ниже). Здесь только предварительная чистка
     // дублей SUBST и конфликтующих SCALE.
 
-    for (const it of items) {
+    // §3: liveScaleFroms/desiredMap уже вычислены выше (до cleanup-скана).
+    for (const src of items) {
+      let it = { ...src }; // копия: допускаем нормализацию state ниже (RECIPE→SCALED при переносе замены)
       const ingId = String(it.ingredientId);
-      const st = String(it.state);
+      let st = String(it.state);
+      if (st === 'RECIPE' && liveScaleFroms.has(editIngredientKey(ingId)) && substFromScaled.has(editIngredientKey(ingId))) {
+        // извлечение scale-ratio из живой SCALE-правки для сохранения SCALED-строки
+        const sc = editsOf().find(s => s.scale === true && s.fromIngredientId != null &&
+          String(s.fromIngredientId) === String(s.toIngredientId) &&
+          editIngredientKey(String(s.fromIngredientId)) === editIngredientKey(ingId));
+        if (sc) { it = { ...it, state: 'SCALED', ratio: sc.ratio }; st = 'SCALED'; }
+      }
       if (st === 'SCALED') {
         const ingKey = editIngredientKey(ingId); // правки храним под каталожным id (composition-расчёты идут по базовому рецепту)
         // §3: если этот же from заменяется на другой to — SCALE-правка НЕ нужна
@@ -1076,25 +1105,12 @@ export const mockServer = {
     const isSubst = (s: MockSubstitution) =>
       !s.added && !s.removed && s.fromIngredientId != null && s.toIngredientId != null &&
       String(s.fromIngredientId) !== String(s.toIngredientId);
-    // §4.2: одна активная замена на from-ингредиент (в рамках рецепта). Дедуп
-    // делаем ПО ИДЕНТИФИКАТОРУ from, а не «удаляем все»: при идемпотентном
-    // повторе batch PUT первая идентичная desired-правка остаётся живой (её id
-    // возвращается в substitutions — паритет с бэкендом, где PUT делает upsert),
-    // а лишние дубли снимаются. Прочие SUBST (изменённый to или отсутствие в
-    // desired) удаляются полностью.
+    // §3: desiredMap уже НЕ содержит замен от позиций с live SCALE (они вынесены
+    // в substFromScaled), поэтому SCALE-правки в основном cleanup не снимаются.
     const keptFroms = new Set<string>();
-    for (const s of editsOf().filter(x => isSubst(x) || x.scale === true)) {
+    for (const s of editsOf().filter(x => isSubst(x))) {
       const sFrom = editIngredientKey(String(s.fromIngredientId));
       const sTo = s.toIngredientId == null ? null : editIngredientKey(String(s.toIngredientId));
-      if (s.scale && String(s.fromIngredientId) === String(s.toIngredientId)) {
-        // SCALE-правка (from===to): если этот же from заменяется на другой to,
-        // SCALE снимается — количество переносится заменой (§3), state наследует
-        // SCALED из scaleRatios. Если в desired нет замены с таким from — SCALE
-        // остаётся (обычный cleanup ниже его не тронет: он в keepScaled).
-        const substTarget = desiredMap.get(sFrom);
-        if (substTarget && substTarget.to !== sFrom) removeEdit(s);
-        continue;
-      }
       const target = sTo == null ? undefined : desiredMap.get(sFrom);
       if (target && target.to === sTo && !keptFroms.has(sFrom)) {
         keptFroms.add(sFrom); // upsert: существующая правка уже соответствует desired
@@ -1102,6 +1118,9 @@ export const mockServer = {
       }
       removeEdit(s);
     }
+    // Замена ОТ масштабированной позиции: сама SCALE-правка остаётся живой
+    // (её from обнуляется в build через replacements), а SUBST from→to записывается
+    // upsert'ом — при идемпотентном повторе существующая идентичная правка сохраняется.
     for (const d of desiredSubs) {
       if (keptFroms.has(d.from)) continue;
       list.push({
