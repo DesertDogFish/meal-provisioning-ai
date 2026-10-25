@@ -285,8 +285,13 @@ public class SummaryService {
         // FIX P1 (аудит): раньше findEffectivePrice вызывался внутри цикла по каждому
         // ингредиенту — N+1. Теперь плановые цены на дату окончания грузятся одним пакетным
         // запросом DISTINCT ON; оверрайды и так уже в памяти (getAllOverrides).
+        // FIX V20/SNAPSHOT-02: «план» похода заморожен на дате создания блюда (copy-on-write),
+        // поэтому базовый срез берём на startDate (замораживалась цена, действовавшая к моменту
+        // addMeal), а не на endDate — иначе поздняя глобальная цена просачивалась в плановую
+        // стоимость снепшота (CI: expected 414.25 but was 1000.0). Для походов без изменения
+        // цен в окне [startDate, endDate] результат идентичен прежнему.
         Map<Long, IngredientPrice> plannedPricesByIngredient = loadLatestPrices(
-                aggregation.keySet(), trip.getEndDate());
+                aggregation.keySet(), trip.getStartDate());
 
         // FIX Known Bug #1: ценовые ряды нужны только тем ингредиентам, чей срез на endDate
         // датируется позже startDate (иначе одна и та же цена действовала все дни — поправка
@@ -454,7 +459,10 @@ public class SummaryService {
             }
         }
 
-        LocalDate rangeEnd = trip.getEndDate();
+        // FIX V20/SNAPSHOT-02: базовый срез — на startDate (цена, действовавшая к моменту
+        // addMeal/заморозки), а не endDate; спуск по ряду history даёт цену для каждой даты
+        // внутри похода. См. комментарий у plannedPricesByIngredient выше.
+        LocalDate rangeEnd = trip.getStartDate();
         Map<Long, IngredientPrice> basePrices = loadLatestPrices(allIngredientIds, rangeEnd);
         Map<Long, List<IngredientPrice>> priceSeries = new HashMap<>();
         if (!allIngredientIds.isEmpty()) {

@@ -187,16 +187,15 @@ class EconomicConsistencyTest {
         // V20-снепшотов name_norm заморожен на момент addMeal, и рассинхрон имени оригинала
         // ломал матчинг «строка закупки == сумма по дням» (CI: Гречка 1.0 vs 1.8) и попадание
         // чужих снепшотов в fixtureItems (CI: size 5 but was 12). Каноны задаются сразу здесь.
-        grechkaId = createIngredient("Гречка", GRECHK_CODE, "KG", 343);
-        tushenkaId = createIngredient("Тушёнка", TUSH_CODE, "PCS", 215);
-        butterId = createIngredient("Масло", BUTT_CODE, "KG", 734);
-        riceId = createIngredient("Рис", RICE_CODE, "KG", 340);
-        saltId = createIngredient("Соль", SALT_CODE, "KG", 0);
+        grechkaId = createIngredient(GRECHK, GRECHK_CODE, "KG", 343);
+        tushenkaId = createIngredient(TUSH, TUSH_CODE, "PCS", 215);
+        butterId = createIngredient(BUTT, BUTT_CODE, "KG", 734);
+        riceId = createIngredient(RICE, RICE_CODE, "KG", 340);
+        saltId = createIngredient(SALT, SALT_CODE, "KG", 0);
 
-        // Рецепты заводятся под уникальными именами ("E2E ..."): экраны матчают блюда по
-        // имени recipeName в DTO меню, состав — по id фикстур. Глобальные сид-рецепты к этому
-        // моменту уже удалены (dropGlobalSeedCatalog), но уникальные имена — страховка от
-        // коллизий при любой политике проверки имён рецептов на сервере.
+        // Рецепты заводятся ГЛОБАЛЬНЫМИ POST /admin/recipes (состав проверяется по глобальному
+        // реестру ингредиентов) и сразу копируются в trip-scope вместе с ингредиентами-копиями
+        // (см. snapshotRecipeAs/snapshotAs).
         recipe1Id = createRecipe("Каша гречневая с тушёнкой", recipeIngredients(
                 grechkaId, new BigDecimal("0.1"),
                 tushenkaId, new BigDecimal("0.1"),
@@ -220,6 +219,25 @@ class EconomicConsistencyTest {
                 butterId, new BigDecimal("0.1")), 1, 450);
 
         tripId = createTrip(TRIP_NAME, START_DATE, END_DATE, DEFAULT_PEOPLE);
+
+        // FIX (раунд 14): канонические имена («Гречка», «Тушёнка», …) ассертятся экранами по
+        // name. POST с таким именем даёт 409 (existsByName — ГЛОБАЛЬНАЯ проверка IngredientService,
+        // сид V3 занимает имя), UPDATE глобальной строки — DuplicateKey на uniq_product_identity_global.
+        // Поэтому фикстуры создаются под test-only именами/кодами, а после создания похода
+        // переводятся в trip-scope копиями V20-формы (INSERT ... SELECT с каноническим name;
+        // частичный индекс WHERE trip_id IS NULL копий не касается). id фикстур переключаются на
+        // копии; рецепты копируются вместе с составом (snapshotRecipeAs), при addMeal сервер
+        // копирует только глобальные сущности (trip_id IS NULL) — наши копии не дублируются.
+        grechkaId = snapshotAs(tripId, grechkaId, "Гречка");
+        tushenkaId = snapshotAs(tripId, tushenkaId, "Тушёнка");
+        butterId = snapshotAs(tripId, butterId, "Масло");
+        riceId = snapshotAs(tripId, riceId, "Рис");
+        saltId = snapshotAs(tripId, saltId, "Соль");
+        recipe1Id = snapshotRecipeAs(tripId, recipe1Id);
+        recipe2Id = snapshotRecipeAs(tripId, recipe2Id);
+        recipe3Id = snapshotRecipeAs(tripId, recipe3Id);
+        recipe4Id = snapshotRecipeAs(tripId, recipe4Id);
+        recipe5Id = snapshotRecipeAs(tripId, recipe5Id);
 
         day1Id = getDayIdByDate(tripId, START_DATE);
         day2Id = getDayIdByDate(tripId, START_DATE.plusDays(1));
@@ -273,6 +291,59 @@ class EconomicConsistencyTest {
         jdbc.update("DELETE FROM ingredients WHERE trip_id IS NULL"
                 + " AND id NOT IN (?, ?, ?, ?, ?)",
                 grechkaId, tushenkaId, butterId, riceId, saltId);
+    }
+
+    /** id фикстур в ГЛОБАЛЬНОМ виде (оригиналы до snapshotAs) — для dropGlobalSeedCatalog. */
+    private static Long gGrechkaId, gTushenkaId, gButterId, gRiceId, gSaltId;
+
+    /**
+     * Trip-scoped копия ингредиента в форме V20 copy-on-write (INSERT ... SELECT). Каноническое
+     * имя («Гречка») фиксируется только на копии: частичный unique-индекс uniq_product_identity_global
+     * действует WHERE trip_id IS NULL, поэтому коллизии с сид-строкой V3 нет, а POST/UPDATE глобальных
+     * строк с каноническими именами (409/DuplicateKey) больше не нужны.
+     */
+    private Long snapshotAs(Long tripLocal, Long originalId, String canonicalName) {
+        // Долго живущие id (grechkaId и т.д.) — static: к ним обращаются статические парсеры
+        // ответов; jdbc-хелперы вызываются из нестатических методов, поэтому вызовы легальны.
+        gGrechkaId = grechkaId; gTushenkaId = tushenkaId; gButterId = butterId;
+        gRiceId = riceId; gSaltId = saltId;
+        jdbc.update("INSERT INTO ingredients (name, unit, category_id, kcal_per_100g,"
+                        + " piece_weight_g, pack_size, round_to_packs, name_norm, code,"
+                        + " protein_per_100g, fat_per_100g, carbs_per_100g, shelf_life_days,"
+                        + " trip_id, snapshot_of)"
+                        + " SELECT ?, i.unit, i.category_id, i.kcal_per_100g, i.piece_weight_g,"
+                        + " i.pack_size, i.round_to_packs, ?, i.code || '_snap',"
+                        + " i.protein_per_100g, i.fat_per_100g, i.carbs_per_100g, i.shelf_life_days,"
+                        + " ?, i.id FROM ingredients i WHERE i.id = ?",
+                canonicalName, canonicalName.toLowerCase().replace('ё', 'е'),
+                tripLocal, originalId);
+        return jdbc.queryForObject(
+                "SELECT id FROM ingredients WHERE trip_id = ? AND snapshot_of = ?",
+                Long.class, tripLocal, originalId);
+    }
+
+    /** Trip-scoped копия рецепта (V20-форма) вместе с составом, переведённым на id-копии. */
+    private Long snapshotRecipeAs(Long tripLocal, Long originalRecipeId) {
+        jdbc.update("INSERT INTO recipes (name, meal_type, category, cook_minutes,"
+                        + " base_servings, calories_per_serving, source, cuisine,"
+                        + " prep_minutes, instructions, difficulty, trip_id, snapshot_of)"
+                        + " SELECT r.name, r.meal_type, r.category, r.cook_minutes,"
+                        + " r.base_servings, r.calories_per_serving, r.source, r.cuisine,"
+                        + " r.prep_minutes, r.instructions, r.difficulty, ?, r.id"
+                        + " FROM recipes r WHERE r.id = ?",
+                tripLocal, originalRecipeId);
+        Long copyId = jdbc.queryForObject(
+                "SELECT id FROM recipes WHERE trip_id = ? AND snapshot_of = ?",
+                Long.class, tripLocal, originalRecipeId);
+        // Состав копии: ingredient_id оригиналов заменяем на id их копий того же похода
+        // (snapshotAs выполнен ДО этого вызова — все 5 ингредиентов уже скопированы).
+        jdbc.update("INSERT INTO recipe_ingredients (recipe_id, ingredient_id, amount)"
+                        + " SELECT ?, snap.id, ri.amount FROM recipe_ingredients ri"
+                        + " JOIN ingredients snap ON snap.snapshot_of = ri.ingredient_id"
+                        + "  AND snap.trip_id = ?"
+                        + " WHERE ri.recipe_id = ?",
+                copyId, tripLocal, originalRecipeId);
+        return copyId;
     }
 
     private void addMeals() throws Exception {
