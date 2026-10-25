@@ -23,7 +23,6 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
-import org.springframework.transaction.annotation.Transactional;
 import org.testcontainers.containers.PostgreSQLContainer;
 import com.provision.integration.ContainerSuite;
 import com.provision.integration.LocalPgFallback;
@@ -53,16 +52,17 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * (round(итог / perPersonMeal) == totalPersonMeals и т.п.), которые ловят
  * рассинхрон агрегации при любой модели. Фактические значения логируются.
  *
- * Инфра: @Transactional на классе -> каждый тест в своей транзакции с rollback,
- * поэтому фикстуры идемпотентны между 8 методами. Если ContainerSuite/LocalPgFallback
- * не дружит с rollback (первый прогон упадёт на unique code/email) — см. FALLBACK
- * в комментарии к tearDown.
+ * Инфра: БЕЗ @Transactional на классе (см. FIX ниже): DROP SCHEMA внутри тестовой
+ * транзакции вешает прогон (Hibernate после DDL ждёт коммита/rollback, соединение
+ * зависает). Как в ConflictIntegrationTest: TestDataIsolation.reset(jdbc, flyway)
+ * пересоздаёт БД из миграций перед каждым @Test, фикстуры — в отдельном helper
+ * createFixtures(), вызываемом каждым методом; состояние чистое за счёт reset,
+ * ручной rollback не нужен.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
 @ContainerSuite
 @ActiveProfiles("test")
-@Transactional
 @DisplayName("E2E-ECON-01: Economic consistency across all screens")
 class EconomicConsistencyTest {
 
@@ -105,16 +105,27 @@ class EconomicConsistencyTest {
 
     private String userToken;
 
+    /**
+     * FIX (зависание прогона): раньше @BeforeEach вызывал TestDataIsolation.reset()
+     * внутри тестовой транзакции (@Transactional на классе). "DROP SCHEMA public CASCADE"
+     * — DDL, который в PostgreSQL нельзя выполнить корректно из незакрытой транзакции с
+     * активными курсорами Hibernate: после reset() сессия зависала (в логах — последний
+     * select sync_logs status='RUNNING' от ApplicationReadyEvent и тишина). Паттерн
+     * ConflictIntegrationTest: reset вне транзакции + фикстуры в helper, который вызывает
+     * каждый @Test. Транзакционная аннотация с класса снята полностью.
+     */
     @BeforeEach
-    void setUp() throws Exception {
+    void setUp() {
         // E2E-ECON-01: фикстуры (Гречка/buckwheat, Тушёнка/tushonka, Масло/butter, Рис/rice,
         // Соль/salt) пересекаются с каталогом, накатываемым Flyway-сидом V3__seed_catalog.sql
         // (одноимённые записи с теми же code), а IngredientService отдаёт ConflictException ->
         // POST /admin/ingredients возвращал 409 вместо 201. Как в ConflictIntegrationTest,
-        // пересоздаём БД из миграций перед каждым тестом; @Transactional на классе затем
-        // откатывает фикстуры после каждого метода.
+        // пересоздаём БД из миграций перед каждым тестом.
         TestDataIsolation.reset(jdbc, flyway);
+    }
 
+    /** Заводит фикстуры (админ, 5 ингредиентов, 5 рецептов, поход 3 дня, 5 блюд, 5 цен). */
+    private void createFixtures() throws Exception {
         // Ингредиентами (POST /api/v1/admin/ingredients) и рецептами (/api/v1/admin/recipes)
         // управляет только ADMIN — register-API роль задать не даёт, поэтому заводим
         // админа через TestUsers.createAdmin (raw SQL + логин), как в ConflictIntegrationTest.
@@ -170,16 +181,8 @@ class EconomicConsistencyTest {
 
     @AfterEach
     void tearDown() {
-        // @Transactional на классе откатывает все изменения (юзер, ингредиенты,
-        // цены, рецепты, поход, блюда, оверрайды) после каждого метода.
-        // Ручной cleanup не нужен и не должен ассертить статусы.
-        //
-        // FALLBACK (если первый прогон упадёт на duplicate email/code):
-        // @ContainerSuite не совместим с rollback тестовой транзакции. Тогда:
-        //   1) убрать @Transactional с класса;
-        //   2) в registerAndLogin использовать email "e2econ-" + UUID + "@test.com";
-        //   3) в createIngredient суффиксировать code: code + "-" + UUID;
-        //   4) в tearDown вернуть delete трипа БЕЗ andExpect (мягкая очистка).
+        // Ручной cleanup не нужен: перед каждым тестом setUp() полностью пересоздаёт
+        // БД из миграций (TestDataIsolation.reset), поэтому состояние всегда чистое.
     }
 
     // ==================== ЭКРАН 1: МЕНЮ ПО ДНЯМ ====================
@@ -187,6 +190,7 @@ class EconomicConsistencyTest {
     @Test
     @DisplayName("EK-01: День 1 — Гречка с тушёнкой x10 порций")
     void ekran1_day1() throws Exception {
+        createFixtures();
         List<MenuByDay> days = parseMenu(getMenu());
         assertThat(days).hasSize(3);
 
@@ -207,6 +211,7 @@ class EconomicConsistencyTest {
     @Test
     @DisplayName("EK-02: День 2 — Рис с маслом x4 + Гречка с маслом x4")
     void ekran1_day2() throws Exception {
+        createFixtures();
         List<MenuByDay> days = parseMenu(getMenu());
         MenuByDay day2 = days.get(1);
         assertThat(day2.dayDate()).isEqualTo("2026-07-02");
@@ -224,6 +229,7 @@ class EconomicConsistencyTest {
     @Test
     @DisplayName("EK-03: День 3 — Рис с тушёнкой x3 + Масляный рис x3")
     void ekran1_day3() throws Exception {
+        createFixtures();
         List<MenuByDay> days = parseMenu(getMenu());
         MenuByDay day3 = days.get(2);
         assertThat(day3.dayDate()).isEqualTo("2026-07-03");
@@ -243,6 +249,7 @@ class EconomicConsistencyTest {
     @Test
     @DisplayName("EK-04: Общий список покупок — веса, цены, итог 806.30")
     void ekran2_shoppingList() throws Exception {
+        createFixtures();
         ShoppingList list = parseShoppingList(getShopping());
 
         assertThat(list.items()).hasSize(5); // соль с 0 ккал присутствует
@@ -267,6 +274,7 @@ class EconomicConsistencyTest {
     @Test
     @DisplayName("EK-05: Закупка по дням — 301.00 + 280.00 + 225.30 = 806.30")
     void ekran3_shoppingByDays() throws Exception {
+        createFixtures();
         List<DayShopping> days = parseDayShopping(getByDays());
         assertThat(days).hasSize(3);
 
@@ -289,6 +297,7 @@ class EconomicConsistencyTest {
     @Test
     @DisplayName("EK-06: На человека — инварианты согласованности DTO (модель-независимо)")
     void ekran4_personSummary() throws Exception {
+        createFixtures();
         PersonSummary p = parsePersonSummary(getPerson());
         ShoppingList s = parseShoppingList(getShopping());
         BigDecimal total = s.totalPlannedCost(); // 806.30
@@ -317,6 +326,7 @@ class EconomicConsistencyTest {
     @Test
     @DisplayName("EK-07: Оверрайды Гр=120, Тш=180 -> факт 816.30, дельта +10.00, проброс в by-days")
     void ekran5_priceOverrides() throws Exception {
+        createFixtures();
         mockMvc.perform(put("/api/v1/trips/" + tripId + "/price-overrides/" + grechkaId)
                         .header("Authorization", "Bearer " + userToken)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -364,6 +374,7 @@ class EconomicConsistencyTest {
     @Test
     @DisplayName("EK-08: CONSISTENCY: все экраны сходятся до копейки")
     void konsistentnostVsekhEkranov() throws Exception {
+        createFixtures();
         List<MenuByDay> menuDays = parseMenu(getMenu());
         ShoppingList shopping = parseShoppingList(getShopping());
         List<DayShopping> dayShopping = parseDayShopping(getByDays());
