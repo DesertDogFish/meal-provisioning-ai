@@ -1013,7 +1013,14 @@ export const mockServer = {
     for (const [id, aps] of Object.entries(extraAmounts)) {
       const p = products.find(x => x.id === id);
       if (!p) continue;
-      const abs = r3(aps * people); // пер-serving обратно в абсолют на приём
+      const abs = r3(aps * people); // пер-serving обратно в абсолют на приём (legacy-фолбэк)
+      itemsById.set(p.id, mkItem(p, null, null, abs, 'EXTRA', null, null));
+      effective.set(p.id, abs);
+    }
+    for (const [id, abs] of Object.entries(extraAbsolutes)) {
+      // §3: EXTRA — абсолют на приём хранится напрямую, НЕ масштабируется при смене людей
+      const p = products.find(x => x.id === id);
+      if (!p) continue;
       itemsById.set(p.id, mkItem(p, null, null, abs, 'EXTRA', null, null));
       effective.set(p.id, abs);
     }
