@@ -179,13 +179,19 @@ class EconomicConsistencyTest {
         riceId = seedIngredientId("rice");
         saltId = seedIngredientId("salt");
 
-        // FIX (DuplicateKey, раунд 4): фикстуры — сидовые ингредиенты; их канонические имена
-        // из сида ("Масло сливочное", "Тушенка говяжья 325 г") не совпадают с именами в
-        // ассертах экранов. Нормализуем ИМЕНА фикстур к коротким канонам тестов. Коллизий по
-        // uniq_product_identity_global (V20: UNIQUE(name_norm,unit) WHERE trip_id IS NULL) нет:
-        // в сидах V3/V12/V17/V20 отсутствуют строки с name_norm in {тушёнка, масло, рис} при
-        // unit KG (проверено grep'ом), а UPDATE выполняется ДО создания рецептов/похода,
-        // поэтому бэкфил V20 (temp-таблицы ing_src/map_ing) эти переименования не касается.
+        // FIX (раунд 5, DuplicateKey): ОЧИСТИТЬ коллизию ДО переименования — у сид-дублей
+        // канонических имён снимаем code и удаляем их через API (см. dropSeedDupes).
+        dropSeedDupes("buckwheat", grechkaId);
+        dropSeedDupes("beef_stew", tushenkaId);
+        dropSeedDupes("butter", butterId);
+        dropSeedDupes("rice", riceId);
+        dropSeedDupes("salt", saltId);
+
+        // Фикстуры — сидовые ингредиенты; их канонические имена из сида ("Масло сливочное",
+        // "Тушенка говяжья 325 г") не совпадают с именами в ассертах экранов. Нормализуем
+        // ИМЕНА фикстур к коротким канонам тестов ПОСЛЕ удаления дублей — теперь partial-индекс
+        // uniq_product_identity_global (V20: UNIQUE(name_norm,unit) WHERE trip_id IS NULL)
+        // свободен от занятых дублями имён.
         renameFixture(grechkaId, "Гречка");
         renameFixture(tushenkaId, "Тушёнка");
         renameFixture(butterId, "Масло");
@@ -245,8 +251,48 @@ class EconomicConsistencyTest {
         addMeals();
     }
 
+    /**
+     * Удаляет через API сид-дубли канонического имени фикстуры (строки V3/V17 вида
+     * Гречка/KG, Тушёнка/PCS, ...), которые занимают слот partial-индекса
+     * uniq_product_identity_global (V20) и мешают renameFixture. Перед удалением у дубля
+     * снимается code (UPDATE 'seed_dupe_'||id), чтобы уникальность кода не мешала; удаление
+     * безопасно: TestDataIsolation.reset() пересоздал БД, ни один тестовый рецепт/поход на
+     * дублях не висит (сид-рецепты V18 ссылаются на ДРУГИЕ сид-ингредиенты).
+     */
+    private void dropSeedDupes(String fixtureCode, Long fixtureId) throws Exception {
+        String canon = switch (fixtureCode) {
+            case "buckwheat" -> "гречка";
+            case "beef_stew" -> "тушенка";   // ё->е как в IngredientService.normalizeName
+            case "butter" -> "масло";
+            case "rice" -> "рис";
+            default -> "соль";
+        };
+        List<Long> dupes = jdbc.queryForList(
+                "SELECT id FROM ingredients WHERE trip_id IS NULL AND name_norm = ? AND id <> ?",
+                Long.class, canon, fixtureId);
+        for (Long dupeId : dupes) {
+            jdbc.update("UPDATE ingredients SET code = 'seed_dupe_' || id WHERE id = ?", dupeId);
+            mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                            .delete("/api/v1/admin/ingredients/" + dupeId)
+                            .header("Authorization", "Bearer " + userToken))
+                    .andExpect(status().isNoContent());
+        }
+    }
+
     private void addMeals() throws Exception {
-        // День 1: Р1 x10; День 2: Р2 x4 + Р3 x4; День 3: Р4 x3 + Р5 x3
+        // FIX (раунд 5, expected 10 but was 4 / size 5 but was 12): "servings" в этом API —
+        // это peopleOverride (число человек на блюдо), а НЕ множитель порций: см.
+        // SummaryService.calculateEffectivePeople -> meal.getPeopleOverride() и
+        // calculateAmountForMeal(amountPerServing, baseServings, mealPeople) = amount*people/base.
+        // Прежние вызовы при defaultPeople=4 давали amounts = servings*people/4
+        // (Д1: 0.4 кг гречки вместо 1.0 => effectivePeople=4 вместо 10).
+        // Новый сценарий (baseServings=1 => amount = ingredient.amount * people; значения
+        // addMeals не менялись — они уже были заложены под эту модель):
+        //   Д1: Р1 x10ч          -> Гр 1.0, Тш 1.0, Соль 0.1        (итог 301.00)
+        //   Д2: Р2 x4ч + Р3 x4ч  -> Рис 0.8, Масло 0.2+0.2, Гр 0.8  (итог 280.00)
+        //   Д3: Р4 x3ч + Р5 x3ч  -> Рис 0.6+0.3, Тш 0.3, Соль 0.03, Масло 0.3 (225.30)
+        //   Закупка: Гр 1.8=180.00, Тш 1.3=260.00, Масло 0.7=280.00,
+        //            Рис 1.7=85.00, Соль 0.13=1.30 => всего 806.30 — совпадает с docstring.
         addMeal(day1Id, "BREAKFAST", recipe1Id, 10);
         addMeal(day2Id, "BREAKFAST", recipe2Id, 4);
         addMeal(day2Id, "DINNER", recipe3Id, 4);
