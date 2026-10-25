@@ -126,7 +126,10 @@ public class SummaryService {
      * («в расчёте используем нормальную цену»), иначе «На человека» при малых суммах
      * округлялось бы к нулю.
      */
-    static BigDecimal roundToRub(BigDecimal value) {
+    // FIX (раунд 8): public — интеграционные тесты (EconomicConsistencyTest) сверяют
+    // «итог экрана == round(Σ точных позиций)», используя ЭТУ же функцию округления, чтобы
+    // проверка не расходилась с продакшн-политикой при её изменении.
+    public static BigDecimal roundToRub(BigDecimal value) {
         if (value == null) {
             return null;
         }
