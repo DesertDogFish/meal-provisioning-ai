@@ -7,6 +7,7 @@ import Modal from '../components/Modal';
 import { api } from '../api/client';
 import type { UnitOfMeasure, ProductCategory, IngredientPrice } from '../types';
 import { humanizeUnit, recipesWord } from '../utils/text';
+import { Button } from '../components/Button';
 
 type Product = ProductRow;
 
@@ -270,7 +271,7 @@ export default function ProductsPage() {
         <div>
           <h1 className="text-2xl md:text-3xl font-bold" style={{ color: 'var(--text)' }}>Продукты</h1>
           <p className="mt-1" style={{ color: 'var(--fire)' }}>{error}</p>
-          <button onClick={loadData} className="ghost-btn mt-4">Повторить</button>
+          <Button variant="ghost" onClick={loadData}>Повторить</Button>
         </div>
       </div>
     );
@@ -286,13 +287,10 @@ export default function ProductsPage() {
             {products.length} продуктов · {categories.length} категорий
           </p>
         </div>
-        <button
-          onClick={() => { resetForm(); setShowModal(true); }}
-          className="grad-btn flex items-center gap-2"
-        >
-          <Plus size={16} />
-          Продукт
-        </button>
+        <Button variant="primary" size="sm" onClick={() => { resetForm(); setShowModal(true); }} aria-label="Добавить продукт">
+                  <Plus size={16} />
+                  Продукт
+                </Button>
       </div>
 
       {/* Toolbar */}
@@ -345,10 +343,10 @@ export default function ProductsPage() {
         </select>
 
         {(query || selectedUnit || priceStatus || bindingStatus) && (
-          <button onClick={resetFilters} className="ghost-btn flex items-center gap-2">
-            <X size={16} />
-            Сбросить
-          </button>
+          <Button variant="ghost" onClick={resetFilters} aria-label="Сбросить фильтры">
+                      <X size={16} />
+                      Сбросить
+                    </Button>
         )}
       </div>
 
@@ -505,24 +503,8 @@ export default function ProductsPage() {
             </div>
 
             <div className="flex gap-3 mt-6">
-              <button
-                onClick={() => setShowModal(false)}
-                className="flex-1 px-4 py-2.5 rounded-full"
-                style={{ border: '1px solid var(--border)', color: 'var(--text)' }}
-              >
-                Отмена
-              </button>
-              <button
-                onClick={handleSave}
-                disabled={!formName || !formCategory || duplicateWarning?.type === 'hard'}
-                className="flex-1 px-4 py-2.5 rounded-full"
-                style={{
-                  
-                  opacity: (!formName || !formCategory || duplicateWarning?.type === 'hard') ? 0.5 : 1
-                }}
-              >
-                Сохранить
-              </button>
+              <Button variant="ghost" size="sm" onClick={() => setShowModal(false)}>Отмена</Button>
+              <Button variant="primary" size="sm" onClick={handleSave} disabled={!formName || !formCategory || duplicateWarning?.type === 'hard'} aria-label="Сохранить продукт">Сохранить</Button>
             </div>
           </div>
         </Modal>

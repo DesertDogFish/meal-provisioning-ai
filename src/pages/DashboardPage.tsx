@@ -53,7 +53,7 @@ export default function DashboardPage() {
   }, [loadData]);
 
   if (loading) {
-    return <div style={{ padding: '20px', color: 'var(--muted)' }}>Загрузка...</div>;
+    return <div style={{ padding: 'var(--sp-5)', color: 'var(--muted)' }}>Загрузка...</div>;
   }
 
   const myTrips = trips.filter(t => t.userId === currentUser?.id);

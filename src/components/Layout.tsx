@@ -115,7 +115,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
         <div className="absolute bottom-0 left-0 right-0 p-4" style={{ borderTop: '1px solid var(--line)' }}>
           <div className="flex items-center gap-3 px-4 py-2 mb-2">
-            <div className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold" style={{ background: 'var(--bg-3)', color: 'var(--amber-200)' }}>
+            <div className="btn primary sm" style={{ background: 'var(--bg-3)', color: 'var(--amber-200)' }}>
               {currentUser?.firstName?.[0]}{currentUser?.lastName?.[0]}
             </div>
             <div className="flex-1 min-w-0">

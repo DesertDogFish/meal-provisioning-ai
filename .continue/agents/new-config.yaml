@@ -150,9 +150,30 @@ models:
     roles: [chat, edit, apply]
     capabilities: [tool_use]
     defaultCompletionOptions:
-      contextLength: 65536
+      contextLength: 121856
       maxTokens: 18192
-      temperature: 0.7
+      temperature: 0.2
+      topP: 0.8
+      topK: 20
+      reasoning: false
+    requestOptions:
+      timeout: 900000
+      extraBodyProperties:
+        presence_penalty: 0.0
+        repeat_penalty: 1.0
+        min_p: 0.0
+
+  - name: Qwen2.5-14B (LM Studio)
+    provider: openai
+    apiBase: http://localhost:1234/v1     # дефолт LM Studio, обязательно с /v1
+    apiKey: lm-studio
+    model: qwen2.5-14b-instruct                  # сверьте с curl http://localhost:1234/v1/models
+    roles: [chat, edit, apply]
+    capabilities: [tool_use]
+    defaultCompletionOptions:
+      contextLength: 33195
+      maxTokens: 18192
+      temperature: 0.2
       topP: 0.8
       topK: 20
       reasoning: false

@@ -202,7 +202,7 @@ h1, h2, h3, .logo-word, .font-display {
   background: var(--bg-1);
   border: 1px solid var(--line);
   border-radius: var(--r-md);
-  padding: 14px 16px;
+  padding: var(--sp-4);
 }
 .stat-value {
   color: var(--amber-300);
@@ -216,7 +216,7 @@ h1, h2, h3, .logo-word, .font-display {
   border: none;
   box-shadow: var(--shadow-glow);
   border-radius: var(--r-pill);
-  padding: 10px 18px;
+  padding: var(--sp-3) var(--sp-5);
   font: 800 13px Manrope;
   cursor: pointer;
   transition: transform var(--t-base) var(--ease), filter var(--t-base) var(--ease), box-shadow var(--t-base) var(--ease);
@@ -232,7 +232,7 @@ h1, h2, h3, .logo-word, .font-display {
   border: 1px solid var(--line-strong);
   color: var(--text-1);
   border-radius: var(--r-pill);
-  padding: 10px 18px;
+  padding: var(--sp-3) var(--sp-5);
   font: 600 13px Manrope;
   cursor: pointer;
   transition: all var(--t-base) var(--ease);
@@ -245,8 +245,8 @@ h1, h2, h3, .logo-word, .font-display {
 /* Сегментированный контрол (.seg) из брендбука */
 .seg {
   display: inline-flex;
-  gap: 4px;
-  padding: 4px;
+  gap: var(--sp-1);
+  padding: var(--sp-1);
   background: color-mix(in srgb, var(--bg-0) 70%, transparent);
   border: 1px solid var(--line);
   border-radius: var(--r-pill);
@@ -256,7 +256,7 @@ h1, h2, h3, .logo-word, .font-display {
   background: transparent;
   color: var(--text-2);
   font: 700 12px Manrope;
-  padding: 8px 14px;
+  padding: var(--sp-2) var(--sp-3);
   border-radius: var(--r-pill);
   cursor: pointer;
   transition: all var(--t-base) var(--ease);
@@ -314,10 +314,10 @@ h1, h2, h3, .logo-word, .font-display {
 .note-box {
   border: 1px dashed var(--line-strong);
   border-radius: var(--r-sm);
-  padding: 10px 14px;
+  padding: var(--sp-2) var(--sp-3);
   color: var(--text-2);
   font-size: 12px;
-  margin: 10px 0;
+  margin: var(--sp-3) 0;
 }
 
 /* Нативные спиннеры не существуют нигде в приложении */
@@ -373,7 +373,7 @@ input[type=number]::-webkit-outer-spin-button {
   border: 1px solid var(--line-strong);
   color: var(--text-1);
   border-radius: var(--r-sm);
-  padding: 7px 9px;
+  padding: var(--sp-2) var(--sp-2);
   font: 700 12px Manrope;
   text-align: right;
   font-variant-numeric: tabular-nums;
@@ -425,7 +425,7 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
 .kcal-missing {
   display: inline-block;
   border-radius: var(--r-pill);
-  padding: 2px 9px;
+  padding: var(--sp-1) var(--sp-2);
   font: 700 10px Manrope;
   background: color-mix(in srgb, var(--amber-500) 14%, transparent);
   border: 1px solid color-mix(in srgb, var(--amber-500) 34%, transparent);
@@ -437,7 +437,7 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   background: var(--success-soft);
   border: 1px solid color-mix(in srgb, var(--success) 34%, transparent);
   border-radius: var(--r-sm);
-  padding: 10px 12px;
+  padding: var(--sp-3) var(--sp-3);
   font-size: 13px;
   margin-top: 10px;
   color: var(--text-1);
@@ -446,7 +446,7 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
 .chip-delta {
   display: inline-block;
   border-radius: var(--r-pill);
-  padding: 2px 9px;
+  padding: var(--sp-1) var(--sp-2);
   font: 700 10px Manrope;
 }
 
@@ -469,7 +469,7 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   position: sticky;
   bottom: 10px;
   margin-top: 12px;
-  padding: 14px 18px;
+  padding: var(--sp-3) var(--sp-3);
   display: flex;
   gap: 18px;
   align-items: center;
@@ -495,7 +495,7 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   width: min(560px, 92vw);
   max-height: 86vh;
   overflow: auto;
-  padding: 22px;
+  padding: var(--sp-6);
   background: linear-gradient(160deg, color-mix(in srgb, var(--bg-2) 90%, transparent), color-mix(in srgb, var(--bg-0) 94%, transparent));
   backdrop-filter: blur(12px);
   border: 1px solid var(--line);
@@ -509,7 +509,7 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   color: var(--text-2);
   cursor: pointer;
   font-size: 14px;
-  padding: 4px;
+  padding: var(--sp-1);
   transition: color var(--t-base) var(--ease);
 }
 
@@ -554,7 +554,7 @@ input:-webkit-autofill:active {
 /* ФИКС 2: аккуратный бейдж категории блюда (без КАПСА) — стиль teal/wave */
 .recipe-category-badge {
   display: inline-block;
-  padding: 2px 10px;
+  padding: var(--sp-1) var(--sp-2);
   font-size: 0.75rem;
   font-weight: 600;
   color: var(--wave-300);

@@ -94,7 +94,7 @@ a:hover { color: var(--wave-400); }
 }
 .nav-inner {
   display: flex; align-items: center; gap: 28px;
-  padding: 14px 0;
+  padding: var(--sp-3) 0;
 }
 .nav-logo { display: flex; align-items: center; gap: 12px; color: var(--text-1); }
 .nav-logo .mark { width: 34px; height: 34px; }
@@ -106,7 +106,7 @@ a:hover { color: var(--wave-400); }
 /* ---------- Кнопки ---------- */
 .btn {
   display: inline-flex; align-items: center; gap: 10px;
-  padding: 13px 22px; border-radius: var(--r-md);
+  padding: var(--sp-3) var(--sp-4); border-radius: var(--r-md);
   font: 700 15px/1 var(--font-body);
   border: 1px solid transparent; cursor: pointer;
   transition: transform .15s ease, box-shadow .15s ease, background .15s ease;
@@ -122,7 +122,7 @@ a:hover { color: var(--wave-400); }
   border-color: var(--line-strong);
 }
 .btn-ghost:hover { background: var(--bg-2); }
-.btn-sm { padding: 9px 16px; border-radius: var(--r-sm); font-size: 14px; }
+.btn-sm { padding: var(--sp-2) var(--sp-3); border-radius: var(--r-sm); font-size: 14px; }
 
 /* ---------- Карточки ---------- */
 .card {
@@ -130,7 +130,7 @@ a:hover { color: var(--wave-400); }
   background: linear-gradient(180deg, var(--bg-1), color-mix(in srgb, var(--bg-1) 82%, #000 18%));
   border: 1px solid var(--line);
   border-radius: var(--r-lg);
-  padding: 24px;
+  padding: var(--sp-6);
   box-shadow: var(--shadow-1);
 }
 .card-hover:hover { border-color: var(--line-strong); background: var(--bg-2); }
@@ -138,7 +138,7 @@ a:hover { color: var(--wave-400); }
 /* ---------- Бейджи, чипы ---------- */
 .badge {
   display: inline-flex; align-items: center; gap: 8px;
-  padding: 6px 12px; border-radius: 999px;
+  padding: var(--sp-1) var(--sp-2); border-radius: 999px;
   background: rgba(87, 199, 184, .12);
   border: 1px solid rgba(87, 199, 184, .35);
   color: var(--wave-300);
@@ -157,7 +157,7 @@ a:hover { color: var(--wave-400); }
 
 /* ---------- Формы ---------- */
 .input {
-  width: 100%; padding: 13px 16px;
+  width: 100%; padding: var(--sp-3) var(--sp-3);
   background: var(--bg-1); color: var(--text-1);
   border: 1px solid var(--line-strong); border-radius: var(--r-md);
   font: 500 15px/1.2 var(--font-body);
@@ -176,7 +176,7 @@ a:hover { color: var(--wave-400); }
 .footer {
   border-top: 1px solid var(--line);
   color: var(--text-3); font-size: 14px;
-  padding: 28px 0; margin-top: 72px;
+  padding: var(--sp-6) 0; margin-top: 72px;
 }
 
 /* ============================================================

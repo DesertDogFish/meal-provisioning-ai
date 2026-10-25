@@ -8,6 +8,7 @@ import { useToast } from '../components/ToastProvider';
 import Modal from '../components/Modal';
 import RecipeEditorModal from '../components/RecipeEditorModal';
 import { ConflictError } from '../utils/errors';
+import { Button } from '../components/Button';
 
 interface Recipe {
   id: string;
@@ -176,7 +177,7 @@ export default function RecipesPage() {
         <div>
           <h1 className="text-2xl md:text-3xl font-bold" style={{ color: 'var(--text)' }}>Каталог блюд</h1>
           <p className="mt-1" style={{ color: 'var(--fire)' }}>{error}</p>
-          <button onClick={loadRecipes} className="ghost-btn mt-4">Повторить</button>
+          <Button variant="ghost" onClick={loadRecipes}>Повторить</Button>
         </div>
       </div>
     );
@@ -192,13 +193,9 @@ export default function RecipesPage() {
           Завтрак {counts.breakfast} · Обед {counts.lunch} · Ужин {counts.dinner} · Перекус {counts.snack} | без огня {counts.noFire}
         </p>
         {isAdmin && (
-          <button
-            onClick={openCreate}
-            className="mt-3 px-5 py-2.5 rounded-full font-bold flex items-center gap-2"
-            style={{ background: 'var(--grad-brand)', color: 'var(--on-fire)' }}
-          >
-            <Plus size={16} /> Создать блюдо
-          </button>
+          <Button variant="primary" size="sm" onClick={openCreate} aria-label="Создать блюдо">
+                      <Plus size={16} /> Создать блюдо
+                    </Button>
         )}
       </div>
 
@@ -220,70 +217,15 @@ export default function RecipesPage() {
             />
           </div>
           
-          <button
-            onClick={() => setFilterMealType('')}
-            className="px-4 py-2.5 rounded-full text-sm font-bold transition-all"
-            style={{
-              background: filterMealType === '' ? 'var(--grad-brand)' : 'transparent',
-              border: filterMealType === '' ? '1px solid transparent' : '1px solid var(--border)',
-              color: filterMealType === '' ? 'var(--on-fire)' : 'var(--muted)',
-              boxShadow: filterMealType === '' ? '0 0 18px color-mix(in srgb, var(--wave-400) 25%, transparent)' : 'none'
-            }}
-          >
-            Все {counts.all}
-          </button>
+          <Button variant="primary" size="sm" onClick={() => setFilterMealType('')} aria-label="Показать все рецепты">Все {counts.all}</Button>
           
-          <button
-            onClick={() => setFilterMealType('BREAKFAST')}
-            className="px-4 py-2.5 rounded-full text-sm font-bold transition-all"
-            style={{
-              background: filterMealType === 'BREAKFAST' ? 'var(--grad-brand)' : 'transparent',
-              border: filterMealType === 'BREAKFAST' ? '1px solid transparent' : '1px solid var(--border)',
-              color: filterMealType === 'BREAKFAST' ? 'var(--on-fire)' : 'var(--muted)',
-              boxShadow: filterMealType === 'BREAKFAST' ? '0 0 18px color-mix(in srgb, var(--wave-400) 25%, transparent)' : 'none'
-            }}
-          >
-            Завтрак {counts.breakfast}
-          </button>
+          <Button variant="primary" size="sm" onClick={() => setFilterMealType('BREAKFAST')} aria-label="Фильтр: Завтрак">Завтрак {counts.breakfast}</Button>
           
-          <button
-            onClick={() => setFilterMealType('LUNCH')}
-            className="px-4 py-2.5 rounded-full text-sm font-bold transition-all"
-            style={{
-              background: filterMealType === 'LUNCH' ? 'var(--grad-brand)' : 'transparent',
-              border: filterMealType === 'LUNCH' ? '1px solid transparent' : '1px solid var(--border)',
-              color: filterMealType === 'LUNCH' ? 'var(--on-fire)' : 'var(--muted)',
-              boxShadow: filterMealType === 'LUNCH' ? '0 0 18px color-mix(in srgb, var(--wave-400) 25%, transparent)' : 'none'
-            }}
-          >
-            Обед {counts.lunch}
-          </button>
+          <Button variant="primary" size="sm" onClick={() => setFilterMealType('LUNCH')} aria-label="Фильтр: Обед">Обед {counts.lunch}</Button>
           
-          <button
-            onClick={() => setFilterMealType('DINNER')}
-            className="px-4 py-2.5 rounded-full text-sm font-bold transition-all"
-            style={{
-              background: filterMealType === 'DINNER' ? 'var(--grad-brand)' : 'transparent',
-              border: filterMealType === 'DINNER' ? '1px solid transparent' : '1px solid var(--border)',
-              color: filterMealType === 'DINNER' ? 'var(--on-fire)' : 'var(--muted)',
-              boxShadow: filterMealType === 'DINNER' ? '0 0 18px color-mix(in srgb, var(--wave-400) 25%, transparent)' : 'none'
-            }}
-          >
-            Ужин {counts.dinner}
-          </button>
+          <Button variant="primary" size="sm" onClick={() => setFilterMealType('DINNER')} aria-label="Фильтр: Ужин">Ужин {counts.dinner}</Button>
           
-          <button
-            onClick={() => setFilterMealType('SNACK')}
-            className="px-4 py-2.5 rounded-full text-sm font-bold transition-all"
-            style={{
-              background: filterMealType === 'SNACK' ? 'var(--grad-brand)' : 'transparent',
-              border: filterMealType === 'SNACK' ? '1px solid transparent' : '1px solid var(--border)',
-              color: filterMealType === 'SNACK' ? 'var(--on-fire)' : 'var(--muted)',
-              boxShadow: filterMealType === 'SNACK' ? '0 0 18px color-mix(in srgb, var(--wave-400) 25%, transparent)' : 'none'
-            }}
-          >
-            Перекус {counts.snack}
-          </button>
+          <Button variant="primary" size="sm" onClick={() => setFilterMealType('SNACK')} aria-label="Фильтр: Перекус">Перекус {counts.snack}</Button>
         </div>
 
         {/* Вторая строка: категория, без огня, сброс */}
@@ -411,12 +353,7 @@ export default function RecipesPage() {
         <div className="text-center py-12">
           <Utensils size={48} className="mx-auto mb-4" style={{ color: 'var(--muted)' }} />
           <p className="mb-4" style={{ color: 'var(--muted)' }}>Рецепты не найдены</p>
-          <button
-            onClick={resetFilters}
-            className="grad-btn"
-          >
-            Сбросить фильтры
-          </button>
+          <Button variant="ghost" onClick={resetFilters} aria-label="Сбросить фильтры">Сбросить фильтры</Button>
         </div>
       )}
 
@@ -453,30 +390,16 @@ export default function RecipesPage() {
             
             {isAdmin && (
               <div className="flex gap-3 mt-6">
-                <button
-                  onClick={() => openEdit(selected)}
-                  className="flex-1 px-4 py-2.5 rounded-full font-semibold flex items-center justify-center gap-2"
-                  style={{ border: '1px solid var(--wave-600)', color: 'var(--wave-300)' }}
-                >
-                  <Pencil size={15} /> Редактировать
-                </button>
-                <button
-                  onClick={() => handleDelete(selected)}
-                  className="flex-1 px-4 py-2.5 rounded-full font-semibold flex items-center justify-center gap-2"
-                  style={{ border: '1px solid var(--fire)', color: 'var(--fire)' }}
-                >
-                  <Trash2 size={15} /> Удалить
-                </button>
+                <Button variant="soft" size="sm" onClick={() => openEdit(selected)} aria-label="Редактировать рецепт">
+                                  <Pencil size={15} /> Редактировать
+                                </Button>
+                                <Button variant="danger" size="sm" onClick={() => handleDelete(selected)} aria-label="Удалить рецепт">
+                                  <Trash2 size={15} /> Удалить
+                                </Button>
               </div>
             )}
 
-            <button
-              onClick={() => setSelectedRecipe(null)}
-              className="w-full mt-3 px-4 py-2.5 rounded-full"
-              style={{ border: '1px solid var(--border)', color: 'var(--text)' }}
-            >
-              Закрыть
-            </button>
+            <Button variant="ghost" size="sm" onClick={() => setSelectedRecipe(null)} className="w-full mt-3" aria-label="Закрыть модалку">Закрыть</Button>
           </div>
         </Modal>
       )}

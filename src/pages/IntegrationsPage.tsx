@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Wifi, WifiOff, RefreshCw, Search, Link, Unlink, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
 import { useToast } from '../components/ToastProvider';
 import { api } from '../api/client';
+import { Button } from '../components/Button';
 
 interface Integration {
   id: number;
@@ -323,45 +324,20 @@ export default function IntegrationsPage() {
 
         <div className="flex gap-3">
           {!offIntegration || offIntegration.status !== 'CONNECTED' ? (
-            <button
-              onClick={() => handleConnect('OFF')}
-              disabled={loading}
-              className="flex items-center gap-2 px-4 py-2 rounded-full text-sm font-bold transition-all"
-              style={{ 
-                
-                opacity: loading ? 0.5 : 1
-              }}
-            >
-              <Link size={16} />
-              Подключить
-            </button>
+            <Button variant="primary" size="sm" onClick={() => handleConnect('OFF')} disabled={loading} aria-label="Подключить интеграцию">
+                          <Link size={16} />
+                          Подключить
+                        </Button>
           ) : (
             <>
-              <button
-                onClick={() => handleSyncPrices('OFF')}
-                disabled={syncing}
-                className="flex items-center gap-2 px-4 py-2 rounded-full text-sm font-bold transition-all"
-                style={{ 
-                  
-                  opacity: syncing ? 0.5 : 1
-                }}
-              >
-                <RefreshCw size={16} className={syncing ? 'animate-spin' : ''} />
-                {syncing ? 'Синхронизация...' : 'Обновить цены'}
-              </button>
-              <button
-                onClick={() => handleDisconnect('OFF')}
-                disabled={loading}
-                className="flex items-center gap-2 px-4 py-2 rounded-full text-sm"
-                style={{ 
-                  border: '1px solid var(--border)', 
-                  color: 'var(--text)',
-                  opacity: loading ? 0.5 : 1
-                }}
-              >
-                <Unlink size={16} />
-                Отключить
-              </button>
+              <Button variant="primary" size="sm" onClick={() => handleSyncPrices('OFF')} disabled={syncing} aria-label="Синхронизировать цены">
+                              <RefreshCw size={16} className={syncing ? 'animate-spin' : ''} />
+                              {syncing ? 'Синхронизация...' : 'Обновить цены'}
+                            </Button>
+              <Button variant="danger" size="sm" onClick={() => handleDisconnect('OFF')} disabled={loading} aria-label="Отключить интеграцию">
+                              <Unlink size={16} />
+                              Отключить
+                            </Button>
             </>
           )}
         </div>
@@ -410,12 +386,9 @@ export default function IntegrationsPage() {
                       style={{ background: 'var(--elev)', border: '1px solid var(--border)', color: 'var(--text)' }}
                     />
                   </div>
-                  <button
-                    onClick={handleSearchProducts}
-                    className="px-4 py-2 rounded-full text-sm font-bold"
-                                      >
-                    Найти
-                  </button>
+                  <Button variant="primary" size="sm" onClick={handleSearchProducts} aria-label="Найти товар">
+                                      Найти
+                                    </Button>
                 </div>
               </div>
             )}
@@ -451,12 +424,9 @@ export default function IntegrationsPage() {
                           )}
                         </p>
                       </div>
-                      <button
-                        onClick={() => handleCreateMapping(product)}
-                        className="px-3 py-1 rounded-full text-xs font-bold"
-                                              >
-                        Привязать
-                      </button>
+                      <Button variant="primary" size="sm" onClick={() => handleCreateMapping(product)} aria-label="Привязать товар">
+                                              Привязать
+                                            </Button>
                     </div>
                   ))}
                 </div>
@@ -509,3 +479,4 @@ export default function IntegrationsPage() {
     </div>
   );
 }
+

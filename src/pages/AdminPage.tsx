@@ -7,6 +7,7 @@ import { DatePicker } from '../components/DatePicker';
 import { useToast } from '../components/ToastProvider';
 import { servingsWord, ingredientsWord } from '../utils/text';
 import { api, getRecipes } from '../api/client';
+import { Button } from '../components/Button';
 
 type AdminTab = 'prices' | 'recipes' | 'import';
 
@@ -244,7 +245,7 @@ export default function AdminPage() {
         <div>
           <h1 className="text-2xl md:text-3xl font-bold" style={{ color: 'var(--text)' }}>Администрирование</h1>
           <p className="mt-1" style={{ color: 'var(--fire)' }}>{error}</p>
-          <button onClick={loadData} className="ghost-btn mt-4">Повторить</button>
+          <Button variant="ghost" onClick={loadData}>Повторить</Button>
         </div>
       </div>
     );
@@ -280,10 +281,9 @@ export default function AdminPage() {
         <div className="space-y-4">
           <div className="flex justify-between items-center">
             <p className="text-sm" style={{ color: 'var(--muted)' }}>{prices.length} цен</p>
-            <button onClick={() => setShowPriceForm(true)}
-              className="flex items-center gap-2 px-4 py-2 rounded-full text-sm grad-btn">
-              <Plus size={16} /> Добавить цену
-            </button>
+            <Button variant="primary" size="sm" onClick={() => setShowPriceForm(true)}>
+                          <Plus size={16} /> Добавить цену
+                        </Button>
           </div>
 
           {showPriceForm && (
@@ -306,8 +306,8 @@ export default function AdminPage() {
                 </select>
               </div>
               <div className="flex gap-2">
-                <button onClick={handleSavePrice} className="px-4 py-2 rounded-full text-sm grad-btn">Сохранить</button>
-                <button onClick={() => setShowPriceForm(false)} className="px-4 py-2 text-sm" style={{ color: 'var(--muted)' }}>Отмена</button>
+                <Button variant="primary" size="sm" onClick={handleSavePrice}>Сохранить</Button>
+                <Button variant="ghost" size="sm" onClick={() => setShowPriceForm(false)}>Отмена</Button>
               </div>
             </div>
           )}
@@ -346,7 +346,7 @@ export default function AdminPage() {
           <div className="flex justify-between items-center">
             <p className="text-sm" style={{ color: 'var(--muted)' }}>{recipes.length} рецептов</p>
             <button onClick={() => setShowRecForm(true)}
-              className="flex items-center gap-2 px-4 py-2 rounded-full text-sm grad-btn">
+              className="btn primary sm">
               <Plus size={16} /> Новый рецепт
             </button>
           </div>
@@ -392,7 +392,7 @@ export default function AdminPage() {
                   className="text-sm" style={{ color: 'var(--w1)' }}>+ Добавить ингредиент</button>
               </div>
               <div className="flex gap-2">
-                <button onClick={handleSaveRecipe} className="px-4 py-2 rounded-full text-sm grad-btn">Сохранить</button>
+                <button onClick={handleSaveRecipe} className="btn primary sm">Сохранить</button>
                 <button onClick={() => setShowRecForm(false)} className="px-4 py-2 text-sm" style={{ color: 'var(--muted)' }}>Отмена</button>
               </div>
             </div>
@@ -411,7 +411,7 @@ export default function AdminPage() {
                     <p className="text-sm mt-1" style={{ color: 'var(--muted)' }}>{recipe.baseServings} {servingsWord(recipe.baseServings)} • {recipe.ingredients.length} {ingredientsWord(recipe.ingredients.length)}</p>
                   </div>
                   <div className="flex items-center gap-1">
-                    <button onClick={() => handleDeleteRecipe(recipe.id)} className="p-1.5 rounded" style={{ color: 'var(--muted)' }}><Trash2 size={14} /></button>
+                    <Button variant="danger" size="sm" onClick={() => handleDeleteRecipe(recipe.id)} aria-label="Удалить рецепт"><Trash2 size={14} /></Button>
                   </div>
                 </div>
               </div>
@@ -458,11 +458,11 @@ export default function AdminPage() {
                   {staging.status === 'PENDING' && (
                     <div className="flex gap-2">
                       <button onClick={() => handleApproveStaging(staging.id)}
-                        className="flex items-center gap-1 px-3 py-1.5 rounded-full text-sm grad-btn">
+                        className="btn primary sm">
                         <Check size={14} /> Одобрить
                       </button>
                       <button onClick={() => handleRejectStaging(staging.id)}
-                        className="flex items-center gap-1 px-3 py-1.5 rounded-full text-sm" style={{ border: '1px solid color-mix(in srgb, var(--danger) 30%, transparent)', color: 'var(--danger)' }}>
+                        className="btn primary sm" style={{ border: '1px solid color-mix(in srgb, var(--danger) 30%, transparent)', color: 'var(--danger)' }}>
                         <X size={14} /> Отклонить
                       </button>
                     </div>

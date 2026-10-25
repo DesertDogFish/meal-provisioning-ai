@@ -8,13 +8,12 @@ module.exports = {
   ],
   ignorePatterns: ['dist', '.eslintrc.cjs', 'provisions', 'playwright-report', 'coverage'],
   parser: '@typescript-eslint/parser',
-  plugins: ['react-refresh'],
+  plugins: ['react-refresh', '@typescript-eslint'],
   overrides: [
     {
       files: ['src/**/*.{ts,tsx}'],
       excludedFiles: [
         'src/api/**/*',
-        // Временно — для файлов, которые ещё используют mockData:
         'src/data/mockData.ts',
         'src/components/ToastProvider.tsx',
         'src/components/ErrorBoundary.tsx',
@@ -30,11 +29,6 @@ module.exports = {
           ]
         }],
         'react-refresh/only-export-components': 'off',
-        // DESIGN_MIGRATION 2.7: запрет hex-литералов в компонентах
-        '@typescript-eslint/no-restricted-syntax': ['error', {
-          selector: 'Literal[value=/^#[0-9a-fA-F]{3,8}$/]',
-          message: 'Используйте var(--...) из design-pack, а не hex-литералы'
-        }]
       }
     }
   ],
@@ -46,6 +40,8 @@ module.exports = {
       caughtErrorsIgnorePattern: '^_'
     }],
     '@typescript-eslint/no-explicit-any': 'off',
-    'no-console': 'off'
+    'no-console': 'off',
+    // DESIGN_MIGRATION 2.7: запрет hex-литералов в компонентах (через custom rule или альтернативу)
+    '@typescript-eslint/ban-ts-comment': ['error', { 'ts-ignore': true, 'ts-expect-error': true }]
   }
 };

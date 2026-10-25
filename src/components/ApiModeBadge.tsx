@@ -213,7 +213,7 @@ export default function ApiModeBadge() {
               <button
                 onClick={handleCheckConnection}
                 disabled={checking}
-                className="w-full px-4 py-2.5 rounded-full font-semibold transition-all flex items-center justify-center gap-2"
+                className="btn primary sm"
                 style={{
                   
                   opacity: checking ? 0.6 : 1
@@ -232,7 +232,7 @@ export default function ApiModeBadge() {
               {mode === 'mock' && (
                 <button
                   onClick={handleResetData}
-                  className="w-full px-4 py-2.5 rounded-full font-semibold transition-all flex items-center justify-center gap-2"
+                  className="btn primary sm"
                   style={{
                     border: '1px solid var(--fire)',
                     color: 'var(--fire)'

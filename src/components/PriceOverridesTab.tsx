@@ -490,7 +490,7 @@ export default function PriceOverridesTab({ tripId }: Props) {
 
       {/* Вкладка: Закупка */}
       {activeTab === 'total' && (
-        <div className="rounded-xl overflow-hidden" style={{ background: 'var(--surface)', border: '1px solid var(--border)', padding: '6px 10px 14px' }}>
+        <div className="rounded-xl overflow-hidden" style={{ background: 'var(--surface)', border: '1px solid var(--border)', padding: 'var(--sp-1) var(--sp-3) var(--sp-4)' }}>
           <table className="w-full text-sm">
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border)' }}>
@@ -679,7 +679,7 @@ export default function PriceOverridesTab({ tripId }: Props) {
         <Modal onClose={() => setShowModal(false)}>
           <div className="modal-sheet">
             <b style={{ fontFamily: 'Unbounded', fontSize: '15px', color: 'var(--text)' }}>Ввести чек</b>
-            <p style={{ color: 'var(--muted)', fontSize: '12px', margin: '6px 0 14px' }}>
+            <p style={{ color: 'var(--muted)', fontSize: '12px', margin: 'var(--sp-1) 0 var(--sp-4)' }}>
               Фактические цены за единицу (₽/кг, ₽/шт и т.д. — см. подпись в поле). Пусто = «= план».
             </p>
             <div className="flex flex-col gap-3">

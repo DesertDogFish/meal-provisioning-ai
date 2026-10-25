@@ -3,7 +3,7 @@
 /* --- Поле ввода --- */
 .date-picker-input {
   width: 100%;
-  padding: 8px 12px;
+  padding: var(--sp-2) var(--sp-3);
   background-color: color-mix(in srgb, var(--bg-0) 70%, transparent);
   color: var(--text-1);
   border: 1px solid var(--line-strong);
@@ -42,26 +42,26 @@ input::-webkit-calendar-picker-indicator {
   right: 10px;
   top: 50%;
   transform: translateY(-50%);
-  color: var(--muted, #8b98ac);
+  color: var(--muted);
   pointer-events: none; /* клик проходит в input → открывает наш попапер */
 }
 
 .dp-clear {
-  position: absolute;
-  right: 28px;
-  top: 50%;
-  transform: translateY(-50%);
-  border: none;
-  background: transparent;
-  color: var(--muted, #8b98ac);
-  font-size: 15px;
-  line-height: 1;
-  padding: 2px 4px;
-  cursor: pointer;
+    position: absolute;
+    right: 28px;
+    top: 50%;
+    transform: translateY(-50%);
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    font-size: 15px;
+    line-height: 1;
+    padding: var(--sp-1) var(--sp-2);
+    cursor: pointer;
 }
 
 .dp-clear:hover {
-  color: var(--fire, #f59e0b);
+    color: var(--fire);
 }
 
 .date-picker-input:hover:not(.disabled):not(.error) {
@@ -105,7 +105,7 @@ input::-webkit-calendar-picker-indicator {
   background-color: transparent;
   border-bottom: 1px solid var(--line);
   border-radius: 0;
-  padding-top: 12px;
+  padding-top: var(--sp-3);
 }
 
 .dark-calendar .react-datepicker__current-month,
@@ -184,7 +184,7 @@ input::-webkit-calendar-picker-indicator {
 
 /* --- Подвал календаря --- */
 .dark-calendar .react-datepicker__footer {
-  padding: 8px 12px;
+  padding: var(--sp-2) var(--sp-3);
 }
 
 .dark-calendar .react-datepicker__current-month a {

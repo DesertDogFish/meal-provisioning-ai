@@ -12,6 +12,7 @@ import RecipeIngredientsEditor, { DraftIngredient } from '../components/RecipeIn
 import { servingsWord } from '../utils/text';
 import { api, getRecipes, updateRecipeIngredients } from '../api/client';
 import { useToast } from '../components/ToastProvider';
+import { Button } from '../components/Button';
 
 /** Фаза 13: черновик фактической цены (₽ за единицу измерения продукта). */
 export interface ActualPriceDraft {
@@ -436,11 +437,7 @@ export default function TripDetailPage() {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center gap-4">
-        <button onClick={() => navigate('/trips')} className="p-2 rounded-lg transition-colors" style={{ color: 'var(--muted)' }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = 'color-mix(in srgb, var(--line-strong) 22%, transparent)'; }}
-          onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}>
-          <ArrowLeft size={20} />
-        </button>
+        <Button variant="ghost" onClick={() => navigate('/trips')} aria-label="Назад к походам"><ArrowLeft size={20} /></Button>
         <div className="flex-1">
           <h1 className="text-2xl font-bold" style={{ color: 'var(--text)' }}>{trip.name}</h1>
           <p className="text-sm" style={{ color: 'var(--muted)' }}>
@@ -550,8 +547,8 @@ export default function TripDetailPage() {
                       style={{ background: 'var(--elev)', border: '1px solid var(--border)', color: 'var(--text)' }}
                       placeholder={trip.defaultPeople.toString()}
                     />
-                    <button onClick={() => handleUpdateDayPeople(tripDay.id)} className="px-3 py-1 text-sm rounded grad-btn">OK</button>
-                    <button onClick={() => setEditingDay(null)} className="px-3 py-1 text-sm" style={{ color: 'var(--muted)' }}>Отмена</button>
+                    <Button variant="primary" size="sm" onClick={() => handleUpdateDayPeople(tripDay.id)} aria-label="Сохранить количество людей">OK</Button>
+                                        <Button variant="ghost" size="sm" onClick={() => setEditingDay(null)} aria-label="Отмена">Отмена</Button>
                   </div>
                 )}
 
@@ -832,32 +829,13 @@ export default function TripDetailPage() {
               </div>
             </div>
             <div className="flex flex-wrap gap-3 mt-6">
-              <button onClick={closeAddMeal} className="px-4 py-2.5 rounded-full transition-colors" style={{ border: '1px solid var(--border)', color: 'var(--text)' }}>
-                Отмена
-              </button>
+              <Button variant="ghost" size="sm" onClick={closeAddMeal} aria-label="Отмена">Отмена</Button>
               {selectedRecipe && draftIngredients && (
-                <button
-                  onClick={handleSaveComposition}
-                  disabled={isEditorAdmin === false || savingComposition}
-                  className="px-4 py-2.5 rounded-full transition-colors inline-flex items-center gap-1.5"
-                  style={{
-                    border: '1px solid var(--w2)',
-                    color: 'var(--w2)',
-                    opacity: isEditorAdmin === false || savingComposition ? 0.55 : 1,
-                  }}
-                  title="Сохранить новый состав блюда в каталоге"
-                >
-                  <Save size={15} /> {savingComposition ? 'Сохраняем…' : 'Сохранить состав'}
-                </button>
+                <Button variant="primary" size="sm" onClick={handleSaveComposition} disabled={isEditorAdmin === false || savingComposition} aria-label="Сохранить состав блюда" title="Сохранить новый состав блюда в каталоге">
+                                  <Save size={15} /> {savingComposition ? 'Сохраняем…' : 'Сохранить состав'}
+                                </Button>
               )}
-              <button
-                onClick={handleAddMeal}
-                disabled={!newMeal.recipeId}
-                className="flex-1 px-4 py-2.5 rounded-full transition-colors grad-btn"
-                style={{ opacity: newMeal.recipeId ? 1 : 0.55 }}
-              >
-                Добавить в приём пищи
-              </button>
+              <Button variant="primary" size="sm" onClick={handleAddMeal} disabled={!newMeal.recipeId} aria-label="Добавить в приём пищи">Добавить в приём пищи</Button>
             </div>
           </div>
         </Modal>

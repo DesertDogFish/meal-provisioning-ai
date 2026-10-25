@@ -349,7 +349,7 @@ export default function SyncLogsPage() {
                     <button
                       onClick={() => setSelectedLog(log)}
                       className="ghost-btn"
-                      style={{ padding: '6px 12px' }}
+                      style={{ padding: 'var(--sp-1) var(--sp-3)' }}
                     >
                       детали
                     </button>
@@ -407,7 +407,7 @@ export default function SyncLogsPage() {
                         {item.oldPrice !== null && item.newPrice !== null ? (
                           <>
                             {item.oldPrice.toFixed(2)}
-                            <span style={{ color: 'var(--muted)', padding: '0 6px' }}>→</span>
+                            <span style={{ color: 'var(--muted)', padding: 'var(--sp-1) var(--sp-2)' }}>→</span>
                             <b style={{ color: item.newPrice > item.oldPrice ? 'var(--danger)' : 'var(--wave-300)' }}>
                               {item.newPrice.toFixed(2)}
                             </b>

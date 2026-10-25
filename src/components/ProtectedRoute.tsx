@@ -50,7 +50,7 @@ export default function ProtectedRoute({ children, adminOnly = false }: { childr
   }, []);
 
   if (loading) {
-    return <div style={{ padding: '20px', color: 'var(--muted)' }}>Загрузка...</div>;
+    return <div style={{ padding: 'var(--sp-5)', color: 'var(--muted)' }}>Загрузка...</div>;
   }
   
   if (!isAuthenticated) {

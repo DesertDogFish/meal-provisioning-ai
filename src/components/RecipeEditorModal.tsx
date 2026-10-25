@@ -264,11 +264,11 @@ export default function RecipeEditorModal({ recipe, categories, onClose, onSaved
                   key={mt.value}
                   type="button"
                   onClick={() => setMealType(mt.value)}
-                  className="px-4 py-2 rounded-full text-sm font-bold transition-all"
+                  className="btn primary sm"
                   style={{
                     background: mealType === mt.value ? 'var(--grad-brand)' : 'transparent',
                     border: mealType === mt.value ? '1px solid transparent' : '1px solid var(--border)',
-                    color: mealType === mt.value ? '#04121A' : 'var(--muted)',
+                    color: mealType === mt.value ? 'var(--text)' : 'var(--muted)',
                   }}
                 >
                   {mt.label}
@@ -333,7 +333,7 @@ export default function RecipeEditorModal({ recipe, categories, onClose, onSaved
               <span className="text-sm font-semibold" style={{ color: 'var(--text)' }}>
                 Состав (количество на {baseServings || 1} порц.)
               </span>
-              <button type="button" onClick={addRow} className="ghost-btn px-3 py-1.5 rounded-full text-sm flex items-center gap-1">
+              <button type="button" onClick={addRow} className="btn primary sm">
                 <Plus size={14} /> ингредиент
               </button>
             </div>
