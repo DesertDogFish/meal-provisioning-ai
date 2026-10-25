@@ -45,6 +45,9 @@ interface MockSubstitution {
    * (absoluteAmount), чтобы пер-приёмные people не вносили дрейф округления при
    * round-trip per-serving↔абсолют (0,25/6×6 → 0,252 вместо 0,25). */
   absoluteAmount?: number;
+  /** Composition-правки (§4) привязаны к приёму: PUT одного приёма не должен
+   * снимать правки других приёмов того же рецепта (паритет с per-meal editSet). */
+  mealId?: string;
 }
 const substitutions: Record<string, MockSubstitution[]> = {};
 let substitutionSeq = 1;
@@ -314,7 +317,7 @@ function editIngredientKey(ingredientId: string | null | undefined): string {
  * промежуточного округления — возвращаем чистое. Все корректные результаты уже проходят
  * это условие (разница ≤1e-9), поэтому поведение для них не меняется. */
 const normQty = (rounded: number, clean: number) =>
-  Math.abs(rounded - clean) < 1e-9 ? clean : rounded;
+  Math.abs(rounded - clean) <= 1e-9 ? clean : rounded;
 
 /** Граммы позиции: KG/L → ×1000; PCS/PACK → qty × pieceWeightG (эталон Java weightOfGrams). */
 function mockWeightGrams(qty: number, unit?: string, pieceWeightG?: number | null): number {
@@ -927,7 +930,15 @@ export const mockServer = {
     // каталожным ('rec1'), и по trip-scoped копиям ('rec1::ttrip1'); правки одного
     // рецепта должны находиться независимо от формы id (паритет с editRecipeKey).
     const recipeId = editRecipeKey(recipe.id);
-    const editsOf = () => allTripEdits(tripId).filter(s => editRecipeKey(s.recipeId) === recipeId);
+    // Область PUT — правки текущего приёма (mealId на записи; паритет с бэкендом,
+    // где composition хранит editSet per-meal) + legacy-правки без mealId. Иначе
+    // batch-PUT одного приёма снимал бы EXTRA/SCALE-правки других приёмов того же
+    // рецепта (тест 2b: гречка m3 теряла SCALED×1.5 при PUT нового приёма).
+    const ownEdit = (s: MockSubstitution) => s.mealId == null || String(s.mealId) === String(meal.id);
+    const editsOf = () => allTripEdits(tripId).filter(s => editRecipeKey(s.recipeId) === recipeId && ownEdit(s));
+    // Все composition-правки этого рецепта (включая другие приёмы) — для проверки
+    // «уже есть замена» перед созданием дубликата (уникальность from в рамках рецепта).
+    const recipeEdits = () => allTripEdits(tripId).filter(s => editRecipeKey(s.recipeId) === recipeId);
     const removeEdit = (s: MockSubstitution) => {
       substitutions[tripId] = (substitutions[tripId] || []).filter(x => x.id !== s.id);
       removedItems[tripId] = (removedItems[tripId] || []).filter(x => x.id !== s.id);
@@ -953,7 +964,7 @@ export const mockServer = {
         else list.push({
           id: `sub-${substitutionSeq++}`, recipeId, fromIngredientId: ingKey, toIngredientId: ingKey,
           amountPerServing: 0, ratio: Number(it.ratio), added: false, removed: false, scale: true,
-          comment: 'SCALE via composition',
+          mealId: String(meal.id), comment: 'SCALE via composition',
         });
       } else if (st === 'EXTRA') {
         keepExtra.add(editIngredientKey(ingId));
@@ -970,7 +981,7 @@ export const mockServer = {
         else list.push({
           id: `sub-${substitutionSeq++}`, recipeId, fromIngredientId: null, toIngredientId: targetId,
           amountPerServing: perServing, absoluteAmount: abs, ratio: 1, added: true, removed: false,
-          comment: 'EXTRA via composition',
+          mealId: String(meal.id), comment: 'EXTRA via composition',
         });
       } else if (st === 'EXCLUDED') {
         keepExcluded.add(editIngredientKey(ingId));
@@ -979,7 +990,8 @@ export const mockServer = {
         if (!has) {
           const created: MockSubstitution = {
             id: `rmv-${removedSeq++}`, recipeId, fromIngredientId: ingKey, toIngredientId: null,
-            amountPerServing: 0, ratio: 1, added: false, removed: true, comment: 'EXCLUDE via composition',
+            amountPerServing: 0, ratio: 1, added: false, removed: true,
+            mealId: String(meal.id), comment: 'EXCLUDE via composition',
           };
           (removedItems[tripId] || (removedItems[tripId] = [])).push(created);
         }
@@ -1018,7 +1030,7 @@ export const mockServer = {
         id: `sub-${substitutionSeq++}`, recipeId,
         fromIngredientId: editIngredientKey(String(dto.fromIngredientId)), toIngredientId: editIngredientKey(String(dto.toIngredientId)),
         amountPerServing: 0, ratio: Number(dto.ratio ?? 1) || 1, added: false, removed: false,
-        comment: 'SUBST via composition',
+        mealId: String(meal.id), comment: 'SUBST via composition',
       });
     }
   },
@@ -1090,7 +1102,6 @@ export const mockServer = {
       const toItem = itemsById.get(s.toIngredientId);
       const qtyFrom = effective.get(s.fromIngredientId) ?? 0;
       const moved = r3(qtyFrom * s.ratio);
-      effective.set(s.fromIngredientId, 0);
       const baseTo = toItem ? toItem.effectiveAmount : 0;
       let newState = toItem ? toItem.state : 'RECIPE';
       let newRatio = toItem ? toItem.ratio : null;
@@ -1100,12 +1111,19 @@ export const mockServer = {
       }
       const toP = compProduct(s.toIngredientId);
       const fromP = compProduct(s.fromIngredientId);
-      if (toP) {
-        itemsById.set(toP.id, toItem
-          ? { ...toItem, effectiveAmount: r3(baseTo + moved), state: newState, ratio: newRatio, substitutedFrom: fromP?.name ?? null }
-          : mkItem(toP, null, null, moved, newState, newRatio, fromP?.name ?? null));
+      // §3: источник обнуляем ДО начисления на to — иначе при to===from в одном
+      // PUT замена и SCALE одной позиции взаимно затеняют друг друга.
+      if (fromItem) {
+        itemsById.set(fromItem.ingredientId, { ...fromItem, effectiveAmount: 0 });
+        effective.set(s.fromIngredientId, 0);
       }
-      if (fromItem) itemsById.set(fromItem.ingredientId, { ...fromItem, effectiveAmount: 0 });
+      if (toP) {
+        const newEff = normQty(r3(baseTo + moved), baseTo + moved);
+        itemsById.set(toP.id, toItem
+          ? { ...toItem, effectiveAmount: newEff, state: newState, ratio: newRatio, substitutedFrom: fromP?.name ?? null }
+          : mkItem(toP, null, null, newEff, newState, newRatio, fromP?.name ?? null));
+        effective.set(toP.id, newEff);
+      }
       subDtos.push({
         id: s.id, fromIngredientId: s.fromIngredientId, fromName: fromP?.name ?? '',
         toIngredientId: s.toIngredientId, toName: toP?.name ?? '', ratio: s.ratio,
