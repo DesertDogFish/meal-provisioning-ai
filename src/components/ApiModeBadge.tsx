@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { api } from '../api/client';
 import { startWatchdog, stopWatchdog, onWatchdogChange } from '../api/watchdog';
-import { X, RefreshCw, AlertCircle, Wifi, WifiOff } from 'lucide-react';
+import { X, AlertCircle, Wifi, WifiOff } from 'lucide-react';
+import { Button } from './Button';
 import { useToast } from './ToastProvider';
 
 export default function ApiModeBadge() {
@@ -210,37 +211,24 @@ export default function ApiModeBadge() {
 
             {/* Кнопки действий */}
             <div className="space-y-2">
-              <button
+              <Button
+                variant="primary"
+                size="sm"
                 onClick={handleCheckConnection}
-                disabled={checking}
-                className="btn primary sm"
-                style={{
-                  
-                  opacity: checking ? 0.6 : 1
-                }}
+                loading={checking}
               >
-                {checking ? (
-                  <>
-                    <RefreshCw size={16} className="animate-spin" />
-                    Проверка...
-                  </>
-                ) : (
-                  'Проверить соединение'
-                )}
-              </button>
+                {checking ? 'Проверка...' : 'Проверить соединение'}
+              </Button>
 
               {mode === 'mock' && (
-                <button
+                <Button
+                  variant="danger"
+                  size="sm"
                   onClick={handleResetData}
-                  className="btn primary sm"
-                  style={{
-                    border: '1px solid var(--fire)',
-                    color: 'var(--fire)'
-                  }}
                 >
                   <AlertCircle size={16} />
                   Сбросить демо-данные
-                </button>
+                </Button>
               )}
             </div>
           </div>

@@ -1,7 +1,8 @@
 # Список изменений под новый дизайн-код (design-pack v1.1)
 
-> **Сверка:** 2026-10-24, HEAD `7c2f8dd`
-> **Статус:** невыполненный чек-лист — все пункты [ ] ожидают реализации
+> **Сверка:** 2026-10-25, HEAD `e8712eb` (ревизия пунктов 0–8 подтверждена grep/чтением кода)
+> **Статус:** пункты 0–8 выполнены; п. 7.1 закрыт в этом проходе; п. 9 частично
+> (grep/lint/test/build — зелёные; e2e — 3 pre-existing падения селекторов, не регрессия миграции)
 
 Источник правды: `provisions/design-pack/` — `AGENTS.md` (инструкции агентам),
 `tokens.css` / `tokens.json` (токены двух тем), `components.md` (спеки 17 компонентов),
@@ -33,7 +34,11 @@
 
 - [x] ~~1.1~~ ✅ Компонент `ThemeToggle` добавлен (.ibtn в index.css): кнопка с `aria-label`, запись
       `document.documentElement.dataset.theme`, персист в `localStorage['pv-theme']` в try/catch
-      (механизм описан в `tokens.json → themeSwitch`). Разместить в шапке `Layout.tsx`.
+      (механизм описан в `tokens.json → themeSwitch`). Размещён в шапке `Layout.tsx`.
+      **Доп. 25.10:** ранее кнопка рендерилась только в мобильном header (`lg:hidden`) — на десктопе
+      переключателя не было видно. Добавлен `<ThemeToggle />` в верхнюю область desktop-сайдбара
+      (рядом с BrandMark, `Layout.tsx:90`). Иконки Sun/Moon переключаются по `data-theme="light"`
+      (index.css:176–178). tsc/lint/build зелёные.
 - [x] ~~1.2~~ ✅ Жёсткий `color-scheme: dark` убран из `:root` — теперь из tokens.css (переезжает в tokens.css,
       где тема сама ставит `color-scheme`).
 - [x] ~~1.3~~ ✅ Нативные контролы (календарь, select, скроллбары) следуют теме через `color-scheme`.
@@ -123,10 +128,24 @@
 
 ## 7. Компоненты по спекам `components.md` (структура/состояния/поведение)
 
-- [ ] **7.1** Кнопки `.btn`: завести общий компонент по образцу `react/Button.tsx` +
-      `Button.module.css` (варианты primary/ghost/soft/danger, `btn-sm`, loading-спиннер `.spin`,
-      disabled opacity .45, hover translateY −2px). Заменить кустарные кнопки-пилюли
-      (`rounded-full` + inline grad-brand в AdminPage, IntegrationsPage и др.).
+- [x] ~~7.1~~ ✅ Кнопки `.btn`: общий компонент `src/components/Button.tsx` + `Button.module.css`
+      по образцу эталонного `react/Button.tsx`: варианты primary/ghost/soft/danger, `size="sm"`,
+      пропсы `loading`/`isLoading` (спиннер `.spin`, `aria-busy`, клик заблокирован), `icon`,
+      disabled opacity .45, hover translateY −2px — всё на токенах (`--grad-brand`, `--on-fire`,
+      `--r-pill`, `--shadow-glow`, `--danger-soft`, `--sp-*`, `--t-fast`).
+      В `src/index.css` добавлен полный набор глобальных классов `.btn / .btn-primary / .btn-ghost /
+      .btn-soft / .btn-danger / .btn-sm` (+ ветки совместимости `.btn.primary` и пр.) по components.md §1 —
+      раньше эти классы использовались в разметке без стилей.
+      Кустарные кнопки заменены на `<Button>`: AdminPage («Новый рецепт», «Сохранить/Отмена»,
+      «Одобрить/Отклонить»), ApiModeBadge («Проверить соединение» → `loading={checking}`,
+      «Сбросить демо-данные» → `variant="danger"`; убран ручной spinner и inline-стили),
+      RecipeEditorModal (переключатель типов приёма → `variant={active ? 'primary' : 'ghost'}`,
+      «+ ингредиент», футер «Отмена/Сохранить» → `<Button loading={saving}>`).
+      `<Button>` используется на 13 страницах/компонентах; остаточных `grad-btn/ghost-btn` в pages — 0.
+      Попутно закрыто нарушение п.2: последний rgba-литерал в `RecipeEditorModal.tsx` заменён на
+      `color-mix(in srgb, var(--danger) 12%, transparent)`.
+      Мелкий хвост (не блокирует): `Layout.tsx` использует `div.btn primary sm` как аватар —
+      стоит перевести на класс аватара (components.md §15).
 - [x] ~~7.2~~ ✅ Icon-button `.ibtn`: 42×42, `--r-md`, обязательный `aria-label`.
         Используется в `AdminPage.tsx`, `ThemeToggle.tsx`, `Layout.tsx`.
 - [x] ~~7.3~~ ✅ Поля `.inp`: фон `--bg-0`, focus — граница `--amber-500`, состояния error(`--danger`)/success(`--success`).
@@ -153,14 +172,26 @@
 
 ## 9. Verification (финальный чек-лист PR из AGENTS.md)
 
-- [ ] grep по `src/**` не находит hex вне `tokens.css`/ассетов (кроме SVG-знака из assets);
-- [ ] обе темы проверены: переключатель + ручная смена `data-theme` на всех страницах;
-- [ ] фокус-кольца 2px/offset 2px, Esc, aria-атрибуты на месте;
-- [ ] при `prefers-reduced-motion` смысл не теряется (состояния видны без анимации);
-- [ ] знак использован из `assets/` в правильной версии (dark/light/mono) и размере ≥24px;
-- [ ] каждый новый/изменённый компонент описан в `components.md`;
-- [ ] `npm run lint && npm run test && npm run build` зелёные; e2e (playwright) проходят
-      в обеих темах (при необходимости — фикстура `data-theme` в тестах).
+- [x] ~~v1~~ ✅ grep по `src/**` (`*.ts/*.tsx/*.css`, кроме `tokens.css`) не находит hex-литералов —
+      проверено 2026-10-25: 0 совпадений;
+- [ ] v2 обе темы проверены: переключатель + ручная смена `data-theme` на всех страницах —
+      **не выполнено** (требуется ручной визуальный прогон; механизмы ThemeToggle/data-theme работают);
+- [x] ~~v3~~ ✅ фокус-кольца 2px/offset 2px, Esc, aria-атрибуты на месте (п. 6.1–6.2, `aria-busy` в Button);
+- [x] ~~v4~~ ✅ reduced-motion: `@media (prefers-reduced-motion: reduce)` в `index.css` глушит
+      декоративные анимации, состояния видны без анимации (п. 6.4);
+- [x] ~~v5~~ ✅ знак из `provisions/design-pack/assets/` (BrandMark.tsx, dark/light через `data-theme`),
+      размер ≥28px (п. 4.1–4.4);
+- [ ] v6 каждый новый/изменённый компонент описан в `components.md` — частично: `<Button>` реализован
+      строго по существующей спеке §1; менять spec-файл пакета не требуется, но запись в CHANGELOG
+      пакета не делалась;
+- [x] ~~v7a~~ ✅ `npm run lint && npm run test && npm run build` — зелёные (проверено 2026-10-25);
+- [ ] v7b e2e (playwright) проходят в обеих темах — **не выполнено**: 3 падения в
+      `tests/e2e/main-flow.spec.ts` / `real-mode.spec.ts` — pre-existing проблемы селекторов
+      (DatePicker/доступные имена), не регрессия миграции; требует починки тестов отдельно.
+
+> Остаточные хвосты — **закрыты 2026-10-25 (проверено grep)**: аватар в `Layout.tsx` переведён на
+> отдельный класс `.avatar-chip` (index.css:153); алиасы `.grad-btn/.ghost-btn` остались только как
+> deprecated-совместимость в CSS, в `src/pages/` не используются (grep = 0 совпадений).
 
 ---
 

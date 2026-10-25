@@ -237,7 +237,7 @@ export default function TripDetailPage() {
     return (
       <div className="text-center py-12">
         <p style={{ color: 'var(--fire)' }}>{error || 'Поход не найден'}</p>
-        <button onClick={() => navigate('/trips')} className="mt-4 ghost-btn">← Назад к походам</button>
+        <Button variant="ghost" onClick={() => navigate('/trips')} className="mt-4">← Назад к походам</Button>
       </div>
     );
   }
