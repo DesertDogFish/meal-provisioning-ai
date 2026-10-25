@@ -19,9 +19,15 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.transaction.annotation.Transactional;
+import org.testcontainers.containers.PostgreSQLContainer;
+import com.provision.integration.ContainerSuite;
+import com.provision.integration.LocalPgFallback;
+import com.provision.integration.TestUsers;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -54,14 +60,32 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
-// IMPORT: @ContainerSuite — добавьте импорт по образцу MetaControllerTest.java
-// (аннотация объявлена в test-support пакете проекта; здесь она без импорта,
-//  чтобы не выдумывать пакет).
 @ContainerSuite
 @ActiveProfiles("test")
 @Transactional
 @DisplayName("E2E-ECON-01: Economic consistency across all screens")
 class EconomicConsistencyTest {
+
+    /** Docker есть -> Testcontainers; нет -> локальный PG-fallback (как в MetaControllerTest). */
+    private static final boolean LOCAL_PG = !LocalPgFallback.dockerAvailable();
+
+    static PostgreSQLContainer<?> postgres = LOCAL_PG ? null : new PostgreSQLContainer<>("postgres:15-alpine")
+            .withDatabaseName("provision_test_econ")
+            .withUsername("test")
+            .withPassword("test");
+
+    static {
+        if (!LOCAL_PG && postgres != null && !postgres.isRunning()) {
+            postgres.start();
+        }
+    }
+
+    @DynamicPropertySource
+    static void configureProperties(DynamicPropertyRegistry registry) {
+        registry.add("spring.datasource.url", () -> LOCAL_PG ? LocalPgFallback.jdbcUrl("provision_test_econ") : postgres.getJdbcUrl());
+        registry.add("spring.datasource.username", () -> LOCAL_PG ? "test" : postgres.getUsername());
+        registry.add("spring.datasource.password", () -> LOCAL_PG ? "test" : postgres.getPassword());
+    }
 
     // === FIXTURES ===
     private static final LocalDate START_DATE = LocalDate.of(2026, 7, 1);
@@ -76,12 +100,16 @@ class EconomicConsistencyTest {
 
     @Autowired private MockMvc mockMvc;
     @Autowired private ObjectMapper objectMapper;
+    @Autowired private org.springframework.jdbc.core.JdbcTemplate jdbc;
 
     private String userToken;
 
     @BeforeEach
     void setUp() throws Exception {
-        userToken = registerAndLogin("e2econ@test.com");
+        // Ингредиентами (POST /api/v1/admin/ingredients) и рецептами (/api/v1/admin/recipes)
+        // управляет только ADMIN — register-API роль задать не даёт, поэтому заводим
+        // админа через TestUsers.createAdmin (raw SQL + логин), как в ConflictIntegrationTest.
+        userToken = TestUsers.createAdmin(mockMvc, objectMapper, jdbc, "e2econ@test.com");
 
         createIngredient("Гречка", "buckwheat", "KG", 100);
         createIngredient("Тушёнка", "tushonka", "KG", 200);
@@ -517,9 +545,9 @@ class EconomicConsistencyTest {
 
     private void createIngredient(String name, String code, String unit, int kcal) throws Exception {
         String body = String.format(
-                "{\"name\":\"%s\",\"code\":\"%s\",\"unit\":\"%s\",\"kcalPer100g\":%d}",
+                "{\"name\":\"%s\",\"code\":\"%s\",\"unit\":\"%s\",\"category\":\"E2E\",\"kcalPer100g\":%d}",
                 name, code, unit, kcal);
-        mockMvc.perform(post("/api/v1/ingredients")
+        mockMvc.perform(post("/api/v1/admin/ingredients")
                         .header("Authorization", "Bearer " + userToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body))
@@ -527,7 +555,7 @@ class EconomicConsistencyTest {
     }
 
     private Long getIngredientIdByName(String name) throws Exception {
-        MvcResult result = mockMvc.perform(get("/api/v1/ingredients")
+        MvcResult result = mockMvc.perform(get("/api/v1/admin/ingredients")
                         .header("Authorization", "Bearer " + userToken))
                 .andExpect(status().isOk())
                 .andReturn();
