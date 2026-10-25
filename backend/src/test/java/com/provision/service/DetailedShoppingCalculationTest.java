@@ -49,7 +49,7 @@ class DetailedShoppingCalculationTest {
         // TripIngredientEditService. В этом тесте используются только чистые
         // методы (calculateEffectivePeople/calculateAmountForMeal), репозитории
         // не обращаются — передаём null, как и раньше для priceResolutionService.
-        summaryService = new SummaryService(tripRepository, priceRepository, recipeRepository, null, null, null);
+        summaryService = new SummaryService(tripRepository, priceRepository, recipeRepository, null, null, null, null);
 
         // === КОМПОНЕНТЫ ===
         ingGrechka = Ingredient.builder().id(1L).name("Гречка").unit(UnitOfMeasure.KG).build();

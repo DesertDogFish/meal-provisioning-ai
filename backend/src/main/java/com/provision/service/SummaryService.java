@@ -23,6 +23,7 @@ public class SummaryService {
     private final TripRepository tripRepository;
     private final IngredientPriceRepository priceRepository;
     private final RecipeRepository recipeRepository;
+    private final IngredientRepository ingredientRepository; // FIX V20: резолв снепшотов в loadLatestPrices
     private final PriceResolutionService priceResolutionService;
     private final TripIngredientSubstitutionRepository substitutionRepository;
     private final TripIngredientEditService tripIngredientEditService; // Фаза 14 (N3)
@@ -306,8 +307,24 @@ public class SummaryService {
         }
         Map<Long, List<IngredientPrice>> overallPriceSeries = new HashMap<>();
         if (!needHistoryOverall.isEmpty()) {
-            for (IngredientPrice p : priceRepository.findByIngredientIdInOrderByEffectiveFromDesc(needHistoryOverall)) {
-                overallPriceSeries.computeIfAbsent(p.getIngredient().getId(), k -> new ArrayList<>()).add(p);
+            // FIX V20: needHistoryOverall содержит id СТРОК РЕЦЕПТОВ БЛЮД (для снепшотов —
+            // id копий), а история цен лежит на оригиналах. Грузим ряд по id оригиналов и
+            // раскладываем в map под запрошенным id (snowflake-key = ключ plannedPricesByIngredient).
+            Map<Long, Long> toLookupOverall = new HashMap<>();
+            for (Long requested : needHistoryOverall) {
+                Ingredient ing = ingredientRepository.findById(requested).orElse(null);
+                toLookupOverall.put(requested, ing != null && ing.getSnapshotOf() != null ? ing.getSnapshotOf() : requested);
+            }
+            Set<Long> lookupIdsOverall = new HashSet<>(toLookupOverall.values());
+            Map<Long, List<IngredientPrice>> byOriginal = new HashMap<>();
+            for (IngredientPrice p : priceRepository.findByIngredientIdInOrderByEffectiveFromDesc(lookupIdsOverall)) {
+                byOriginal.computeIfAbsent(p.getIngredient().getId(), k -> new ArrayList<>()).add(p);
+            }
+            for (Map.Entry<Long, Long> e : toLookupOverall.entrySet()) {
+                List<IngredientPrice> series = byOriginal.get(e.getValue());
+                if (series != null) {
+                    overallPriceSeries.put(e.getKey(), series);
+                }
             }
         }
 
@@ -459,8 +476,22 @@ public class SummaryService {
                 }
             }
             if (!needHistory.isEmpty()) {
-                for (IngredientPrice p : priceRepository.findByIngredientIdInOrderByEffectiveFromDesc(needHistory)) {
-                    priceSeries.computeIfAbsent(p.getIngredient().getId(), k -> new ArrayList<>()).add(p);
+                // FIX V20: см. выше — ряды истории резолвятся через snapshot_of оригиналы.
+                Map<Long, Long> toLookup = new HashMap<>();
+                for (Long requested : needHistory) {
+                    Ingredient ing = ingredientRepository.findById(requested).orElse(null);
+                    toLookup.put(requested, ing != null && ing.getSnapshotOf() != null ? ing.getSnapshotOf() : requested);
+                }
+                Set<Long> lookupIds = new HashSet<>(toLookup.values());
+                Map<Long, List<IngredientPrice>> byOriginal = new HashMap<>();
+                for (IngredientPrice p : priceRepository.findByIngredientIdInOrderByEffectiveFromDesc(lookupIds)) {
+                    byOriginal.computeIfAbsent(p.getIngredient().getId(), k -> new ArrayList<>()).add(p);
+                }
+                for (Map.Entry<Long, Long> e : toLookup.entrySet()) {
+                    List<IngredientPrice> series = byOriginal.get(e.getValue());
+                    if (series != null) {
+                        priceSeries.put(e.getKey(), series);
+                    }
                 }
             }
         }
@@ -792,12 +823,30 @@ public class SummaryService {
         if (ingredientIds == null || ingredientIds.isEmpty()) {
             return Map.of();
         }
+        // FIX (V20 copy-on-write, E2E-ECON-01 EK-05/EK-07): плановые цены хранятся на
+        // ГЛОБАЛЬНОМ ингредиенте (POST /admin/ingredient-prices), а расчётное ядро резолвит
+        // их по id строки рецепта блюда — после V20 это trip-scoped снепшот с ДРУГИМ id.
+        // Без fallback плановая цена снепшота отсутствовала бы (hasMissingPrices, plannedCost
+        // = null, итог 225 вместо 225.30 и т.п.). Подменяем id снепшотов на id оригиналов;
+        // глобальные ингредиенты (snapshotOf == null) резолвятся как раньше.
+        List<Ingredient> entities = ingredientRepository.findAllById(ingredientIds);
+        Set<Long> lookupIds = new HashSet<>();
+        for (Ingredient ing : entities) {
+            lookupIds.add(ing.getSnapshotOf() != null ? ing.getSnapshotOf() : ing.getId());
+        }
         Map<Long, IngredientPrice> result = new HashMap<>();
-        for (IngredientPrice p : priceRepository.findLatestPricesAsOfForIngredients(date, ingredientIds)) {
+        for (IngredientPrice p : priceRepository.findLatestPricesAsOfForIngredients(date, lookupIds)) {
             // DISTINCT ON + ORDER BY effective_from DESC => первая запись на ингредиент — самая свежая.
             result.putIfAbsent(p.getIngredient().getId(), p);
         }
-        return result;
+        Map<Long, IngredientPrice> byRequestedId = new HashMap<>();
+        for (Ingredient ing : entities) {
+            IngredientPrice p = result.get(ing.getSnapshotOf() != null ? ing.getSnapshotOf() : ing.getId());
+            if (p != null) {
+                byRequestedId.put(ing.getId(), p);
+            }
+        }
+        return byRequestedId;
     }
 
     /**

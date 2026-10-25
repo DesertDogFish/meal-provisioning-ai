@@ -54,7 +54,7 @@ class ShoppingListCostAggregationBugTest {
         when(substitutionRepository.findAllEditsForTrip(org.mockito.ArgumentMatchers.anyLong()))
             .thenReturn(Collections.emptyList());
         tripIngredientEditService = new TripIngredientEditService(substitutionRepository, null);
-        summaryService = new SummaryService(tripRepository, priceRepository, recipeRepository, priceResolutionService, substitutionRepository, tripIngredientEditService);
+        summaryService = new SummaryService(tripRepository, priceRepository, recipeRepository, null, priceResolutionService, substitutionRepository, tripIngredientEditService);
     }
 
     @Test

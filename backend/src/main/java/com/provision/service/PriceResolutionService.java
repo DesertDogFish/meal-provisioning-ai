@@ -11,6 +11,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import com.provision.entity.Ingredient;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -42,14 +44,32 @@ public class PriceResolutionService {
     }
 
     /**
-     * Получить все оверрайды для похода
+     * Получить все оверрайды для похода.
+     *
+     * FIX (V20 copy-on-write, E2E-ECON-01 EK-07 «факт 806.3 вместо 816.3»): UI/API пишет
+     * trip_price_overrides на id ГЛОБАЛЬНОГО ингредиента (PUT /trips/{tripId}/price-overrides/
+     * {ingredientId} — пользователь выбирает продукт из справочника), а расчётное ядро
+     * (SummaryService.computeShopping) резолвит оверрайд по id строки рецепта блюда — после
+     * V20 это trip-scoped снепшот с ДРУГИМ id. Без дублирования ключа override никогда не
+     * применялся к походам со снепшотами. Регистрируем запись и под id оригинала
+     * (snapshotOf), и под id самого снепшота; merge-function оставляет первое значение —
+     * поведение для глобальных ингредиентов (snapshotOf == null) не меняется.
      */
     public Map<Long, BigDecimal> getAllOverrides(Long tripId) {
-        return overrideRepository.findByTripId(tripId).stream()
-                .collect(Collectors.toMap(
-                        override -> override.getIngredient().getId(),
-                        TripPriceOverride::getActualPrice
-                ));
+        Map<Long, BigDecimal> result = new HashMap<>();
+        for (TripPriceOverride override : overrideRepository.findByTripId(tripId)) {
+            BigDecimal price = override.getActualPrice();
+            if (price == null) {
+                continue;
+            }
+            Ingredient ingredient = override.getIngredient();
+            Long snapshotId = ingredient.getId();
+            result.putIfAbsent(snapshotId, price);
+            if (ingredient.getSnapshotOf() != null) {
+                result.putIfAbsent(ingredient.getSnapshotOf(), price);
+            }
+        }
+        return result;
     }
 
     /**
