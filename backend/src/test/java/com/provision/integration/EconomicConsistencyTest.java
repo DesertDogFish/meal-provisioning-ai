@@ -188,6 +188,14 @@ class EconomicConsistencyTest {
         renameSeed("butter", "Масло");
         renameSeed("rice", "Рис");
         renameSeed("salt", "Соль");
+        // Сид V13__seed_price_history сеет на сидовые ингредиенты месячные срезы цен за
+        // 2024-2026 (включая даты дней похода), а IngredientPriceService.addPrice даёт 409
+        // при existsByIngredientIdAndEffectiveFrom — чистим ряд, чтобы baseline-цены
+        // фикстур (setPrice ниже) были единственными эффективными.
+        for (String code : new String[]{"buckwheat", "tushonka", "butter", "rice", "salt"}) {
+            jdbc.update("DELETE FROM ingredient_prices WHERE ingredient_id = " +
+                    "(SELECT id FROM ingredients WHERE code = ?)", code);
+        }
         deleteIngredient(grechkaId);
         deleteIngredient(tushenkaId);
         deleteIngredient(butterId);
