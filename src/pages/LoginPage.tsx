@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import { Mail, Lock, User, Eye, EyeOff } from 'lucide-react';
 import BrandMark from '../components/BrandMark';
+import { Button } from '../components/Button';
 
 interface AuthResponse {
   accessToken: string;
@@ -189,18 +190,9 @@ export default function LoginPage() {
               </div>
             </div>
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="grad-btn w-full py-3 font-semibold"
-              style={{ 
-                
-                opacity: loading ? 0.6 : 1,
-                cursor: loading ? 'not-allowed' : 'pointer'
-              }}
-            >
-              {loading ? 'Загрузка...' : (isRegister ? 'Зарегистрироваться' : 'Войти')}
-            </button>
+            <Button type="submit" variant="primary" loading={loading} className="w-full">
+              {isRegister ? 'Зарегистрироваться' : 'Войти'}
+            </Button>
           </form>
 
           <div className="mt-6 text-center">

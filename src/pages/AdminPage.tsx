@@ -345,10 +345,9 @@ export default function AdminPage() {
         <div className="space-y-4">
           <div className="flex justify-between items-center">
             <p className="text-sm" style={{ color: 'var(--muted)' }}>{recipes.length} рецептов</p>
-            <button onClick={() => setShowRecForm(true)}
-              className="btn primary sm">
+            <Button variant="primary" size="sm" onClick={() => setShowRecForm(true)}>
               <Plus size={16} /> Новый рецепт
-            </button>
+            </Button>
           </div>
 
           {showRecForm && (
@@ -392,8 +391,8 @@ export default function AdminPage() {
                   className="text-sm" style={{ color: 'var(--w1)' }}>+ Добавить ингредиент</button>
               </div>
               <div className="flex gap-2">
-                <button onClick={handleSaveRecipe} className="btn primary sm">Сохранить</button>
-                <button onClick={() => setShowRecForm(false)} className="px-4 py-2 text-sm" style={{ color: 'var(--muted)' }}>Отмена</button>
+                <Button variant="primary" size="sm" onClick={handleSaveRecipe}>Сохранить</Button>
+                <Button variant="ghost" size="sm" onClick={() => setShowRecForm(false)}>Отмена</Button>
               </div>
             </div>
           )}
@@ -457,14 +456,12 @@ export default function AdminPage() {
                   </div>
                   {staging.status === 'PENDING' && (
                     <div className="flex gap-2">
-                      <button onClick={() => handleApproveStaging(staging.id)}
-                        className="btn primary sm">
+                      <Button variant="primary" size="sm" onClick={() => handleApproveStaging(staging.id)}>
                         <Check size={14} /> Одобрить
-                      </button>
-                      <button onClick={() => handleRejectStaging(staging.id)}
-                        className="btn primary sm" style={{ border: '1px solid color-mix(in srgb, var(--danger) 30%, transparent)', color: 'var(--danger)' }}>
+                      </Button>
+                      <Button variant="danger" size="sm" onClick={() => handleRejectStaging(staging.id)}>
                         <X size={14} /> Отклонить
-                      </button>
+                      </Button>
                     </div>
                   )}
                 </div>

@@ -39,6 +39,8 @@ interface MockSubstitution {
   added: boolean;
   removed?: boolean;               // true = мягкое удаление (рецепт в каталоге не тронут)
   comment?: string;
+  /** FORM-meal-composition-spec: SCALED-правка хранится как «замена на себя» (from===to). */
+  scale?: boolean;
 }
 const substitutions: Record<string, MockSubstitution[]> = {};
 let substitutionSeq = 1;
@@ -248,6 +250,50 @@ function findUsedIn(productId: string): { resourceType: string; resourceId: stri
 }
 
 // Обработчик запросов
+/** FORM-meal-composition-spec §3: scale 3 HALF_UP (эталон Java setScale(3, HALF_UP)). */
+const r3 = (x: number) => Math.round((x + Number.EPSILON) * 1000) / 1000;
+const r2 = (x: number) => Math.round((x + Number.EPSILON) * 100) / 100;
+
+/**
+ * FORM-meal-composition-spec §4.4 (mock-паритет): разложение правок похода для
+ * рецепта на категории — те же правила, что в MealCompositionService.buildResponse:
+ * added/from=null → EXTRA; removed/to=null → EXCLUDE; from===to → SCALE; else → SUBST.
+ */
+function classifyMealEdits(tripId: string, recipeId: string) {
+  const scaleRatios: Record<string, number> = {};
+  const extraAmounts: Record<string, number> = {}; // абсолют на приём = amountPerServing × people
+  const excluded = new Set<string>();
+  const replacements: { id: string; fromIngredientId: string; toIngredientId: string; ratio: number }[] = [];
+  for (const s of allTripEdits(tripId)) {
+    if (s.recipeId !== recipeId) continue;
+    const from = s.fromIngredientId == null ? null : String(s.fromIngredientId);
+    const to = s.toIngredientId == null ? null : String(s.toIngredientId);
+    if (s.added || from == null) {
+      if (to != null && s.amountPerServing != null) extraAmounts[to] = s.amountPerServing;
+    } else if (s.removed || to == null) {
+      excluded.add(from);
+    } else if (from === to) {
+      scaleRatios[from] = s.ratio ?? 1;
+    } else {
+      replacements.push({ id: s.id, fromIngredientId: from, toIngredientId: to, ratio: s.ratio ?? 1 });
+    }
+  }
+  return { scaleRatios, extraAmounts, excluded, replacements };
+}
+
+/** Граммы позиции: KG/L → ×1000; PCS/PACK → qty × pieceWeightG (эталон Java weightOfGrams). */
+function mockWeightGrams(qty: number, unit?: string, pieceWeightG?: number | null): number {
+  if (unit === 'KG' || unit === 'L') return qty * 1000;
+  if (pieceWeightG != null && pieceWeightG > 0) return qty * pieceWeightG;
+  return 0;
+}
+
+/** Ккал позиции: kcalPer100g × граммы / 100 (эталон Java kcalOf). */
+function mockKcalOf(qty: number, unit?: string, kcalPer100g?: number | null, pieceWeightG?: number | null): number {
+  if (kcalPer100g == null) return 0;
+  return (mockWeightGrams(qty, unit, pieceWeightG) * kcalPer100g) / 100;
+}
+
 export const mockServer = {
   handleRequest<T>(method: string, path: string, body?: any): T {
     // Отрезаем query string для матчинга маршрута
@@ -765,6 +811,242 @@ export const mockServer = {
     return copy;
   },
 
+  /**
+   * FORM-meal-composition-spec §4.2/§4.4: GET/PUT /trips/:t/meals/:m/composition.
+   * In-memory правки (substitutions-хранилище) трактуются ровно как на бэкенде
+   * (MealCompositionService): SCALE = from===to, EXTRA = added (абсолют на приём,
+   * хранится per-serving), EXCLUDE = removed/to=null, SUBST = from→to × ratio.
+   */
+  handleMealComposition(method: string, tripId: string, mealId: string, body?: any): any {
+    const trip = trips.find(t => t.id === tripId);
+    if (!trip) throw { status: 404, message: 'Not found', detail: `Trip ${tripId} not found` } as any;
+    let day: any = null;
+    let meal: any = null;
+    for (const d of trip.days || []) {
+      const m = (d.meals || []).find((x: any) => String(x.id) === String(mealId));
+      if (m) { day = d; meal = m; }
+    }
+    if (!meal) throw { status: 404, message: 'Not found', detail: `Meal ${mealId} not found in trip` } as any;
+    const recipe: any = recipes.find(r => r.id === meal.recipeId);
+    if (!recipe) throw { status: 404, message: 'Not found', detail: `Recipe ${meal.recipeId} not found` } as any;
+
+    if (method === 'PUT') this.applyCompositionPut(tripId, day, meal, recipe, body);
+    return this.buildCompositionResponse(trip, day, meal, recipe);
+  },
+
+  /** Атомарный диф-коммит желаемого состояния (паритет с MealCompositionService.putComposition). */
+  applyCompositionPut(tripId: string, day: any, meal: any, recipe: any, body: any): void {
+    const items: any[] = body?.items ?? [];
+    if (!Array.isArray(body?.items)) throw { status: 400, message: 'Bad request', detail: 'items are required' } as any;
+
+    // Валидации спеки §4.2: state/amount/ratio > 0, дубли ingredientId → 400
+    const seen = new Set<string>();
+    for (const it of items) {
+      const st = String(it.state ?? '');
+      if (!['RECIPE', 'SCALED', 'EXTRA', 'EXCLUDED'].includes(st)) {
+        throw { status: 400, message: 'Bad request', detail: `Unknown state: ${st}` } as any;
+      }
+      if (st === 'EXTRA' && !(Number(it.amount) > 0)) {
+        throw { status: 400, message: 'Bad request', detail: 'EXTRA requires amount > 0' } as any;
+      }
+      if (st === 'SCALED' && !(Number(it.ratio) > 0)) {
+        throw { status: 400, message: 'Bad request', detail: 'SCALED requires ratio > 0' } as any;
+      }
+      const key = String(it.ingredientId);
+      if (seen.has(key)) throw { status: 400, message: 'Bad request', detail: `Duplicate ingredientId: ${key}` } as any;
+      seen.add(key);
+    }
+    const subs: any[] = body?.substitutions ?? [];
+    const subSeen = new Set<string>();
+    for (const s of subs) {
+      if (String(s.fromIngredientId) === String(s.toIngredientId)) {
+        throw { status: 400, message: 'Bad request', detail: 'From and to ingredients must be different' } as any;
+      }
+      if (s.ratio != null && !(Number(s.ratio) > 0)) {
+        throw { status: 400, message: 'Bad request', detail: 'substitution ratio must be > 0' } as any;
+      }
+      if (subSeen.has(String(s.fromIngredientId))) {
+        throw { status: 400, message: 'Bad request', detail: `Duplicate substitution from: ${s.fromIngredientId}` } as any;
+      }
+      subSeen.add(String(s.fromIngredientId));
+    }
+    for (const id of [...seen, ...subs.flatMap(s => [String(s.fromIngredientId), String(s.toIngredientId)])]) {
+      if (!products.find(p => p.id === id)) {
+        throw { status: 404, message: 'Not found', detail: `Ingredient not found: ${id}` } as any;
+      }
+    }
+
+    const list = substitutions[tripId] || (substitutions[tripId] = []);
+    const recipeId = recipe.id;
+    const editsOf = () => allTripEdits(tripId).filter(s => s.recipeId === recipeId);
+    const removeEdit = (s: MockSubstitution) => {
+      substitutions[tripId] = (substitutions[tripId] || []).filter(x => x.id !== s.id);
+      removedItems[tripId] = (removedItems[tripId] || []).filter(x => x.id !== s.id);
+    };
+
+    // people для EXTRA-конверсии — та же формула, что в buildCompositionResponse
+    const tripObj = trips.find(t => t.id === tripId);
+    const people = meal.peopleOverride ?? day?.peopleOverride ?? tripObj?.defaultPeople ?? 1;
+    const keepScaled = new Set<string>();
+    const keepExtra = new Set<string>();
+    const keepExcluded = new Set<string>();
+
+    for (const it of items) {
+      const ingId = String(it.ingredientId);
+      const st = String(it.state);
+      if (st === 'SCALED') {
+        keepScaled.add(ingId);
+        const ex = editsOf().find(s => !s.added && s.fromIngredientId != null && s.toIngredientId == null && String(s.fromIngredientId) === ingId);
+        if (ex) removeEdit(ex); // SCALED поверх EXCLUDED снимает исключение
+        const existing = editsOf().find(s => s.fromIngredientId != null && String(s.fromIngredientId) === ingId && String(s.toIngredientId) === ingId);
+        if (existing) existing.ratio = Number(it.ratio);
+        else list.push({
+          id: `sub-${substitutionSeq++}`, recipeId, fromIngredientId: ingId, toIngredientId: ingId,
+          amountPerServing: 0, ratio: Number(it.ratio), added: false, removed: false, scale: true,
+          comment: 'SCALE via composition',
+        });
+      } else if (st === 'EXTRA') {
+        keepExtra.add(ingId);
+        // абсолют на приём → храним per-serving (паритет с конвейером закупки)
+        const perServing = r3(Number(it.amount) / people);
+        const existing = editsOf().find(s => (s.added || s.fromIngredientId == null) && String(s.toIngredientId) === ingId);
+        if (existing) existing.amountPerServing = perServing;
+        else list.push({
+          id: `sub-${substitutionSeq++}`, recipeId, fromIngredientId: null, toIngredientId: ingId,
+          amountPerServing: perServing, ratio: 1, added: true, removed: false,
+          comment: 'EXTRA via composition',
+        });
+      } else if (st === 'EXCLUDED') {
+        keepExcluded.add(ingId);
+        const has = editsOf().some(s => s.removed || (s.fromIngredientId != null && s.toIngredientId == null && String(s.fromIngredientId) === ingId));
+        if (!has) {
+          const created: MockSubstitution = {
+            id: `rmv-${removedSeq++}`, recipeId, fromIngredientId: ingId, toIngredientId: null,
+            amountPerServing: 0, ratio: 1, added: false, removed: true, comment: 'EXCLUDE via composition',
+          };
+          (removedItems[tripId] || (removedItems[tripId] = [])).push(created);
+        }
+      }
+    }
+    // Снимаем правки, которых нет в desired-состоянии (state=RECIPE или позиция исчезла)
+    for (const s of editsOf()) {
+      const from = s.fromIngredientId == null ? null : String(s.fromIngredientId);
+      const to = s.toIngredientId == null ? null : String(s.toIngredientId);
+      if (s.added || from == null) {
+        if (to != null && !keepExtra.has(to)) removeEdit(s);
+      } else if (s.removed || to == null) {
+        if (!keepExcluded.has(from!)) removeEdit(s);
+      } else if (from === to) {
+        if (!keepScaled.has(from)) removeEdit(s);
+      }
+    }
+    // Замены: полная замена набора from→to
+    for (const s of editsOf()) {
+      if (s.fromIngredientId != null && s.toIngredientId != null && String(s.fromIngredientId) !== String(s.toIngredientId)) {
+        removeEdit(s);
+      }
+    }
+    for (const dto of subs) {
+      list.push({
+        id: `sub-${substitutionSeq++}`, recipeId,
+        fromIngredientId: String(dto.fromIngredientId), toIngredientId: String(dto.toIngredientId),
+        amountPerServing: 0, ratio: Number(dto.ratio ?? 1) || 1, added: false, removed: false,
+        comment: 'SUBST via composition',
+      });
+    }
+  },
+
+  /** Сборка ответа composition — тот же порядок, что §3 и buildResponse на Java. */
+  buildCompositionResponse(trip: any, day: any, meal: any, recipe: any): any {
+    const people = meal.peopleOverride ?? day.peopleOverride ?? trip.defaultPeople ?? 1;
+    const baseServings = recipe.baseServings && recipe.baseServings > 0 ? recipe.baseServings : 1;
+    const { scaleRatios, extraAmounts, excluded, replacements } = classifyMealEdits(trip.id, recipe.id);
+
+    type CompItem = Record<string, any>;
+    const itemsById = new Map<string, CompItem>();
+    const effective = new Map<string, number>();
+
+    const mkItem = (p: any, base: number | null, derived: number | null, eff: number,
+                    state: string, ratio: number | null, substitutedFrom: string | null): CompItem => ({
+      ingredientId: p.id, name: p.name, unit: p.unit, packSize: p.packSize ?? null,
+      pieceWeightG: p.pieceWeightG ?? null, kcalPer100g: p.kcalPer100g ?? null,
+      baseAmountPerServing: base, derivedAmount: derived, effectiveAmount: eff,
+      state, ratio, substitutedFrom,
+    });
+
+    for (const ri of recipe.ingredients || []) {
+      const p = products.find(x => x.id === ri.ingredientId);
+      if (!p) continue;
+      if (excluded.has(String(ri.ingredientId))) {
+        itemsById.set(p.id, mkItem(p, ri.amount, null, 0, 'EXCLUDED', null, null));
+        effective.set(p.id, 0);
+        continue;
+      }
+      const ratio = scaleRatios[String(ri.ingredientId)];
+      let derived = r3((ri.amount / baseServings) * people);
+      if (ratio != null) derived = r3(derived * ratio);
+      itemsById.set(p.id, mkItem(p, ri.amount, derived, derived, ratio != null ? 'SCALED' : 'RECIPE', ratio ?? null, null));
+      effective.set(p.id, derived);
+    }
+    for (const [id, aps] of Object.entries(extraAmounts)) {
+      const p = products.find(x => x.id === id);
+      if (!p) continue;
+      const abs = r3(aps * people); // пер-serving обратно в абсолют на приём
+      itemsById.set(p.id, mkItem(p, null, null, abs, 'EXTRA', null, null));
+      effective.set(p.id, abs);
+    }
+
+    // substitutions: qty[to] += qty[from]×ratio; qty[from]:=0; state наследуется (§3)
+    const subDtos: any[] = [];
+    for (const s of replacements) {
+      const fromItem = itemsById.get(s.fromIngredientId);
+      const toItem = itemsById.get(s.toIngredientId);
+      const qtyFrom = effective.get(s.fromIngredientId) ?? 0;
+      const moved = r3(qtyFrom * s.ratio);
+      effective.set(s.fromIngredientId, 0);
+      const baseTo = toItem ? toItem.effectiveAmount : 0;
+      let newState = toItem ? toItem.state : 'RECIPE';
+      let newRatio = toItem ? toItem.ratio : null;
+      if (!toItem || newState === 'RECIPE') {
+        if (fromItem?.state === 'SCALED') { newState = 'SCALED'; newRatio = scaleRatios[s.fromIngredientId] ?? null; }
+        else if (fromItem?.state === 'EXTRA') newState = 'EXTRA';
+      }
+      const toP = products.find(x => x.id === s.toIngredientId);
+      const fromP = products.find(x => x.id === s.fromIngredientId);
+      if (toP) {
+        itemsById.set(toP.id, toItem
+          ? { ...toItem, effectiveAmount: r3(baseTo + moved), state: newState, ratio: newRatio, substitutedFrom: fromP?.name ?? null }
+          : mkItem(toP, null, null, moved, newState, newRatio, fromP?.name ?? null));
+      }
+      if (fromItem) itemsById.set(fromItem.ingredientId, { ...fromItem, effectiveAmount: 0 });
+      subDtos.push({
+        id: s.id, fromIngredientId: s.fromIngredientId, fromName: fromP?.name ?? '',
+        toIngredientId: s.toIngredientId, toName: toP?.name ?? '', ratio: s.ratio,
+      });
+    }
+
+    // totals: ккал, вес (г), план-стоимость (₽ scale 2)
+    let kcal = 0, weightGrams = 0, plannedCost = 0;
+    const items = [...itemsById.values()].map(i => {
+      const qty = i.effectiveAmount ?? 0;
+      const kcalTotal = qty > 0 ? r3(mockKcalOf(qty, i.unit, i.kcalPer100g, i.pieceWeightG)) : 0;
+      if (qty > 0) {
+        kcal += mockKcalOf(qty, i.unit, i.kcalPer100g, i.pieceWeightG);
+        weightGrams += mockWeightGrams(qty, i.unit, i.pieceWeightG);
+        const price = priceOf(i.ingredientId);
+        if (price != null) plannedCost += qty * price;
+      }
+      return { ...i, kcalTotal };
+    });
+
+    return {
+      mealId: meal.id, dayDate: day.dayDate, mealType: meal.mealType, people,
+      baseServings, recipeId: recipe.id, recipeName: recipe.name,
+      items, substitutions: subDtos,
+      totals: { kcal: r3(kcal), weightGrams: r3(weightGrams), plannedCost: r2(plannedCost) },
+    };
+  },
+
   handleTrips(method: string, path: string, body?: any): any {
     const parts = path.split('/').filter(Boolean);
 
@@ -826,6 +1108,42 @@ export const mockServer = {
       if (method === 'GET') {
         return day.meals;
       }
+    }
+
+    // ===== FORM-meal-composition-spec §4.2/§4.4: состав приёма (Модалка B) =====
+    // GET/PUT /trips/:id/meals/:mealId/composition — mock-паритет с реальным бэкендом:
+    // сервер считает ВСЁ масштабирование (§3: SCALE → people → EXCLUDE → EXTRA → SUBST).
+    if (parts.length === 5 && parts[2] === 'meals' && parts[4] === 'composition') {
+      return this.handleMealComposition(method, parts[1], parts[3], body) as any;
+    }
+
+    // FORM-meal-composition-spec §2.2: после batch PUT UI делает refetch summary (T6-пайплайн).
+    // Mock-паритет: агрегируем composition-ответы всех приёмов похода в kcal/weight/cost.
+    if (parts.length === 2 && parts[1] === 'summary' && method === 'GET') {
+      const tripId = parts[0];
+      const trip = trips.find(t => t.id === tripId);
+      if (!trip) throw { status: 404, message: 'Not found', detail: `Trip ${tripId} not found` } as any;
+      let kcal = 0, weightGrams = 0, plannedCost = 0, mealCount = 0;
+      for (const d of trip.days || []) {
+        for (const m of d.meals || []) {
+          try {
+            const rec: any = recipes.find(r => r.id === m.recipeId);
+            if (!rec) continue;
+            const comp = this.buildCompositionResponse(trip, d, m, rec);
+            kcal += comp.totals.kcal;
+            weightGrams += comp.totals.weightGrams;
+            plannedCost += comp.totals.plannedCost;
+            mealCount++;
+          } catch { /* приём без блюда — пропускаем */ }
+        }
+      }
+      return {
+        tripId,
+        mealCount,
+        kcalTotal: r2(kcal),
+        weightGrams: r3(weightGrams),
+        plannedCost: r2(plannedCost),
+      };
     }
 
     // DELETE /trips/:id/days/:dayId/meals/:mealId

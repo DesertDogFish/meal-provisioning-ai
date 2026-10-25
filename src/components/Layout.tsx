@@ -82,10 +82,12 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           <div id="pv-mark" className="w-10 h-10 rounded-[var(--r-sm)] flex items-center justify-center p-1.5" style={{ boxShadow: 'var(--shadow-glow)' }}>
             <BrandMark size={32} />
           </div>
-          <div>
+          <div className="flex-1 min-w-0">
             <h1 className="text-lg font-bold logo-word" style={{ fontFamily: 'var(--font-display)', color: 'var(--text-1)' }}>Провиант</h1>
             <p className="text-xs" style={{ color: 'var(--text-3)' }}>Планировщик питания</p>
           </div>
+          {/* DESIGN_MIGRATION 1.1: переключатель тем виден и на десктопе (was only в мобильном header) */}
+          <ThemeToggle />
         </div>
         
         <nav className="px-4 py-6 space-y-1">
@@ -115,7 +117,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
         <div className="absolute bottom-0 left-0 right-0 p-4" style={{ borderTop: '1px solid var(--line)' }}>
           <div className="flex items-center gap-3 px-4 py-2 mb-2">
-            <div className="btn primary sm" style={{ background: 'var(--bg-3)', color: 'var(--amber-200)' }}>
+            <div className="avatar-chip">
               {currentUser?.firstName?.[0]}{currentUser?.lastName?.[0]}
             </div>
             <div className="flex-1 min-w-0">

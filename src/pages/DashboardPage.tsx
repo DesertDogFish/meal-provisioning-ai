@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import { useToast } from '../components/ToastProvider';
+import { Button } from '../components/Button';
 
 interface User {
   id: string;
@@ -106,12 +107,9 @@ export default function DashboardPage() {
               <path d="M48 18 L70 70 H26 Z" fill="var(--muted)"/>
             </svg>
             <p className="mb-4" style={{ color: 'var(--muted)' }}>У вас пока нет походов</p>
-            <button
-              onClick={() => navigate('/trips')}
-              className="grad-btn"
-            >
+            <Button variant="primary" onClick={() => navigate('/trips')}>
               Создать поход
-            </button>
+            </Button>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
