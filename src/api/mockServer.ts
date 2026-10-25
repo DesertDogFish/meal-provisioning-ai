@@ -1117,6 +1117,35 @@ export const mockServer = {
       return this.handleMealComposition(method, parts[1], parts[3], body) as any;
     }
 
+    // FORM-meal-composition-spec §2.2: после batch PUT UI делает refetch summary (T6-пайплайн).
+    // Mock-паритет: агрегируем composition-ответы всех приёмов похода в kcal/weight/cost.
+    if (parts.length === 2 && parts[1] === 'summary' && method === 'GET') {
+      const tripId = parts[0];
+      const trip = trips.find(t => t.id === tripId);
+      if (!trip) throw { status: 404, message: 'Not found', detail: `Trip ${tripId} not found` } as any;
+      let kcal = 0, weightGrams = 0, plannedCost = 0, mealCount = 0;
+      for (const d of trip.days || []) {
+        for (const m of d.meals || []) {
+          try {
+            const rec: any = recipes.find(r => r.id === m.recipeId);
+            if (!rec) continue;
+            const comp = this.buildCompositionResponse(trip, d, m, rec);
+            kcal += comp.totals.kcal;
+            weightGrams += comp.totals.weightGrams;
+            plannedCost += comp.totals.plannedCost;
+            mealCount++;
+          } catch { /* приём без блюда — пропускаем */ }
+        }
+      }
+      return {
+        tripId,
+        mealCount,
+        kcalTotal: r2(kcal),
+        weightGrams: r3(weightGrams),
+        plannedCost: r2(plannedCost),
+      };
+    }
+
     // DELETE /trips/:id/days/:dayId/meals/:mealId
     if (parts.length === 6 && parts[2] === 'days' && parts[4] === 'meals' && method === 'DELETE') {
       const trip = trips.find(t => t.id === parts[1]);

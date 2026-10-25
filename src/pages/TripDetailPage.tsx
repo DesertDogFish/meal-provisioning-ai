@@ -2,15 +2,14 @@ import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { calculateMenuByDays, calculateShoppingList, calculateDayShopping, calculatePersonSummary, formatAmount } from '../utils/calculations';
 import { formatRub } from '../utils/formatRub'; // Фаза 13: итоги — целые рубли
-import { ArrowLeft, Plus, Trash2, Users, ShoppingCart, BookOpen, TrendingUp, Calendar, ChevronDown, ChevronRight, Save } from 'lucide-react';
-import { MealType, Ingredient } from '../types';
+import { ArrowLeft, Plus, Trash2, Users, ShoppingCart, BookOpen, TrendingUp, Calendar, ChevronDown, ChevronRight, ListChecks } from 'lucide-react';
+import { MealType } from '../types';
 import PriceOverridesTab from '../components/PriceOverridesTab';
-import Modal from '../components/Modal';
-import CustomSelect from '../components/CustomSelect';
-import RecipeSearchSelect from '../components/RecipeSearchSelect';
-import RecipeIngredientsEditor, { DraftIngredient } from '../components/RecipeIngredientsEditor';
+import AddMealModal, { type AddMealDayContext } from '../components/AddMealModal';
+import MealCompositionModal from '../components/MealCompositionModal';
 import { servingsWord } from '../utils/text';
-import { api, getRecipes, updateRecipeIngredients } from '../api/client';
+import { api, getRecipes } from '../api/client';
+import type { Ingredient } from '../types';
 import { useToast } from '../components/ToastProvider';
 import { Button } from '../components/Button';
 
