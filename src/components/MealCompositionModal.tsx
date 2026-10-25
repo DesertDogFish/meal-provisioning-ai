@@ -86,6 +86,8 @@ export default function MealCompositionModal({
   const [addAmount, setAddAmount] = useState('');
   // инлайн-подтверждение merge для уже присутствующего продукта (§2.2)
   const [mergeAsk, setMergeAsk] = useState<{ ingredientId: string; current: number; unit: UnitOfMeasure; wanted: number } | null>(null);
+  // инлайн-предложение «добавить как новый продукт», если поиска в составе нет (§2.2)
+  const [addAsk, setAddAsk] = useState<{ name: string; unit: UnitOfMeasure; amount: number } | null>(null);
   // инлайн-раскрытие замены (§2.2)
   const [substOpenFor, setSubstOpenFor] = useState<string | null>(null);
   const [substTarget, setSubstTarget] = useState<string>('');
@@ -227,6 +229,23 @@ export default function MealCompositionModal({
   };
 
   // ===== Добавление продукта (§2.2: поиск + обязательное количество > 0, merge-подтверждение) =====
+  const commitAdd = (prod: Ingredient, n: number) => {
+    const ingId = String(prod.id);
+    const existing = rows.find((r) => String(r.ingredientId) === ingId);
+    if (existing) {
+      // merge: новой строки нет — существующая становится SCALE (или меняет EXTRA-сумму)
+      if ((existing.draft?.state ?? existing.state) === 'EXTRA') {
+        const se = extraRows.find((e) => e.ingredientId === ingId);
+        if (se) setExtraRows((prev) => prev.map((e) => (e.ingredientId === ingId ? { ...e, amount: n } : e)));
+        else setDraft(ingId, { state: 'EXTRA', extraAmount: n, unit: existing.unit });
+      } else {
+        setDraft(ingId, { state: 'SCALED', amount: n, unit: existing.unit });
+      }
+    } else {
+      setExtraRows((prev) => [...prev, { ingredientId: ingId, name: prod.name, unit: prod.unit, amount: n }]);
+    }
+  };
+
   const addProduct = (confirmed = false) => {
     const n = parseAmount(addAmount);
     if (!addSelected || !(n != null && n > 0)) {
@@ -246,19 +265,30 @@ export default function MealCompositionModal({
       setMergeAsk({ ingredientId: ingId, current: effOf(existing), unit: existing.unit, wanted: n });
       return;
     }
-    if (existing) {
-      // merge: новой строки нет — существующая становится SCALE (или меняет EXTRA-сумму)
-      if ((existing.draft?.state ?? existing.state) === 'EXTRA') {
-        const se = extraRows.find((e) => e.ingredientId === ingId);
-        if (se) setExtraRows((prev) => prev.map((e) => (e.ingredientId === ingId ? { ...e, amount: n } : e)));
-        else setDraft(ingId, { state: 'EXTRA', extraAmount: n, unit: existing.unit });
-      } else {
-        setDraft(ingId, { state: 'SCALED', amount: n, unit: existing.unit });
-      }
-    } else {
-      setExtraRows((prev) => [...prev, { ingredientId: ingId, name: prod.name, unit: prod.unit, amount: n }]);
-    }
-    setAddSelected(''); setAddAmount(''); setAddQuery(''); setMergeAsk(null);
+    commitAdd(prod, n);
+    setAddSelected(''); setAddAmount(''); setAddQuery(''); setMergeAsk(null); setAddAsk(null);
+  };
+
+  /**
+   * §2.2: если введённый текст поиска не выбран из справочника как конкретный продукт,
+   * предлагаем добавить его отдельным подтверждением — иначе набранное название молча терялось.
+   */
+  const offerFreeTextAdd = () => {
+    const n = parseAmount(addAmount);
+    const q = addQuery.trim();
+    if (!(q && n != null && n > 0)) return;
+    // совпадение с уже добавленным черновым EXTRA — merge, а не новая строка
+    const dup = extraRows.find((e) => e.name.toLowerCase() === q.toLowerCase());
+    const unit: UnitOfMeasure = dup?.unit ?? 'PCS';
+    if (dup) { commitAdd({ id: dup.ingredientId, name: dup.name, unit } as Ingredient, n); }
+    else { setAddAsk({ name: q, unit, amount: n }); }
+  };
+
+  const applyFreeTextAdd = () => {
+    if (!addAsk) return;
+    const id = `free-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    setExtraRows((prev) => [...prev, { ingredientId: id, name: addAsk.name, unit: addAsk.unit, amount: addAsk.amount }]);
+    setAddSelected(''); setAddAmount(''); setAddQuery(''); setMergeAsk(null); setAddAsk(null);
   };
 
   // ===== Замена (инлайн-раскрытие строки, §2.2) =====
@@ -574,10 +604,20 @@ export default function MealCompositionModal({
                   placeholder="0,25"
                 />
               </div>
-              <Button variant="primary" size="sm" onClick={() => addProduct(false)} aria-label="Добавить продукт в состав">
+              <Button variant="primary" size="sm" onClick={() => { if (addSelected) addProduct(false); else offerFreeTextAdd(); }} aria-label="Добавить продукт в состав">
                 <Plus size={14} /> Добавить
               </Button>
             </div>
+
+            {/* Инлайн-предложение добавить набранное название как новый продукт (§2.2) */}
+            {addAsk && (
+              <div className="mt-2 rounded-lg p-3 text-sm flex flex-wrap items-center gap-3" data-testid="add-new-confirm"
+                   style={{ background: 'color-mix(in srgb, var(--w1, #0ea5e9) 10%, transparent)', color: 'var(--text)' }}>
+                в составе нет продукта «{addAsk.name}» — добавить его позицией {fmtQty(addAsk.amount, addAsk.unit)}?
+                <Button variant="primary" size="sm" onClick={applyFreeTextAdd}>Да, добавить</Button>
+                <Button variant="ghost" size="sm" onClick={() => setAddAsk(null)}>Отмена</Button>
+              </div>
+            )}
 
             {/* Инлайн-подтверждение merge для уже присутствующего продукта */}
             {mergeAsk && (

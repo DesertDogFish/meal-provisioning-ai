@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Minus, Plus, Search } from 'lucide-react';
+import { Minus, Plus } from 'lucide-react';
 import Modal from './Modal';
 import { Button } from './Button';
 import RecipeSearchSelect from './RecipeSearchSelect';

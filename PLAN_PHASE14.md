@@ -12,14 +12,14 @@
 | 1a | Backend: сущность TripIngredientRemoval (nullable from/to, added-флаг) + миграция V17 (ALTER of from_ingredient_id DROP NOT NULL, ADD added BOOLEAN; новый трип removals/exclusions таблицы или расширение substitutions) | ⬜ |
 | 1b | Backend: CRUD эндпоинты /trips/{id}/substitutions (+POST supports add/remove), /trips/{id}/shopping-exclusions PUT/GET/DELETE | ⬜ (substitutions GET/POST/DELETE есть — расширить) |
 | 2 | mockServer: роуты + applyTripEditsToRows в агрегации — ПРОВЕРИТЬ прогоном vitest (noUnusedLocals/strict TS) | ⬜ проверка |
-| 3 | Frontend TripDetailPage: переключатель режима сохранения состава «только в этом походе» (trip-level POST substitutions-diff) vs «ко всему каталогу» (PUT /admin/recipes/:id + confirm, только ADMIN) | ⬜ |
+| 3 | Frontend TripDetailPage: переключатель режима сохранения состава «только в этом походе» (trip-level POST substitutions-diff) vs «ко всему каталогу» (PUT /admin/recipes/:id + confirm, только ADMIN) | ✅ снято редизайном по `FORM-meal-composition-spec.md`: модалки A/B, правки только пер-приёмные (batch PUT composition), справочник правится исключительно из RecipesPage (T7) — см. PLAN.md T8/T8b (2026-10-25) |
 | 4 | UI мелочи: подпись единицы в колонке «План ₽/ед» (priceUnitSuffix); удалить мёртвый setDraftOverrides; filteredItems+onlyDiff со стейдж-оверрайдами | ⬜ |
 | 5 | Гейты: npm run typecheck/build/vitest + mvn -q compile (mvn test если возможно) | ⬜ |
 | 6 | PLAN.md: записать Фазу 14 с отметками выполнения | ⬜ |
 
 ## Контекст (что уже сделано ранее)
 - Поиск по блюдам (RecipeSearchSelect, ?search=) ✅
-- RecipeIngredientsEditor в окне «Добавить приём пищи» (замена/добавление/удаление) ✅ UI; сохранение сейчас глобальное через PUT /admin/recipes/:id ⚠️
+- RecipeIngredientsEditor в окне «Добавить приём пищи» (замена/добавление/удаление) ✅ UI; сохранение сейчас глобальное через PUT /admin/recipes/:id ⚠️ → **снято 2026-10-25**: окно добавления заменено на Модалку A (без редактора состава), правки состава — Модалка B через batch PUT `/trips/{t}/meals/{m}/composition` (спека FORM, PLAN.md T8/T8b)
 - formatRub везде, toBaseUnits/costOf фикс единиц (г↔кг) на фронте ✅
 - tripStaging (localStorage) для факт-цен и исключений; PriceOverridesTab синхронизирован ✅
 - mockServer: MockSubstitution/MockRemoved/shoppingExcluded, applyTripEditsToRows, роуты substitutions/shopping-exclusions/ingredient-removals — код написан (коммиты 65ceed2..0334b99), тесты не гонялись ⚠️
