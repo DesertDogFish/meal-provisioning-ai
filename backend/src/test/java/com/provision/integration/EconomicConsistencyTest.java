@@ -258,22 +258,23 @@ class EconomicConsistencyTest {
         // чей norm после ё->е равен 'тушенка'), 'масло'/KG ('Масло топлёное...'? — нет, тот norm
         // другой; точное совпадение ловит только реально занятые слоты), 'рис'/KG, 'соль'/KG.
         // Освобождаем слоты у НЕ-фикстурных глобальных строк; фикстурные id исключаем.
-        // FIX (раунд 8): PostgreSQL использует ОДИНОЧНЫЕ кавычки как идентификаторы, поэтому
-        // условие (name_norm, unit) IN (('гречка','KG'),...) никогда не матчилось — канонические
-        // слоты сида оставались заняты, renameFixture падал на uniq_product_identity_global, а
-        // экраны отдавали дубли по имени (CI: "Expected size: 5 but was: 12"). Строковые
-        // литералы — в двойных кавычках SQL (' -> "). Освобождаем слоты у НЕ-фикстурных строк;
-        // фикстурные id исключаем.
+        // FIX (раунды 8-9, история граблей): (1) кортежный список в одинарных кавычках без
+        // VALUES синтаксически неверен и никогда не матчился — renameFixture падал на
+        // uniq_product_identity_global, экраны отдавали дубли по имени (size 5 but was 12);
+        // (2) двойные кавычки в PostgreSQL — идентификаторы, ("гречка","KG") давал
+        // BadSqlGrammarException («column "гречка" does not exist»). Корректный синтаксис:
+        // (col1, col2) IN (VALUES ('a','b'), ...) со строковыми литералами в одинарных кавычках.
         // FIX (раунд 8): слоты (name_norm, unit) освобождаем у ВСЕХ чужих строк — и глобальных
         // (trip_id IS NULL), и trip-scoped снепшотов чужих походов: partial-индекс
         // uniq_product_identity_global уникален только среди глобальных, но экраны матчат
         // позиции по ИМЕНИ (itemAmount("Гречка")), поэтому чужие снепшоты с каноническим именем
         // дали бы ложные дубли.
-        jdbc.update("UPDATE ingredients SET name = 'seed-' || code, name_norm = 'seed-' || lower(code) "
-                        + "WHERE id NOT IN (?, ?, ?, ?, ?) "
-                        + "AND (name_norm, unit) IN "
-                        + "((\"гречка\",\"KG\"),(\"тушенка\",\"PCS\"),(\"масло\",\"KG\"),(\"рис\",\"KG\"),(\"соль\",\"KG\"))",
-                fixtureIds[0], fixtureIds[1], fixtureIds[2], fixtureIds[3], fixtureIds[4]);
+        String sql = "UPDATE ingredients SET name = 'seed-' || code, name_norm = 'seed-' || lower(code) "
+                + "WHERE id NOT IN (?, ?, ?, ?, ?) "
+                + "AND (name_norm, unit) IN (VALUES "
+                + "('гречка','KG'),('тушенка','PCS'),('масло','KG'),"
+                + "('рис','KG'),('соль','KG'))";
+        jdbc.update(sql, fixtureIds[0], fixtureIds[1], fixtureIds[2], fixtureIds[3], fixtureIds[4]);
     }
 
     private void addMeals() throws Exception {
@@ -486,7 +487,7 @@ class EconomicConsistencyTest {
         // Инвариант 1 (до копейки): perPersonMeal == round(точный итог / TPM) — снимает
         // рассинхрон «цена делится на один счётчик, приёмов — на другой» без ±1 от двойного
         // округления (roundToRub итога И частного).
-        assertThat(com.provision.service.SummaryService.roundToRub(
+        assertThat(roundToRub(
                 exactTotal.divide(BigDecimal.valueOf(tpm), 2, RoundingMode.HALF_UP)))
                 .as("plannedCostPerPersonMeal не согласован с totalPersonMeals")
                 .isEqualByComparingTo(p.plannedCostPerPersonMeal());
@@ -534,9 +535,9 @@ class EconomicConsistencyTest {
         assertThat(plannedSum).as("план по позициям фикстур").isEqualByComparingTo("806.30");
         // Факт: 216.00 + 234.00 + 280.00 + 85.00 + 1.30 = 816.30
         assertThat(actualSum).as("факт по позициям фикстур").isEqualByComparingTo("816.30");
-        assertThat(com.provision.service.SummaryService.roundToRub(plannedSum))
+        assertThat(roundToRub(plannedSum))
                 .as("итог плана == round(точных позиций)").isEqualByComparingTo(list.totalPlannedCost());
-        assertThat(com.provision.service.SummaryService.roundToRub(actualSum))
+        assertThat(roundToRub(actualSum))
                 .as("итог факта == round(точных позиций)").isEqualByComparingTo(list.totalActualCost());
         assertThat(list.itemActualCost("Гречка")).isEqualByComparingTo("216.00");
         assertThat(list.itemActualCost("Тушёнка")).isEqualByComparingTo("234.00");
@@ -557,12 +558,22 @@ class EconomicConsistencyTest {
                             d.dayDate())
                     .isNotNull();
             assertThat(d.actualCost()).as("by-days: округлённый итог дня %s", d.dayDate()).isNotNull();
-            assertThat(com.provision.service.SummaryService.roundToRub(dayActual))
+            assertThat(roundToRub(dayActual))
                     .as("by-days день %s: итог == round(позиций)", d.dayDate())
                     .isEqualByComparingTo(d.actualCost());
             factSum = factSum.add(dayActual);
         }
         assertThat(factSum).isEqualByComparingTo("816.30");
+    }
+
+    /**
+     * FIX (раунд 9): локальная копия политики округления итогов — идентично
+     * SummaryService.roundToRub (Фаза 14: итоги похода — целые рубли, HALF_UP). Прямой вызов
+     * public static roundToRub из тестового пакета компилировался в CI, но падал при сборке
+     * против target/classes со stale package-private сигнатурой; инкапсулируем формулу здесь.
+     */
+    private static BigDecimal roundToRub(BigDecimal value) {
+        return value == null ? null : value.setScale(0, java.math.RoundingMode.HALF_UP);
     }
 
     /** Σ точных стоимостей позиций (planned=true — плановые, иначе фактические). */
@@ -614,7 +625,7 @@ class EconomicConsistencyTest {
         }
         assertThat(exactDaySum).as("Σ точных плановых позиций по дням").isEqualByComparingTo("806.30");
         assertThat(shopping.totalPlannedCost())
-                .as("итог плана == round(точных позиций)").isEqualTo(com.provision.service.SummaryService.roundToRub(exactDaySum));
+                .as("итог плана == round(точных позиций)").isEqualTo(roundToRub(exactDaySum));
         assertThat(roundedDaySum).isEqualByComparingTo("806"); // Σ округлённых итогов дней
 
         // 3. Инвариант "на человека" vs итог закупки (модель-независимо)
@@ -625,7 +636,7 @@ class EconomicConsistencyTest {
         BigDecimal exactTotal = sumCosts(fixtureItems(shopping), true); // 806.30
         assertThat(person.totalPersonMeals())
                 .as("EK-08: TPM != сумма людей по блюдам (10+4+4+3+3)").isEqualTo(24);
-        assertThat(com.provision.service.SummaryService.roundToRub(
+        assertThat(roundToRub(
                 exactTotal.divide(BigDecimal.valueOf(person.totalPersonMeals()), 2, RoundingMode.HALF_UP)))
                 .as("EK-08: plannedCostPerPersonMeal != round(итог/TPM)")
                 .isEqualByComparingTo(person.plannedCostPerPersonMeal());
