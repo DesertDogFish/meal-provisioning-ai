@@ -165,36 +165,43 @@ class EconomicConsistencyTest {
         // админа через TestUsers.createAdmin (raw SQL + логин), как в ConflictIntegrationTest.
         userToken = TestUsers.createAdmin(mockMvc, objectMapper, jdbc, "e2econ@test.com");
 
-        // FIX (409, раунд 3): предыдущий план «создать E2E-дубли, переименовать сиды и
-        // удалить дубли» падал с EmptyResultDataAccessException в seedIngredientId():
-        // в сиде V3__seed_catalog.sql НЕТ кода tushonka (там beef_stew/chicken_stew), а
-        // reset() пересоздаёт схему полным прогоном V1..V20, поэтому lookup по кодам
-        // "tushonka"/"butter"... нестабилен. Теперь схема проще: фикстуры заводятся под
-        // уникальными test-only именами/кодами (GRECHK/e2e_grechka и т.д.) — они никогда
-        // не пересекаются с сидами V3/V17 по name_norm/code (отсюда 409 первых раундов),
-        // а канонические имена для ассертов экранов ("Гречка", "Тушёнка", ...) ставим
-        // самим фикстурам одним UPDATE до создания рецептов (PUT /admin запрещён, когда
-        // ингредиент уже в рецептах; raw SQL работает всегда). Никаких renameSeed/
-        // deleteIngredient/seedIngredientId больше не нужно.
-        grechkaId = createIngredient(GRECHK, GRECHK_CODE, "KG", 100);
-        tushenkaId = createIngredient(TUSH, TUSH_CODE, "KG", 200);
-        butterId = createIngredient(BUTT, BUTT_CODE, "KG", 400);
-        riceId = createIngredient(RICE, RICE_CODE, "KG", 50);
-        saltId = createIngredient(SALT, SALT_CODE, "KG", 0);
+        // FIX (DuplicateKey, раунд 4): попытка завести фикстуры под уникальными именами и
+        // затем переименовать их в канонические ("Гречка" и т.д.) упёрлась в partial-индекс
+        // uniq_product_identity_global (V20): UNIQUE (name_norm, unit) WHERE trip_id IS NULL,
+        // а сид V3__seed_catalog.sql УЖЕ содержит глобальные строки buckwheat/Гречка KG и
+        // др. — переименование давало коллизию. Правильная схема: фикстурами выступают сами
+        // сидовые ингредиенты — берём их id по кодам сида V3 (buckwheat, beef_stew, butter,
+        // rice, salt; кода "tushonka" в сиде нет — там beef_stew/"Тушенка говяжья 325 г") и
+        // создаём РЕЦЕПТЫ ТОЛЬКО из них. Никаких POST /admin/ingredients больше не нужно.
+        grechkaId = seedIngredientId("buckwheat");
+        tushenkaId = seedIngredientId("beef_stew");
+        butterId = seedIngredientId("butter");
+        riceId = seedIngredientId("rice");
+        saltId = seedIngredientId("salt");
 
-        // Переименовываем фикстуры в канонические имена, которые ассертят экраны
-        // (позиции закупок отдаются по ingredientName). name_norm пересчитываем так же,
-        // как IngredientService: lower + ё->е.
+        // FIX (DuplicateKey, раунд 4): фикстуры — сидовые ингредиенты; их канонические имена
+        // из сида ("Масло сливочное", "Тушенка говяжья 325 г") не совпадают с именами в
+        // ассертах экранов. Нормализуем ИМЕНА фикстур к коротким канонам тестов. Коллизий по
+        // uniq_product_identity_global (V20: UNIQUE(name_norm,unit) WHERE trip_id IS NULL) нет:
+        // в сидах V3/V12/V17/V20 отсутствуют строки с name_norm in {тушёнка, масло, рис} при
+        // unit KG (проверено grep'ом), а UPDATE выполняется ДО создания рецептов/похода,
+        // поэтому бэкфил V20 (temp-таблицы ing_src/map_ing) эти переименования не касается.
         renameFixture(grechkaId, "Гречка");
         renameFixture(tushenkaId, "Тушёнка");
         renameFixture(butterId, "Масло");
         renameFixture(riceId, "Рис");
         renameFixture(saltId, "Соль");
 
-        // Сид V13__seed_price_history/V17 сеет на сидовые ингредиенты месячные срезы цен,
-        // но наши фикстуры — ОТДЕЛЬНЫЕ строки (свои id), их истории нет; setPrice ниже
-        // даёт единственную baseline-цену на дату старта похода. Чистка строк сида не
-        // нужна: расчёты экрана идут по id/именам фикстур, сиды в рецептах не участвуют.
+        // Сид V3 (base-цена на '2026-01-01') + V13 (месячные срезы за 24 мес. до 2026-10-01,
+        // т.е. по 2026-09-01 включительно) сеют ИСТОРИЮ ЦЕН на сидовые ингредиенты — а наши
+        // фикстуры ТЕПЕРЬ и есть сидовые строки. setPrice() ниже пишет базовые цены теста в
+        // effectiveFrom='2026-01-01', поэтому: (а) чистим seed-строки ingredient_prices этих
+        // id, иначе existsByIngredientIdAndEffectiveFrom -> ConflictException(409); (б) после
+        // записи baseline удаляем ВСЕ более ранние/поздние срезы, кроме '2026-01-01' — экраны
+        // резолвят цену как последнюю effective_from <= даты, и без чистки расчёты EK-экранов
+        // ловили бы сезонные цены V13 вместо заложенных 100/200/400/50/10.
+        jdbc.update("DELETE FROM ingredient_prices WHERE ingredient_id IN (?, ?, ?, ?, ?)",
+                grechkaId, tushenkaId, butterId, riceId, saltId);
 
         recipe1Id = createRecipe("Каша гречневая с тушёнкой", recipeIngredients(
                 grechkaId, new BigDecimal("0.1"),
@@ -224,13 +231,30 @@ class EconomicConsistencyTest {
         day2Id = getDayIdByDate(tripId, START_DATE.plusDays(1));
         day3Id = getDayIdByDate(tripId, START_DATE.plusDays(2));
 
+        // (б) из комментария выше: оставляем ровно одну цену на фикстурах — baseline теста.
+        jdbc.update("DELETE FROM ingredient_prices WHERE ingredient_id IN (?, ?, ?, ?, ?)"
+                        + " AND effective_from <> DATE '2026-01-01'",
+                grechkaId, tushenkaId, butterId, riceId, saltId);
+
+        // FIX (V20 copy-on-write): POST /days/{dayId}/meals создаёт trip-scoped СНЕПШОТЫ
+        // рецептов и ингредиентов (TripCatalogSnapshotService), замораживая плановую цену по
+        // findEffectivePrice(..., LocalDate.now()) НА МОМЕНТ добавления блюда. Поэтому цены
+        // должны быть записаны ДО addMeal — иначе снепшоты словят сезонный срез V13 вместо
+        // baseline 100/200/400/50/10 и ассерты EK-экранов по стоимости не сойдутся.
+        setPrices();
+        addMeals();
+    }
+
+    private void addMeals() throws Exception {
         // День 1: Р1 x10; День 2: Р2 x4 + Р3 x4; День 3: Р4 x3 + Р5 x3
         addMeal(day1Id, "BREAKFAST", recipe1Id, 10);
         addMeal(day2Id, "BREAKFAST", recipe2Id, 4);
         addMeal(day2Id, "DINNER", recipe3Id, 4);
         addMeal(day3Id, "BREAKFAST", recipe4Id, 3);
         addMeal(day3Id, "DINNER", recipe5Id, 3);
+    }
 
+    private void setPrices() throws Exception {
         setPrice(grechkaId, new BigDecimal("100.00"));
         setPrice(tushenkaId, new BigDecimal("200.00"));
         setPrice(butterId, new BigDecimal("400.00"));
@@ -628,6 +652,17 @@ class EconomicConsistencyTest {
                 .andExpect(status().isCreated())
                 .andReturn();
         return lng(objectMapper.readTree(body(result)), "id", true);
+    }
+
+    /**
+     * id сидового ингредиента по коду (строки V3__seed_catalog.sql после TestDataIsolation.reset():
+     * buckwheat/'Гречка'/KG, beef_stew/'Тушенка говяжья 325 г'/PCS, butter/'Масло сливочное'/KG,
+     * rice/'Рис'/KG, salt/'Соль'/KG). Глобальных дублей по коду нет (uniq-ограничение сида),
+     * поэтому queryForObject ожидаемо возвращает ровно 1 строку.
+     */
+    private Long seedIngredientId(String code) {
+        return jdbc.queryForObject("SELECT id FROM ingredients WHERE code = ? AND trip_id IS NULL",
+                Long.class, code);
     }
 
     /**
