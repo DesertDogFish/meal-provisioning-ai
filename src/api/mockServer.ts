@@ -39,6 +39,8 @@ interface MockSubstitution {
   added: boolean;
   removed?: boolean;               // true = мягкое удаление (рецепт в каталоге не тронут)
   comment?: string;
+  /** FORM-meal-composition-spec: SCALED-правка хранится как «замена на себя» (from===to). */
+  scale?: boolean;
 }
 const substitutions: Record<string, MockSubstitution[]> = {};
 let substitutionSeq = 1;
@@ -248,6 +250,10 @@ function findUsedIn(productId: string): { resourceType: string; resourceId: stri
 }
 
 // Обработчик запросов
+/** FORM-meal-composition-spec §3: scale 3 HALF_UP (эталон Java setScale(3, HALF_UP)). */
+const r3 = (x: number) => Math.round((x + Number.EPSILON) * 1000) / 1000;
+const r2 = (x: number) => Math.round((x + Number.EPSILON) * 100) / 100;
+
 export const mockServer = {
   handleRequest<T>(method: string, path: string, body?: any): T {
     // Отрезаем query string для матчинга маршрута
