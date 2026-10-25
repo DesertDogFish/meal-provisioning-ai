@@ -172,7 +172,10 @@ export default function RecipeSearchSelect({
           ref={listRef}
           role="listbox"
           aria-label={searchPlaceholder ?? 'Блюда'}
-          className="absolute left-0 right-0 z-20 mt-1 max-h-56 overflow-y-auto rounded-lg shadow-xl py-1"
+          /* Release-1.0 (UI-consistency): список В ПОТОКЕ, а не absolute — внутри модалки
+             с overflow он вываливался за границы листа (скрин «Добавить приём пищи»).
+             Теперь он раздвигает форму и всегда остаётся внутри контейнера. */
+          className="mt-1 max-h-56 overflow-y-auto rounded-lg shadow-xl py-1"
           style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
         >
           {filtered.length === 0 && (

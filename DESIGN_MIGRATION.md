@@ -205,3 +205,106 @@
 | 9 (проверка) | все | S |
 
 Рекомендуемая последовательность PR: 0 → 1 → 2 → 4 → 3/5/6 → 7 → 8 → 9.
+
+
+### Доработки
+
+Логичные места для реализации новых компонентов
+1. 🍞 Тосты (.toast, .toasts) — УЖЕ ЧАСТИЧНО РЕАЛИЗОВАНЫ
+Текущее состояние: useToast() хук и ToastProvider уже есть в проекте. Тосты показываются при ошибках и успехах.
+
+Что нужно добавить из дизайн-пака:
+
+.toast контейнер — фиксированный position right/bottom
+Анимация появления slide-in уже есть в index.css (строка 232-245)
+Места интеграции:
+
+✅ TripsPage.tsx — строка 53: showError('Не удалось загрузить список походов')
+✅ RecipesPage.tsx — строка 76: showError(new ConflictError(...))
+✅ TripDetailPage.tsx — строка 173: showError(err?.detail || 'Не удалось загрузить данные похода')
+✅ TripDetailPage.tsx — строка 81: showSuccess('Поход успешно создан')
+Рекомендация: Реализовать визуальный контейнер .toasts в index.css (fixed right top, z-index --z-toast), стили .toast (padding, border-radius, margin между тостами).
+
+2. 💀 Скетелон (.skl) — Нужно добавить в loading-состояния
+Текущее состояние: Loading-состояния используют простой текст "Загрузка..." (TripsPage:100-108, RecipesPage:163-172, TripDetailPage:195-201).
+
+Места интеграции:
+
+Место	Что скелетонить
+TripsPage.tsx (строка 100-108)	3 карточки походов с анимацией пульсации
+RecipesPage.tsx (строка 163-172)	Сетка 3×2 карточек рецептов
+TripDetailPage.tsx (строка 195-201)	Summary cards (4 шт) + таб меню
+ProductsPage.tsx	Сетка продуктов
+AdminPage.tsx	Таблица каталога
+Рекомендация: Добавить .skl классы из дизайн-пака (анимированный градиент var(--bg-2) → var(--bg-3)), использовать вместо статичного текста "Загрузка...".
+
+3. 🪗 Аккордеон (.acc) — Идеально для TripDetailPage
+Текущее состояние: Дни в TripDetailPage раскрываются через toggleDay (строка 213-218) с простой анимацией.
+
+Места интеграции:
+
+Место	Что сделать
+TripDetailPage.tsx (строка 402-534)	Каждый день — аккордеон с .acc-h (header) и .acc-b (body)
+TripDetailPage.tsx (строка 536-621)	Вкладка "Закупка по дням" — каждый день-аккордеон
+Рекомендация: Заменить текущий toggleDay на .acc компоненты из дизайн-пака:
+
+.acc — контейнер с border-radius: var(--r-md)
+.acc-h — header с ChevronDown анимацией
+.acc-b — body с max-height анимацией
+.acc-sep — разделитель между секциями
+4. 🌊 Волна-разделитель (.wave-divider) — Для визуального разделения секций
+Текущее состояние: Разделение секций через className="space-y-6" (Tailwind).
+
+Места интеграции:
+
+Место	Что сделать
+TripsPage.tsx	Между списком походов и модальным окном создания
+RecipesPage.tsx	Между фильтрами и сеткой рецептов
+TripDetailPage.tsx	Между header и summary cards
+AdminPage.tsx	Между заголовком и таблицей каталога
+Рекомендация: Добавить SVG .wave-divider из дизайн-пака (300×24px, кривая Безье с градиентом --amber-500 → --wave-400), использовать как разделитель между логическими секциями.
+
+5. 💬 Тултип ([data-tip]) — Для иконок действий
+Текущее состояние: Кнопки используют title атрибут (TripsPage:187, 200; TripDetailPage:438, 448, 497).
+
+Места интеграции:
+
+Место	Что тултипить
+TripsPage.tsx	Edit2 → "Редактировать поход", Trash2 → "Удалить поход"
+TripDetailPage.tsx	Users → "Изменить количество людей", Plus → "Добавить приём пищи", ListChecks → "Состав приёма"
+RecipesPage.tsx	Pencil → "Редактировать рецепт", Trash2 → "Удалить рецепт"
+Рекомендация: Заменить title на CSS-only тултип из дизайн-пака:
+
+
+[data-tip] { position: relative; }
+[data-tip]::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: var(--sp-1) var(--sp-2);
+  background: var(--bg-3);
+  color: var(--text-1);
+  border-radius: var(--r-sm);
+  font-size: 12px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--t-base) var(--ease);
+}
+[data-tip]:hover::after { opacity: 1; }
+Итоговый приоритет внедрения
+Компонент	Приоритет	Сложность	Мест интеграции
+🍞 Тосты (.toast)	Высокий	Низкая	4 страницы
+💀 Скетелон (.skl)	Средний	Средняя	5 страниц
+💬 Тултип ([data-tip])	Высокий	Низкая	3 страницы
+🪗 Аккордеон (.acc)	Средний	Средняя	TripDetailPage
+🌊 Волна (.wave-divider)	Низкий	Низкая	4 страницы
+Рекомендуемый порядок:
+
+Тосты — минимальные изменения, максимальный UX-эффект
+Тултипы — замена title на стилизованные подсказки
+Скетелон — улучшение loading-состояний
+Аккордеон — рефакторинг TripDetailPage
+Волна — декоративный элемент, можно в конце

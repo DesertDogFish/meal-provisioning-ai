@@ -1,100 +1,128 @@
 # Plan
 
-Живой статус проекта. Правила работы агентов — в `AGENTS.md`; архитектура и формулы — в `ARCHITECTURE.md`; история фаз 1–14 сжата в конце файла. Протоколы сессий здесь не ведутся: факт = коммит + зелёный гейт.
+Живой статус проекта. Формулы и контракты — `ARCHITECTURE.md`, правила агентов — `AGENTS.md`, дизайн — `DESIGN_MIGRATION.md`/`provisions/design-pack` (ведётся владельцем отдельно, агентами не трогается). Факт = коммит + зелёный гейт; записей «в рабочем дереве» не бывает.
 
-**Обновлено:** 2026-10-25, прогресс по `FORM-meal-composition-spec.md` (T8: модалки A/B, batch composition GET/PUT, mock-паритет; CI-lint зелёный).
+**Обновлено:** 2026-10-25 · master `2ce3a86` · ожидающий патч `functional-breakthrough-kickoff` (tsc/lint-остаток, диагностика docker-stack, MD-обновление, этот PLAN).
 
-## Current Phase
+## Release 1.0 — критерии функционального прорыва
 
-**Фаза 15 — «Закупки, составы, факт» (эпик) + стабилизация CI.**
+Приложение «нормально используется», когда пользовательский цикл проходится целиком без костылей и рассинхронов:
 
-Снепшоты каталога (V20) и редактор блюд влиты в main. Бэкенд-часть эпика в значительной степени собрана: правки состава приёма (V19: `trip_ingredient_substitutions.added/removed/amount_per_serving` + `trip_shopping_exclusions`) уже передаются в `computeShopping` через `TripIngredientEditService`. Фронтенд ещё не переведён на серверные сводки и не персистит факт-цены — это ближайшие задачи (T6, T9).
+- [x] Админ ведёт каталог: продукты + цены срезу, блюда + составы, импорт OFF
+- [x] Пользователь собирает меню: поиск/превью блюда, люди, снепшот при добавлении
+- [x] Пользователь правит состав приёма (добавить/исключить/масштаб/замена) — серверно, batch PUT (PR #47/#49)
+- [ ] Правки состава и исключения **видны во всех цифрах похода** (сейчас вкладки закупок считают на клиенте мимо серверных правок) — R1/R2
+- [ ] Ручные позиции закупки (добавить/исключить/удалить свою) по дням и в чеке — серверные (сейчас отсутствуют вовсе) — R3
+- [ ] Чек: факт сохранён на сервере ✅, но без черновиков-дублёров; экспорт печать/CSV — R4
+- [ ] Цифры везде из одного источника `/summary/*`; клиент не пересчитывает деньги/ккал — R1
+- [ ] Дашборд: план/факт/вес/ккал по походам — R6
+- [ ] CI зелёный, contract-ночь зелёная, e2e real проходит сквозной сценарий — R0/R5/R8
 
-### Статус CI на main (2026-10-24, коммит `8b88fc55`)
+## Функциональный аудит 2026-10-25 (user journeys)
 
-| Workflow | Статус | Причина / действие |
+| # | Journey | Статус | Evidence / что не так |
+|---|---|---|---|
+| J1 | Админ: продукты, цены, блюда, составы, импорт OFF | ✅ | `ProductsPage` (CRUD + цена срезу), `RecipeEditorModal`, `RecipesPage` админ-действия, staging approve/reject |
+| J2 | Пользователь: поход → меню по дням | ✅ | `TripForm`, `AddMealModal` (RecipeSearchSelect + превью ккал/готовка/топ-ингредиенты, степпер людей, одна commit-кнопка), V20-снепшот при добавлении |
+| J3 | Состав приёма: add/exclude/scale/замена | ✅ с оговоркой | `MealCompositionModal` → `GET/PUT /trips/{t}/meals/{m}/composition` (batch, атомарно; `MealCompositionService` поверх V19 без новой таблицы — решение зафиксировано в ARCHITECTURE). Оговорка: EXTRA-семантика и 4 красных contract-теста — R5 |
+| J4 | Закупки: исключения, ручные позиции | ⚠️/❌ | Бэкенд: summary + edits + exclusions + снепшоты готовы. UI: клиентский пересчёт `calculations.ts`, исключения в localStorage `trip-shopping-excluded-*`; ручных позиций нет ни в бэке, ни в UI — R1–R3 |
+| J5 | Чек: факт, итоги, экспорт | ⚠️ | `PUT price-overrides` персистентен ✅, но параллельно черновики `tripStaging`; exclusions локальные; экспорта нет — R2/R4 |
+| J6 | Метрики: дашборд, вес, ккал-цель | ❌ | Дашборд без стоимостей, kpi-эндпоинта нет — R6 |
+| J7 | Паритет и сквозные тесты | 🟡 | contract-тесты состава зелёные (PR #53); mock `summary/shopping` = фикстура FIX-1; e2e не покрывает состав/ручные/факт — R8 |
+| J8 | CI/CD | ❌ | см. таблицу CI — R0 |
+
+### Реестр рассинхронов («одно не ладит с другим»)
+
+1. **Клиентский пересчёт vs серверные правки**: batch PUT состава сохранён, но «Закупка/По дням/На человека» считают из `calculations.ts` по необработанным копиям → правки не видны в цифрах. → R1.
+2. **tripStaging/localStorage vs сервер**: черновики факта и exclusions живут в браузере, серверные сущности — отдельно; другое устройство не видит. → R1/R2, `tripStaging.ts` удалить.
+3. **mock-фикстура FIX-1 vs реальный расчёт**: contract-ночь сравнивает фикстуру с бэком. → R8.
+4. **EXTRA ×people vs спека (абсолют на приём)**: ~~конвейер трактует `amount_per_serving` добавленных строк как на порцию~~ — mock закрыт PR #53 (contract-тесты зелёные); сверка бэкенда `SummaryService` — → R5.1.
+5. **Дубль-редакторы состава**: историческое окно добавления приёма правила глобальный рецепт — устранено модалками A/B (PR #49); рецидивы запрещены (AGENTS §9).
+
+## Статус CI (2026-10-25, последние completed-раны + локальная верификация)
+
+| Workflow | Статус | Причина / задача |
 |---|---|---|
-| CI → Backend Tests | 🔴 | `EconomicConsistencyTest`: (а) ходит в голый `localhost:5432` вместо паттерна `@ContainerSuite`/`LocalPgFallback`; (б) шлёт payload продукта без `categoryId` → 500. Тест несовместим с текущим контрактом V8+. Задача **CI-1** |
-| CI → Frontend Tests | 🟢 | typecheck + lint + build + vitest (220/220 локально) |
-| Docker Stack Smoke | 🔴 | падает шаг `Up (detached)`; нужны логи раннера (гипотеза: compose-конфиг/имена томов после смены compose-файла). Задача **CI-2** |
-| E2E nightly | 🔴 | red на schedule (real-mode блокирующий); триаж — задача **CI-3** |
-| Contract parity (mock↔real) | 🟢 | nightly от 2026-10-24 07:44 |
+| CI → Backend Tests | 🟡 | **CI-1**: фикс влит (PR #51 — Testcontainers/LocalPgFallback для `EconomicConsistencyTest` + SCALED-substitution в `TripIngredientEditService`); ждём подтверждения ближайшим CI-раном |
+| CI → Frontend Tests | 🟡 | PR #52/#53 закрыли unused-vars, dup `state` (MCM), unused `products` (TDP) и 4 red contract-теста (фиксы mock-состава). Локально на базе `5c321995` + ui-consistency-патч: tsc/lint чисто, **251/251 зелёные** |
+| Docker Stack Smoke | 🔴 | падает `Up (detached)`, причина без логов раннера неизвестна; kickoff-патч добавляет `compose config -q`, диагностику на failure и teardown `if: always()`. **CI-2** |
+| E2E nightly | 🔴 | mock-прогон красной после редизайна (PR #48) и/или composition-контрактов; триаж и починка. **CI-3** |
+| Contract parity (nightly) | 🟢 (10-24) | после R5/R8 должен оставаться зелёным всегда |
 
-## Next Step (приоритет)
+## План прорыва: этапы R0–R9 (порядок = зависимости)
 
-1. **CI-1** — починить `EconomicConsistencyTest`: перевести на `@ContainerSuite`/`LocalPgFallback` (как все интеграционные сьюты) и привести payload к контракту `ProductRequest` (`categoryId` из `/product-categories`); либо временно `@Disabled` с TODO и отдельным тикетом (R4: не глушить молча).
-2. **CI-2** — разобрать логи падения `Up (detached)` в Docker Stack Smoke; починить compose/воркфлоу; добавить `docker compose down -v` в `if: always()`-teardown, чтобы раннеры не наследовали состояние.
-3. **CI-3** — триаж e2e nightly: разделить mock- и real-части, real оставить блокирующим только на schedule после починки стека (CI-2).
-4. **T6** — фронтенд на серверные сводки: `TripDetailPage`/`PriceOverridesTab` перестают пересчитывать на клиенте (`calculations.ts`), читают `/trips/{id}/summary/*`; факт-цены Persist через `PUT /trips/{id}/price-overrides/{ingId}` (черновики из localStorage удалить).
-5. **T8/T9** — UI правок состава: модалки A/B из `FORM-meal-composition-spec.md` реализованы в рабочем дереве (см. таблицу T8/T8b) — закоммитить + прогнать гейты, доделать component-тесты модалок и e2e-mock по чек-листу §6; далее T9 (экран чека: факт/исключения/ручные/экспорт).
+### R0. Разблокировать CI (0.5–1 день)
+1. Влить kickoff-патч (tsc/lint-остаток, docker-stack-диагностика, MD).
+2. **CI-1**: в `EconomicConsistencyTest` добавить `LOCAL_PG` + `@DynamicPropertySource` по образцу `MetaControllerTest`; локально снять стек 500 из `createIngredient` (запустить один тест с логом; чинить тест или эндпоинт — не маскировать).
+3. **CI-2**: прочитать логи нового рана с диагностикой; починить по факту (compose/воркфлоу/раннер).
+4. **CI-3**: `npm run test:e2e` локально; снять падающие селекторы редизайна; flaky-спеки — в skip с TODO (R4-правило AGENTS).
+*Готово:* все workflow зелёные на main два рана подряд.
 
-## Backlog
+### R5. Математика состава по спеке — mock закрыт, бэк проверяется
+1. Бэк: `SummaryService` — строки `added=true` добавляют абсолют на приём (не ×people); `MealCompositionService` — убрать конверсию абсолют↔per-serving с округлением; трактовку `amount_per_serving` для added зафиксировать в ARCHITECTURE. **Открыто**: PR #51 добавил SCALED-substitution в `TripIngredientEditService` — сверить с этим гейт ниже.
+2. ~~Mock: `buildCompositionResponse` — derived для SCALED при people≠base, обнуление qty(from) при замене, идемпотентность batch PUT~~ — **закрыто PR #53** (SCALE→SUBST перенос, EXTRA-абсолют, идемпотентный PUT, copy-on-write снепшоты).
+3. Гейт: `mealCompositionContract.test.ts` — **9/9 ✅ (локально, база `5c321995`)**; осталось: unit бэка «EXTRA-итог не меняется при people 4→6».
 
-### P0 — CI и красная main-ветка
-- **CI-1** EconomicConsistencyTest (см. Next Step).
-- **CI-2** Docker Stack Smoke `Up (detached)`.
-- **CI-3** e2e nightly triage + решение по blocking-политике real-прогона.
+### R1. Единый источник цифр (1–1.5 дня)
+1. `TripDetailPage`: вкладки меню/закупка/по дням/на человека читают `/trips/{id}/summary/*`; убрать импорт `calculations.ts` из страниц.
+2. Удалить `src/utils/calculations.ts` (+тесты, правка `coverage.include`), `src/utils/tripStaging.ts`, ключи `trip-shopping-excluded-*`, `draftOverrides`.
+3. Любая мутация (meal, composition, override, exclusion, manual) → единый `refreshSummaries()`.
+*Готово:* правка состава меняет цифры всех вкладок; после reload/с другого браузера состояние то же; e2e-mock «исключил ингредиент → закупка уменьшилась».
 
-### P1 — эпик «Закупки, составы, факт» (статусы задач)
-| id | Задача | Статус |
+### R2. Серверные исключения в UI (0.5 дня)
+Чекбоксы «исключить» → `POST/DELETE /trips/{id}/shopping-exclusions`; строки с `excluded=true` из summary рисуются приглушённо с «вернуть»; клиентских Set'ов нет.
+
+### R3. Ручные позиции закупки (1.5–2 дня)
+1. V21 `trip_manual_items` (trip, day NULL-able, ingredient, amount, unit_price NULL, created_by) + CRUD-эндпоинты + встраивание в `computeShopping` (строки `source=MANUAL`; fact = unit_price ?: override ?: план) + usedIn при удалении продукта.
+2. UI: «+ продукт» в «Закупка по дням» (с днём), «Закупка на поход» и в чеке (без дня); удалять только свои; picker с поиском и фасовочными подсказками.
+3. Mock-паритет + contract + e2e: добавил → видно в дне/походе/чеке; удалил свою → исчезла; чужую удалить нельзя.
+
+### R4. Чек-экран и экспорт (1 день)
+`PriceOverridesTab` → «Чек»: строки из `summary/shopping` с source-бейджами; инлайн-факт (PUT, debounce) и «вернуть к плану» (DELETE); итоги план/факт/Δ из ответа; экспорт: печатная верстка (`window.print`) + CSV blob (наименование, кол-во, ед., план/факт ₽/ед, суммы).
+
+### R6. Метрики похода и дашборд (1 день)
+`GET /trips/{id}/summary/kpi` (plan/actual/delta/weightGrams/kcalPerPersonPerDay); карточки походов на дашборде; «На человека»: индикатор ккал/чел/день против цели (поле похода, дефолт 3000).
+
+### R7. UX меню (0.5–1 день)
+`PATCH /trips/{t}/days/{d}/meals/reorder`; «скопировать день / меню похода»; inline people-override на карточке приёма.
+
+### R8. Тестовая сеть сквозных цепочек (1 день)
+1. Mock `summary/*` — реальный расчёт из meals/edits/exclusions/manual; фикстуру FIX-1 удалить, contract-тесты перевести на динамические фикстуры.
+2. e2e real (compose): регистрация → поход → состав (exclude+extra) → ручная позиция → факт в чеке → сверка итогов вкладок и после reload.
+3. e2e real — blocking на schedule.
+
+### R9. Релизная гигиена (фоново, 1–2 дня)
+LICENSE-файл; мёртвые deps + `depcheck` в CI; `git filter-repo` (pack ~112 МБ); prod-деплой (ghcr + стенд, `SPRING_PROFILES_ACTIVE=prod`); backup-runbook; rate limiting `/auth`; nginx-заголовки/gzip; refresh в httpOnly-cookie.
+
+## Backlog (вне Release 1.0)
+
+- Продукт: шаблоны меню/ротация блюд, общие походы (участники и разделение стоимости), OFF-матчинг региональных продуктов, i18n, offline/PWA (после R1 — поверх готового серверного слоя).
+- Техдолг: типы фронта `id: number` в новых DTO и постепенный перевод legacy; TanStack Query вместо ручных fetch; TIMESTAMPTZ-миграция дат; component-тесты модалок A/B ≥80% lines и e2e-mock чек-лист FORM-спеки §6 (остаток T8).
+
+## Архив достижений (фазы и вехи)
+
+| Фаза/веха | Содержание | Итог |
 |---|---|---|
-| T0 | Зелёный main + typecheck в CI | ✅ (typecheck-шаг в ci.yml; lint-ignore `provisions`) |
-| T1 | План-стоимость по дням (Known Bug #1) | ✅ PR #44–46 (`computeShopping`, per-day prices) |
-| T2 | Замены в расчётах + ккал из продуктов | ✅ частично: ккал в `computeShopping`; замены (substitutions) применяются через `TripIngredientEditService` — покрыть contract-тестами |
-| T3 | Сущности правок состава/исключений | ✅ V19 (+ `ShoppingExclusionController`) |
-| T4 | CRUD-эндпоинты правок/исключений | ✅ (нужны contract-тесты mock↔real) |
-| T5 | Summary v2: правки/исключения в конвейере | ✅ бэкенд (wiring в `computeShopping`); инварианты «by-days == shopping == person×people» — тесты |
-| T6 | Фронт на `/summary/*`, персистентный факт | ❌ открыто (ключевое) |
-| T7 | Админ-редактор блюд | ✅ (RecipeEditorModal, mock-CRUD паритет) |
-| T8 | UI состава приёма + ручные позиции (модалки A/B) | 🟡 модалки A/B по спеке FORM реализованы (в рабочем дереве, не закоммичены): AddMealModal — контекст дня, сегменты типов, комбобокс с превью (ккал/готовка/топ-ингредиенты), степпер людей, одна commit-кнопка + шорткат «добавить и настроить состав»; MealCompositionModal — GET/PUT `/trips/{t}/meals/{m}/composition` (batch, атомарно), 5 статусов-бейджей, действия по состоянию, merge-подтверждение при добавлении существующего, инлайн-замены, dirty-state (Сбросить/confirm при закрытии), live-итоги ккал/вес/план, ссылка «Изменить блюдо в справочнике» только ADMIN. Глобальный `PUT /admin/recipes` из окна добавления убран ✅. Осталось: component-тесты модалок ≥80% lines, e2e-mock «исключил ингредиент → закупка уменьшилась», чек-лист §6 |
-| T8b | Backend composition по спеке FORM | ✅ в рабочем дереве (не закоммичено): `MealCompositionService` + эндпоинты GET/PUT composition в `TripController`; хранение поверх V19/V20 (SCALE = from===to с ratio; EXTRA = added=true, абсолют на приём; EXCLUDE = removed=true) — таблица `trip_meal_adjustments` из §4.1 НЕ создавалась (решение зафиксировать в ARCHITECTURE); unit `MealCompositionMathTest` есть; contract-тесты mock (`mealCompositionContract.test.ts`, 9 it) написаны |
-| T9 | Экран чека: факт/исключения/ручные/экспорт | ❌ открыто |
-| T10 | e2e real сквозной сценарий факта и персистентности | ❌ после T6/T9 |
-| T11 | ккал-цели, вес раскладки, копирование меню | ❌ продуктовые идеи |
-
-### P1 — безопасность и эксплуатация (аудит 2026-10-23, живо)
-- Rate limiting на `/auth/*` (bucket4j) + аудит-лог событий.
-- nginx: security-заголовки (CSP, X-Content-Type-Options, frame-ancestors), gzip, cache `assets/*`.
-- Refresh-token → httpOnly-cookie (или письменно зафиксировать риск localStorage-токенов в ARCHITECTURE).
-- `POSTGRES_PASSWORD` fail-fast по образцу `JWT_SECRET`.
-- Backup-процедура (pg_dump + restore-runbook).
-- LICENSE-файл (README декларирует MIT).
-- Удалить мёртвые зависимости (`@dnd-kit/*`, `@supabase/supabase-js`, `recharts`, `framer-motion`, `canvas-confetti`, `uuid` — 0 импортов) + `depcheck` в CI; `happy-dom` → devDependencies.
-- Переписать историю git (`git filter-repo`): pack ~112 МБ из-за закоммиченного когда-то `node_modules`; PNG-черновики логотипов (~5 МБ) вынести из git.
-
-### P2 — долг и продукт
-- **mock-паритет summary**: `mockServer.handleTrips(summary/shopping)` до сих пор отдаёт захардкоженную фикстуру FIX-1 вместо расчёта из meals — заменить на реальный mock-расчёт (иначе contract-ночь сравнивает фикстуру с бэком).
-- Типы фронта: `id: string` vs number в JSON бэка; новые DTO типизировать number, legacy выправить попутно; `any` в новом коде запрещён.
-- TanStack Query вместо ручных useEffect-fetch (кеш/инвалидации/гонки).
-- Экспорт закупки: печать/CSV с факт-ценами; вес раскладки (кг) и ккал/чел/день против цели (норма 2500–3500).
-- Dashboard: план/факт по походам из `summary/kpi`-подобного лёгкого эндпоинта.
-- DESIGN_MIGRATION.md (design-pack v1.1) — ведётся отдельно владельцем, не трогать.
-
-### Known Bugs / отклонения (актуальные)
-1. `EconomicConsistencyTest` красный на master (контракт payload + env-зависимость) — CI-1.
-2. Docker Stack Smoke падает на `Up (detached)` — CI-2.
-3. e2e nightly red на schedule — CI-3.
-4. mock `summary/shopping` — фикстура, не расчёт (P2).
-5. ~~Окно добавления приёма пищи правит глобальный рецепт (`PUT /admin/recipes`)~~ — исправлено по FORM-спеке: модалки A/B, batch PUT composition (в рабочем дереве, до влития считать открытым).
-6. Lint CI (unused-vars в AddMealModal/MealCompositionModal/TripDetailPage) — исправлено в рабочем дереве (2026-10-25).
-7. Удалённые: агрегация по endDate (PR #44–46), N+1 summary (PR #44–46), дубль V13 (PR #19).
-
-## Правила ведения плана
-- Закрыто = коммит в main + зелёный гейт; записи «в рабочем дереве» не допускаются.
-- Устаревшие пункты удаляются сразу, а не помечаются (архив фаз — ниже, одной строкой на фазу).
-- Новые MD-файлы запрещены (AGENTS.md); статус живёт только здесь.
-
-## Архив фаз 1–14 (сжато)
-
-| Фаза | Содержание | Итог |
-|---|---|---|
-| 1–3 | Core CRUD, CR-1..CR-5, оверрайды/замены/упаковки/OFF | ✅ |
-| 4–5 | Docker/CI, JWT+режимы mock/real, watchdog | ✅ |
+| 1–5 | CRUD каталога, CR-1..CR-5, Docker/CI, JWT+режимы mock/real | ✅ |
 | 6–9 | Миграция страниц с AppContext на api-клиент (4 батча) | ✅ |
-| 10 | Тестовые дыры: component-тесты, MODE-сьют, coverage-гейт R5 | ✅ |
-| 11–12 | Аудит бэкенда P0/P1: IDOR, N+1, @Async-sync, usedIn, packs | ✅ |
-| 13 | UX-полишка: DatePicker текст, CustomSelect, formatRub, черновики цен (localStorage) | ✅ (черновики уходят в T6) |
-| 14 | V19 правки состава приёма + exclusions | ✅ бэкенд |
-| — | Аудиты 2026-10-23 (2 шт.): P0-1 git-артефакты, P0-2 сид-админ, P0-3 `/prices` | ✅ всё закрыто |
-| — | Сид-каталог V17/V18 (204 продукта / 201 блюдо) + демо-походы | ✅ в main |
-| — | V20 снепшоты каталога похода + редактор блюд | ✅ в main (`8b88fc55`) |
+| 10 | Component-тесты, MODE-сьют, coverage-гейт R5 | ✅ |
+| 11–12 | Аудит бэкенда: IDOR, N+1, @Async-sync, usedIn, packs | ✅ |
+| 13 | UX-полировка: DatePicker, CustomSelect, formatRub | ✅ |
+| 14 | V19: правки состава приёма + shopping-exclusions (бэкенд) | ✅ |
+| Аудит 23.10 ×2 | P0: git-артефакты, сид-админ в миграциях, `/prices` | ✅ |
+| Сид V17/V18 + демо-походы | 204 продукта / 201 блюдо, 3 демо-похода (DevTripsInitializer) | ✅ |
+| PR #44–46 | Known Bug #1 (план по дням), N+1 summary, `computeShopping` | ✅ |
+| Редактор блюд + mock-CRUD | RecipeEditorModal, POST/PUT/DELETE /admin/recipes в mock | ✅ |
+| V20 снепшоты | изоляция походов от каталога, бэкфил, trip-`recipes`/`prices` | ✅ |
+| PR #47–49 | Модалки A/B (FORM-спека), batch PUT composition, MealCompositionService, contract-тесты | ✅ (4 red закрыты PR #53) |
+| PR #48, #52 | Дизайн-ревизия (токены/темы/ThemeToggle), lint-фикс | ✅ |
+| PR #51, #53 | Бэк: Testcontainers/LocalPgFallback (CI-1), SCALED-substitution; mock: состав §3/§4 (SCALE→SUBST, EXTRA-абсолют, идемпотентный PUT), copy-on-write снепшоты; contract-тесты 9/9 | ✅ |
+| Kickoff «Функциональный прорыв» | tsc/lint-хотфиксы (dup `state`, unused `products`) — superseded PR #51/#53; остаток патча: диагностика Docker Stack Smoke (CI-2) + ревизия MD | 🟡 в составе `ui-consistency-release1.patch` |
+| UI-consistency Release-1.0 | Единый формат чисел/единиц (`utils/format.ts`: запятая, целые ₽, «1,5 кг»), нормализация плоских DTO (`getTripRecipes`, `ingOf`) — «Unknown»/«шт» закрыты, категория-объект → строка («[object Object]» закрыт), KPI = «Итого» (один источник), «По дням» считает факт по количествам дня, дропдаун поиска в потоке модалки, плюрализация «+N продукта», общие расчёты в «Закупка и чеки» вместо локальной копии | 🟡 патч `ui-consistency-release1.patch` (ждёт merge; гейты на базе `5c321995`: tsc/lint чисто, **251/251**, format.ts coverage 100%) |
+| DESIGN_MIGRATION rev | пункты 0–8 закрыты владельцем, хвосты пункта 9 — отдельно | 🟡 вне аудита |
+
+## Правила ведения
+
+- Закрыто = коммит в main + зелёный гейт + строка в архиве.
+- Устаревшее удаляется сразу; Known Bugs живёт только в реестре рассинхронов и CI-таблице.
+- Новые MD-файлы запрещены (AGENTS §1); статус и инструкции — только здесь.

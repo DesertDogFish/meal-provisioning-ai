@@ -29,11 +29,23 @@ jobs:
           sed -i "s|^JWT_SECRET=.*|JWT_SECRET=${SECRET}|" .env
           grep -q "^JWT_SECRET=[A-Za-z0-9+/=]\{32,\}" .env && echo "JWT_SECRET set"
 
+      - name: Validate compose config (fail fast on interpolation/schema errors)
+        run: docker compose config -q
+
       - name: Build images
         run: docker compose build --parallel
 
       - name: Up (detached)
         run: docker compose up -d
+
+      # CI-2: шаг Up падал на main без видимой причины — логи раннера недоступны постфактум,
+      # поэтому диагностика собирается в самом ране при любом падении ниже.
+      - name: Diagnostics on failure (ps + logs всех сервисов)
+        if: failure()
+        run: |
+          docker compose ps -a || true
+          docker compose logs --tail=200 || true
+          df -h /var/lib/docker || true
 
       - name: Wait for all services healthy (max ~5 min)
         run: |
@@ -58,6 +70,10 @@ jobs:
 
       - name: Smoke — nginx proxy through frontend (same-origin path)
         run: curl -fsS http://localhost:3000/api/v1/meta
+
+      - name: Tear down stack (не оставлять состояние раннеру)
+        if: always()
+        run: docker compose down -v || true
 
       - name: Smoke — frontend index
         run: curl -fsS http://localhost:3000/ | grep -qi '<div id="root">'

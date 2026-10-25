@@ -68,8 +68,8 @@ describe('humanize', () => {
     expect(humanize(0.8, 'KG')).toBe('800 г');
   });
 
-  it('1.5 KG → "1.50 кг"', () => {
-    expect(humanize(1.5, 'KG')).toBe('1.50 кг');
+  it('1.5 KG → "1,5 кг" (Release-1.0: запятая, без хвостовых нулей)', () => {
+    expect(humanize(1.5, 'KG')).toBe('1,5 кг');
   });
 
   it('0.25 L → "250 мл"', () => {

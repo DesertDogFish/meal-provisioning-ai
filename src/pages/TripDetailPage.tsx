@@ -8,7 +8,7 @@ import PriceOverridesTab from '../components/PriceOverridesTab';
 import AddMealModal, { type AddMealDayContext } from '../components/AddMealModal';
 import MealCompositionModal from '../components/MealCompositionModal';
 import { servingsWord } from '../utils/text';
-import { api, getRecipes } from '../api/client';
+import { api, getRecipes, getTripRecipes } from '../api/client';
 import { useToast } from '../components/ToastProvider';
 import { Button } from '../components/Button';
 
@@ -158,8 +158,10 @@ export default function TripDetailPage() {
         // V20: цены КОНКРЕТНОГО похода (trip-scoped копии продуктов, замороженный план);
         // глобальный справочник цен — GET /prices (экраны админа/каталога)
         api.get<Price[]>(`/trips/${id}/prices`),
-        // V20: trip-scoped копии блюд (меню похода ссылается на них)
-        api.get<Recipe[]>(`/trips/${id}/recipes`).catch(() => [] as Recipe[])
+        // V20: trip-scoped копии блюд (меню похода ссылается на них).
+        // Release-1.0: через getTripRecipes — нормализация плоских DTO снапшотов
+        // (иначе в меню/закупке «Unknown» и единица «шт» по умолчанию).
+        getTripRecipes(String(id)).catch(() => [] as Recipe[])
       ]);
       setTrip(tripData);
       setRecipes(recipesData);
@@ -321,9 +323,12 @@ export default function TripDetailPage() {
   });
 
   const { summary: personSummaryBase, tripSummary: tripSummaryBase } = calculatePersonSummary(trip as any, recipesMap, prices);
-  // Фаза 13: итоги с учётом фактических цен и исключённых позиций
-  const hasAdjustments = Object.keys(draftOverrides).length > 0 || shoppingExcluded.size > 0;
-  const totalCostFinal = hasAdjustments ? shoppingTotalFinal : tripSummaryBase.totalCost;
+  // Release-1.0 (UI-consistency): KPI шапки и «Итого» в закупке — ОДИН источник.
+  // Раньше при отсутствии чеков/исключений KPI брал tripSummaryBase.totalCost, а с ними —
+  // shoppingTotalFinal; суммы считались разными путями и спорили друг с другом
+  // (скрин: KPI «494,71 ₽» против «Итого 168 ₽»). Теперь всегда shoppingTotalFinal:
+  // он уже включает фактические цены (draftOverrides) и исключения (shoppingExcluded).
+  const totalCostFinal = shoppingTotalFinal;
   const tripSummary = {
     ...tripSummaryBase,
     totalCost: totalCostFinal,
@@ -376,11 +381,12 @@ export default function TripDetailPage() {
         </div>
         <div className="stat">
           <p className="text-xs mb-1" style={{ color: 'var(--muted)' }}>Стоимость</p>
-          <p className="stat-value text-xl font-bold">{tripSummary.totalCost.toLocaleString('ru-RU')} ₽</p>
+          {/* Release-1.0: formatRub — целые рубли, неразрывный пробел; без «123,678 ₽» */}
+          <p className="stat-value text-xl font-bold">{formatRub(tripSummary.totalCost)}</p>
         </div>
         <div className="stat">
           <p className="text-xs mb-1" style={{ color: 'var(--muted)' }}>На человека</p>
-          <p className="stat-value text-xl font-bold">{tripSummary.costPerDefaultPerson.toLocaleString('ru-RU')} ₽</p>
+          <p className="stat-value text-xl font-bold">{formatRub(tripSummary.costPerDefaultPerson)}</p>
         </div>
       </div>
 

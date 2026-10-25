@@ -19,6 +19,7 @@ import {
   calculateShoppingList,
   calculateDayShopping,
   calculatePersonSummary,
+  shoppingPlannedTotal,
 } from './calculations';
 
 // ---------- фикстуры ----------
@@ -108,20 +109,22 @@ describe('findPriceForDate — выбор актуальной цены', () => 
 });
 
 describe('formatAmount — humanize единиц измерения', () => {
-  it('KG: <1 → граммы, >=1 → кг с 2 знаками', () => {
+  // Release-1.0 (UI-consistency): единый формат — запятая и адаптивная точность
+  // («1,5 кг», а не legacy «1.50 кг» через точку).
+  it('KG: <1 → граммы, >=1 → кг через запятую', () => {
     expect(formatAmount(0.8, 'KG')).toBe('800 г');
-    expect(formatAmount(1.5, 'KG')).toBe('1.50 кг');
+    expect(formatAmount(1.5, 'KG')).toBe('1,5 кг');
   });
   it('L: <1 → мл, >=1 → л', () => {
     expect(formatAmount(0.25, 'L')).toBe('250 мл');
-    expect(formatAmount(2, 'L')).toBe('2.00 л');
+    expect(formatAmount(2, 'L')).toBe('2 л');
   });
   it('PCS/PACK: округление до целых шт/уп', () => {
     expect(formatAmount(5.6, 'PCS')).toBe('6 шт');
     expect(formatAmount(1.4, 'PACK')).toBe('1 уп');
   });
-  it('неизвестная единица — как есть, с округлением', () => {
-    expect(formatAmount(3.2, 'TLSP')).toBe('3 TLSP');
+  it('неизвестная единица — через запятую, единица сохраняется', () => {
+    expect(formatAmount(3.2, 'TLSP')).toBe('3,2 TLSP');
   });
 });
 
@@ -217,5 +220,24 @@ describe('calculatePersonSummary', () => {
     const { tripSummary } = calculatePersonSummary(makeTrip([day1]), recipesMap, []);
     expect(tripSummary.hasMissingPrices).toBe(true);
     expect(tripSummary.missingIngredients).toEqual(expect.arrayContaining(['Яйцо', 'Хлеб']));
+  });
+});
+
+// ---------- Release-1.0 (UI-consistency): единая формула плановой суммы ----------
+
+describe('shoppingPlannedTotal — ОДНА формула плановой суммы закупки', () => {
+  const items = [
+    { ingredientId: '1', ingredientName: 'Гречка', unit: 'KG', totalAmount: 2, estimatedCost: 100, hasPrice: true },
+    { ingredientId: '2', ingredientName: 'Тушёнка', unit: 'PCS', totalAmount: 3, estimatedCost: 50.4, hasPrice: true },
+    { ingredientId: '3', ingredientName: 'Без цены', unit: 'PCS', totalAmount: 1, hasPrice: false },
+  ] as any;
+
+  it('суммирует estimatedCost; позиции без цены дают 0', () => {
+    expect(shoppingPlannedTotal(items)).toBeCloseTo(150.4);
+  });
+
+  it('исключённые позиции (soft-disable) не входят в сумму — KPI не спорит с «Итого»', () => {
+    expect(shoppingPlannedTotal(items, new Set(['1']))).toBeCloseTo(50.4);
+    expect(shoppingPlannedTotal(items, new Set(['1', '2', '3']))).toBe(0);
   });
 });

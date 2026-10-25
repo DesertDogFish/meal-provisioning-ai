@@ -4,6 +4,7 @@ import Modal from './Modal';
 import { Button } from './Button';
 import RecipeSearchSelect from './RecipeSearchSelect';
 import { api, getRecipes, humanize } from '../api/client';
+import { productsWord } from '../utils/text'; // Release-1.0: «4 продукта», не «4 продуктов»
 import type { MealType } from '../types';
 import type { Recipe } from '../types';
 import { useToast } from './ToastProvider';
@@ -165,11 +166,14 @@ export default function AddMealModal({
         <RecipeSearchSelect
           value={recipeId}
           onChange={(v) => setRecipeId(v)}
-          options={pool.map((r) => ({
-            value: r.id,
-            label: r.name,
-            hint: `${MEAL_TYPES.find(t => t.value === r.mealType)?.label ?? ''}${r.cookMinutes ? ` • готовка ${r.cookMinutes} мин` : ''}`,
-          }))}
+          options={pool.map((r) => {
+            const n = r.ingredients?.length ?? 0;
+            return {
+              value: r.id,
+              label: r.name,
+              hint: `${MEAL_TYPES.find(t => t.value === r.mealType)?.label ?? ''}${r.cookMinutes ? ` • готовка ${r.cookMinutes} мин` : ''}${n > 0 ? ` • ${n} ${productsWord(n)}` : ''}`,
+            };
+          })}
           searchPlaceholder="Название блюда или продукта…"
           placeholder="Начните вводить название блюда…"
           emptyText={searching ? 'Ищем…' : 'Блюдо не найдено'}
@@ -209,7 +213,10 @@ export default function AddMealModal({
                   </span>
                 ))}
                 {selected.ingredients.length > 4 && (
-                  <span className="text-xs" style={{ color: 'var(--muted)' }}>+{selected.ingredients.length - 4}</span>
+                  <span className="text-xs" style={{ color: 'var(--muted)' }}>
+                    {/* Release-1.0: плюрализация — «+3 продукта», а не голое «+3» */}
+                    +{selected.ingredients.length - 4} {productsWord(selected.ingredients.length - 4)}
+                  </span>
                 )}
               </div>
             )}

@@ -1,5 +1,24 @@
 import { Trip, TripDay, TripMeal, IngredientPrice, ShoppingItem, DayShopping, MenuDay, PersonSummary, TripSummary, UnitOfMeasure } from '../types';
 import { calculateKcal } from './calc';
+import { formatQty } from './format';
+
+/**
+ * Release-1.0 (UI-consistency): бэкенд в DTO рецепта отдаёт плоские поля
+ * (ingredientId/ingredientName/unit/unitLabel — RecipeResponse.RecipeIngredientResponse),
+ * а mock и нормализованный GET /recipes — вложенный объект ingredient.
+ * Читаем ОБЕ формы, иначе в UI протекает «Unknown» и единица «шт» по умолчанию.
+ */
+export function ingOf(ri: any): { name: string; unit: any; enabled?: boolean; kcalPer100g?: number; pieceWeightG?: number } {
+  const ing = ri?.ingredient;
+  if (ing && typeof ing === 'object') return ing;
+  return {
+    name: ri?.ingredientName ?? 'Unknown',
+    unit: ri?.unit ?? 'PCS',
+    enabled: ri?.enabled,
+    kcalPer100g: ri?.kcalPer100g,
+    pieceWeightG: ri?.pieceWeightG,
+  };
+}
 
 export function getEffectivePeople(trip: Trip, day: TripDay, meal?: TripMeal): number {
   if (meal?.peopleOverride) return meal.peopleOverride;
@@ -45,22 +64,9 @@ export function findPriceForDate(prices: IngredientPrice[], date: string): Ingre
   return sorted[0];
 }
 
+/** Количество с единицей (см. formatQty — единые правила вывода Release-1.0). */
 export function formatAmount(amount: number, unit: string): string {
-  if (unit === 'KG') {
-    if (amount < 1) return `${Math.round(amount * 1000)} г`;
-    return `${amount.toFixed(2)} кг`;
-  }
-  if (unit === 'L') {
-    if (amount < 1) return `${Math.round(amount * 1000)} мл`;
-    return `${amount.toFixed(2)} л`;
-  }
-  if (unit === 'PCS') {
-    return `${Math.round(amount)} шт`;
-  }
-  if (unit === 'PACK') {
-    return `${Math.round(amount)} уп`;
-  }
-  return `${Math.round(amount)} ${unit}`;
+  return formatQty(amount, unit);
 }
 
 /**
@@ -68,7 +74,7 @@ export function formatAmount(amount: number, unit: string): string {
  * попадать ни в меню, ни в закупку, ни в чеки/сводки. undefined = включён (обратная совместимость).
  */
 export function isIngredientDisabled(ri: any): boolean {
-  return ri?.ingredient?.enabled === false;
+  return ingOf(ri).enabled === false;
 }
 
 export function calculateMenuByDays(trip: Trip, recipes: Map<string, any>): MenuDay[] {
@@ -87,9 +93,9 @@ export function calculateMenuByDays(trip: Trip, recipes: Map<string, any>): Menu
         ingredients: (recipe?.ingredients || [])
           .filter((ri: any) => !isIngredientDisabled(ri))
           .map((ri: any) => ({
-            name: ri.ingredient?.name || 'Unknown',
+            name: ingOf(ri).name || 'Unknown',
             amount: calculateAmountPerPerson(ri.amount, recipe.baseServings, people),
-            unit: ri.ingredient?.unit || 'PCS'
+            unit: ingOf(ri).unit || 'PCS'
           }))
       };
     })
@@ -108,6 +114,8 @@ export function calculateShoppingList(trip: Trip, recipes: Map<string, any>, pri
       const people = getEffectivePeople(trip, day, meal);
       
       for (const ri of recipe.ingredients) {
+        // Release-1.0: выключенные продукты не попадают ни в меню, ни в закупку (паритет)
+        if (isIngredientDisabled(ri)) continue;
         const amountPerMeal = calculateAmountPerPerson(ri.amount, recipe.baseServings, people);
         const existing = items.get(ri.ingredientId);
         
@@ -122,10 +130,10 @@ export function calculateShoppingList(trip: Trip, recipes: Map<string, any>, pri
           }
         } else {
           const price = findPriceForDate(prices.filter(p => p.ingredientId === ri.ingredientId), day.dayDate);
-          const unit = ri.ingredient?.unit || 'PCS';
+          const unit = ingOf(ri).unit || 'PCS';
           items.set(ri.ingredientId, {
             ingredientId: ri.ingredientId,
-            ingredientName: ri.ingredient?.name || 'Unknown',
+            ingredientName: ingOf(ri).name || 'Unknown',
             unit,
             totalAmount: amountPerMeal,
             estimatedCost: price ? costOf(amountPerMeal, unit, price.pricePerUnit) : undefined,
@@ -139,7 +147,24 @@ export function calculateShoppingList(trip: Trip, recipes: Map<string, any>, pri
   return Array.from(items.values());
 }
 
-export function calculateDayShopping(trip: Trip, recipes: Map<string, any>, prices: IngredientPrice[]): DayShopping[] {
+/**
+ * Release-1.0 (UI-consistency): ОДНА формула плановой суммы закупки для всех
+ * поверхностей (KPI шапки, «Закупка», «По дням», «На человека»). Позиции из
+ * excluded (soft-disable) в сумму не входят — поэтому KPI больше не спорит с «Итого».
+ */
+export function shoppingPlannedTotal(items: ShoppingItem[], excluded?: ReadonlySet<string>): number {
+  return items.reduce((sum, it) => {
+    if (excluded?.has(String(it.ingredientId))) return sum;
+    return sum + (it.estimatedCost ?? 0);
+  }, 0);
+}
+
+export function calculateDayShopping(
+  trip: Trip,
+  recipes: Map<string, any>,
+  prices: IngredientPrice[],
+  excluded?: ReadonlySet<string>
+): DayShopping[] {
   if (!trip.days) return [];
   
   return trip.days.map(day => {
@@ -153,6 +178,10 @@ export function calculateDayShopping(trip: Trip, recipes: Map<string, any>, pric
       const people = getEffectivePeople(trip, day, meal);
       
       for (const ri of recipe.ingredients) {
+        // Release-1.0: исключённые позиции (soft-disable) не влияют ни на одну сумму
+        if (excluded?.has(String(ri.ingredientId))) continue;
+        // Release-1.0: выключенные продукты не попадают ни в меню, ни в закупку (паритет)
+        if (isIngredientDisabled(ri)) continue;
         const amountPerMeal = calculateAmountPerPerson(ri.amount, recipe.baseServings, people);
         const existing = items.get(ri.ingredientId);
         
@@ -161,8 +190,8 @@ export function calculateDayShopping(trip: Trip, recipes: Map<string, any>, pric
         } else {
           items.set(ri.ingredientId, {
             ingredientId: ri.ingredientId,
-            ingredientName: ri.ingredient?.name || 'Unknown',
-            unit: ri.ingredient?.unit || 'PCS',
+            ingredientName: ingOf(ri).name || 'Unknown',
+            unit: ingOf(ri).unit || 'PCS',
             totalAmount: amountPerMeal,
             hasPrice: false
           });
@@ -211,6 +240,8 @@ export function calculatePersonSummary(trip: Trip, recipes: Map<string, any>, pr
           let hasAllKcal = true;
           
           for (const ri of recipe.ingredients) {
+            // Release-1.0: выключенные продукты не участвуют ни в суммах, ни в ккал
+            if (isIngredientDisabled(ri)) continue;
             const ing = ri.ingredient;
             if (!ing) continue;
             

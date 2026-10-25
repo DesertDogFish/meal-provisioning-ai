@@ -5,6 +5,7 @@
  */
 
 import type { MealType, Recipe, UnitOfMeasure } from '../types';
+import { formatQty } from '../utils/format';
 
 export interface ApiError {
   status: number;
@@ -339,6 +340,16 @@ export async function getRecipes(search?: string): Promise<Recipe[]> {
 }
 
 /**
+ * Release-1.0 (UI-consistency): trip-scoped копии блюд (V20) — та же нормализация,
+ * что и GET /recipes. Использовать вместо api.get(`/trips/${id}/recipes`):
+ * без неё плоские DTO снапшотов дают «Unknown» и единицу «шт» по умолчанию.
+ */
+export async function getTripRecipes(tripId: string | number): Promise<Recipe[]> {
+  const data = await api.get<Recipe[]>(`/trips/${tripId}/recipes`);
+  return Array.isArray(data) ? data.map(normalizeRecipe) : data;
+}
+
+/**
  * Правка состава блюда (замена/добавление продукта) — PUT /admin/recipes/:id.
  * Бэкенд принимает полный RecipeRequest, поэтому прокидываем все поля блюда,
  * меняя только ingredients. Ответ нормализуем так же, как GET /recipes.
@@ -442,25 +453,12 @@ export const UNIT_LABELS: Record<UnitOfMeasure, string> = {
   PACK: 'уп'
 };
 
+/**
+ * Количество с единицей. Release-1.0 (UI-consistency): делегируем в formatQty —
+ * одна реализация на всё приложение (запятая, адаптивная точность: «1,5 кг», «200 г»).
+ */
 export function humanize(amount: number, unit: UnitOfMeasure): string {
-  if (amount == null || isNaN(amount)) return '—';
-  switch (unit) {
-    case 'KG':
-      return amount < 1 ? `${Math.round(amount * 1000)} г` : `${amount.toFixed(2)} кг`;
-    case 'L':
-      return amount < 1 ? `${Math.round(amount * 1000)} мл` : `${amount.toFixed(2)} л`;
-    case 'PCS':
-      return `${Math.round(amount)} шт`;
-    case 'PACK':
-      return `${Math.round(amount)} уп`;
-    default:
-      return `${amount}`;
-  }
-}
-
-export function formatMoney(value: number | null | undefined, currency = 'RUB'): string {
-  if (value == null) return '—';
-  return `${value.toLocaleString('ru-RU', { maximumFractionDigits: 2 })} ${currency === 'RUB' ? '₽' : currency}`;
+  return formatQty(amount, unit);
 }
 
 /**
@@ -473,7 +471,7 @@ export function packHint(item: { unit?: UnitOfMeasure | string; packSize?: numbe
     const label = UNIT_LABELS[item.unit as UnitOfMeasure] ?? String(item.unit ?? '');
     if (item.unit === 'KG' || item.unit === 'L') {
       const perPack = Math.round(pack * 1000); // кг/л → г/мл на упаковку
-      return `≈ ${perPack.toLocaleString('ru-RU')} ${item.unit === 'L' ? 'мл' : 'г'} / упаковка (${pack} ${label})`;
+      return `≈ ${perPack.toLocaleString('ru-RU')} ${item.unit === 'L' ? 'мл' : 'г'} / упаковка (${pack.toLocaleString('ru-RU')} ${label})`;
     }
     return `≈ упаковка × ${pack.toLocaleString('ru-RU')} ${label}`;
   }

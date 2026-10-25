@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import type { Ingredient, Recipe } from '../types';
 import { UNIT_LABELS } from '../types';
+import { categoryName } from '../utils/format'; // Release-1.0: category может прийти объектом (ProductCategoryDto)
 import RecipeSearchSelect from './RecipeSearchSelect';
 
 /** Строка черновика состава блюда в окне «Добавить приём пищи». */
@@ -114,7 +115,7 @@ export default function RecipeIngredientsEditor({ recipe, products, onChange, di
 
   const productOptions = products
     .filter(p => p.enabled !== false)
-    .map(p => ({ value: String(p.id), label: p.name, hint: `${UNIT_LABELS[p.unit] ?? p.unit} • ${p.category || 'без категории'}` }));
+    .map(p => ({ value: String(p.id), label: p.name, hint: `${UNIT_LABELS[p.unit] ?? p.unit} • ${categoryName(p) || 'без категории'}` }));
 
   return (
     <div className="rounded-lg p-3 space-y-2" style={{ background: 'var(--elev)', border: '1px solid var(--border)' }}>

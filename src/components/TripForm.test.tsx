@@ -200,7 +200,7 @@ describe('TripForm — успешный submit с humanize-корректным�
 describe('humanize единиц (CR-2) — интеграция, используемая формой/строками', () => {
   it('форматирует кг/г, л/мл, шт, уп', () => {
     expect(humanize(0.8, 'KG')).toBe('800 г');
-    expect(humanize(1.5, 'KG')).toBe('1.50 кг');
+    expect(humanize(1.5, 'KG')).toBe('1,5 кг'); // Release-1.0: единый формат — запятая
     expect(humanize(0.25, 'L')).toBe('250 мл');
     expect(humanize(2, 'PCS')).toBe('2 шт');
     expect(humanize(3, 'PACK')).toBe('3 уп');

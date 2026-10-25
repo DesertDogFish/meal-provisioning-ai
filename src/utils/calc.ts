@@ -1,4 +1,5 @@
 import { UnitOfMeasure } from '../types';
+import { formatQty } from './format';
 
 /**
  * CR-1: Расчёт калорийности по формуле ядра
@@ -71,28 +72,11 @@ export function calculateRecipeKcal(
 /**
  * CR-2: Humanize количества
  * 0.8 KG → "800 г", 0.25 L → "250 мл", 2 PCS → "2 шт", 3 PACK → "3 уп"
+ * Release-1.0 (UI-consistency): единая реализация — formatQty (запятая, «1,5 кг»,
+ * а не legacy «1.50 кг» через точку). Оставляем обёртку ради существующих импортов.
  */
 export function humanize(amount: number | null | undefined, unit: UnitOfMeasure): string {
-  if (amount == null) return '—';
-  
-  switch (unit) {
-    case 'KG':
-      if (amount < 1) {
-        return `${Math.round(amount * 1000)} г`;
-      }
-      return `${amount.toFixed(2)} кг`;
-    case 'L':
-      if (amount < 1) {
-        return `${Math.round(amount * 1000)} мл`;
-      }
-      return `${amount.toFixed(2)} л`;
-    case 'PCS':
-      return `${Math.round(amount)} шт`;
-    case 'PACK':
-      return `${Math.round(amount)} уп`;
-    default:
-      return `${amount}`;
-  }
+  return formatQty(amount, unit);
 }
 
 /**

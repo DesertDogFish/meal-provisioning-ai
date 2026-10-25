@@ -90,7 +90,9 @@ export default function RecipeEditorModal({ recipe, categories, onClose, onSaved
     (recipe?.ingredients ?? []).map(ri => ({
       key: rowSeq++,
       ingredientId: ri.ingredientId,
-      query: ri.ingredient?.name ?? '',
+      // Release-1.0: плоские DTO (снапшоты походов) несут ingredientName — читаем обе формы,
+      // иначе строка редактора открывается с пустым названием.
+      query: ri.ingredient?.name ?? (ri as { ingredientName?: string }).ingredientName ?? '',
       amount: String(ri.amount),
     }))
   );

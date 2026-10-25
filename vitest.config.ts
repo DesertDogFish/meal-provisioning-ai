@@ -40,6 +40,8 @@ export default defineConfig({
         // src/utils: математика/расчёты (errorHandler/errors/validation — legacy, вне гейта)
         'src/utils/calc.ts',
         'src/utils/calculations.ts',
+        // Release-1.0 (UI-consistency): единый формат чисел/единиц — зона изменения
+        'src/utils/format.ts',
         // новые компоненты, выделенные в Фазе 10
         'src/components/ProductTable.tsx',
         'src/components/TripForm.tsx',

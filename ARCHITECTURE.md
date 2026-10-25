@@ -67,9 +67,27 @@ PostgreSQL 15 + Flyway V1–V20 (без.hand-right схем: ddl-auto=validate)
 | unit price в ответах | 2 | HALF_UP |
 | packs/buy/leftover | 3 (packs — int) | CEIL для packs |
 | ккал | 0 | HALF_UP |
-| вывод UI | итоги — `formatRub` (целые ₽); ₽/ед — 2 знака; количества — `humanize` (г/кг/мл/л/шт/уп) | — |
+| вывод UI | `src/utils/format.ts` — единый контракт вывода (см. ниже) | — |
 
 Клиент НЕ пересчитывает деньги/ккал (только форматирование); источник — ответы `/summary/*` (задача T6 переводит оставшиеся клиентские расчёты).
+
+### Формат вывода чисел и единиц (Release-1.0, UI-consistency)
+
+Единственный источник — `src/utils/format.ts`; форматировать числа в компонентах напрямую (`toFixed`, `toLocaleString` с настройками по умолчанию) запрещено:
+
+| Что | Функция | Результат | Пример |
+|---|---|---|---|
+| Итоговые суммы (KPI, «Итого», чеки) | `formatRub` | целые ₽, неразрывный пробел тысяч | «1 234 ₽» (не «123,678 ₽») |
+| Цены за единицу (₽/кг, ₽/шт, план/факт в таблицах) | `formatPrice` | ровно 2 знака, запятая | «887,65» (не «9.86») |
+| Количества | `formatQty` | человеческая единица, адаптивная точность | «200 г», «1,5 кг», «8 шт», «2 уп» |
+| Короткая единица для подписей («₽ / кг») | `unitShortLabel` | кг/г/л/мл/шт/уп, пусто → «ед.» | — |
+| Категория продукта | `categoryName` | объект `ProductCategoryDto` или строка → строка | «Мясо» (не «[object Object]») |
+
+Разделитель тысяч — неразрывный пробел (ru-RU), десятичный разделитель — ЗАПЯТАЯ, всегда. Округление только на выводе; внутренние расчёты — полная точность. `humanize` (client.ts, calc.ts) и `formatAmount` (calculations.ts) — обёртки над `formatQty`.
+
+DTO-рассинхрон имён/единиц закрыт нормализацией в одном месте: бэкенд в рецептах отдаёт плоские поля (`ingredientId/ingredientName/unit/unitLabel`), mock — вложенный `ingredient`. Все загрузки идут через `getRecipes`/`getTripRecipes` (client.ts, `normalizeRecipe`), расчётное ядро читает обе формы через `ingOf` (calculations.ts). Прямые `api.get('/recipes'|'/trips/{id}/recipes')` в компонентах запрещены — дают «Unknown» и «шт» вместо имени/единицы.
+
+Итоги похода — ОДИН источник: KPI шапки и «Итого» в закупке считают из `shoppingTotalFinal` (фактические цены + исключения); «По дням» — из `calculateDayShopping` с теми же исключениями (раньше два пути давали спорящие суммы).
 
 ## Изоляция каталога похода (V20, снепшоты)
 
@@ -85,6 +103,30 @@ PostgreSQL 15 + Flyway V1–V20 (без.hand-right схем: ddl-auto=validate)
 Расчётное ядро (SummaryService) не изменилось: копии лежат в тех же таблицах и читаются теми же запросами по id ингредиентов похода.
 
 Бэкфил: миграция V20 перевела существовавшие походы на снепшоты (temp-таблицы соответствий, перепривязка overrides/exclusions/substitutions). Повторный прогон миграции безопасен (IF NOT EXISTS + DROP temp-таблиц в начале).
+
+## Правки состава приёма (V19 + composition API)
+
+Хранение — поверх `trip_ingredient_substitutions`, без новой таблицы (`MealCompositionService`, решение зафиксировано в PR #47–49):
+
+| State UI | Хранилище | Эффект в конвейере |
+|---|---|---|
+| RECIPE | записи нет | derived = amount/baseServings × people |
+| SCALED | from=X, to=X, ratio | derived × ratio |
+| EXTRA | added=true, from=null, to=X, amount_per_serving | добавка к агрегату |
+| EXCLUDED | removed=true, to=null | строка рецепта пропускается |
+| замена | from=A, to=B, ratio | qty(B) += qty(A)×ratio; qty(A) := 0; SCALE-правки A переносятся на B |
+
+API: `GET/PUT /api/v1/trips/{tripId}/meals/{mealId}/composition` (GET — сервер считает масштабирование и totals; PUT — атомарный batch-диф desired-состояния). Порядок в конвейере: SCALE → people → EXCLUDE → EXTRA → substitutions. UI: `MealCompositionModal` (5 статусов-бейджей, действия по состоянию, merge-подтверждение, инлайн-замены, dirty-state, live-итоги).
+
+⚠️ Девиация (задача R5): EXTRA по спеке FORM — абсолют на приём, но бэкенд-конвейер трактует `amount_per_serving` добавленных строк как на порцию (×people), а сервис конвертирует абсолют→per-serving с округлением scale 3 (0.25 → 0.252 при 4 чел). Mock закрыт PR #53 (contract-тесты 9/9); сверка `SummaryService` — R5.1.
+
+## Известный долг до Release 1.0 (реестр рассинхронов)
+
+1. Вкладки закупок считают на клиенте (`calculations.ts`) и не видят серверные правки состава → R1.
+2. `tripStaging.ts`/localStorage дублируют серверные overrides/exclusions → R1/R2.
+3. mock `summary/shopping` — фикстура FIX-1, не расчёт → R8.
+4. EXTRA ×people (выше) → R5.
+Критерии и порядок — PLAN.md, этапы R0–R9.
 
 ## Contract Frontend ↔ Backend
 
@@ -102,7 +144,7 @@ ISO: `YYYY-MM-DD` (date-only) и ISO-8601 datetime в UTC-локалях БД (`
 
 ### Формат денег
 
-`NUMERIC(10,2)` RUB в БД; в JSON — number с 2 знаками; отображение — `formatRub` (целые ₽) для итогов.
+`NUMERIC(10,2)` RUB в БД; в JSON — number с 2 знаками; отображение — итоги `formatRub` (целые ₽), цены за единицу `formatPrice` (2 знака, запятая) — см. «Формат вывода чисел и единиц».
 
 ### Новые/изменённые эндпоинты эпохи V19–V20
 
@@ -115,6 +157,7 @@ GET/POST /api/v1/trips/{id}/shopping-exclusions, DELETE .../{ingredientId}   и�
 GET/POST /api/v1/trips/{id}/substitutions/ingredient-edits, DELETE .../ingredient-edits/{editId}   правки состава приёма (added/removed/amount_per_serving, V19)
 GET/POST/DELETE /api/v1/trips/{id}/substitutions[/{substitutionId}]   замены from→to (ratio)
 PUT/DELETE /api/v1/trips/{id}/price-overrides/{ingId}    факт-цены (чеки)
+GET/PUT /api/v1/trips/{id}/meals/{mealId}/composition   состав приёма (batch-диф, V19-хранилище)
 GET  /api/v1/trips/{id}/summary/{menu|shopping|shopping/by-days|person}
 ```
 

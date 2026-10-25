@@ -7,8 +7,9 @@ import { ProblemDetailAlert } from './ProblemDetailAlert';
 import { useToast } from './ToastProvider';
 import type { ProblemDetail } from '../types/errors';
 import {
-  api, getMealComposition, putMealComposition, humanize, packHint, humanizeWeight, formatMoney,
+  api, getMealComposition, putMealComposition, humanize, packHint, humanizeWeight,
 } from '../api/client';
+import { formatRub, categoryName } from '../utils/format'; // Release-1.0: единый формат чисел
 import type { CompositionItem, CompositionPutRequest, CompositionResponse } from '../api/client';
 import type { Ingredient, MealType, UnitOfMeasure } from '../types';
 import { parseAmount } from './AddMealModal';
@@ -55,7 +56,8 @@ interface SubstDraft {
 
 function fmtQty(n: number | null | undefined, unit?: UnitOfMeasure | null): string {
   if (n == null || isNaN(n)) return '—';
-  return unit ? humanize(n, unit) : String(n);
+  // Release-1.0: без единицы — всё равно через ru-RU (запятая), а не «1.5»
+  return unit ? humanize(n, unit) : n.toLocaleString('ru-RU', { maximumFractionDigits: 2 });
 }
 
 function ratioFromAmount(derived: number | null | undefined, newAmount: number): number {
@@ -117,7 +119,14 @@ export default function MealCompositionModal({
       .then((res) => {
         if (cancelled) return;
         const list = Array.isArray(res) ? res : (res?.content ?? []);
-        setProducts(list.filter((p: Ingredient) => p.enabled !== false));
+        // Release-1.0: бэкенд отдаёт category ОБЪЕКТОМ (ProductCategoryDto {id,name,slug,…}),
+        // а подсказки пикера интерполируют его строкой → «[object Object]».
+        // Нормализуем один раз на входе (mock отдаёт строку — categoryName её не трогает).
+        setProducts(
+          list
+            .filter((p: Ingredient) => p.enabled !== false)
+            .map((p: Ingredient) => ({ ...p, category: categoryName(p) as Ingredient['category'] }))
+        );
       })
       .catch(() => {});
     return () => { cancelled = true; };
@@ -636,7 +645,7 @@ export default function MealCompositionModal({
             {liveTotals && (
               <p className="mt-4 text-sm" data-testid="composition-totals" style={{ color: 'var(--muted)' }}>
                 Итого на приём: {liveTotals.kcal} ккал · {humanizeWeight(liveTotals.weightGrams)}
-                {' · '}план {formatMoney(server.totals.plannedCost)}
+                {' · '}план {formatRub(server.totals.plannedCost)}
               </p>
             )}
 

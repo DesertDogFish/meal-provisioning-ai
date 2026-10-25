@@ -5,6 +5,8 @@ export const servingsWord = (count: number): string => pluralize(count, ['пор
 export const recipesWord = (count: number): string => pluralize(count, ['рецепт', 'рецепта', 'рецептов']);
 export const ingredientsWord = (count: number): string => pluralize(count, ['ингредиент', 'ингредиента', 'ингредиентов']);
 export const mealsWord = (count: number): string => pluralize(count, ['приём', 'приёма', 'приёмов']);
+// Release-1.0 (UI-consistency): «1 продукт / 2 продукта / 5 продуктов» — для чипов и подсказок
+export const productsWord = (count: number): string => pluralize(count, ['продукт', 'продукта', 'продуктов']);
 
 // P0-1/P0-3: Человекочитаемые единицы измерения и категории.
 const UNIT_HUMAN: Record<string, string> = { KG: 'кг', L: 'л', ML: 'мл', G: 'г', PCS: 'шт', PACK: 'уп' };

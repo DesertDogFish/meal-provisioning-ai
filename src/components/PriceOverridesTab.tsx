@@ -1,13 +1,13 @@
 import { Button } from './Button';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useToast } from './ToastProvider';
 import { Download } from 'lucide-react';
-import { formatAmount, toBaseUnits } from '../utils/calculations';
-import { formatRub } from '../utils/formatRub'; // Фаза 13 (п.3): итоги — целые рубли везде
+import { formatAmount, calculateShoppingList, calculateDayShopping } from '../utils/calculations';
+import { formatPrice, formatRub, unitShortLabel } from '../utils/format'; // Release-1.0: единый формат чисел/единиц
 import { mealsWord } from '../utils/text';
 import { NumberField } from './NumberField';
 import Modal from './Modal';
-import { api, getRecipes } from '../api/client';
+import { api, getRecipes, getTripRecipes } from '../api/client';
 import {
   ActualPriceDraft,
   loadActualPrices,
@@ -17,9 +17,8 @@ import {
   onTripStageChange,
 } from '../utils/tripStaging';
 
-/** Фаза 13 (п.4): человекочитаемая единица для подписи цены «₽ / ед». */
-const unitShortLabel: Record<string, string> = { KG: 'кг', G: 'г', L: 'л', ML: 'мл', PCS: 'шт', PACK: 'уп' };
-const priceUnitSuffix = (unit?: string) => `₽ / ${unitShortLabel[unit || ''] || 'ед.'}`;
+/** Фаза 13 (п.4): подпись цены «₽ / кг» — единица из общего unitShortLabel (utils/format). */
+const priceUnitSuffix = (unit?: string) => `₽ / ${unitShortLabel(unit)}`;
 
 interface ShoppingItem {
   ingredientId: string;
@@ -94,8 +93,11 @@ interface Price {
 
 export default function PriceOverridesTab({ tripId }: Props) {
   const { showError, showSuccess } = useToast();
-  const [shoppingItems, setShoppingItems] = useState<ShoppingItem[]>([]);
-  const [dayShopping, setDayShopping] = useState<DayShopping[]>([]);
+  // Release-1.0 (UI-consistency): сырые данные — в state, таблицы «Закупка» и «По дням»
+  // ВЫВОДЯТСЯ из общих утилит (useMemo ниже). Чеки и исключения мгновенно отражаются
+  // во всех суммах без ручного пересчёта и без расхождений между вкладками.
+  const [allRecipes, setAllRecipes] = useState<Recipe[]>([]);
+  const [prices, setPrices] = useState<Price[]>([]);
   const [activeTab, setActiveTab] = useState<TabType>('total');
   const [showModal, setShowModal] = useState(false);
   const [onlyDiff, setOnlyDiff] = useState(false);
@@ -113,12 +115,6 @@ export default function PriceOverridesTab({ tripId }: Props) {
   // Серверные оверрайды (GET /trips/:id/price-overrides) — как фолбэк, если
   // локальный стейдж пуст (например, чек ввели в другой сессии на сервере).
   const serverOverridesRef = useRef<Record<string, ActualPriceDraft>>({});
-  // Зеркала state в ref — чтобы пересчёты вне render видели актуальные данные.
-  const shoppingItemsRef = useRef<ShoppingItem[]>([]);
-  const shoppingExcludedRef = useRef<Set<string>>(new Set());
-
-  useEffect(() => { shoppingItemsRef.current = shoppingItems; }, [shoppingItems]);
-  useEffect(() => { shoppingExcludedRef.current = shoppingExcluded; }, [shoppingExcluded]);
 
   const syncStage = () => {
     setDraftOverrides(loadActualPrices(tripId));
@@ -147,19 +143,8 @@ export default function PriceOverridesTab({ tripId }: Props) {
         comment: v == null ? undefined : 'чек',
       });
     } catch { /* нет роута/прав — локальный стейдж уже сохранён */ }
-
-    const stage = effectiveOverrides();
-    setShoppingItems(prev => prev.map(i => {
-      const ov = stage[i.ingredientId]?.price;
-      const actualUnitPrice = ov ?? i.plannedUnitPrice ?? undefined;
-      return {
-        ...i,
-        actualUnitPrice,
-        actualCost: actualUnitPrice != null ? i.totalAmount * actualUnitPrice : undefined,
-        overridden: ov != null,
-      };
-    }));
-    recomputeDayActuals();
+    // Release-1.0: ручной пересчёт строк не нужен — saveActualPrice рассылает событие
+    // стейджа, syncStage обновляет draftOverrides, таблицы пересобираются в useMemo.
   };
 
   /** Фактические цены: общий стейдж (инлайн-поле + модалка) поверх серверных оверрайдов. */
@@ -168,21 +153,6 @@ export default function PriceOverridesTab({ tripId }: Props) {
     ...draftOverrides,
   });
 
-  /** Дней-факт = базовый план дня + Σ (факт−план)×кол-во по включённым позициям. */
-  const recomputeDayActuals = () => {
-    const stage = effectiveOverrides();
-    setDayShopping(prev => prev.map(d => {
-      let delta = 0;
-      for (const item of shoppingItemsRef.current) {
-        const ov = stage[item.ingredientId];
-        if (ov && item.plannedUnitPrice != null && !shoppingExcludedRef.current.has(item.ingredientId)) {
-          delta += (ov.price - item.plannedUnitPrice) * item.totalAmount;
-        }
-      }
-      return { ...d, actualCost: d.plannedCost + delta };
-    }));
-  };
-
   /** Фаза 13 (п.5): soft-disable позиции из расчёта прямо во вкладке «Закупка». */
   const toggleExcluded = (ingredientId: string) => {
     const next = new Set(shoppingExcluded);
@@ -190,8 +160,6 @@ export default function PriceOverridesTab({ tripId }: Props) {
     else next.add(ingredientId);
     persistExcluded(tripId, next);
     setShoppingExcluded(next);
-    shoppingExcludedRef.current = next;
-    recomputeDayActuals();
   };
 
   // Загрузка данных через API
@@ -218,15 +186,15 @@ export default function PriceOverridesTab({ tripId }: Props) {
         getRecipes(),
         // V20: цены похода — trip-scoped копии (план заморожен на момент планирования)
         api.get<Price[]>(`/trips/${tripId}/prices`),
-        // V20: копии блюд похода — расчёт закупок идёт по ним
-        api.get<any[]>(`/trips/${tripId}/recipes`).catch(() => [])
+        // V20 + Release-1.0: копии блюд похода через getTripRecipes — с нормализацией
+        // плоских DTO снапшотов (без неё строки «Unknown» и единица «шт» вместо «кг»).
+        getTripRecipes(tripId).catch(() => [] as Recipe[])
       ]);
 
       setTrip(tripData);
-
-      // Расчёт списка закупок
       // V20: расчёт по объединённому набору: справочник (пикер) + копии блюд похода
-      calculateShoppingData(tripData, [...recipesData, ...tripRecipesData], pricesData);
+      setAllRecipes([...recipesData, ...tripRecipesData]);
+      setPrices(pricesData);
     } catch (err) {
       console.error('Failed to load ', err);
       setError('Не удалось загрузить данные');
@@ -236,100 +204,58 @@ export default function PriceOverridesTab({ tripId }: Props) {
     }
   };
 
-  const calculateShoppingData = (tripData: Trip, recipesData: Recipe[], pricesData: Price[]) => {
-    // Расчёт списка закупок
-    const recipesMap = new Map(recipesData.map(r => [r.id, r]));
-    
-    // Простой расчёт закупок (без использования calculateShoppingList из utils)
-    const items: ShoppingItem[] = [];
-    const ingredientTotals = new Map<string, { amount: number; ingredient: any }>();
-    
-    if (tripData.days) {
-      for (const day of tripData.days) {
-        if (day.meals) {
-          for (const meal of day.meals) {
-            const recipe = recipesMap.get(meal.recipeId);
-            if (!recipe) continue;
-            
-            const people = meal.peopleOverride || day.peopleOverride || tripData.defaultPeople;
-            
-            for (const ri of recipe.ingredients) {
-              const amount = (ri.amount / recipe.baseServings) * people;
-              const existing = ingredientTotals.get(ri.ingredientId);
-              
-              if (existing) {
-                existing.amount += amount;
-              } else {
-                ingredientTotals.set(ri.ingredientId, { amount, ingredient: ri.ingredient });
-              }
-            }
-          }
-        }
-      }
-    }
-    
-    // Преобразование в ShoppingItem
-    for (const [ingredientId, data] of ingredientTotals.entries()) {
-      const price = pricesData.find(p => p.ingredientId === ingredientId);
-      const unitPrice = price?.pricePerUnit;
-      const unit = data.ingredient?.unit || 'PCS';
-      // FIX (T0): контракт единиц — KG/L хранят базовые единицы (кг/л), цена — ₽/кг (₽/л).
-      // Стоимость позиции = базовые единицы × цена за базовую единицу (см. toBaseUnits).
-      const baseQty = toBaseUnits(data.amount, unit);
-      
-      items.push({
-        ingredientId,
-        ingredientName: data.ingredient?.name || 'Unknown',
-        unit,
-        totalAmount: data.amount,
-        plannedUnitPrice: unitPrice,
-        actualUnitPrice: unitPrice,
-        plannedCost: unitPrice ? baseQty * unitPrice : undefined,
-        actualCost: unitPrice ? baseQty * unitPrice : undefined,
-        overridden: false,
-        hasPlannedPrice: !!unitPrice
-      });
-    }
-    
-    setShoppingItems(items);
-    
-    // Расчёт закупок по дням
-    const dayShoppingData: DayShopping[] = [];
-    if (tripData.days) {
-      for (const day of tripData.days) {
-        let dayCost = 0;
-        
-        if (day.meals) {
-          for (const meal of day.meals) {
-            const recipe = recipesMap.get(meal.recipeId);
-            if (!recipe) continue;
-            
-            const people = meal.peopleOverride || day.peopleOverride || tripData.defaultPeople;
-            
-            for (const ri of recipe.ingredients) {
-              const amount = (ri.amount / recipe.baseServings) * people;
-              const price = pricesData.find(p => p.ingredientId === ri.ingredientId);
-              if (price) {
-                // FIX (T0): стоимость в базовых единицах (кг/л × ₽/кг) — см. toBaseUnits
-                dayCost += toBaseUnits(amount, ri.ingredient?.unit || 'PCS') * price.pricePerUnit;
-              }
-            }
-          }
-        }
-        
-        dayShoppingData.push({
-          dayDate: day.dayDate,
-          plannedCost: dayCost,
-          actualCost: dayCost
-        });
-      }
-    }
-    
-    setDayShopping(dayShoppingData);
-  };
+  // ===== Release-1.0 (UI-consistency): производные таблицы из ОБЩИХ утилит =====
+  // Раньше здесь жила локальная копия расчёта («простой расчёт без calculateShoppingList»):
+  // она читала только вложенный ri.ingredient и брала ПЕРВУЮ цену без учёта даты.
+  // Теперь те же calculateShoppingList/calculateDayShopping, что и на вкладке «Закупка на
+  // поход» — одна математика, одни имена, одни единицы на всех поверхностях.
+  const recipesMap = useMemo(
+    () => new Map(allRecipes.map(r => [String(r.id), r])),
+    [allRecipes]
+  );
 
-  // В mock-режиме оверрайды не поддерживаются
-  // В реальном приложении здесь будет API вызов
+  const shoppingItems = useMemo<ShoppingItem[]>(() => {
+    if (!trip) return [];
+    const stage = { ...(serverOverridesRef.current || {}), ...draftOverrides };
+    return calculateShoppingList(trip as any, recipesMap as any, prices as any).map(it => {
+      // Плановая ₽/ед — из плановой стоимости позиции (та же цена по дням, что в «План ₽»),
+      // чтобы строка таблицы была самосогласована: plannedCost = plannedUnitPrice × totalAmount.
+      const plannedCost = it.estimatedCost;
+      const plannedUnitPrice = plannedCost != null && it.totalAmount > 0
+        ? plannedCost / it.totalAmount
+        : undefined;
+      const ov = stage[String(it.ingredientId)];
+      const actualUnitPrice = ov?.price ?? plannedUnitPrice;
+      return {
+        ingredientId: String(it.ingredientId),
+        ingredientName: it.ingredientName,
+        unit: it.unit,
+        totalAmount: it.totalAmount,
+        plannedUnitPrice,
+        actualUnitPrice,
+        plannedCost,
+        actualCost: actualUnitPrice != null ? actualUnitPrice * it.totalAmount : plannedCost,
+        overridden: ov != null,
+        hasPlannedPrice: it.hasPrice,
+      };
+    });
+  }, [trip, recipesMap, prices, draftOverrides]);
+
+  const dayShopping = useMemo<DayShopping[]>(() => {
+    if (!trip) return [];
+    const stage = { ...(serverOverridesRef.current || {}), ...draftOverrides };
+    // Факт дня считаем по количествам ЭТОГО дня (раньше к каждому дню прибавлялась
+    // общая дельта всего похода — «По дням» не сходилась с «Закупкой»).
+    return calculateDayShopping(trip as any, recipesMap as any, prices as any, shoppingExcluded).map(d => {
+      let actual = 0;
+      for (const it of d.items) {
+        const planned = it.estimatedCost ?? 0;
+        const ov = stage[String(it.ingredientId)]?.price;
+        actual += ov != null ? ov * it.totalAmount : planned;
+      }
+      return { dayDate: d.dayDate, plannedCost: d.dayCost, actualCost: actual };
+    });
+  }, [trip, recipesMap, prices, shoppingExcluded, draftOverrides]);
 
   const calculateDelta = (planned?: number | null, actual?: number | null): number => {
     if (!planned || !actual || planned === 0) return 0;
@@ -338,7 +264,8 @@ export default function PriceOverridesTab({ tripId }: Props) {
 
   const formatDelta = (delta: number): string => {
     if (delta === 0) return '0%';
-    return `${delta > 0 ? '+' : ''}${delta.toFixed(1)}%`;
+    // Release-1.0: запятая вместо точки («+3,5%») — единый десятичный разделитель во всём UI
+    return `${delta > 0 ? '+' : ''}${delta.toLocaleString('ru-RU', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
   };
 
   const getDeltaChipClass = (delta: number): string => {
@@ -362,17 +289,8 @@ export default function PriceOverridesTab({ tripId }: Props) {
     }, 0);
   const totalDelta = calculateDelta(totalPlanned, totalActual);
 
-  // Фаза 13 (п.4): фактические цены стейджа применяются и к разбивке по дням.
-  const dayShoppingView = dayShopping.map(d => {
-    let delta = 0;
-    for (const item of shoppingItems) {
-      const ov = effectiveOverrides()[item.ingredientId];
-      if (ov && item.plannedUnitPrice != null && !shoppingExcluded.has(item.ingredientId)) {
-        delta += (ov.price - item.plannedUnitPrice) * item.totalAmount;
-      }
-    }
-    return { ...d, actualCost: d.plannedCost + delta };
-  });
+  // Release-1.0: «По дням» уже включает фактические цены стейджа и исключения —
+  // таблица выводится из dayShopping (useMemo выше), отдельный «view»-слой не нужен.
 
   // FIX: «только расхождения» учитывает стейдж-оверрайды (факт из общего стейджа),
   // а не только флаг overridden из начального расчёта.
@@ -501,7 +419,6 @@ export default function PriceOverridesTab({ tripId }: Props) {
                 <th className="text-right px-2 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: '11px' }} title="Цена за единицу измерения продукта (не сумма чека). Сумма = цена × количество слева.">Факт ₽/ед</th>
                 <th className="text-right px-2 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: '11px' }}>Факт ₽</th>
                 <th className="text-right px-2 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: '11px' }}>Δ</th>
-                <th className="px-2 py-3"></th>
               </tr>
             </thead>
             <tbody>
@@ -536,7 +453,7 @@ export default function PriceOverridesTab({ tripId }: Props) {
                       {formatAmount(item.totalAmount, item.unit)}
                     </td>
                     <td className="px-2 py-3 text-right" style={{ color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>
-                      {item.hasPlannedPrice ? item.plannedUnitPrice?.toFixed(2) : '—'}
+                      {item.hasPlannedPrice ? formatPrice(item.plannedUnitPrice) : '—'}
                     </td>
                     <td className="px-2 py-3 text-right" style={{ color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>
                       {excluded ? '—' : formatRub(item.plannedCost)}
@@ -548,7 +465,7 @@ export default function PriceOverridesTab({ tripId }: Props) {
                         placeholder={`${formatAmount(item.totalAmount, item.unit)} × ${priceUnitSuffix(item.unit)}`}
                         onCommit={v => commitActualPrice(item, v)}
                         testId={`actual-input-${item.ingredientId}`}
-                        ariaLabel={`Фактическая цена за единицу (${unitShortLabel[item.unit] || 'ед.'}): ${item.ingredientName}, объём позиции ${formatAmount(item.totalAmount, item.unit)}`}
+                        ariaLabel={`Фактическая цена за единицу (${unitShortLabel(item.unit)}): ${item.ingredientName}, объём позиции ${formatAmount(item.totalAmount, item.unit)}`}
                       />
                     </td>
                     <td className="px-2 py-3 text-right" style={{ color: 'var(--w1)', fontWeight: 'bold', fontVariantNumeric: 'tabular-nums' }}>
@@ -558,9 +475,6 @@ export default function PriceOverridesTab({ tripId }: Props) {
                       <span className={`chip-delta ${deltaChipClass}`}>
                         {formatDelta(delta)}
                       </span>
-                    </td>
-                    <td className="px-2 py-3 text-right">
-                      {/* В mock-режиме оверрайды не поддерживаются */}
                     </td>
                   </tr>
                 );
@@ -602,7 +516,7 @@ export default function PriceOverridesTab({ tripId }: Props) {
               </tr>
             </thead>
             <tbody>
-              {dayShoppingView.map(day => {
+              {dayShopping.map(day => {
                 const delta = calculateDelta(day.plannedCost, day.actualCost);
                 return (
                   <tr key={day.dayDate} style={{ borderBottom: '1px solid var(--border)' }}>
@@ -689,7 +603,7 @@ export default function PriceOverridesTab({ tripId }: Props) {
                     <span style={{ color: 'var(--muted)' }}> · {formatAmount(item.totalAmount, item.unit)}</span>
                   </span>
                   <span style={{ color: 'var(--muted)', fontSize: '12px', fontVariantNumeric: 'tabular-nums' }}>
-                    план {item.plannedUnitPrice?.toFixed(2) || '—'}
+                    план {formatPrice(item.plannedUnitPrice)}
                   </span>
                   <NumberField
                     size="sm"
@@ -698,7 +612,7 @@ export default function PriceOverridesTab({ tripId }: Props) {
                     placeholder={`${formatAmount(item.totalAmount, item.unit)} × ${priceUnitSuffix(item.unit)}`}
                     onCommit={v => commitActualPrice(item, v)}
                     testId={`modal-input-${item.ingredientId}`}
-                    ariaLabel={`Фактическая цена за единицу (${unitShortLabel[item.unit] || 'ед.'}): ${item.ingredientName}, объём позиции ${formatAmount(item.totalAmount, item.unit)}`}
+                    ariaLabel={`Фактическая цена за единицу (${unitShortLabel(item.unit)}): ${item.ingredientName}, объём позиции ${formatAmount(item.totalAmount, item.unit)}`}
                   />
                 </div>
               ))}

@@ -76,6 +76,7 @@ Swagger: http://localhost:8080/swagger-ui.html (dev). Health: `GET /api/v1/meta`
 - `GET|POST /api/v1/trips/{id}/substitutions/ingredient-edits`, `DELETE .../ingredient-edits/{editId}` — правки состава приёма: добавить/исключить ингредиент (`added/removed/amount_per_serving`, V19)
 - `GET|POST /api/v1/trips/{id}/substitutions`, `DELETE .../{substitutionId}` — замены ингредиента from→to с `ratio`
 - `GET /api/v1/trips/{id}/summary/menu|shopping|shopping/by-days|person` — расчётные сводки
+- `GET|PUT /api/v1/trips/{id}/meals/{mealId}/composition` — состав приёма: серверное масштабирование + атомарный batch-диф правок (V19-хранилище, спека FORM-meal-composition)
 
 ### Каталог (все аутентифицированные — чтение; глобальные записи, `trip_id IS NULL`)
 - `GET /api/v1/recipes[/{id}]` (фильтры mealType/category/cookMinutes/search), `GET /api/v1/prices`, `GET /api/v1/product-categories`
@@ -109,6 +110,8 @@ mvn test -Dtest=SnapshotIsolationIntegrationTest      # изоляция сне�
 6. **Конфликты:** продукт/рецепт защищены usedIn-проверками **внутри глобального каталога**; походы их не блокируют (держат копии, V20).
 7. **Изоляция:** пользователь видит только свои походы (ownership-фильтры, 404 на чужое); ADMIN-зона под `@PreAuthorize`.
 8. **Округления и формулы** — эталон в `ARCHITECTURE.md` («Эталон округлений», «Core Calculations»).
+9. **Состав приёма**: RECIPE/SCALED/EXTRA/EXCLUDED + замены хранятся в `trip_ingredient_substitutions` (SCALE = «замена на себя» с ratio; EXCLUDE = removed; EXTRA = added); порядок в конвейере: SCALE → people → EXCLUDE → EXTRA → substitutions. Девиация до задачи R5: EXTRA трактуется конвейером как per-serving (спека — абсолют на приём).
+10. **Ручные позиции закупки** (`trip_manual_items`) отсутствуют, запланированы миграцией V21 (PLAN R3); обходных решений поверх не добавлять.
 
 ## Миграции
 
