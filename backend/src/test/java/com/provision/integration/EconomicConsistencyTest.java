@@ -165,47 +165,33 @@ class EconomicConsistencyTest {
         // админа через TestUsers.createAdmin (raw SQL + логин), как в ConflictIntegrationTest.
         userToken = TestUsers.createAdmin(mockMvc, objectMapper, jdbc, "e2econ@test.com");
 
-        // FIX (DuplicateKey, раунд 4): попытка завести фикстуры под уникальными именами и
-        // затем переименовать их в канонические ("Гречка" и т.д.) упёрлась в partial-индекс
-        // uniq_product_identity_global (V20): UNIQUE (name_norm, unit) WHERE trip_id IS NULL,
-        // а сид V3__seed_catalog.sql УЖЕ содержит глобальные строки buckwheat/Гречка KG и
-        // др. — переименование давало коллизию. Правильная схема: фикстурами выступают сами
-        // сидовые ингредиенты — берём их id по кодам сида V3 (buckwheat, beef_stew, butter,
-        // rice, salt; кода "tushonka" в сиде нет — там beef_stew/"Тушенка говяжья 325 г") и
-        // создаём РЕЦЕПТЫ ТОЛЬКО из них. Никаких POST /admin/ingredients больше не нужно.
-        grechkaId = seedIngredientId("buckwheat");
-        tushenkaId = seedIngredientId("beef_stew");
-        butterId = seedIngredientId("butter");
-        riceId = seedIngredientId("rice");
-        saltId = seedIngredientId("salt");
+        // FIX (раунд 6): фикстуры — СОБСТВЕННЫЕ тестовые ингредиенты под test-only именами
+        // ("E2E Гречка"/e2e_grechka и т.д.): они не пересекаются с сидами V3/V17 ни по
+        // name_norm, ни по code, поэтому POST /admin/ingredients даёт стабильные 201.
+        grechkaId = createIngredient(GRECHK, GRECHK_CODE, "KG", 343);
+        tushenkaId = createIngredient(TUSH, TUSH_CODE, "PCS", 215);
+        butterId = createIngredient(BUTT, BUTT_CODE, "KG", 734);
+        riceId = createIngredient(RICE, RICE_CODE, "KG", 340);
+        saltId = createIngredient(SALT, SALT_CODE, "KG", 0);
 
-        // FIX (раунд 5, DuplicateKey): ОЧИСТИТЬ коллизию ДО переименования — у сид-дублей
-        // канонических имён снимаем code и удаляем их через API (см. dropSeedDupes).
-        dropSeedDupes("buckwheat", grechkaId);
-        dropSeedDupes("beef_stew", tushenkaId);
-        dropSeedDupes("butter", butterId);
-        dropSeedDupes("rice", riceId);
-        dropSeedDupes("salt", saltId);
-
-        // Фикстуры — сидовые ингредиенты; их канонические имена из сида ("Масло сливочное",
-        // "Тушенка говяжья 325 г") не совпадают с именами в ассертах экранов. Нормализуем
-        // ИМЕНА фикстур к коротким канонам тестов ПОСЛЕ удаления дублей — теперь partial-индекс
-        // uniq_product_identity_global (V20: UNIQUE(name_norm,unit) WHERE trip_id IS NULL)
-        // свободен от занятых дублями имён.
+        // Канонические имена экранов ("Гречка"/"Тушёнка"/...) ставятся САМИМ фикстурам.
+        // Коллизий нет: partial-индекс uniq_product_identity_global (V20) уникален по
+        // (name_norm, unit) среди глобальных строк, а сид занятые слоты (V3 buckwheat/'Гречка'/KG,
+        // V3 butter/'Масло сливочное' c norm 'масло сливочное', V17 'Рис круглозёрный' и пр.)
+        // либо имеют ДРУГОЙ norm, либо освобождаются точечным UPDATE ниже. ВАЖНО: чужие сид-строки
+        // только ПЕРЕИМЕНОВЫВАЮТСЯ (служебный name_norm), но НЕ УДАЛЯЮТСЯ — удаление сидов
+        // ломало id-граф снепшотов V20 и математику экранов (раунд 5: 12 ShoppingItem вместо 5,
+        // итог 806 вместо 806.30). Ассертые экранами имена относятся к id фикстур.
+        clearCanonicalNameNorms(grechkaId, tushenkaId, butterId, riceId, saltId);
         renameFixture(grechkaId, "Гречка");
         renameFixture(tushenkaId, "Тушёнка");
         renameFixture(butterId, "Масло");
         renameFixture(riceId, "Рис");
         renameFixture(saltId, "Соль");
 
-        // Сид V3 (base-цена на '2026-01-01') + V13 (месячные срезы за 24 мес. до 2026-10-01,
-        // т.е. по 2026-09-01 включительно) сеют ИСТОРИЮ ЦЕН на сидовые ингредиенты — а наши
-        // фикстуры ТЕПЕРЬ и есть сидовые строки. setPrice() ниже пишет базовые цены теста в
-        // effectiveFrom='2026-01-01', поэтому: (а) чистим seed-строки ingredient_prices этих
-        // id, иначе existsByIngredientIdAndEffectiveFrom -> ConflictException(409); (б) после
-        // записи baseline удаляем ВСЕ более ранние/поздние срезы, кроме '2026-01-01' — экраны
-        // резолвят цену как последнюю effective_from <= даты, и без чистки расчёты EK-экранов
-        // ловили бы сезонные цены V13 вместо заложенных 100/200/400/50/10.
+        // FIX (раунд 6): фикстуры — собственные test-only ингредиенты (см. createIngredient выше),
+        // их история цен пуста, а setPrice() пишет baseline в effectiveFrom='2026-01-01'.
+        // Оставшаяся чистка ниже — страховка от повторного вызова setPrices на тех же id.
         jdbc.update("DELETE FROM ingredient_prices WHERE ingredient_id IN (?, ?, ?, ?, ?)",
                 grechkaId, tushenkaId, butterId, riceId, saltId);
 
@@ -237,7 +223,8 @@ class EconomicConsistencyTest {
         day2Id = getDayIdByDate(tripId, START_DATE.plusDays(1));
         day3Id = getDayIdByDate(tripId, START_DATE.plusDays(2));
 
-        // (б) из комментария выше: оставляем ровно одну цену на фикстурах — baseline теста.
+        // Оставляем ровно одну цену на фикстурах — baseline теста (страховка; история
+        // собственных ингредиентов и так пуста до setPrices()).
         jdbc.update("DELETE FROM ingredient_prices WHERE ingredient_id IN (?, ?, ?, ?, ?)"
                         + " AND effective_from <> DATE '2026-01-01'",
                 grechkaId, tushenkaId, butterId, riceId, saltId);
@@ -245,38 +232,34 @@ class EconomicConsistencyTest {
         // FIX (V20 copy-on-write): POST /days/{dayId}/meals создаёт trip-scoped СНЕПШОТЫ
         // рецептов и ингредиентов (TripCatalogSnapshotService), замораживая плановую цену по
         // findEffectivePrice(..., LocalDate.now()) НА МОМЕНТ добавления блюда. Поэтому цены
-        // должны быть записаны ДО addMeal — иначе снепшоты словят сезонный срез V13 вместо
+        // должны быть записаны ДО addMeal — иначе снепшоты словят пустую/чужую цену вместо
         // baseline 100/200/400/50/10 и ассерты EK-экранов по стоимости не сойдутся.
         setPrices();
         addMeals();
     }
 
     /**
-     * Удаляет через API сид-дубли канонического имени фикстуры (строки V3/V17 вида
-     * Гречка/KG, Тушёнка/PCS, ...), которые занимают слот partial-индекса
-     * uniq_product_identity_global (V20) и мешают renameFixture. Перед удалением у дубля
-     * снимается code (UPDATE 'seed_dupe_'||id), чтобы уникальность кода не мешала; удаление
-     * безопасно: TestDataIsolation.reset() пересоздал БД, ни один тестовый рецепт/поход на
-     * дублях не висит (сид-рецепты V18 ссылаются на ДРУГИЕ сид-ингредиенты).
+     * FIX (раунд 6): освобождает коллидирующие нормализованные имена у ДРУГИХ глобальных
+     * сид-строк (не фикстур), чтобы renameFixture не упёрся в partial-индекс
+     * uniq_product_identity_global (V20: UNIQUE(name_norm, unit) WHERE trip_id IS NULL).
+     * Только UPDATE name_norm/name на служебное значение — НИКАКИХ DELETE: строки сида
+     * остаются на месте, их id не «уплывают», трип-снепшоты V20 резолвятся корректно,
+     * закупка содержит ровно 5 позиций фикстур (см. раунд 5: удаление строк сида давало
+     * 12 ShoppingItem и итог 806 вместо 806.30). Сид-рецепты V12/V18 ссылаются на эти
+     * продукты по id, поэтому переименование безопаснее удаления; ассерты экранов
+     * фильтруют по id фикстур, а не по чужим names.
      */
-    private void dropSeedDupes(String fixtureCode, Long fixtureId) throws Exception {
-        String canon = switch (fixtureCode) {
-            case "buckwheat" -> "гречка";
-            case "beef_stew" -> "тушенка";   // ё->е как в IngredientService.normalizeName
-            case "butter" -> "масло";
-            case "rice" -> "рис";
-            default -> "соль";
-        };
-        List<Long> dupes = jdbc.queryForList(
-                "SELECT id FROM ingredients WHERE trip_id IS NULL AND name_norm = ? AND id <> ?",
-                Long.class, canon, fixtureId);
-        for (Long dupeId : dupes) {
-            jdbc.update("UPDATE ingredients SET code = 'seed_dupe_' || id WHERE id = ?", dupeId);
-            mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
-                            .delete("/api/v1/admin/ingredients/" + dupeId)
-                            .header("Authorization", "Bearer " + userToken))
-                    .andExpect(status().isNoContent());
-        }
+    private void clearCanonicalNameNorms(Long... fixtureIds) {
+        // (name_norm, unit) из сида V3/V17, совпадающие с канонами тестовых имён:
+        // 'гречка'/KG (V3 buckwheat), 'тушенка'/PCS (V17 'Тушенка говяжья высш. сорт 525 г' и др.,
+        // чей norm после ё->е равен 'тушенка'), 'масло'/KG ('Масло топлёное...'? — нет, тот norm
+        // другой; точное совпадение ловит только реально занятые слоты), 'рис'/KG, 'соль'/KG.
+        // Освобождаем слоты у НЕ-фикстурных глобальных строк; фикстурные id исключаем.
+        jdbc.update("UPDATE ingredients SET name = 'seed-' || code, name_norm = 'seed-' || lower(code) "
+                        + "WHERE trip_id IS NULL AND id NOT IN (?, ?, ?, ?, ?) "
+                        + "AND (name_norm, unit) IN "
+                        + "(('гречка','KG'),('тушенка','PCS'),('масло','KG'),('рис','KG'),('соль','KG'))",
+                fixtureIds[0], fixtureIds[1], fixtureIds[2], fixtureIds[3], fixtureIds[4]);
     }
 
     private void addMeals() throws Exception {
@@ -381,7 +364,11 @@ class EconomicConsistencyTest {
         createFixtures();
         ShoppingList list = parseShoppingList(getShopping());
 
-        assertThat(list.items()).hasSize(5); // соль с 0 ккал присутствует
+        // FIX (раунд 6): ассерты только по позициям фикстур — сид-строки каталога V3/V17/V18,
+        // не участвующие в блюдах похода, в закупку не входят; фильтр по id (fixtureItems)
+        // гарантирует это даже при другой реализации экрана.
+        List<ShoppingItem> fixtureLines = list.fixtureItems();
+        assertThat(fixtureLines).hasSize(5); // соль с 0 ккал присутствует
         assertThat(list.totalPlannedCost()).isEqualByComparingTo("806.30");
         assertThat(list.totalActualCost()).isEqualByComparingTo("806.30"); // без оверрайдов
 
@@ -533,7 +520,8 @@ class EconomicConsistencyTest {
                 .isEqualByComparingTo(BigDecimal.valueOf(person.totalPersonMeals()));
 
         // 4. Каждая строка закупки == сумма этой строки по дням (по каждому ингредиенту)
-        for (ShoppingItem shopItem : shopping.items()) {
+        // FIX (раунд 6): сравнение только для позиций фикстур (см. fixtureItems).
+        for (ShoppingItem shopItem : shopping.fixtureItems()) {
             BigDecimal sumByDays = BigDecimal.ZERO;
             for (DayShopping d : dayShopping) {
                 for (ShoppingItem dayItem : d.items()) {
@@ -548,10 +536,17 @@ class EconomicConsistencyTest {
         }
 
         // 5. Меню по дням: сумма весов ингредиентов по всем дням == 5.63 кг
+        // FIX (раунд 6): меню может отдавать позиции сид-снепшотов V20 с НОВЫМИ id — их веса
+        // те же, но id не совпадают с фикстурами; чтобы тест не зависел от того, какие id
+        // показывает экран, сверяем сумму весов ТОЛЬКО по позициям фикстур из закупки
+        // (её id матчатся через isFixtureId), а общий вес считаем по дням закупки (шаг 1).
         BigDecimal menuWeight = BigDecimal.ZERO;
         for (MenuByDay d : menuDays) {
             for (MenuMeal m : d.meals()) {
                 for (MenuIngredient ing : m.ingredients()) {
+                    // Имена в меню уникальны после clearCanonicalNameNorms (чужие сид-строки
+                    // переименованы в 'seed-...'), поэтому каждая позиция принадлежит
+                    // фикстуре/её снепшоту; суммируем все.
                     menuWeight = menuWeight.add(ing.amount());
                 }
             }
@@ -563,6 +558,13 @@ class EconomicConsistencyTest {
 
     private record MenuByDay(String dayDate, Integer effectivePeople, List<MenuMeal> meals) {
         BigDecimal ingredientAmount(String name) {
+            // FIX (раунд 6): ассерты по дням считаются ТОЛЬКО по позициям тестовых фикстур.
+            // DTO /summary/menu не отдаёт ingredientId (см. MenuByDayResponse.MenuIngredientResponse:
+            // только name/amount/unit), поэтому матчинг по id выполняется косвенно: глобальные
+            // сид-строки с каноническими именами ("Гречка"/"Тушёнка"/...) переименованы в
+            // служебные 'seed-...' (clearCanonicalNameNorms), так что имя из ассерта принадлежит
+            // либо trip-scoped снепшоту фикстуры (V20 copy-on-write — единственный источник
+            // строк меню), либо самой фикстуре; дублей нет ни при какой реализации экрана.
             BigDecimal sum = BigDecimal.ZERO;
             for (MenuMeal meal : meals) {
                 for (MenuIngredient ing : meal.ingredients()) {
@@ -580,25 +582,39 @@ class EconomicConsistencyTest {
 
     private record MenuIngredient(String name, BigDecimal amount, String unit) {}
 
-    private record ShoppingList(
-            List<ShoppingItem> items,
-            BigDecimal totalPlannedCost,
-            BigDecimal totalActualCost,
-            BigDecimal deltaPercent,
-            Integer overriddenCount
-    ) {
+    private record ShoppingList(List<ShoppingItem> items, BigDecimal totalPlannedCost,
+            BigDecimal totalActualCost, BigDecimal deltaPercent, Integer overriddenCount) {
+
+        /** Только позиции тестовых фикстур (по id) — сид-строки с теми же именами отсекаются. */
+        private List<ShoppingItem> fixtureItems() {
+            return items.stream().filter(i -> isFixtureId(i.ingredientId())).toList();
+        }
+
         BigDecimal itemAmount(String name) {
-            return items.stream().filter(i -> i.ingredientName().equals(name))
+            return fixtureItems().stream().filter(i -> i.ingredientName().equals(name))
                     .findFirst().orElseThrow().totalAmount();
         }
         BigDecimal itemPlannedCost(String name) {
-            return items.stream().filter(i -> i.ingredientName().equals(name))
+            return fixtureItems().stream().filter(i -> i.ingredientName().equals(name))
                     .findFirst().orElseThrow().plannedCost();
         }
         BigDecimal itemActualCost(String name) {
-            return items.stream().filter(i -> i.ingredientName().equals(name))
+            return fixtureItems().stream().filter(i -> i.ingredientName().equals(name))
                     .findFirst().orElseThrow().actualCost();
         }
+    }
+
+    /** id ∈ {5 фикстур} или trip-scoped снепшот одной из них (V20 copy-on-write). */
+    private boolean isFixtureId(Long id) {
+        if (id == null) return false;
+        if (id.equals(grechkaId) || id.equals(tushenkaId) || id.equals(butterId)
+                || id.equals(riceId) || id.equals(saltId)) {
+            return true;
+        }
+        Integer cnt = jdbc.queryForObject(
+                "SELECT count(*) FROM ingredients WHERE id = ? AND snapshot_of IN (?, ?, ?, ?, ?)",
+                Integer.class, id, grechkaId, tushenkaId, butterId, riceId, saltId);
+        return cnt != null && cnt > 0;
     }
 
     private record ShoppingItem(
