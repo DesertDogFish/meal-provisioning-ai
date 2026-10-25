@@ -58,7 +58,7 @@ class PriceOverrideTest {
         // findAllEditsForTrip → пустой список (стаб ниже) → правок состава нет.
         lenient().when(substitutionRepository.findAllEditsForTrip(any())).thenReturn(List.of());
         tripIngredientEditService = new TripIngredientEditService(substitutionRepository, null);
-        summaryService = new SummaryService(tripRepository, priceRepository, recipeRepository, null, null, priceResolutionService, substitutionRepository, tripIngredientEditService);
+        summaryService = new SummaryService(tripRepository, priceRepository, recipeRepository, null, priceResolutionService, substitutionRepository, tripIngredientEditService, null);
 
         // FIX P1 (аудит): getShoppingList теперь грузит плановые цены пакетным запросом
         // findLatestPricesAsOfForIngredients вместо per-ingredient findEffectivePrice.

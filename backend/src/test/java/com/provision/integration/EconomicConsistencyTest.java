@@ -173,28 +173,25 @@ class EconomicConsistencyTest {
         // админа через TestUsers.createAdmin (raw SQL + логин), как в ConflictIntegrationTest.
         userToken = TestUsers.createAdmin(mockMvc, objectMapper, jdbc, "e2econ@test.com");
 
-        // FIX (раунд 6): фикстуры — СОБСТВЕННЫЕ тестовые ингредиенты под test-only именами
-        // ("E2E Гречка"/e2e_grechka и т.д.): они не пересекаются с сидами V3/V17 ни по
-        // name_norm, ни по code, поэтому POST /admin/ingredients даёт стабильные 201.
-        grechkaId = createIngredient(GRECHK, GRECHK_CODE, "KG", 343);
-        tushenkaId = createIngredient(TUSH, TUSH_CODE, "PCS", 215);
-        butterId = createIngredient(BUTT, BUTT_CODE, "KG", 734);
-        riceId = createIngredient(RICE, RICE_CODE, "KG", 340);
-        saltId = createIngredient(SALT, SALT_CODE, "KG", 0);
-
-        // FIX (раунд 12, локальный прогон mvn): канонические имена ("Гречка"/"Тушёнка"/...)
-        // ставятся фикстурам ТОЛЬКО ПОСЛЕ dropGlobalSeedCatalog(): partial unique индекс
-        // uniq_product_identity_global ON ingredients(name_norm, unit) WHERE trip_id IS NULL
-        // (V20) уже занят сид-строками V3 ('гречка','KG') и V17 ('рис','KG'), UPDATE до
-        // очистки падал с DuplicateKey (CI-лог раунда 9). После удаления чужих сид-строк
-        // переименование безопасно: экраны матчают позиции по имени (DTO меню не отдаёт
-        // ingredientId), дубли канонических имён исключены.
+        // FIX (раунд 10/13): чистим ГЛОБАЛЬНЫЙ сид-каталог V3/V17/V12/V18 ДО создания фикстур:
+        // (а) POST /admin/ingredients с каноническим именем не получит 409 по name_norm;
+        // (б) SummaryService.loadCalculationContext -> recipeRepository.findAllWithIngredients()
+        // берёт ВСЕ глобальные рецепты — сид-рецепты попадали в закупку (+7 чужих id, CI
+        // «Expected size: 5 but was: 12»).
         dropGlobalSeedCatalog();
-        renameFixture(grechkaId, "Гречка");
-        renameFixture(tushenkaId, "Тушёнка");
-        renameFixture(butterId, "Масло");
-        renameFixture(riceId, "Рис");
-        renameFixture(saltId, "Соль");
+
+        // FIX (раунд 13, локальный прогон mvn): раньше фикстуры создавались под test-only
+        // именами ("E2E Гречка") и переименовывались в каноны после dropGlobalSeedCatalog().
+        // Теперь сид-строки удаляются ДО POST /admin/ingredients — имя уникально уже на момент
+        // создания, коллизий с сидом нет. Но rename теперь НЕЛЬЗЯ делать через UPDATE: у
+        // V20-снепшотов name_norm заморожен на момент addMeal, и рассинхрон имени оригинала
+        // ломал матчинг «строка закупки == сумма по дням» (CI: Гречка 1.0 vs 1.8) и попадание
+        // чужих снепшотов в fixtureItems (CI: size 5 but was 12). Каноны задаются сразу здесь.
+        grechkaId = createIngredient("Гречка", GRECHK_CODE, "KG", 343);
+        tushenkaId = createIngredient("Тушёнка", TUSH_CODE, "PCS", 215);
+        butterId = createIngredient("Масло", BUTT_CODE, "KG", 734);
+        riceId = createIngredient("Рис", RICE_CODE, "KG", 340);
+        saltId = createIngredient("Соль", SALT_CODE, "KG", 0);
 
         // Рецепты заводятся под уникальными именами ("E2E ..."): экраны матчают блюда по
         // имени recipeName в DTO меню, состав — по id фикстур. Глобальные сид-рецепты к этому
@@ -262,6 +259,10 @@ class EconomicConsistencyTest {
      * reset() в @BeforeEach каждого теста пересоздаёт схему из миграций заново.
      */
     private void dropGlobalSeedCatalog() {
+        // FIX (раунд 13, локальный прогон mvn — «409 Ingredient with name already exists»):
+        // IngredientService.create проверяет existsByCode/existsByName ГЛОБАЛЬНО (без фильтра
+        // trip_id), а сид V3 занимает коды grechka/rice/salt и т.д. Поэтому фикстуры идут под
+        // test-only кодами (e2e_*), а их канонические ИМЕНА освобождаются удалением строк сида.
         // recipe_ingredients.ingredient_id -> ingredients имеет FK ON DELETE RESTRICT (V1),
         // поэтому ссылки чужих ГЛОБАЛЬНЫХ рецептов снимаем до удаления ингредиентов
         // (сами рецепты удаляются первой строкой, но страховка от ссылок trip-рецептов тоже).
@@ -859,8 +860,12 @@ class EconomicConsistencyTest {
 
     /** Создаёт ингредиент и возвращает его id из ответа 201. */
     private Long createIngredient(String name, String code, String unit, int kcal) throws Exception {
+        // FIX (раунд 13): test-only категория вместо "E2E": IngredientService при создании
+        //Ingredients ищет категорию по name_norm; если в каталоге уже есть категория с таким
+        // же именем, новая строка не создаётся. В сидах категорий с именем 'E2E' нет — это
+        // гарантированно fresh-категория, и сид-ингредиенты никогда не подтянутся к фикстурам.
         String body = String.format(
-                "{\"name\":\"%s\",\"code\":\"%s\",\"unit\":\"%s\",\"category\":\"E2E\",\"kcalPer100g\":%d}",
+                "{\"name\":\"%s\",\"code\":\"%s\",\"unit\":\"%s\",\"category\":\"E2E econ fixture\",\"kcalPer100g\":%d}",
                 name, code, unit, kcal);
         MvcResult result = mockMvc.perform(post("/api/v1/admin/ingredients")
                         .header("Authorization", "Bearer " + userToken)

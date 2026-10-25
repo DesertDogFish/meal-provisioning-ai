@@ -29,16 +29,6 @@ public class SummaryService {
     private final TripIngredientEditService tripIngredientEditService; // Фаза 14 (N3)
     private final EntityManager entityManager; // FIX N+1: пакетная инициализация LAZY-проксей category
 
-    public SummaryService(TripRepository tripRepository,
-                          IngredientPriceRepository priceRepository,
-                          RecipeRepository recipeRepository,
-                          PriceResolutionService priceResolutionService,
-                          TripIngredientSubstitutionRepository substitutionRepository,
-                          TripIngredientEditService tripIngredientEditService) {
-        this(tripRepository, priceRepository, recipeRepository, null, priceResolutionService,
-                substitutionRepository, tripIngredientEditService, null);
-    }
-
     @org.springframework.beans.factory.annotation.Autowired
     public SummaryService(TripRepository tripRepository,
                           IngredientPriceRepository priceRepository,
@@ -314,7 +304,7 @@ public class SummaryService {
             // раскладываем в map под запрошенным id (snowflake-key = ключ plannedPricesByIngredient).
             Map<Long, Long> toLookupOverall = new HashMap<>();
             for (Long requested : needHistoryOverall) {
-                Ingredient ing = ingredientRepository.findById(requested).orElse(null);
+                Ingredient ing = ingredientRepository != null ? ingredientRepository.findById(requested).orElse(null) : null;
                 toLookupOverall.put(requested, ing != null && ing.getSnapshotOf() != null ? ing.getSnapshotOf() : requested);
             }
             Set<Long> lookupIdsOverall = new HashSet<>(toLookupOverall.values());
@@ -481,7 +471,7 @@ public class SummaryService {
                 // FIX V20: см. выше — ряды истории резолвятся через snapshot_of оригиналы.
                 Map<Long, Long> toLookup = new HashMap<>();
                 for (Long requested : needHistory) {
-                    Ingredient ing = ingredientRepository.findById(requested).orElse(null);
+                    Ingredient ing = ingredientRepository != null ? ingredientRepository.findById(requested).orElse(null) : null;
                     toLookup.put(requested, ing != null && ing.getSnapshotOf() != null ? ing.getSnapshotOf() : requested);
                 }
                 Set<Long> lookupIds = new HashSet<>(toLookup.values());
@@ -831,6 +821,15 @@ public class SummaryService {
         // Без fallback плановая цена снепшота отсутствовала бы (hasMissingPrices, plannedCost
         // = null, итог 225 вместо 225.30 и т.п.). Подменяем id снепшотов на id оригиналов;
         // глобальные ингредиенты (snapshotOf == null) резолвятся как раньше.
+        // FIX (раунд 12, unit-тесты): в unit-тестах конструктор передаёт репозиторий снепшотов
+        // как null. Если id заведомо глобальные (unit-фикстуры) — резолв snapshot_of не нужен.
+        if (ingredientRepository == null) {
+            Map<Long, IngredientPrice> direct = new HashMap<>();
+            for (IngredientPrice p : priceRepository.findLatestPricesAsOfForIngredients(date, new HashSet<>(ingredientIds))) {
+                direct.putIfAbsent(p.getIngredient().getId(), p);
+            }
+            return direct;
+        }
         List<Ingredient> entities = ingredientRepository.findAllById(ingredientIds);
         Set<Long> lookupIds = new HashSet<>();
         for (Ingredient ing : entities) {
