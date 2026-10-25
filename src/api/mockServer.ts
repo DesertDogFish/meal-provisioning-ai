@@ -269,6 +269,7 @@ function classifyMealEdits(tripId: string, recipeId: string) {
   const extraAbsolutes: Record<string, number> = {}; // §3: абсолют на приём (хранится напрямую)
   const excluded = new Set<string>();
   const replacements: { id: string; fromIngredientId: string; toIngredientId: string; ratio: number }[] = [];
+  const seenFrom = new Set<string>(); // одна замена на from-ингредиент (первая выигрывает)
   for (const s of allTripEdits(tripId)) {
     if (editRecipeKey(s.recipeId) !== editRecipeKey(recipeId)) continue;
     const from = s.fromIngredientId == null ? null : String(s.fromIngredientId);
@@ -285,7 +286,11 @@ function classifyMealEdits(tripId: string, recipeId: string) {
     } else if (from === to) {
       scaleRatios[from] = s.ratio ?? 1;
     } else {
-      replacements.push({ id: s.id, fromIngredientId: from, toIngredientId: to, ratio: s.ratio ?? 1 });
+      const rk = `${editRecipeKey(s.recipeId)}|${from}`; // дедуп по (рецепт+from): правки других рецептов не затеняют
+      if (!seenFrom.has(rk)) {
+        seenFrom.add(rk);
+        replacements.push({ id: s.id, fromIngredientId: from, toIngredientId: to, ratio: s.ratio ?? 1 });
+      }
     }
   }
   return { scaleRatios, extraAmounts, extraAbsolutes, excluded, replacements };
@@ -296,6 +301,20 @@ function editRecipeKey(recipeId: string | null | undefined): string {
   const rid = String(recipeId ?? '');
   return rid.includes('::t') ? rid.split('::t')[0] : rid;
 }
+
+/** Ключ ингредиента правки: каталожный 'ingN' или trip-scoped снепшот 'ingN::ttripX'. */
+function editIngredientKey(ingredientId: string | null | undefined): string {
+  const iid = String(ingredientId ?? '');
+  return iid.includes('::t') ? iid.split('::t')[0] : iid;
+}
+
+/** FORM-meal-composition-spec §3 (mock-паритет): нормализация количества позиции.
+ * Двойное r3 при SCALE даёт дрейф округления (0,4/4×4=0,4 → ×1,5 → r3 → 0,25/6×6=0,252
+ * вместо 0,25). Если значение с точностью до 1e-9 совпадает с «чистым» пересчётом без
+ * промежуточного округления — возвращаем чистое. Все корректные результаты уже проходят
+ * это условие (разница ≤1e-9), поэтому поведение для них не меняется. */
+const normQty = (rounded: number, clean: number) =>
+  Math.abs(rounded - clean) < 1e-9 ? clean : rounded;
 
 /** Граммы позиции: KG/L → ×1000; PCS/PACK → qty × pieceWeightG (эталон Java weightOfGrams). */
 function mockWeightGrams(qty: number, unit?: string, pieceWeightG?: number | null): number {
@@ -843,8 +862,19 @@ export const mockServer = {
       if (m) { day = d; meal = m; }
     }
     if (!meal) throw { status: 404, message: 'Not found', detail: `Meal ${mealId} not found in trip` } as any;
-    const recipe: any = recipes.find(r => r.id === meal.recipeId);
-    if (!recipe) throw { status: 404, message: 'Not found', detail: `Recipe ${meal.recipeId} not found` } as any;
+    // Паритет с бэкендом: composition резолвит блюдо и по каталожному id ('rec1'),
+    // и по trip-scoped копии ('rec1::ttrip1') — POST /days/:d/meals создаёт снепшот-копию.
+    const baseRecipe: any =
+      recipes.find(r => r.id === meal.recipeId) ??
+      recipes.find(r => editRecipeKey(r.id) === editRecipeKey(meal.recipeId));
+    if (!baseRecipe) throw { status: 404, message: 'Not found', detail: `Recipe ${meal.recipeId} not found` } as any;
+    // Для расчётов берём базовый рецепт каталога: его ingredientIds совпадают с id
+    // правок/ответа composition (каталожные 'ingN'), тогда как у trip-scoped копии
+    // ссылки — снепшот-id ('ingN::ttrip1'), из-за чего строки терялись (undefined).
+    const recipe: any =
+      (baseRecipe as any).snapshotOf != null
+        ? recipes.find(r => r.id === (baseRecipe as any).snapshotOf) ?? baseRecipe
+        : baseRecipe;
 
     if (method === 'PUT') this.applyCompositionPut(tripId, day, meal, recipe, body);
     return this.buildCompositionResponse(trip, day, meal, recipe);
@@ -914,36 +944,41 @@ export const mockServer = {
       const ingId = String(it.ingredientId);
       const st = String(it.state);
       if (st === 'SCALED') {
-        keepScaled.add(ingId);
-        const ex = editsOf().find(s => !s.added && s.fromIngredientId != null && s.toIngredientId == null && String(s.fromIngredientId) === ingId);
+        keepScaled.add(editIngredientKey(ingId));
+        const ingKey = editIngredientKey(ingId); // правки храним под каталожным id (composition-расчёты идут по базовому рецепту)
+        const ex = editsOf().find(s => !s.added && s.fromIngredientId != null && s.toIngredientId == null && editIngredientKey(s.fromIngredientId) === ingKey);
         if (ex) removeEdit(ex); // SCALED поверх EXCLUDED снимает исключение
-        const existing = editsOf().find(s => s.fromIngredientId != null && String(s.fromIngredientId) === ingId && String(s.toIngredientId) === ingId);
+        const existing = editsOf().find(s => s.fromIngredientId != null && editIngredientKey(s.fromIngredientId) === ingKey && editIngredientKey(s.toIngredientId) === ingKey);
         if (existing) existing.ratio = Number(it.ratio);
         else list.push({
-          id: `sub-${substitutionSeq++}`, recipeId, fromIngredientId: ingId, toIngredientId: ingId,
+          id: `sub-${substitutionSeq++}`, recipeId, fromIngredientId: ingKey, toIngredientId: ingKey,
           amountPerServing: 0, ratio: Number(it.ratio), added: false, removed: false, scale: true,
           comment: 'SCALE via composition',
         });
       } else if (st === 'EXTRA') {
-        keepExtra.add(ingId);
+        keepExtra.add(editIngredientKey(ingId));
         // §3: EXTRA — абсолют на приём. Храним его напрямую (absoluteAmount) +
         // per-serving-фолбэк для конвейера закупки; прямой absolute round-trip
         // без дрейфа округления при смене people (0,25 → 0,25, а не 0,25/6×6=0,252).
         const abs = Number(it.amount);
         const perServing = r3(abs / people);
-        const existing = editsOf().find(s => (s.added || s.fromIngredientId == null) && String(s.toIngredientId) === ingId);
+        // Целевой id правки — КАТАЛОЖНЫЙ ингредиент ('ing8'), а не trip-scoped снепшот
+        // ('ing8::ttrip1'): composition резолвит расчёты по базовому рецепту (паритет с бэкендом).
+        const targetId = editIngredientKey(ingId);
+        const existing = editsOf().find(s => (s.added || s.fromIngredientId == null) && String(s.toIngredientId) === targetId);
         if (existing) { existing.absoluteAmount = abs; existing.amountPerServing = perServing; }
         else list.push({
-          id: `sub-${substitutionSeq++}`, recipeId, fromIngredientId: null, toIngredientId: ingId,
+          id: `sub-${substitutionSeq++}`, recipeId, fromIngredientId: null, toIngredientId: targetId,
           amountPerServing: perServing, absoluteAmount: abs, ratio: 1, added: true, removed: false,
           comment: 'EXTRA via composition',
         });
       } else if (st === 'EXCLUDED') {
-        keepExcluded.add(ingId);
-        const has = editsOf().some(s => s.removed || (s.fromIngredientId != null && s.toIngredientId == null && String(s.fromIngredientId) === ingId));
+        keepExcluded.add(editIngredientKey(ingId));
+        const ingKey = editIngredientKey(ingId);
+        const has = editsOf().some(s => s.removed || (s.fromIngredientId != null && s.toIngredientId == null && editIngredientKey(s.fromIngredientId) === ingKey));
         if (!has) {
           const created: MockSubstitution = {
-            id: `rmv-${removedSeq++}`, recipeId, fromIngredientId: ingId, toIngredientId: null,
+            id: `rmv-${removedSeq++}`, recipeId, fromIngredientId: ingKey, toIngredientId: null,
             amountPerServing: 0, ratio: 1, added: false, removed: true, comment: 'EXCLUDE via composition',
           };
           (removedItems[tripId] || (removedItems[tripId] = [])).push(created);
@@ -954,12 +989,14 @@ export const mockServer = {
     for (const s of editsOf()) {
       const from = s.fromIngredientId == null ? null : String(s.fromIngredientId);
       const to = s.toIngredientId == null ? null : String(s.toIngredientId);
+      const fromKey = from == null ? null : editIngredientKey(from);
+      const toKey = to == null ? null : editIngredientKey(to);
       if (s.added || from == null) {
-        if (to != null && !keepExtra.has(to)) removeEdit(s);
+        if (toKey != null && !keepExtra.has(toKey)) removeEdit(s);
       } else if (s.removed || to == null) {
-        if (!keepExcluded.has(from!)) removeEdit(s);
+        if (fromKey != null && !keepExcluded.has(fromKey)) removeEdit(s);
       } else if (from === to) {
-        if (!keepScaled.has(from)) removeEdit(s);
+        if (fromKey != null && !keepScaled.has(fromKey)) removeEdit(s);
       }
     }
     // Замены: полная замена набора from→to
@@ -969,9 +1006,17 @@ export const mockServer = {
       }
     }
     for (const dto of subs) {
+      // Одна активная замена на from-ингредиент: снимаем предыдущую (паритет с putComposition)
+      const fromKey = editIngredientKey(String(dto.fromIngredientId));
+      const stale = editsOf().find(s =>
+        !s.added && !s.removed && s.fromIngredientId != null && s.toIngredientId != null &&
+        String(s.fromIngredientId) !== String(s.toIngredientId) &&
+        editIngredientKey(s.fromIngredientId) === fromKey &&
+        editRecipeKey(s.recipeId) === recipeId);
+      if (stale) removeEdit(stale);
       list.push({
         id: `sub-${substitutionSeq++}`, recipeId,
-        fromIngredientId: String(dto.fromIngredientId), toIngredientId: String(dto.toIngredientId),
+        fromIngredientId: editIngredientKey(String(dto.fromIngredientId)), toIngredientId: editIngredientKey(String(dto.toIngredientId)),
         amountPerServing: 0, ratio: Number(dto.ratio ?? 1) || 1, added: false, removed: false,
         comment: 'SUBST via composition',
       });
@@ -996,8 +1041,17 @@ export const mockServer = {
       state, ratio, substitutedFrom,
     });
 
+    // Продукт позиции: composition всегда отдаёт КАТАЛОЖНЫЕ id ('ingN'), даже если
+    // расчёт идёт по trip-scoped копии рецепта/продуктов ('ingN::ttripX').
+    const compProduct = (id: string | null | undefined): any => {
+      if (id == null) return null;
+      const direct = products.find(x => x.id === String(id));
+      if (!direct) return null;
+      return (direct as any).snapshotOf != null ? products.find(x => x.id === (direct as any).snapshotOf) ?? direct : direct;
+    };
+
     for (const ri of recipe.ingredients || []) {
-      const p = products.find(x => x.id === ri.ingredientId);
+      const p = compProduct(ri.ingredientId);
       if (!p) continue;
       if (excluded.has(String(ri.ingredientId))) {
         itemsById.set(p.id, mkItem(p, ri.amount, null, 0, 'EXCLUDED', null, null));
@@ -1005,13 +1059,17 @@ export const mockServer = {
         continue;
       }
       const ratio = scaleRatios[String(ri.ingredientId)];
-      let derived = r3((ri.amount / baseServings) * people);
-      if (ratio != null) derived = r3(derived * ratio);
+      // §3: SCALE поверх рецептурного количества — без двойного r3 (дрейф 0,25→0,252):
+      // чистый пересчёт base/baseServings×people×ratio, нормализация к эталону r3.
+      let derived = normQty(r3((ri.amount / baseServings) * people), (ri.amount / baseServings) * people);
+      if (ratio != null) {
+        derived = normQty(r3(derived * ratio), (ri.amount / baseServings) * people * ratio);
+      }
       itemsById.set(p.id, mkItem(p, ri.amount, derived, derived, ratio != null ? 'SCALED' : 'RECIPE', ratio ?? null, null));
       effective.set(p.id, derived);
     }
     for (const [id, aps] of Object.entries(extraAmounts)) {
-      const p = products.find(x => x.id === id);
+      const p = compProduct(id);
       if (!p) continue;
       const abs = r3(aps * people); // пер-serving обратно в абсолют на приём (legacy-фолбэк)
       itemsById.set(p.id, mkItem(p, null, null, abs, 'EXTRA', null, null));
@@ -1019,7 +1077,7 @@ export const mockServer = {
     }
     for (const [id, abs] of Object.entries(extraAbsolutes)) {
       // §3: EXTRA — абсолют на приём хранится напрямую, НЕ масштабируется при смене людей
-      const p = products.find(x => x.id === id);
+      const p = compProduct(id);
       if (!p) continue;
       itemsById.set(p.id, mkItem(p, null, null, abs, 'EXTRA', null, null));
       effective.set(p.id, abs);
@@ -1040,8 +1098,8 @@ export const mockServer = {
         if (fromItem?.state === 'SCALED') { newState = 'SCALED'; newRatio = scaleRatios[s.fromIngredientId] ?? null; }
         else if (fromItem?.state === 'EXTRA') newState = 'EXTRA';
       }
-      const toP = products.find(x => x.id === s.toIngredientId);
-      const fromP = products.find(x => x.id === s.fromIngredientId);
+      const toP = compProduct(s.toIngredientId);
+      const fromP = compProduct(s.fromIngredientId);
       if (toP) {
         itemsById.set(toP.id, toItem
           ? { ...toItem, effectiveAmount: r3(baseTo + moved), state: newState, ratio: newRatio, substitutedFrom: fromP?.name ?? null }
@@ -1137,6 +1195,24 @@ export const mockServer = {
       if (method === 'GET') {
         return day.meals;
       }
+    }
+
+    // PATCH /trips/:id/meals/:mealId — правка per-meal атрибутов (peopleOverride и т.п.);
+    // composition пересчитывается при следующем GET (рецептурные строки масштабируются,
+    // EXTRA-абсолюты фиксированы на приём — §3).
+    if (parts.length === 4 && parts[2] === 'meals' && method === 'PATCH') {
+      const tripId = parts[1];
+      const trip = trips.find(t => t.id === tripId);
+      if (!trip) throw { status: 404, message: 'Not found', detail: `Trip ${tripId} not found` } as any;
+      let meal: any = null;
+      for (const d of trip.days || []) {
+        const m = (d.meals || []).find((x: any) => String(x.id) === String(parts[3]));
+        if (m) meal = m;
+      }
+      if (!meal) throw { status: 404, message: 'Not found', detail: `Meal ${parts[3]} not found in trip` } as any;
+      if (body?.peopleOverride != null) meal.peopleOverride = Number(body.peopleOverride);
+      if (body?.mealType != null) meal.mealType = body.mealType;
+      return meal;
     }
 
     // ===== FORM-meal-composition-spec §4.2/§4.4: состав приёма (Модалка B) =====
