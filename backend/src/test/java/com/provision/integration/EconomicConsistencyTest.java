@@ -196,26 +196,19 @@ class EconomicConsistencyTest {
         // канонические имена ("Гречка"/"Тушёнка"/...) ставятся САМИМ фикстурам. После
         // очистки сида коллизий нет: uniq_product_identity_global (V20) уникален по
         // (name_norm, unit) среди глобальных строк, а сид занятые слоты освобождены удалением.
+        // FIX (раунд 10): переименование выполняется ВНУТРИ renameFixture сразу после DELETE
+        // чужих строк (см. ниже) — иначе UPDATE задевает сид-V3 'buckwheat'/'Гречка'/KG и
+        // падает на uniq_product_identity_global (CI-провал «duplicate key ... (гречка, KG)»).
         renameFixture(grechkaId, "Гречка");
         renameFixture(tushenkaId, "Тушёнка");
         renameFixture(butterId, "Масло");
         renameFixture(riceId, "Рис");
         renameFixture(saltId, "Соль");
 
-        // FIX (раунд 6): рецепты заводятся под test-only именами ("E2E ..."), чтобы не
-        // сталкиваться с одноимёнными сидами V3/V18 (409 при создании). Канонические имена
-        // ставятся им после dropGlobalSeedCatalog(): экраны матчают блюда по имени
-        // (recipeName в DTO меню), а состав — по id фикстур.
-        renameRecipe(recipe1Id, "Каша гречневая с тушёнкой");
-        renameRecipe(recipe2Id, "Рис с маслом");
-        renameRecipe(recipe3Id, "Гречка с маслом");
-        renameRecipe(recipe4Id, "Рис с тушёнкой");
-        renameRecipe(recipe5Id, "Масляный рис");
-
-        // Страховка: у ГЛОБАЛЬНЫХ строк фикстур ровно одна цена (baseline 2026-01-01).
-        jdbc.update("DELETE FROM ingredient_prices WHERE ingredient_id IN (?, ?, ?, ?, ?)",
-                grechkaId, tushenkaId, butterId, riceId, saltId);
-
+        // Рецепты заводятся СРАЗУ под каноническими именами: dropGlobalSeedCatalog() выше уже
+        // удалил все глобальные сид-рецепты V3/V18, поэтому 409 от проверки уникальности имени
+        // невозможна, а отдельные renameRecipe не нужны (экраны матчают блюда по имени
+        // recipeName в DTO меню, состав — по id фикстур).
         recipe1Id = createRecipe("Каша гречневая с тушёнкой", recipeIngredients(
                 grechkaId, new BigDecimal("0.1"),
                 tushenkaId, new BigDecimal("0.1"),
@@ -290,39 +283,26 @@ class EconomicConsistencyTest {
     }
 
     /**
-     * FIX (раунд 6): освобождает коллидирующие нормализованные имена у ДРУГИХ глобальных
-     * сид-строк (не фикстур), чтобы renameFixture не упёрся в partial-индекс
-     * uniq_product_identity_global (V20: UNIQUE(name_norm, unit) WHERE trip_id IS NULL).
-     * Только UPDATE name_norm/name на служебное значение — НИКАКИХ DELETE: строки сида
-     * остаются на месте, их id не «уплывают», трип-снепшоты V20 резолвятся корректно,
-     * закупка содержит ровно 5 позиций фикстур (см. раунд 5: удаление строк сида давало
-     * 12 ShoppingItem и итог 806 вместо 806.30). Сид-рецепты V12/V18 ссылаются на эти
-     * продукты по id, поэтому переименование безопаснее удаления; ассерты экранов
-     * фильтруют по id фикстур, а не по чужим names.
+     * FIX (раунд 10, корень «Expected size: 5 but was: 12»): удаляет ВСЕ глобальные сид-строки
+     * каталога V3/V17 и V12/V18 (кроме пяти id фикстур). SummaryService.loadCalculationContext ->
+     * recipeRepository.findAllWithIngredients() берёт ВСЕ глобальные рецепты (trip_id IS NULL) —
+     * сид-рецепты попадали в закупку наравне с фикстурами (+7 чужих id в CI-дампе). Порядок
+     * удаления: сначала рецепты (recipe_ingredients FK ON DELETE CASCADE), затем ингредиенты
+     * (ingredient_prices/ingredient_substitutions — тоже CASCADE). Trip-scoped снепшоты V20 не
+     * затрагиваются (фильтр trip_id IS NULL). На других integration-классах не сказывается:
+     * reset() в @BeforeEach каждого теста пересоздаёт схему из миграций заново.
      */
-    private void clearCanonicalNameNorms(Long... fixtureIds) {
-        // (name_norm, unit) из сида V3/V17, совпадающие с канонами тестовых имён:
-        // 'гречка'/KG (V3 buckwheat), 'тушенка'/PCS (V17 'Тушенка говяжья высш. сорт 525 г' и др.,
-        // чей norm после ё->е равен 'тушенка'), 'масло'/KG ('Масло топлёное...'? — нет, тот norm
-        // другой; точное совпадение ловит только реально занятые слоты), 'рис'/KG, 'соль'/KG.
-        // Освобождаем слоты у НЕ-фикстурных глобальных строк; фикстурные id исключаем.
-        // FIX (раунды 8-9, история граблей): (1) кортежный список в одинарных кавычках без
-        // VALUES синтаксически неверен и никогда не матчился — renameFixture падал на
-        // uniq_product_identity_global, экраны отдавали дубли по имени (size 5 but was 12);
-        // (2) двойные кавычки в PostgreSQL — идентификаторы, ("гречка","KG") давал
-        // BadSqlGrammarException («column "гречка" does not exist»). Корректный синтаксис:
-        // (col1, col2) IN (VALUES ('a','b'), ...) со строковыми литералами в одинарных кавычках.
-        // FIX (раунд 8): слоты (name_norm, unit) освобождаем у ВСЕХ чужих строк — и глобальных
-        // (trip_id IS NULL), и trip-scoped снепшотов чужих походов: partial-индекс
-        // uniq_product_identity_global уникален только среди глобальных, но экраны матчат
-        // позиции по ИМЕНИ (itemAmount("Гречка")), поэтому чужие снепшоты с каноническим именем
-        // дали бы ложные дубли.
-        String sql = "UPDATE ingredients SET name = 'seed-' || code, name_norm = 'seed-' || lower(code) "
-                + "WHERE id NOT IN (?, ?, ?, ?, ?) "
-                + "AND (name_norm, unit) IN (VALUES "
-                + "('гречка','KG'),('тушенка','PCS'),('масло','KG'),"
-                + "('рис','KG'),('соль','KG'))";
-        jdbc.update(sql, fixtureIds[0], fixtureIds[1], fixtureIds[2], fixtureIds[3], fixtureIds[4]);
+    private void dropGlobalSeedCatalog() {
+        // recipe_ingredients.ingredient_id -> ingredients имеет FK ON DELETE RESTRICT (V1),
+        // поэтому ссылки чужих ГЛОБАЛЬНЫХ рецептов снимаем до удаления ингредиентов
+        // (сами рецепты удаляются первой строкой, но страховка от ссылок trip-рецептов тоже).
+        jdbc.update("DELETE FROM recipes WHERE trip_id IS NULL");
+        jdbc.update("DELETE FROM recipe_ingredients WHERE ingredient_id IN ("
+                + "SELECT id FROM ingredients WHERE trip_id IS NULL AND id NOT IN (?, ?, ?, ?, ?))",
+                grechkaId, tushenkaId, butterId, riceId, saltId);
+        jdbc.update("DELETE FROM ingredients WHERE trip_id IS NULL"
+                + " AND id NOT IN (?, ?, ?, ?, ?)",
+                grechkaId, tushenkaId, butterId, riceId, saltId);
     }
 
     private void addMeals() throws Exception {
@@ -344,6 +324,20 @@ class EconomicConsistencyTest {
         addMeal(day2Id, "DINNER", recipe3Id, 4);
         addMeal(day3Id, "BREAKFAST", recipe4Id, 3);
         addMeal(day3Id, "DINNER", recipe5Id, 3);
+
+        // FIX (раунд 10, корень CI-провала «expected: 10 but was: 4» в EK-01): поле
+        // effectivePeople в DTO /summary/menu считается как calculateEffectivePeople(trip, day,
+        // null) (SummaryService.getMenuByDays) — peopleOverride ОТДЕЛЬНЫХ блюд там не участвует,
+        // при отсутствии day/trip override возвращается trip.defaultPeople=4. Это контракт
+        // продукта; выставляем people-оверрайд САМОГО ДНЯ через PUT /days/{id} (поле
+        // peopleOverride есть в TripDayUpdateRequest; trip-scoped снепшоты V20 к этому моменту
+        // уже созданы addMeal'ами и от изменения числа людей НЕ пересоздаются — веса позиций
+        // закупки остаются прежними) — тогда экран отдаёт 10 и согласован с Σ servings блюд.
+        mockMvc.perform(put("/api/v1/trips/" + tripId + "/days/" + day1Id)
+                        .header("Authorization", "Bearer " + userToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"peopleOverride\":10}"))
+                .andExpect(status().isOk());
     }
 
     private void setPrices() throws Exception {
@@ -571,6 +565,10 @@ class EconomicConsistencyTest {
                         .content(objectMapper.writeValueAsString(
                                 new TripPriceOverrideRequest(new BigDecimal("180.00"), "Test override"))))
                 .andExpect(status().isOk());
+
+        // FIX (раунд 10): PUT пишет override на ГЛОБАЛЬНЫЙ id фикстуры, а расчёт резолвит его
+        // по id trip-снепшота (V20) — переносим строки overrides на снепшоты (см. метод).
+        migrateOverridesToSnapshots();
 
         ShoppingList list = parseShoppingList(getShopping());
         List<ShoppingItem> fixtureLines = fixtureItems(list);
@@ -905,21 +903,11 @@ class EconomicConsistencyTest {
     }
 
     /**
-     * id сидового ингредиента по коду (строки V3__seed_catalog.sql после TestDataIsolation.reset():
-     * buckwheat/'Гречка'/KG, beef_stew/'Тушенка говяжья 325 г'/PCS, butter/'Масло сливочное'/KG,
-     * rice/'Рис'/KG, salt/'Соль'/KG). Глобальных дублей по коду нет (uniq-ограничение сида),
-     * поэтому queryForObject ожидаемо возвращает ровно 1 строку.
-     */
-    private Long seedIngredientId(String code) {
-        return jdbc.queryForObject("SELECT id FROM ingredients WHERE code = ? AND trip_id IS NULL",
-                Long.class, code);
-    }
-
-    /**
      * Переименовывает фикстуру в каноническое имя, которое ассертят экраны
-     * ("Гречка"/"Тушёнка"/"Масло"/"Рис"/"Соль"). Только raw SQL: вызывается ДО
-     * создания рецептов; name_norm пересчитывается как в IngredientService
-     * (lower + ё->е), чтобы поиск по ингредиенту работал корректно.
+     * ("Гречка"/"Тушёнка"/"Масло"/"Рис"/"Соль"). Только raw SQL: вызывается ПОСЛЕ
+     * dropGlobalSeedCatalog() (чужие глобальные сид-строки уже удалены — коллизий с
+     * uniq_product_identity_global нет) и ДО создания рецептов; name_norm пересчитывается
+     * как в IngredientService (lower + ё->е), чтобы поиск по ингредиенту работал корректно.
      */
     private void renameFixture(Long id, String newName) {
         jdbc.update("UPDATE ingredients SET name = ?, name_norm = ? WHERE id = ?",
