@@ -293,6 +293,16 @@ public class MealCompositionService {
         int baseServings = ctx.recipe.getBaseServings() != null && ctx.recipe.getBaseServings() > 0
                 ? ctx.recipe.getBaseServings() : 1;
 
+        // Кэш ингредиентов состава/правок — нужен уже при построении строк (EXTRA-позиции).
+        Map<Long, Ingredient> ingCache = new HashMap<>();
+        for (RecipeIngredient ri : ctx.recipe.getIngredients()) {
+            ingCache.put(ri.getIngredient().getId(), ri.getIngredient());
+        }
+        for (TripIngredientSubstitution s : edits) {
+            if (s.getFromIngredient() != null) ingCache.putIfAbsent(s.getFromIngredient().getId(), s.getFromIngredient());
+            if (s.getToIngredient() != null) ingCache.putIfAbsent(s.getToIngredient().getId(), s.getToIngredient());
+        }
+
         // 1) эффективные количества до замен: SCALE → people → EXCLUDE → EXTRA
         Map<Long, Item> itemsById = new LinkedHashMap<>();
         Map<Long, BigDecimal> effective = new LinkedHashMap<>();
@@ -333,29 +343,32 @@ public class MealCompositionService {
             Item existingTo = itemsById.get(toId);
             BigDecimal baseTo = existingTo != null && existingTo.effectiveAmount() != null
                     ? existingTo.effectiveAmount() : BigDecimal.ZERO;
-            BigDecimal newState = existingTo != null ? existingTo.state() : STATE_RECIPE;
-            if (moved.signum() > 0) newState = STATE_RECIPE; // получатель помечается заменённой строкой ниже
+            // §3: adjustments исходного from-ингредиента (SCALE/EXTRA) переносятся на to
+            // вместе с количеством — state получателя наследует их.
+            String newState = existingTo != null ? existingTo.state() : STATE_RECIPE;
+            BigDecimal newRatio = existingTo != null ? existingTo.ratio() : null;
+            if (existingTo == null || STATE_RECIPE.equals(newState)) {
+                String fromState = effective.containsKey(fromId) && itemsById.containsKey(fromId)
+                        ? itemsById.get(fromId).state() : STATE_EXTRA;
+                if (STATE_SCALED.equals(fromState)) {
+                    newState = STATE_SCALED;
+                    newRatio = scaleRatios.get(fromId);
+                } else if (STATE_EXTRA.equals(fromState)) {
+                    newState = STATE_EXTRA;
+                }
+            }
             Ingredient toIng = ingCache.get(toId);
             if (toIng == null) toIng = s.getToIngredient();
             itemsById.put(toId, toItem(toIng,
                     existingTo != null ? existingTo.baseAmountPerServing() : null,
                     existingTo != null ? existingTo.derivedAmount() : null,
-                    baseTo.add(moved), newState,
-                    existingTo != null ? existingTo.ratio() : null,
+                    baseTo.add(moved), newState, newRatio,
                     s.getFromIngredient().getName()));
             subDtos.add(new Substitution(s.getId(), fromId, s.getFromIngredient().getName(),
                     toId, s.getToIngredient().getName(), nvl(s.getRatio())));
         }
 
         // 3) totals: ккал, вес (г), план-стоимость по ЦЕНЕ ДНЯ приёма
-        Map<Long, Ingredient> ingCache = new HashMap<>();
-        for (RecipeIngredient ri : ctx.recipe.getIngredients()) {
-            ingCache.put(ri.getIngredient().getId(), ri.getIngredient());
-        }
-        for (TripIngredientSubstitution s : edits) {
-            if (s.getFromIngredient() != null) ingCache.putIfAbsent(s.getFromIngredient().getId(), s.getFromIngredient());
-            if (s.getToIngredient() != null) ingCache.putIfAbsent(s.getToIngredient().getId(), s.getToIngredient());
-        }
         BigDecimal kcal = BigDecimal.ZERO;
         BigDecimal weightGrams = BigDecimal.ZERO;
         BigDecimal plannedCost = BigDecimal.ZERO;

@@ -18,6 +18,7 @@ public class TripController {
 
     private final TripService tripService;
     private final com.provision.service.RecipeService recipeService;
+    private final com.provision.service.MealCompositionService mealCompositionService;
 
     @GetMapping
     public List<TripResponse> getUserTrips(@AuthenticationPrincipal User user) {
@@ -103,5 +104,29 @@ public class TripController {
             @AuthenticationPrincipal User user
     ) {
         tripService.deleteMeal(tripId, dayId, mealId, user.getId());
+    }
+
+    /**
+     * FORM-meal-composition-spec §4.2: состав приёма (Модалка B).
+     * GET /trips/{tripId}/meals/{mealId}/composition — сервер считает ВСЁ масштабирование.
+     */
+    @GetMapping("/{tripId}/meals/{mealId}/composition")
+    public MealCompositionDtos.CompositionResponse getMealComposition(
+            @PathVariable Long tripId,
+            @PathVariable Long mealId,
+            @AuthenticationPrincipal User user
+    ) {
+        return mealCompositionService.getComposition(tripId, mealId, user.getId());
+    }
+
+    /** PUT того же пути — атомарный batch-диф-коммит; ответ = новый GET composition. */
+    @PutMapping("/{tripId}/meals/{mealId}/composition")
+    public MealCompositionDtos.CompositionResponse putMealComposition(
+            @PathVariable Long tripId,
+            @PathVariable Long mealId,
+            @Valid @RequestBody MealCompositionDtos.CompositionPutRequest request,
+            @AuthenticationPrincipal User user
+    ) {
+        return mealCompositionService.putComposition(tripId, mealId, request, user.getId());
     }
 }
