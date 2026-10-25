@@ -1,3 +1,4 @@
+import { Button } from './Button';
 import { useState, useEffect, useRef } from 'react';
 import { useToast } from './ToastProvider';
 import { Download } from 'lucide-react';
@@ -396,7 +397,9 @@ export default function PriceOverridesTab({ tripId }: Props) {
         <div className="note-box" style={{ color: 'var(--fire)' }}>
           {error || 'Поход не найден'}
         </div>
-        <button onClick={loadData} className="ghost-btn">Повторить</button>
+        <Button variant="ghost">
+Повторить
+        </Button>
       </div>
     );
   }
@@ -416,16 +419,12 @@ export default function PriceOverridesTab({ tripId }: Props) {
 
       {/* Панель действий */}
       <div className="flex gap-3 items-center flex-wrap">
-        <button 
-          onClick={() => setShowModal(true)}
-          className="grad-btn"
-        >
+        <Button variant="primary" onClick={() => setShowModal(true)}>
           Ввести чек
-        </button>
-        <button className="ghost-btn flex items-center gap-2">
-          <Download size={16} />
+        </Button>
+        <Button variant="ghost" icon={<Download size={16} />}>
           Экспорт PDF
-        </button>
+        </Button>
         <label className="flex items-center gap-2 cursor-pointer" style={{ color: 'var(--muted)', fontSize: '12px' }}>
           <input 
             type="checkbox" 
@@ -705,21 +704,19 @@ export default function PriceOverridesTab({ tripId }: Props) {
               ))}
             </div>
             <div className="flex gap-3 mt-5">
-              <button 
+              <Button
+                variant="primary"
+                className="flex-1"
                 onClick={() => {
                   setShowModal(false);
                   showSuccess('Чек сохранён');
                 }}
-                className="grad-btn flex-1"
               >
                 Сохранить чек
-              </button>
-              <button 
-                onClick={() => setShowModal(false)}
-                className="ghost-btn flex-1"
-              >
+              </Button>
+              <Button variant="ghost" className="flex-1" onClick={() => setShowModal(false)}>
                 Отмена
-              </button>
+              </Button>
             </div>
           </div>
         </Modal>

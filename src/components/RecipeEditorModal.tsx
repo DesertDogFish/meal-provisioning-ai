@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Plus, Trash2, X } from 'lucide-react';
+import { Button } from './Button';
 import { api } from '../api/client';
 import { useToast } from './ToastProvider';
 import { validateRecipe } from '../utils/validation';
@@ -235,9 +236,9 @@ export default function RecipeEditorModal({ recipe, categories, onClose, onSaved
           <h2 className="text-xl font-bold" style={{ color: 'var(--text)' }}>
             {recipe ? 'Редактирование блюда' : 'Новое блюдо'}
           </h2>
-          <button onClick={onClose} aria-label="Закрыть" className="ghost-btn px-2 py-1 rounded-lg">
+          <Button variant="ghost" size="sm" onClick={onClose} aria-label="Закрыть" className="px-2 py-1 rounded-lg">
             <X size={18} />
-          </button>
+          </Button>
         </div>
 
         <div className="space-y-4">
@@ -260,19 +261,15 @@ export default function RecipeEditorModal({ recipe, categories, onClose, onSaved
             <span className="block text-sm mb-1" style={{ color: 'var(--muted)' }}>Тип приёма</span>
             <div className="flex flex-wrap gap-2">
               {MEAL_TYPES.map(mt => (
-                <button
+                <Button
                   key={mt.value}
                   type="button"
+                  variant={mealType === mt.value ? 'primary' : 'ghost'}
+                  size="sm"
                   onClick={() => setMealType(mt.value)}
-                  className="btn primary sm"
-                  style={{
-                    background: mealType === mt.value ? 'var(--grad-brand)' : 'transparent',
-                    border: mealType === mt.value ? '1px solid transparent' : '1px solid var(--border)',
-                    color: mealType === mt.value ? 'var(--text)' : 'var(--muted)',
-                  }}
                 >
                   {mt.label}
-                </button>
+                </Button>
               ))}
             </div>
           </div>
@@ -333,9 +330,9 @@ export default function RecipeEditorModal({ recipe, categories, onClose, onSaved
               <span className="text-sm font-semibold" style={{ color: 'var(--text)' }}>
                 Состав (количество на {baseServings || 1} порц.)
               </span>
-              <button type="button" onClick={addRow} className="btn primary sm">
+              <Button type="button" variant="primary" size="sm" onClick={addRow}>
                 <Plus size={14} /> ингредиент
-              </button>
+              </Button>
             </div>
 
             {productsLoading && (
@@ -399,15 +396,17 @@ export default function RecipeEditorModal({ recipe, categories, onClose, onSaved
                     <span className="text-sm" style={{ color: 'var(--muted)' }}>
                       {product ? UNIT_SHORT[product.unit] : '—'}
                     </span>
-                    <button
+                    <Button
                       type="button"
+                      variant="ghost"
+                      size="sm"
                       aria-label="Удалить строку"
                       onClick={() => removeRow(row.key)}
-                      className="ghost-btn px-2 py-2 rounded-lg flex items-center justify-center"
+                      className="px-2 py-2 rounded-lg flex items-center justify-center"
                       style={{ color: 'var(--muted)' }}
                     >
                       <Trash2 size={15} />
-                    </button>
+                    </Button>
                   </div>
                 );
               })}
@@ -419,7 +418,7 @@ export default function RecipeEditorModal({ recipe, categories, onClose, onSaved
           </div>
 
           {errors.length > 0 && (
-            <ul className="text-sm space-y-1 rounded-lg px-3 py-2" style={{ background: 'rgba(232, 93, 31, 0.12)', color: 'var(--fire)' }}>
+            <ul className="text-sm space-y-1 rounded-lg px-3 py-2" style={{ background: 'color-mix(in srgb, var(--danger) 12%, transparent)', color: 'var(--danger)' }}>
               {errors.map((e, i) => (
                 <li key={i}>{e}</li>
               ))}
@@ -428,12 +427,10 @@ export default function RecipeEditorModal({ recipe, categories, onClose, onSaved
         </div>
 
         <div className="flex justify-end gap-3 mt-6">
-          <button onClick={onClose} className="px-5 py-2.5 rounded-full" style={{ border: '1px solid var(--border)', color: 'var(--text)' }}>
-            Отмена
-          </button>
-          <button onClick={handleSave} disabled={saving} className="grad-btn px-5 py-2.5 rounded-full font-bold">
+          <Button variant="ghost" onClick={onClose}>Отмена</Button>
+          <Button variant="primary" onClick={handleSave} loading={saving}>
             {saving ? 'Сохранение…' : recipe ? 'Сохранить изменения' : 'Создать блюдо'}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

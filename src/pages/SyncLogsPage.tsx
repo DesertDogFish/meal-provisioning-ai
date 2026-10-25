@@ -4,6 +4,7 @@ import { DatePicker } from '../components/DatePicker';
 import Modal from '../components/Modal';
 import { RefreshCw, X, AlertCircle } from 'lucide-react';
 import { api, ApiClientError } from '../api/client';
+import { Button } from '../components/Button';
 
 interface SyncLog {
   id: number;
@@ -207,14 +208,14 @@ export default function SyncLogsPage() {
             подключён 20.10.2026 18:04 · последний синк 21.10.2026 06:00
           </span>
           <div style={{ flex: 1 }}></div>
-          <button
+          <Button
+            variant="primary"
             onClick={startSync}
-            disabled={syncing}
-            className="grad-btn flex items-center gap-2"
+            loading={syncing}
+            icon={<RefreshCw size={16} />}
           >
-            <RefreshCw size={16} className={syncing ? 'animate-spin' : ''} />
             {syncing ? 'Синк идёт...' : 'Обновить цены'}
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -263,9 +264,9 @@ export default function SyncLogsPage() {
 
         <DatePicker value={filterFrom || null} onChange={(v) => setFilterFrom(v)} placeholder="С" />
         <DatePicker value={filterTo || null} onChange={(v) => setFilterTo(v)} placeholder="По" />
-        <button onClick={resetFilters} className="ghost-btn">
+        <Button variant="ghost" onClick={resetFilters}>
           Сбросить
-        </button>
+        </Button>
       </div>
 
       {/* Error Banner */}
@@ -279,9 +280,9 @@ export default function SyncLogsPage() {
             Последний запуск упал: {syncLogs[0].details?.errors?.[0]?.message || 'Неизвестная ошибка'}
           </span>
           <div style={{ flex: 1 }}></div>
-          <button onClick={startSync} className="ghost-btn">
+          <Button variant="ghost" onClick={startSync}>
             Повторить
-          </button>
+          </Button>
         </div>
       )}
 
@@ -292,7 +293,7 @@ export default function SyncLogsPage() {
         ) : syncLogs.length === 0 ? (
           <div className="p-12 text-center">
             <p style={{ color: 'var(--muted)' }}>Ничего не найдено</p>
-            <button onClick={resetFilters} className="ghost-btn mt-4">Сбросить фильтры</button>
+            <Button variant="ghost" onClick={resetFilters} className="mt-4">Сбросить фильтры</Button>
           </div>
         ) : (
           <table className="w-full text-sm">
@@ -346,13 +347,9 @@ export default function SyncLogsPage() {
                     {log.errorCount}
                   </td>
                   <td className="px-4 py-3 text-right">
-                    <button
-                      onClick={() => setSelectedLog(log)}
-                      className="ghost-btn"
-                      style={{ padding: 'var(--sp-1) var(--sp-3)' }}
-                    >
+                    <Button variant="ghost" size="sm" onClick={() => setSelectedLog(log)}>
                       детали
-                    </button>
+                    </Button>
                   </td>
                 </tr>
               ))}
@@ -446,12 +443,12 @@ export default function SyncLogsPage() {
 
             {/* Actions */}
             <div className="flex gap-3 mt-6">
-              <button onClick={startSync} className="grad-btn flex-1">
+              <Button variant="primary" onClick={startSync} className="flex-1">
                 Повторить запуск
-              </button>
-              <button onClick={() => setSelectedLog(null)} className="ghost-btn flex-1">
+              </Button>
+              <Button variant="ghost" onClick={() => setSelectedLog(null)} className="flex-1">
                 Закрыть
-              </button>
+              </Button>
             </div>
           </div>
         </Modal>

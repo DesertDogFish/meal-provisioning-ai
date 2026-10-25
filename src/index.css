@@ -99,6 +99,80 @@
               border-color var(--t-base) var(--ease);
 }
 .ibtn:hover { color: var(--text-1); background: var(--bg-2); }
+
+/* ============================================================
+   DESIGN_MIGRATION 7.1: глобальные классы кнопок по спеке
+   components.md §1 «Кнопки .btn» (эталон — react/Button.tsx +
+   Button.module.css). Названия вариантов — как в спеке:
+   .btn-primary / .btn-ghost / .btn-soft / .btn-danger, размер
+   .btn-sm. Компонент <Button> использует CSS-Modules-копию тех же
+   правил; эти классы — слой совместимости для разметки без JSX-импорта.
+   Ветки .grad-btn/.ghost-btn ниже оставлены как алиасы (депрекейт).
+   ============================================================ */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-3) var(--sp-5);
+  border-radius: var(--r-pill);
+  font: 700 15px/1 var(--font-body);
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: transform var(--t-fast) var(--ease), filter var(--t-fast) var(--ease),
+              background var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease);
+}
+.btn:hover { transform: translateY(-2px); }
+.btn:active { transform: translateY(1px); }
+.btn:focus-visible { outline: 2px solid var(--amber-500); outline-offset: 2px; }
+.btn:disabled { opacity: .45; pointer-events: none; }
+
+.btn-primary,
+.btn.primary { background: var(--grad-brand); color: var(--on-fire); box-shadow: var(--shadow-glow); }
+.btn-primary:hover,
+.btn.primary:hover { filter: brightness(1.07); }
+
+.btn-ghost,
+.btn.ghost { background: transparent; color: var(--text-1); border-color: var(--line-strong); }
+.btn-ghost:hover,
+.btn.ghost:hover { background: var(--bg-2); }
+
+.btn-soft,
+.btn.soft { background: var(--bg-2); color: var(--text-1); border-color: var(--line); }
+.btn-soft:hover,
+.btn.soft:hover { background: var(--bg-3); }
+
+.btn-danger,
+.btn.danger { background: var(--danger-soft); color: var(--danger); border-color: color-mix(in srgb, var(--danger) 40%, transparent); }
+.btn-danger:hover,
+.btn.danger:hover { background: color-mix(in srgb, var(--danger) 22%, transparent); }
+
+.btn-sm,
+.btn.sm { padding: var(--sp-2) var(--sp-4); font-size: 14px; }
+
+/* Аватар-чип в сайдбаре: не кнопка — отдельный класс (DESIGN_MIGRATION 7.1). */
+.avatar-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--r-pill);
+  background: var(--bg-3);
+  color: var(--amber-200);
+  font: 700 14px/1 var(--font-body);
+}
+
+.spin {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  display: inline-block;
+  border: 2.5px solid color-mix(in srgb, currentColor 30%, transparent);
+  border-top-color: currentColor;
+  animation: rot .8s linear infinite;
+}
+@keyframes rot { to { transform: rotate(360deg); } }
+
 .theme-toggle .theme-icon-light { display: none; }
 :root[data-theme="light"] .theme-toggle .theme-icon-dark { display: none; }
 :root[data-theme="light"] .theme-toggle .theme-icon-light { display: inline; }

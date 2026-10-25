@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Edit2, Trash2 } from 'lucide-react';
 import type { UnitOfMeasure } from '../types';
 import { humanizeUnit } from '../utils/text';
+import { Button } from './Button';
 
 export interface ProductRow {
   id: string;
@@ -170,7 +171,7 @@ export function ProductTable({ products, filters, onEdit, onDelete, onResetFilte
     return (
       <div className="rounded-xl p-12 text-center" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
         <p style={{ color: 'var(--muted)' }}>Ничего не найдено</p>
-        <button onClick={onResetFilters} className="ghost-btn mt-4">Сбросить фильтры</button>
+        <Button variant="ghost" size="sm" onClick={onResetFilters} className="mt-4">Сбросить фильтры</Button>
       </div>
     );
   }

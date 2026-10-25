@@ -5,6 +5,7 @@ import { useToast } from '../components/ToastProvider';
 import { TripForm, type TripFormData } from '../components/TripForm';
 import { api } from '../api/client';
 import { getTripCover } from '../utils/getTripCover';
+import { Button } from '../components/Button';
 
 interface Trip {
   id: string;
@@ -113,7 +114,7 @@ export default function TripsPage() {
         <div>
           <h1 className="text-2xl md:text-3xl font-bold" style={{ color: 'var(--text)' }}>Походы</h1>
           <p className="mt-1" style={{ color: 'var(--fire)' }}>{error}</p>
-          <button onClick={loadData} className="ghost-btn mt-4">Повторить</button>
+          <Button variant="ghost" onClick={loadData} className="mt-4">Повторить</Button>
         </div>
       </div>
     );
@@ -126,13 +127,9 @@ export default function TripsPage() {
           <h1 className="text-2xl md:text-3xl font-bold" style={{ color: 'var(--text)' }}>Походы</h1>
           <p className="mt-1" style={{ color: 'var(--muted)' }}>Управление вашими походами и запасами</p>
         </div>
-        <button
-          onClick={() => setShowCreate(true)}
-          className="grad-btn flex items-center gap-2"
-        >
-          <Plus size={18} />
+        <Button variant="primary" onClick={() => setShowCreate(true)} icon={<Plus size={18} />}>
           <span className="hidden sm:inline">Новый поход</span>
-        </button>
+        </Button>
       </div>
 
       {/* Create modal */}
@@ -148,12 +145,9 @@ export default function TripsPage() {
         <div className="rounded-xl p-12 text-center" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
           <Mountain size={48} className="mx-auto mb-4" style={{ color: 'var(--muted)' }} />
           <p className="mb-4" style={{ color: 'var(--muted)' }}>У вас пока нет походов</p>
-          <button
-            onClick={() => setShowCreate(true)}
-            className="grad-btn"
-          >
+          <Button variant="primary" onClick={() => setShowCreate(true)}>
             Создать первый поход
-          </button>
+          </Button>
         </div>
       ) : (
         <div className="space-y-3">
