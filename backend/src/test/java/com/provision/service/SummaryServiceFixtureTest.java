@@ -30,7 +30,7 @@ class SummaryServiceFixtureTest {
     void setUp() {
         // Тестируются только чистые методы (calculateAmount*/calculateEffectivePeople),
         // репозитории не нужны. Фаза 14 (N3): конструктор требует 6-й аргумент.
-        summaryService = new SummaryService(null, null, null, null, null, null, null);
+        summaryService = new SummaryService(null, null, null, null, null, null, null, null);
 
         // Create ingredients (FIX-1)
         ingredientI1 = Ingredient.builder().id(1L).name("Гречка").unit(UnitOfMeasure.KG).build();

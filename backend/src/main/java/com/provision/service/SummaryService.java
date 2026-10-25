@@ -35,7 +35,7 @@ public class SummaryService {
                           PriceResolutionService priceResolutionService,
                           TripIngredientSubstitutionRepository substitutionRepository,
                           TripIngredientEditService tripIngredientEditService) {
-        this(tripRepository, priceRepository, recipeRepository, priceResolutionService,
+        this(tripRepository, priceRepository, recipeRepository, null, priceResolutionService,
                 substitutionRepository, tripIngredientEditService, null);
     }
 
@@ -43,6 +43,7 @@ public class SummaryService {
     public SummaryService(TripRepository tripRepository,
                           IngredientPriceRepository priceRepository,
                           RecipeRepository recipeRepository,
+                          IngredientRepository ingredientRepository,
                           PriceResolutionService priceResolutionService,
                           TripIngredientSubstitutionRepository substitutionRepository,
                           TripIngredientEditService tripIngredientEditService,
@@ -50,6 +51,7 @@ public class SummaryService {
         this.tripRepository = tripRepository;
         this.priceRepository = priceRepository;
         this.recipeRepository = recipeRepository;
+        this.ingredientRepository = ingredientRepository;
         this.priceResolutionService = priceResolutionService;
         this.substitutionRepository = substitutionRepository;
         this.tripIngredientEditService = tripIngredientEditService;

@@ -30,7 +30,7 @@ class MealCompositionMathTest {
     @BeforeEach
     void setUp() {
         // Чистые методы тестируются без репозиториев (паттерн SummaryServiceTest).
-        summaryService = new SummaryService(null, null, null, null, null, null, null);
+        summaryService = new SummaryService(null, null, null, null, null, null, null, null);
         kgIng = new Ingredient();
         kgIng.setId(1L);
         kgIng.setName("Картофель сублимированный");
