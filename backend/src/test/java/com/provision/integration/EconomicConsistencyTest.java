@@ -62,7 +62,18 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest
 @AutoConfigureMockMvc
 @ContainerSuite
-@ActiveProfiles("test")
+// FIX (409 в createIngredient): ключ кэша Spring TestContext у этого класса совпадал с
+// ConflictIntegrationTest — оба имели @SpringBootTest + @AutoConfigureMockMvc +
+// @ActiveProfiles("test") без других различий, и JUnit переиспользовал чужой контекст
+// (база provision_test_conflict). При этом static-контейнер/@DynamicPropertySource econ-класса
+// указывали на provision_test_econ: TestDataIsolation.reset() пересоздавал из миграций НЕ ту БД,
+// к которой реально подключён MockMvc. В переиспользованной conflict-базе Flyway-сид
+// V3__seed_catalog.sql уже содержит Гречка/buckwheat, Тушёнка/tushonka, Масло/butter, Рис/rice,
+// Соль/salt -> IngredientService -> ConflictException -> POST /api/v1/admin/ingredients 409
+// вместо 201 во всех 8 тестах. Отличный профиль "econ" меняет кэш-ключ MergedContextConfiguration
+// -> класс получает собственный контекст и собственную базу provision_test_econ.
+// (Профиль "test" сохранён: application-test.yml со всеми тестовыми свойствами грузится по нему.)
+@ActiveProfiles({"test", "econ"})
 @DisplayName("E2E-ECON-01: Economic consistency across all screens")
 class EconomicConsistencyTest {
 
@@ -114,13 +125,18 @@ class EconomicConsistencyTest {
      * ConflictIntegrationTest: reset вне транзакции + фикстуры в helper, который вызывает
      * каждый @Test. Транзакционная аннотация с класса снята полностью.
      */
+    /**
+     * FIX (409 в createIngredient, раунд 2): класс переиспользовал чужой кэшированный контекст
+     * Spring TestContext (см. аннотации класса: добавлен профиль "econ"), т.е. работал на базе
+     * provision_test_conflict с сидом V3; теперь у него свой контекст/база provision_test_econ.
+     * Reset остаётся в @BeforeEach вне транзакции (как в зелёном ConflictIntegrationTest после
+     * снятия @Transactional — DDL DROP SCHEMA внутри тестовой транзакции вешал прогон).
+     */
     @BeforeEach
     void setUp() {
-        // E2E-ECON-01: фикстуры (Гречка/buckwheat, Тушёнка/tushonka, Масло/butter, Рис/rice,
-        // Соль/salt) пересекаются с каталогом, накатываемым Flyway-сидом V3__seed_catalog.sql
-        // (одноимённые записи с теми же code), а IngredientService отдаёт ConflictException ->
-        // POST /admin/ingredients возвращал 409 вместо 201. Как в ConflictIntegrationTest,
-        // пересоздаём БД из миграций перед каждым тестом.
+        // Пересоздаём БД из миграций перед каждым тестом (сид V3 содержит те же имена, что и
+        // фикстуры, но после reset они принадлежат только этому тесту; createFixtures() в каждом
+        // @Test заводит их заново на чистом листе).
         TestDataIsolation.reset(jdbc, flyway);
     }
 
