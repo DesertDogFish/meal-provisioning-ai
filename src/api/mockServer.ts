@@ -930,15 +930,13 @@ export const mockServer = {
     // каталожным ('rec1'), и по trip-scoped копиям ('rec1::ttrip1'); правки одного
     // рецепта должны находиться независимо от формы id (паритет с editRecipeKey).
     const recipeId = editRecipeKey(recipe.id);
-    // Область PUT — правки текущего приёма (mealId на записи; паритет с бэкендом,
-    // где composition хранит editSet per-meal) + legacy-правки без mealId. Иначе
-    // batch-PUT одного приёма снимал бы EXTRA/SCALE-правки других приёмов того же
-    // рецепта (тест 2b: гречка m3 теряла SCALED×1.5 при PUT нового приёма).
-    const ownEdit = (s: MockSubstitution) => s.mealId == null || String(s.mealId) === String(meal.id);
-    const editsOf = () => allTripEdits(tripId).filter(s => editRecipeKey(s.recipeId) === recipeId && ownEdit(s));
-    // Все composition-правки этого рецепта (включая другие приёмы) — для проверки
-    // «уже есть замена» перед созданием дубликата (уникальность from в рамках рецепта).
-    const recipeEdits = () => allTripEdits(tripId).filter(s => editRecipeKey(s.recipeId) === recipeId);
+    // Область PUT — ВСЕ composition-правки этого рецепта (по всем приёмам), а не
+    // только текущего приёма: состав рецепта — единый набор правок для всех его
+    // экземпляров в походе (паритет с бэкендом, где TripIngredientSubstitution
+    // хранится per-trip+recipe). Фильтр по mealId ломал идемпотентность batch PUT
+    // (тесты 4/5: cleanup-циклы и удаление старых SUBST не видели правки,
+    // записанные с другим mealId).
+    const editsOf = () => allTripEdits(tripId).filter(s => editRecipeKey(s.recipeId) === recipeId);
     const removeEdit = (s: MockSubstitution) => {
       substitutions[tripId] = (substitutions[tripId] || []).filter(x => x.id !== s.id);
       removedItems[tripId] = (removedItems[tripId] || []).filter(x => x.id !== s.id);
@@ -1011,25 +1009,58 @@ export const mockServer = {
         if (fromKey != null && !keepScaled.has(fromKey)) removeEdit(s);
       }
     }
-    // Замены: полная замена набора from→to
-    for (const s of editsOf()) {
-      if (s.fromIngredientId != null && s.toIngredientId != null && String(s.fromIngredientId) !== String(s.toIngredientId)) {
-        removeEdit(s);
-      }
-    }
+    // Замены: полная замена набора from→to. Собираем целевой набор сначала (по
+    // каталожным ключам), затем одним проходом удаляем ВСЕ старые SUBST-правки —
+    // иначе итерация по живому массиву с splice внутри removeEdit пропускает
+    // элементы (идемпотентность batch PUT: повтор тела не должен оставлять дубль).
+    // Desired-набор: уникальность по from (последнее wins). Если два from идут
+    // на один to — первая замена выигрывает, вторая игнорируется (§4.2).
+    const desiredMap = new Map<string, DesiredSub>();
+    const takenTos = new Set<string>();
     for (const dto of subs) {
-      // Одна активная замена на from-ингредиент: снимаем предыдущую (паритет с putComposition)
-      const fromKey = editIngredientKey(String(dto.fromIngredientId));
-      const stale = editsOf().find(s =>
-        !s.added && !s.removed && s.fromIngredientId != null && s.toIngredientId != null &&
-        String(s.fromIngredientId) !== String(s.toIngredientId) &&
-        editIngredientKey(s.fromIngredientId) === fromKey &&
-        editRecipeKey(s.recipeId) === recipeId);
-      if (stale) removeEdit(stale);
+      const from = editIngredientKey(String(dto.fromIngredientId));
+      const to = editIngredientKey(String(dto.toIngredientId));
+      if (desiredMap.has(from)) continue; // дубль from → 400 в валидации; на всякий случай первая wins
+      if (takenTos.has(to)) continue; // to уже занят другой заменой
+      takenTos.add(to);
+      desiredMap.set(from, { from, to, ratio: Number(dto.ratio ?? 1) || 1 });
+    }
+    const desiredSubs = [...desiredMap.values()];
+    const isSubst = (s: MockSubstitution) =>
+      !s.added && !s.removed && s.fromIngredientId != null && s.toIngredientId != null &&
+      String(s.fromIngredientId) !== String(s.toIngredientId);
+    // §4.2: одна активная замена на from-ингредиент (в рамках рецепта). Дедуп
+    // делаем ПО ИДЕНТИФИКАТОРУ from, а не «удаляем все»: при идемпотентном
+    // повторе batch PUT первая идентичная desired-правка остаётся живой (её id
+    // возвращается в substitutions — паритет с бэкендом, где PUT делает upsert),
+    // а лишние дубли снимаются. Прочие SUBST (изменённый to или отсутствие в
+    // desired) удаляются полностью.
+    const keptFroms = new Set<string>();
+    for (const s of editsOf().filter(x => isSubst(x) || x.scale === true)) {
+      const sFrom = editIngredientKey(String(s.fromIngredientId));
+      const sTo = s.toIngredientId == null ? null : editIngredientKey(String(s.toIngredientId));
+      if (s.scale && String(s.fromIngredientId) === String(s.toIngredientId)) {
+        // SCALE-правка (from===to): если этот же from заменяется на другой to,
+        // SCALE снимается — количество переносится заменой (§3), state наследует
+        // SCALED из scaleRatios. Если в desired нет замены с таким from — SCALE
+        // остаётся (обычный cleanup ниже его не тронет: он в keepScaled).
+        const substTarget = desiredMap.get(sFrom);
+        if (substTarget && substTarget.to !== sFrom) removeEdit(s);
+        continue;
+      }
+      const target = sTo == null ? undefined : desiredMap.get(sFrom);
+      if (target && target.to === sTo && !keptFroms.has(sFrom)) {
+        keptFroms.add(sFrom); // upsert: существующая правка уже соответствует desired
+        continue;
+      }
+      removeEdit(s);
+    }
+    for (const d of desiredSubs) {
+      if (keptFroms.has(d.from)) continue;
       list.push({
         id: `sub-${substitutionSeq++}`, recipeId,
-        fromIngredientId: editIngredientKey(String(dto.fromIngredientId)), toIngredientId: editIngredientKey(String(dto.toIngredientId)),
-        amountPerServing: 0, ratio: Number(dto.ratio ?? 1) || 1, added: false, removed: false,
+        fromIngredientId: d.from, toIngredientId: d.to,
+        amountPerServing: 0, ratio: d.ratio, added: false, removed: false,
         mealId: String(meal.id), comment: 'SUBST via composition',
       });
     }
