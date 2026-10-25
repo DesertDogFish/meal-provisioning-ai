@@ -58,8 +58,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest
 @AutoConfigureMockMvc
 @ContainerSuite
-@ActiveProfiles("test")
-@Transactional
 @DisplayName("E2E-ECON-01: Economic consistency across all screens")
 class EconomicConsistencyTest {
 
@@ -71,6 +69,12 @@ class EconomicConsistencyTest {
             .withUsername("test")
             .withPassword("test");
 
+    static {
+        if (!LOCAL_PG && postgres != null && !postgres.isRunning()) {
+            postgres.start();
+        }
+    }
+
     @DynamicPropertySource
     static void configureProperties(DynamicPropertyRegistry registry) {
         registry.add("spring.datasource.url", () -> LOCAL_PG ? LocalPgFallback.jdbcUrl("provision_test_econ") : postgres.getJdbcUrl());
@@ -78,7 +82,9 @@ class EconomicConsistencyTest {
         registry.add("spring.datasource.password", () -> LOCAL_PG ? "test" : postgres.getPassword());
     }
 
-    // === FIXTURES ===
+    // === FIXTURES (names/codes суффиксированы "E2E"/UUID: Flyway-сид V3 содержит
+    // «Гречка/Тушёнка/Масло/Рис/Соль» — без уникальных суффиксов был бы 409/duplicate) ===
+    private static final String SFX = "-e2e";
     private static final LocalDate START_DATE = LocalDate.of(2026, 7, 1);
     private static final LocalDate END_DATE = LocalDate.of(2026, 7, 3);
     private static final String TRIP_NAME = "Тестовый поход E2E-ECON-01";
@@ -91,44 +97,54 @@ class EconomicConsistencyTest {
 
     @Autowired private MockMvc mockMvc;
     @Autowired private ObjectMapper objectMapper;
+    @Autowired private org.springframework.jdbc.core.JdbcTemplate jdbc;
+    @Autowired private org.flywaydb.core.Flyway flyway;
 
+    /** ADMIN-токен: /api/v1/admin/ingredients* и /api/v1/admin/recipes закрыты hasRole('ADMIN'). */
+    private String adminToken;
+    /** USER-токен — владелец похода: trips/meals/summary/price-overrides доступны аутентифицированным. */
     private String userToken;
 
     @BeforeEach
     void setUp() throws Exception {
-        userToken = registerAndLogin("e2econ@test.com");
+        // Как в UserPrices/Catalog/Conflict: полная пересборка схемы перед каждым тестом
+        // (drop schema + Flyway migrate) — фикстуры идемпотентны между 8 методами
+        // без rollback-транзакции, которая несовместима с @ContainerSuite.
+        TestDataIsolation.reset(jdbc, flyway);
+        userToken = TestUsers.registerUser(mockMvc, objectMapper, "e2econ" + SFX + "@test.com");
+        adminToken = TestUsers.createAdmin(mockMvc, objectMapper, jdbc, "e2econ-admin" + SFX + "@test.com");
 
-        createIngredient("Гречка", "buckwheat", "KG", 100);
-        createIngredient("Тушёнка", "tushonka", "KG", 200);
-        createIngredient("Масло", "butter", "KG", 400);
-        createIngredient("Рис", "rice", "KG", 50);
-        createIngredient("Соль", "salt", "KG", 0);
+        createIngredient("Гречка E2E", "grechka" + SFX, "KG", 343);
+        createIngredient("Тушёнка E2E", "tushonka" + SFX, "KG", 300);
+        createIngredient("Масло E2E", "maslo" + SFX, "KG", 734);
+        createIngredient("Рис E2E", "ris" + SFX, "KG", 349);
+        createIngredient("Соль E2E", "sol" + SFX, "KG", 0);
 
-        grechkaId = getIngredientIdByName("Гречка");
-        tushenkaId = getIngredientIdByName("Тушёнка");
-        butterId = getIngredientIdByName("Масло");
-        riceId = getIngredientIdByName("Рис");
-        saltId = getIngredientIdByName("Соль");
+        grechkaId = getIngredientIdByName("Гречка E2E");
+        tushenkaId = getIngredientIdByName("Тушёнка E2E");
+        butterId = getIngredientIdByName("Масло E2E");
+        riceId = getIngredientIdByName("Рис E2E");
+        saltId = getIngredientIdByName("Соль E2E");
 
-        recipe1Id = createRecipe("Каша гречневая с тушёнкой", recipeIngredients(
+        recipe1Id = createRecipe("Каша гречневая с тушёнкой E2E", recipeIngredients(
                 grechkaId, new BigDecimal("0.1"),
                 tushenkaId, new BigDecimal("0.1"),
                 saltId, new BigDecimal("0.01")), 1, 300);
 
-        recipe2Id = createRecipe("Рис с маслом", recipeIngredients(
+        recipe2Id = createRecipe("Рис с маслом E2E", recipeIngredients(
                 riceId, new BigDecimal("0.2"),
                 butterId, new BigDecimal("0.05")), 1, 300);
 
-        recipe3Id = createRecipe("Гречка с маслом", recipeIngredients(
+        recipe3Id = createRecipe("Гречка с маслом E2E", recipeIngredients(
                 grechkaId, new BigDecimal("0.2"),
                 butterId, new BigDecimal("0.05")), 1, 400);
 
-        recipe4Id = createRecipe("Рис с тушёнкой", recipeIngredients(
+        recipe4Id = createRecipe("Рис с тушёнкой E2E", recipeIngredients(
                 riceId, new BigDecimal("0.2"),
                 tushenkaId, new BigDecimal("0.1"),
                 saltId, new BigDecimal("0.01")), 1, 300);
 
-        recipe5Id = createRecipe("Масляный рис", recipeIngredients(
+        recipe5Id = createRecipe("Масляный рис E2E", recipeIngredients(
                 riceId, new BigDecimal("0.1"),
                 butterId, new BigDecimal("0.1")), 1, 450);
 
@@ -154,16 +170,9 @@ class EconomicConsistencyTest {
 
     @AfterEach
     void tearDown() {
-        // @Transactional на классе откатывает все изменения (юзер, ингредиенты,
-        // цены, рецепты, поход, блюда, оверрайды) после каждого метода.
+        // Идемпотентность между тестами обеспечивает TestDataIsolation.reset() в @BeforeEach
+        // (drop schema + полный прогон Flyway-миграций), как в остальных @ContainerSuite-классах.
         // Ручной cleanup не нужен и не должен ассертить статусы.
-        //
-        // FALLBACK (если первый прогон упадёт на duplicate email/code):
-        // @ContainerSuite не совместим с rollback тестовой транзакции. Тогда:
-        //   1) убрать @Transactional с класса;
-        //   2) в registerAndLogin использовать email "e2econ-" + UUID + "@test.com";
-        //   3) в createIngredient суффиксировать code: code + "-" + UUID;
-        //   4) в tearDown вернуть delete трипа БЕЗ andExpect (мягкая очистка).
     }
 
     // ==================== ЭКРАН 1: МЕНЮ ПО ДНЯМ ====================
@@ -180,12 +189,12 @@ class EconomicConsistencyTest {
         assertThat(day1.meals()).hasSize(1);
 
         MenuMeal meal1 = day1.meals().get(0);
-        assertThat(meal1.recipeName()).isEqualTo("Каша гречневая с тушёнкой");
+        assertThat(meal1.recipeName()).isEqualTo("Каша гречневая с тушёнкой E2E");
         assertThat(meal1.servings()).isEqualTo(10);
 
-        assertThat(day1.ingredientAmount("Гречка")).isEqualByComparingTo("1.000");
-        assertThat(day1.ingredientAmount("Тушёнка")).isEqualByComparingTo("1.000");
-        assertThat(day1.ingredientAmount("Соль")).isEqualByComparingTo("0.100");
+        assertThat(day1.ingredientAmount("Гречка E2E")).isEqualByComparingTo("1.000");
+        assertThat(day1.ingredientAmount("Тушёнка E2E")).isEqualByComparingTo("1.000");
+        assertThat(day1.ingredientAmount("Соль E2E")).isEqualByComparingTo("0.100");
     }
 
     @Test
@@ -200,9 +209,9 @@ class EconomicConsistencyTest {
         assertThat(day2.meals().get(1).servings()).isEqualTo(4);
         System.out.println("E2E-ECON day2 effectivePeople(факт бэка)=" + day2.effectivePeople());
 
-        assertThat(day2.ingredientAmount("Рис")).isEqualByComparingTo("0.800");
-        assertThat(day2.ingredientAmount("Масло")).isEqualByComparingTo("0.400");
-        assertThat(day2.ingredientAmount("Гречка")).isEqualByComparingTo("0.800");
+        assertThat(day2.ingredientAmount("Рис E2E")).isEqualByComparingTo("0.800");
+        assertThat(day2.ingredientAmount("Масло E2E")).isEqualByComparingTo("0.400");
+        assertThat(day2.ingredientAmount("Гречка E2E")).isEqualByComparingTo("0.800");
     }
 
     @Test
@@ -216,10 +225,10 @@ class EconomicConsistencyTest {
         assertThat(day3.meals().get(1).servings()).isEqualTo(3);
         System.out.println("E2E-ECON day3 effectivePeople(факт бэка)=" + day3.effectivePeople());
 
-        assertThat(day3.ingredientAmount("Рис")).isEqualByComparingTo("0.900");
-        assertThat(day3.ingredientAmount("Тушёнка")).isEqualByComparingTo("0.300");
-        assertThat(day3.ingredientAmount("Соль")).isEqualByComparingTo("0.030");
-        assertThat(day3.ingredientAmount("Масло")).isEqualByComparingTo("0.300");
+        assertThat(day3.ingredientAmount("Рис E2E")).isEqualByComparingTo("0.900");
+        assertThat(day3.ingredientAmount("Тушёнка E2E")).isEqualByComparingTo("0.300");
+        assertThat(day3.ingredientAmount("Соль E2E")).isEqualByComparingTo("0.030");
+        assertThat(day3.ingredientAmount("Масло E2E")).isEqualByComparingTo("0.300");
     }
 
     // ==================== ЭКРАН 2: ЗАКУПКА НА ПОХОД ====================
@@ -233,17 +242,17 @@ class EconomicConsistencyTest {
         assertThat(list.totalPlannedCost()).isEqualByComparingTo("806.30");
         assertThat(list.totalActualCost()).isEqualByComparingTo("806.30"); // без оверрайдов
 
-        assertThat(list.itemAmount("Гречка")).isEqualByComparingTo("1.800");
-        assertThat(list.itemAmount("Тушёнка")).isEqualByComparingTo("1.300");
-        assertThat(list.itemAmount("Масло")).isEqualByComparingTo("0.700");
-        assertThat(list.itemAmount("Рис")).isEqualByComparingTo("1.700");
-        assertThat(list.itemAmount("Соль")).isEqualByComparingTo("0.130");
+        assertThat(list.itemAmount("Гречка E2E")).isEqualByComparingTo("1.800");
+        assertThat(list.itemAmount("Тушёнка E2E")).isEqualByComparingTo("1.300");
+        assertThat(list.itemAmount("Масло E2E")).isEqualByComparingTo("0.700");
+        assertThat(list.itemAmount("Рис E2E")).isEqualByComparingTo("1.700");
+        assertThat(list.itemAmount("Соль E2E")).isEqualByComparingTo("0.130");
 
-        assertThat(list.itemPlannedCost("Гречка")).isEqualByComparingTo("180.00");
-        assertThat(list.itemPlannedCost("Тушёнка")).isEqualByComparingTo("260.00");
-        assertThat(list.itemPlannedCost("Масло")).isEqualByComparingTo("280.00");
-        assertThat(list.itemPlannedCost("Рис")).isEqualByComparingTo("85.00");
-        assertThat(list.itemPlannedCost("Соль")).isEqualByComparingTo("1.30");
+        assertThat(list.itemPlannedCost("Гречка E2E")).isEqualByComparingTo("180.00");
+        assertThat(list.itemPlannedCost("Тушёнка E2E")).isEqualByComparingTo("260.00");
+        assertThat(list.itemPlannedCost("Масло E2E")).isEqualByComparingTo("280.00");
+        assertThat(list.itemPlannedCost("Рис E2E")).isEqualByComparingTo("85.00");
+        assertThat(list.itemPlannedCost("Соль E2E")).isEqualByComparingTo("1.30");
     }
 
     // ==================== ЭКРАН 3: ЗАКУПКА ПО ДНЯМ ====================
@@ -321,12 +330,12 @@ class EconomicConsistencyTest {
         assertThat(list.totalPlannedCost()).isEqualByComparingTo("806.30");
         // Факт: 216.00 + 234.00 + 280.00 + 85.00 + 1.30 = 816.30
         assertThat(list.totalActualCost()).isEqualByComparingTo("816.30");
-        assertThat(list.itemActualCost("Гречка")).isEqualByComparingTo("216.00");
-        assertThat(list.itemActualCost("Тушёнка")).isEqualByComparingTo("234.00");
-        assertThat(list.itemActualCost("Масло")).isEqualByComparingTo("280.00"); // без оверрайда
+        assertThat(list.itemActualCost("Гречка E2E")).isEqualByComparingTo("216.00");
+        assertThat(list.itemActualCost("Тушёнка E2E")).isEqualByComparingTo("234.00");
+        assertThat(list.itemActualCost("Масло E2E")).isEqualByComparingTo("280.00"); // без оверрайда
         // Оверрайд меняет ТОЛЬКО цену: веса прежние
-        assertThat(list.itemAmount("Гречка")).isEqualByComparingTo("1.800");
-        assertThat(list.itemAmount("Тушёнка")).isEqualByComparingTo("1.300");
+        assertThat(list.itemAmount("Гречка E2E")).isEqualByComparingTo("1.800");
+        assertThat(list.itemAmount("Тушёнка E2E")).isEqualByComparingTo("1.300");
         assertThat(list.overriddenCount()).isEqualTo(2);
         assertThat(list.totalActualCost().subtract(list.totalPlannedCost()))
                 .isEqualByComparingTo("10.00");
@@ -511,39 +520,21 @@ class EconomicConsistencyTest {
                 .andReturn();
     }
 
-    private String registerAndLogin(String email) throws Exception {
-        String regBody = String.format(
-                "{\"email\":\"%s\",\"password\":\"password123\",\"firstName\":\"E2E\",\"lastName\":\"Test\"}",
-                email);
-        mockMvc.perform(post("/api/v1/auth/register")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(regBody))
-                .andExpect(status().isCreated());
-
-        String loginBody = String.format("{\"email\":\"%s\",\"password\":\"password123\"}", email);
-        MvcResult loginResult = mockMvc.perform(post("/api/v1/auth/login")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(loginBody))
-                .andExpect(status().isOk())
-                .andReturn();
-
-        return text(objectMapper.readTree(body(loginResult)), "accessToken", true);
-    }
 
     private void createIngredient(String name, String code, String unit, int kcal) throws Exception {
         String body = String.format(
-                "{\"name\":\"%s\",\"code\":\"%s\",\"unit\":\"%s\",\"kcalPer100g\":%d}",
+                "{\"name\":\"%s\",\"code\":\"%s\",\"unit\":\"%s\",\"category\":\"Тест E2E\",\"kcalPer100g\":%d}",
                 name, code, unit, kcal);
-        mockMvc.perform(post("/api/v1/ingredients")
-                        .header("Authorization", "Bearer " + userToken)
+        mockMvc.perform(post("/api/v1/admin/ingredients")
+                        .header("Authorization", "Bearer " + adminToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body))
                 .andExpect(status().isCreated());
     }
 
     private Long getIngredientIdByName(String name) throws Exception {
-        MvcResult result = mockMvc.perform(get("/api/v1/ingredients")
-                        .header("Authorization", "Bearer " + userToken))
+        MvcResult result = mockMvc.perform(get("/api/v1/admin/ingredients")
+                        .header("Authorization", "Bearer " + adminToken))
                 .andExpect(status().isOk())
                 .andReturn();
         JsonNode root = objectMapper.readTree(body(result));
@@ -564,8 +555,8 @@ class EconomicConsistencyTest {
         String body = String.format(
                 "{\"name\":\"%s\",\"mealType\":\"BREAKFAST\",\"baseServings\":%d,\"caloriesPerServing\":%d,\"ingredients\":%s}",
                 name, baseServings, kcal, ingredientsJson);
-        MvcResult result = mockMvc.perform(post("/api/v1/recipes")
-                        .header("Authorization", "Bearer " + userToken)
+        MvcResult result = mockMvc.perform(post("/api/v1/admin/recipes")
+                        .header("Authorization", "Bearer " + adminToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body))
                 .andExpect(status().isCreated())
@@ -626,8 +617,8 @@ class EconomicConsistencyTest {
         String body = String.format(
                 "{\"ingredientId\":%d,\"pricePerUnit\":%s,\"effectiveFrom\":\"2026-01-01\",\"currency\":\"RUB\"}",
                 ingredientId, price);
-        mockMvc.perform(post("/api/v1/prices")
-                        .header("Authorization", "Bearer " + userToken)
+        mockMvc.perform(post("/api/v1/admin/ingredient-prices")
+                        .header("Authorization", "Bearer " + adminToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body))
                 .andExpect(status().isCreated());
