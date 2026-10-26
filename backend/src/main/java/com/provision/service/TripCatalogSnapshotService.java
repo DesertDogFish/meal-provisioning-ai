@@ -79,7 +79,12 @@ public class TripCatalogSnapshotService {
         Map<Long, Ingredient> ingredientCopies = new HashMap<>();
         for (RecipeIngredient ri : sourceRows) {
             Ingredient ing = ri.getIngredient();
-            ingredientCopies.computeIfAbsent(ing.getId(), id -> createIngredientCopy(trip, ing));
+            // snapshotIngredient (а не createIngredientCopy) — копия продукта УЖЕ могла
+            // быть создана другим рецептом этого похода (findByTripIdAndSnapshotOf).
+            // Прямой createIngredientCopy плодил дубли снепшотов на каждый рецепт:
+            // один продукт разъезжался на несколько строк закупки со своими ценами и
+            // упаковками («ЭК Гречка 4.2 кг» + «ЭК Гречка 1.5 кг» вместо 5.7 кг).
+            ingredientCopies.computeIfAbsent(ing.getId(), id -> snapshotIngredient(trip, ing));
         }
 
         Recipe copy = Recipe.builder()
@@ -123,16 +128,31 @@ public class TripCatalogSnapshotService {
                 .build();
         final Ingredient saved = ingredientRepository.save(copy);
 
-        // Заморозка плановой цены: актуальный срез на момент снепшота.
-        // Расчётное ядро продолжает читать ingredient_prices без изменений.
-        priceRepository.findEffectivePrice(global.getId(), LocalDate.now()).ifPresent(p ->
-                priceRepository.save(IngredientPrice.builder()
-                        .ingredient(saved)
-                        .pricePerUnit(p.getPricePerUnit())
-                        .currency(p.getCurrency())
-                        .effectiveFrom(p.getEffectiveFrom())
-                        .source(p.getSource())
-                        .build()));
+        // Заморозка плановой цены: срез, который ДЕЙСТВУЕТ на дату старта похода
+        // (фолбэк — срез на сегодня, если на старт цены ещё не было). effective_from
+        // копии прижимается к дате старта: расчёт (SummaryService.loadLatestPrices на
+        // endDate и effectivePriceFromCache по дням) и клиент (findPriceForDate по дню)
+        // видят строку только когда effective_from <= искомая дата; старое поведение
+        // («цена на сегодня» с оригинальным effective_from) оставляло прошедшие/демо-
+        // походы и походы с поздней историей цен БЕЗ плановой цены (plannedCost=null,
+        // заниженные итоги, «чушь» в KPI «на человека»).
+        LocalDate freezeDate = trip.getStartDate() != null ? trip.getStartDate() : LocalDate.now();
+        java.util.Optional<IngredientPrice> frozen = priceRepository.findEffectivePrice(global.getId(), freezeDate);
+        if (frozen.isEmpty()) {
+            frozen = priceRepository.findEffectivePrice(global.getId(), LocalDate.now());
+        }
+        frozen.ifPresent(p -> {
+            LocalDate effectiveFrom = p.getEffectiveFrom() == null || p.getEffectiveFrom().isAfter(freezeDate)
+                    ? freezeDate
+                    : p.getEffectiveFrom();
+            priceRepository.save(IngredientPrice.builder()
+                    .ingredient(saved)
+                    .pricePerUnit(p.getPricePerUnit())
+                    .currency(p.getCurrency())
+                    .effectiveFrom(effectiveFrom)
+                    .source(p.getSource())
+                    .build());
+        });
         return saved;
     }
 }

@@ -231,6 +231,73 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
     }
 
+    /**
+     * Битый/нечитаемый JSON тела (например, ingredientId: "free-..." вместо числа) —
+     * это ошибка клиента (400), а не «Unexpected error» (500): UI получает внятный
+     * detail и может показать его пользователю.
+     */
+    @ExceptionHandler(org.springframework.http.converter.HttpMessageNotReadableException.class)
+    public ResponseEntity<ErrorResponse> handleUnreadableBody(
+            org.springframework.http.converter.HttpMessageNotReadableException ex,
+            HttpServletRequest request
+    ) {
+        log.warn("Malformed request body for {}: {}", request.getRequestURI(), ex.getMessage());
+        ErrorResponse error = new ErrorResponse(
+                "about:blank",
+                "Bad Request",
+                HttpStatus.BAD_REQUEST.value(),
+                "Malformed request body",
+                request.getRequestURI(),
+                LocalDateTime.now(),
+                null,
+                null,
+                null
+        );
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
+    }
+
+    /**PathParam/query не того типа (например, нечисловой id) — тоже 400. */
+    @ExceptionHandler(org.springframework.web.method.annotation.MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ErrorResponse> handleTypeMismatch(
+            org.springframework.web.method.annotation.MethodArgumentTypeMismatchException ex,
+            HttpServletRequest request
+    ) {
+        log.warn("Argument type mismatch for {}: {}", request.getRequestURI(), ex.getMessage());
+        ErrorResponse error = new ErrorResponse(
+                "about:blank",
+                "Bad Request",
+                HttpStatus.BAD_REQUEST.value(),
+                "Invalid value for parameter '" + ex.getName() + "'",
+                request.getRequestURI(),
+                LocalDateTime.now(),
+                null,
+                null,
+                null
+        );
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
+    }
+
+    /** Метод не поддерживается эндпоинтом — 405, а не 500. */
+    @ExceptionHandler(org.springframework.web.HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<ErrorResponse> handleMethodNotSupported(
+            org.springframework.web.HttpRequestMethodNotSupportedException ex,
+            HttpServletRequest request
+    ) {
+        log.warn("Method not supported for {}: {}", request.getRequestURI(), ex.getMessage());
+        ErrorResponse error = new ErrorResponse(
+                "about:blank",
+                "Method Not Allowed",
+                HttpStatus.METHOD_NOT_ALLOWED.value(),
+                ex.getMessage(),
+                request.getRequestURI(),
+                LocalDateTime.now(),
+                null,
+                null,
+                null
+        );
+        return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED).body(error);
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleGeneric(
             Exception ex,

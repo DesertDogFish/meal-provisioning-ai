@@ -21,18 +21,23 @@ import java.util.*;
 /**
  * FORM-meal-composition-spec §3/§4: состав конкретного приёма пищи.
  *
- * Хранение (поверх существующей схемы V19/V20, без новых таблиц):
+ * Хранение (поверх существующей схемы V19/V20/V21, без новых таблиц):
  *  - RECIPE  — рецептурная строка без правки; derived = amount/baseServings × people;
  *  - SCALED  — правка количества: TripIngredientSubstitution(from=X, to=X, ratio) —
  *              «замена на себя» хранится как ratio-корректировка; derived × ratio;
  *  - EXTRA   — добавленный руками продукт: TripIngredientSubstitution(added=true,
- *              from=null, to=X, amountPerServing). По спеке EXTRA — АБСОЛЮТ НА ПРИЁМ
- *              и людьми НЕ масштабируется; в закупке (SummaryService) та же запись
- *              трактуется как количество на порцию, поэтому здесь
- *              amountPerServing = amount / people (итог на приём совпадает с UI);
+ *              from=null, to=X, amountPerServing). По спеке §3 EXTRA — АБСОЛЮТ НА ПРИЁМ:
+ *              в amount_per_serving хранится абсолют (V21), SummaryService не масштабирует
+ *              такие строки людьми/baseServings (EffectiveLine.absolute);
  *  - EXCLUDED— мягкое исключение: TripIngredientSubstitution(to=null, removed=true);
  *  - замена  — TripIngredientSubstitution(from=A, to=B, ratio), A≠B: qty(B)+=qty(A)×ratio,
  *              qty(A):=0; SCALE-правки with-продуктов переносятся на B вместе с количеством.
+ *
+ * V20-привязка: ВСЕ id входящего PUT (items/substitutions) резолвятся в trip-scope
+ * (resolveTripScopedId): строка рецепта → её снепшот; глобальный продукт из справочника →
+ * snowshot-копия с замороженной ценой. Благодаря этому правки состава, закупка и цены
+ * работают в едином пространстве id похода (иначе SUBST/EXTRA цели висели на глобальном
+ * каталоге: цены не заморожены, один продукт двоится в закупке, isolation V20 дырявится).
  *
  * Порядок применения зафиксирован в спеке §3: SCALE → people → EXCLUDE → EXTRA → substitutions.
  */
@@ -54,6 +59,7 @@ public class MealCompositionService {
     private final UserRepository userRepository;
     private final PriceResolutionService priceResolutionService;
     private final SummaryService summaryService;
+    private final TripCatalogSnapshotService snapshotService;
 
     /** GET /trips/{t}/meals/{m}/composition — сервер считает ВСЁ масштабирование. */
     @Transactional(readOnly = true)
@@ -74,36 +80,53 @@ public class MealCompositionService {
         validate(request);
         MealContext ctx = loadContext(tripId, mealId, userId);
 
-        // Дубли ingredientId → 400
+        // Дубли ingredientId → 400 (по сырым id запроса)
         Set<Long> seen = new HashSet<>();
         for (CompositionPutRequest.ItemDto item : request.items()) {
             if (!seen.add(item.ingredientId())) {
                 throw new IllegalArgumentException("Duplicate ingredientId in items: " + item.ingredientId());
             }
         }
-        Set<Long> subSeen = new HashSet<>();
-        if (request.substitutions() != null) {
-            for (CompositionPutRequest.SubstitutionDto s : request.substitutions()) {
-                if (s.fromIngredientId().equals(s.toIngredientId())) {
-                    throw new IllegalArgumentException("From and to ingredients must be different");
-                }
-                if (!subSeen.add(s.fromIngredientId())) {
-                    throw new IllegalArgumentException("Duplicate substitution from: " + s.fromIngredientId());
-                }
-            }
-        }
 
-        // Все задействованные ингредиенты должны существовать
-        Set<Long> wantedIds = new HashSet<>(seen);
+        // V20-привязка: резолвим ВСЕ входящие id в trip-scope (строка рецепта/её снепшот;
+        // глобальный продукт из справочника → снепшот-копия с замороженной ценой).
+        Set<Long> wantedIds = new LinkedHashSet<>(seen);
         if (request.substitutions() != null) {
             for (CompositionPutRequest.SubstitutionDto s : request.substitutions()) {
                 wantedIds.add(s.fromIngredientId());
                 wantedIds.add(s.toIngredientId());
             }
         }
-        Map<Long, Ingredient> ingredients = new HashMap<>();
-        ingredientRepository.findAllById(wantedIds).forEach(i -> ingredients.put(i.getId(), i));
+        Map<Long, Long> resolved = new LinkedHashMap<>();
         for (Long id : wantedIds) {
+            resolved.put(id, resolveTripScopedId(ctx, id));
+        }
+
+        // Проверки дублей/самозамен — ПОСЛЕ резолва (два разных глобальных id могут
+        // отображаться в один снепшот; SUBST «на себя» после снепшота — та же позиция).
+        Set<Long> resolvedSeen = new HashSet<>();
+        for (CompositionPutRequest.ItemDto item : request.items()) {
+            if (!resolvedSeen.add(resolved.get(item.ingredientId()))) {
+                throw new IllegalArgumentException("Duplicate ingredientId in items: " + item.ingredientId());
+            }
+        }
+        Set<Long> subSeen = new HashSet<>();
+        if (request.substitutions() != null) {
+            for (CompositionPutRequest.SubstitutionDto s : request.substitutions()) {
+                Long from = resolved.get(s.fromIngredientId());
+                Long to = resolved.get(s.toIngredientId());
+                if (from.equals(to)) {
+                    throw new IllegalArgumentException("From and to ingredients must be different");
+                }
+                if (!subSeen.add(from)) {
+                    throw new IllegalArgumentException("Duplicate substitution from: " + s.fromIngredientId());
+                }
+            }
+        }
+
+        Map<Long, Ingredient> ingredients = new HashMap<>();
+        ingredientRepository.findAllById(resolved.values()).forEach(i -> ingredients.put(i.getId(), i));
+        for (Long id : resolved.values()) {
             if (!ingredients.containsKey(id)) {
                 throw new NotFoundException("Ingredient not found: " + id);
             }
@@ -134,7 +157,7 @@ public class MealCompositionService {
         Set<Long> keepExtra = new HashSet<>();
         Set<Long> keepExcluded = new HashSet<>();
         for (CompositionPutRequest.ItemDto item : request.items()) {
-            Long ingId = item.ingredientId();
+            Long ingId = resolved.get(item.ingredientId());
             switch (item.state()) {
                 case STATE_SCALED -> {
                     keepScaled.add(ingId);
@@ -159,22 +182,24 @@ public class MealCompositionService {
                 }
                 case STATE_EXTRA -> {
                     keepExtra.add(ingId);
-                    BigDecimal amountOnMeal = item.amount();
-                    // Абсолют на приём → храним как per-serving (паритет с конвейером закупки)
-                    BigDecimal perServing = amountOnMeal.divide(
-                            BigDecimal.valueOf(ctx.people), 6, RoundingMode.HALF_UP);
+                    // §3/V21: EXTRA — АБСОЛЮТ на приём; amount_per_serving added-строки хранит
+                    // его напрямую (SummaryService не масштабирует такие строки — см.
+                    // EffectiveLine.absolute; GET composition отдаёт значение как есть).
+                    // Старая схема (abs/people) теряла точность при baseServings≠1 и давала
+                    // вклад abs/base в закупке — расчёт расходился с составом.
+                    BigDecimal absolute = item.amount();
                     TripIngredientSubstitution existing = extraByTo.get(ingId);
                     if (existing == null) {
                         substitutionRepository.save(TripIngredientSubstitution.builder()
                                 .trip(ctx.trip).recipe(ctx.recipe)
                                 .fromIngredient(null).toIngredient(ingredients.get(ingId))
-                                .amountPerServing(perServing).ratio(BigDecimal.ONE)
+                                .amountPerServing(absolute).ratio(BigDecimal.ONE)
                                 .added(true).removed(false)
                                 .comment("EXTRA via composition")
                                 .createdBy(user).build());
                     } else if (existing.getAmountPerServing() == null
-                            || existing.getAmountPerServing().compareTo(perServing) != 0) {
-                        existing.setAmountPerServing(perServing);
+                            || existing.getAmountPerServing().compareTo(absolute) != 0) {
+                        existing.setAmountPerServing(absolute);
                         substitutionRepository.save(existing);
                     }
                 }
@@ -210,20 +235,22 @@ public class MealCompositionService {
                 request.substitutions() == null ? List.of() : request.substitutions();
         Map<Long, TripIngredientSubstitution> keepReplace = new HashMap<>();
         for (CompositionPutRequest.SubstitutionDto dto : wantSubs) {
-            TripIngredientSubstitution existing = replaceByFrom.get(dto.fromIngredientId());
+            Long fromId = resolved.get(dto.fromIngredientId());
+            Long toId = resolved.get(dto.toIngredientId());
+            TripIngredientSubstitution existing = replaceByFrom.get(fromId);
             boolean changed = existing == null
-                    || !existing.getToIngredient().getId().equals(dto.toIngredientId())
+                    || !existing.getToIngredient().getId().equals(toId)
                     || nvl(existing.getRatio()).compareTo(nvl(dto.ratio())) != 0;
             if (changed) {
                 if (existing != null) substitutionRepository.delete(existing);
                 substitutionRepository.save(TripIngredientSubstitution.builder()
                         .trip(ctx.trip).recipe(ctx.recipe)
-                        .fromIngredient(ingredients.get(dto.fromIngredientId()))
-                        .toIngredient(ingredients.get(dto.toIngredientId()))
+                        .fromIngredient(ingredients.get(fromId))
+                        .toIngredient(ingredients.get(toId))
                         .ratio(nvl(dto.ratio())).comment("SUBST via composition")
                         .createdBy(user).build());
             }
-            if (existing != null) keepReplace.put(dto.fromIngredientId(), existing);
+            if (existing != null) keepReplace.put(fromId, existing);
         }
         for (Map.Entry<Long, TripIngredientSubstitution> e : replaceByFrom.entrySet()) {
             if (!keepReplace.containsKey(e.getKey())) substitutionRepository.delete(e.getValue());
@@ -267,6 +294,41 @@ public class MealCompositionService {
         return new MealContext(trip, foundDay, foundMeal, recipe, people);
     }
 
+    /**
+     * V20-привязка входящего ingredientId к trip-scope похода:
+     *  1) id строки состава рецепта (уже trip-scoped) — как есть;
+     *  2) ГЛОБАЛЬНЫЙ id продукта, чей trip-снепшот есть в составе рецепта, — id снепшота
+     *     (UI может прислать id из справочника для уже присутствующей позиции);
+     *  3) продукт этого же похода (например, цель прошлой правки) — как есть;
+     *  4) продукт из глобального справочника — создаём/переиспользуем снепшот-копию
+     *     (TripCatalogSnapshotService: копия + замороженная плановая цена);
+     *  5) чужой trip-scope / несуществующий id — 404.
+     */
+    private Long resolveTripScopedId(MealContext ctx, Long id) {
+        if (id == null) {
+            throw new IllegalArgumentException("ingredientId is required");
+        }
+        for (RecipeIngredient ri : ctx.recipe.getIngredients()) {
+            Ingredient ing = ri.getIngredient();
+            if (ing.getId().equals(id)) {
+                return ing.getId();
+            }
+            if (id.equals(ing.getSnapshotOf())) {
+                return ing.getId();
+            }
+        }
+        Ingredient loaded = ingredientRepository.findById(id)
+                .orElseThrow(() -> new NotFoundException("Ingredient not found: " + id));
+        if (ctx.trip.getId().equals(loaded.getTripId())) {
+            return loaded.getId();
+        }
+        if (loaded.getTripId() != null) {
+            // trip-scoped продукт ЧУЖОГО похода — в этом походе его не существует
+            throw new NotFoundException("Ingredient not found: " + id);
+        }
+        return snapshotService.snapshotIngredient(ctx.trip, loaded).getId();
+    }
+
     private CompositionResponse buildResponse(MealContext ctx) {
         List<TripIngredientSubstitution> edits =
                 substitutionRepository.findByTripIdAndRecipeId(ctx.trip.getId(), ctx.recipe.getId());
@@ -278,8 +340,8 @@ public class MealCompositionService {
         for (TripIngredientSubstitution s : edits) {
             if (s.isAdded() || s.getFromIngredient() == null) {
                 if (s.getToIngredient() != null && s.getAmountPerServing() != null) {
-                    extraAmounts.put(s.getToIngredient().getId(),
-                            s.getAmountPerServing().multiply(BigDecimal.valueOf(ctx.people)));
+                    // §3/V21: amount_per_serving added-строки хранит АБСОЛЮТ на приём.
+                    extraAmounts.put(s.getToIngredient().getId(), s.getAmountPerServing());
                 }
             } else if (s.isRemoved() || s.getToIngredient() == null) {
                 excluded.add(s.getFromIngredient().getId());
@@ -339,6 +401,17 @@ public class MealCompositionService {
             BigDecimal qtyFrom = effective.getOrDefault(fromId, BigDecimal.ZERO);
             BigDecimal moved = qtyFrom.multiply(nvl(s.getRatio())).setScale(3, RoundingMode.HALF_UP);
             effective.put(fromId, BigDecimal.ZERO);
+
+            // §3: строка-источник ОБНУЛЯЕТСЯ и в ответе (количество перенесено приёмнику) —
+            // иначе totals (ккал/вес/цена) и таблица UI считают заменённый продукт дважды
+            // (паритет с mockServer: buildCompositionResponse zeroing, PR #53).
+            Item fromItem = itemsById.get(fromId);
+            if (fromItem != null) {
+                itemsById.put(fromId, new Item(fromItem.ingredientId(), fromItem.name(), fromItem.unit(),
+                        fromItem.packSize(), fromItem.pieceWeightG(), fromItem.kcalPer100g(),
+                        fromItem.baseAmountPerServing(), fromItem.derivedAmount(), BigDecimal.ZERO,
+                        fromItem.state(), fromItem.ratio(), fromItem.substitutedFrom(), fromItem.kcalTotal()));
+            }
 
             Item existingTo = itemsById.get(toId);
             BigDecimal baseTo = existingTo != null && existingTo.effectiveAmount() != null

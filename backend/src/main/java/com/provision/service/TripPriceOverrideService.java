@@ -59,11 +59,22 @@ public class TripPriceOverrideService {
         Ingredient ingredient = ingredientRepository.findById(ingredientId)
                 .orElseThrow(() -> new NotFoundException("Ingredient not found"));
 
+        // V20: расчётное ядро работает с trip-scoped снепшотами продуктов, поэтому чек,
+        // введённый на ГЛОБАЛЬНЫЙ id (UI может прислать id из справочника), редиректится
+        // на снепшот того же продукта в этом походе. Иначе оверрайд молча не применялся:
+        // «ввёл чек — факт не изменился». Trip-scope чужого похода — не существует здесь.
+        if (ingredient.getTripId() == null) {
+            ingredient = ingredientRepository.findByTripIdAndSnapshotOf(tripId, ingredient.getId())
+                    .orElse(ingredient);
+        } else if (!ingredient.getTripId().equals(tripId)) {
+            throw new NotFoundException("Ingredient not found");
+        }
+
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new NotFoundException("User not found"));
 
         TripPriceOverride override = overrideRepository
-                .findByTripIdAndIngredientId(tripId, ingredientId)
+                .findByTripIdAndIngredientId(tripId, ingredient.getId())
                 .orElse(TripPriceOverride.builder()
                         .trip(trip)
                         .ingredient(ingredient)
@@ -90,6 +101,12 @@ public class TripPriceOverrideService {
         }
 
         overrideRepository.deleteByTripIdAndIngredientId(tripId, ingredientId);
+        // V20: чек мог быть записан на снепшот (редирект при вводе на глобальный id) —
+        // удаляем и его, чтобы DELETE по любому из id был полным.
+        ingredientRepository.findById(ingredientId)
+                .filter(i -> i.getTripId() == null)
+                .flatMap(i -> ingredientRepository.findByTripIdAndSnapshotOf(tripId, i.getId()))
+                .ifPresent(snap -> overrideRepository.deleteByTripIdAndIngredientId(tripId, snap.getId()));
         log.info("Deleted price override for trip {} ingredient {}", tripId, ingredientId);
     }
 

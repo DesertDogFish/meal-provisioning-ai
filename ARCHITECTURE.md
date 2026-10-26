@@ -102,7 +102,13 @@ DTO-рассинхрон имён/единиц закрыт нормализац
 
 Расчётное ядро (SummaryService) не изменилось: копии лежат в тех же таблицах и читаются теми же запросами по id ингредиентов похода.
 
-Бэкфил: миграция V20 перевела существовавшие походы на снепшоты (temp-таблицы соответствий, перепривязка overrides/exclusions/substitutions). Повторный прогон миграции безопасен (IF NOT EXISTS + DROP temp-таблиц в начале).
+Правила привязки (Release-1.0, econ-guardian — охраняются `EconomicConsistencyTest`):
+- **один снепшот на (поход, оригинал)**: `createRecipeCopy` переиспользует копии продуктов других рецептов похода (`snapshotIngredient` → `findByTripIdAndSnapshotOf`); до фикса каждый рецепт плодил свои копии, и один продукт разъезжался на несколько строк закупки со своими ценами/упаковками;
+- **заморозка цены на дату старта похода**: копия получает строку цены, действовавшую на `trip.startDate` (фолбэк — на сегодня), с `effective_from ≤ startDate` — замороженный план виден при резолве на ЛЮБОЙ день похода и сервером (`loadLatestPrices`), и клиентом (`findPriceForDate`); V21 прижал legacy-строки бэкфила;
+- **все ссылки похода — только trip-scoped**: `updateMeal` снепшотит рецепт как `addMeal`; `MealCompositionService.putComposition` резолвит каждый входящий id (строка рецепта → её снепшот по `snapshot_of` → снепшот-копия глобального продукта), поэтому EXTRA/SUBST-цели из справочника привязываются к походу с замороженной ценой; `TripPriceOverrideService` редиректит чек, введённый на глобальный id, на снепшот похода (иначе оверрайд молча не применялся);
+- миграция V21 дополнительно дедуплицировала legacy-снепшоты (канон — MIN(id) на (trip_id, snapshot_of), перепривязка recipe_ingredients/substitutions/overrides).
+
+Бэкфил: миграция V20 перевела существовавшие походы на снепшоты (temp-таблицы соответствий, перепривязка overrides/exclusions/substitutions). Повторный прогон миграций безопасен (IF NOT EXISTS + DROP temp-таблиц в начале).
 
 ## Правки состава приёма (V19 + composition API)
 
@@ -112,20 +118,23 @@ DTO-рассинхрон имён/единиц закрыт нормализац
 |---|---|---|
 | RECIPE | записи нет | derived = amount/baseServings × people |
 | SCALED | from=X, to=X, ratio | derived × ratio |
-| EXTRA | added=true, from=null, to=X, amount_per_serving | добавка к агрегату |
+| EXTRA | added=true, from=null, to=X, amount_per_serving = **абсолют на приём** (V21) | добавка к агрегату БЕЗ масштабирования (`EffectiveLine.absolute`) |
 | EXCLUDED | removed=true, to=null | строка рецепта пропускается |
 | замена | from=A, to=B, ratio | qty(B) += qty(A)×ratio; qty(A) := 0; SCALE-правки A переносятся на B |
 
-API: `GET/PUT /api/v1/trips/{tripId}/meals/{mealId}/composition` (GET — сервер считает масштабирование и totals; PUT — атомарный batch-диф desired-состояния). Порядок в конвейере: SCALE → people → EXCLUDE → EXTRA → substitutions. UI: `MealCompositionModal` (5 статусов-бейджей, действия по состоянию, merge-подтверждение, инлайн-замены, dirty-state, live-итоги).
+API: `GET/PUT /api/v1/trips/{tripId}/meals/{mealId}/composition` (GET — сервер считает масштабирование и totals; PUT — атомарный batch-диф desired-состояния). Порядок в конвейере: SCALE → people → EXCLUDE → EXTRA → substitutions. UI: `MealCompositionModal` (5 статусов-бейджей, действия по состоянию, merge-подтверждение, инлайн-замены, dirty-state, live-итоги; свободный ввод при сохранении резолвится в справочник через check-name/`POST /admin/products` — на сервер уходят только реальные id).
 
-⚠️ Девиация (задача R5): EXTRA по спеке FORM — абсолют на приём, но бэкенд-конвейер трактует `amount_per_serving` добавленных строк как на порцию (×people), а сервис конвертирует абсолют→per-serving с округлением scale 3 (0.25 → 0.252 при 4 чел). Mock закрыт PR #53 (contract-тесты 9/9); сверка `SummaryService` — R5.1.
+Исторические девиации (устранены Release-1.0, econ-guardian):
+- EXTRA: раньше сервис хранил `abs/people`, а закупка делила ещё на `baseServings` → вклад EXTRA занижался в base раз и расходился с составом/UI/mock. Теперь `amount_per_serving` added-строк хранит абсолют (спека §3), V21 сконвертировала legacy-строки (× effectivePeople первого приёма рецепта); mock хранит то же значение (паритет формы).
+- SCALED: check-констрейнт V7 (`from <> to`) физически не давал сохранить «замену на себя» — PUT состава падал в 500. V21 сняла констрейнт; SUBST from==to по-прежнему отклоняется валидацией сервиса (400).
+- SUBST в GET/PUT-ответе не обнулял строку-источник → totals состава считали заменённый продукт дважды. Теперь источник обнулён (паритет с mock, PR #53).
 
 ## Известный долг до Release 1.0 (реестр рассинхронов)
 
 1. Вкладки закупок считают на клиенте (`calculations.ts`) и не видят серверные правки состава → R1.
 2. `tripStaging.ts`/localStorage дублируют серверные overrides/exclusions → R1/R2.
 3. mock `summary/shopping` — фикстура FIX-1, не расчёт → R8.
-4. EXTRA ×people (выше) → R5.
+4. ~~EXTRA ×people~~ — закрыто (econ-guardian: абсолют в `amount_per_serving`, V21).
 Критерии и порядок — PLAN.md, этапы R0–R9.
 
 ## Contract Frontend ↔ Backend
@@ -199,7 +208,8 @@ GET  /api/v1/trips/{id}/summary/{menu|shopping|shopping/by-days|person}
 | Слой | Инструмент | Гейт |
 |---|---|---|
 | Unit backend | JUnit5+AssertJ+Mockito | `mvn test` (CI blocking) |
-| Integration backend | MockMvc + Testcontainers ИЛИ LocalPgFallback (initdb без Docker) | там же; **baseline-красный: `EconomicConsistencyTest` (PLAN CI-1)** |
+| Integration backend | MockMvc + Testcontainers ИЛИ LocalPgFallback (initdb без Docker) | там же |
+| Экономический страж | `EconomicConsistencyTest` (E2E-ECON): сквозной сценарий (каталог → поход → приёмы → состав → чеки) с числами, посчитанными на бумаге; охраняет меню/закупку/дни/«на человека»/состав/оверрайды, привязки V20 (integrity-блок read-only SQL) и заморозку плана | `mvn test` (CI blocking) |
 | Unit/component frontend | vitest + RTL | `npm run test` (CI blocking) |
 | Coverage | v8, per-file lines ≥80% на зоне изменения (список include в vitest.config) | `npm run test:coverage` локально (R5) |
 | Types/lint | `tsc --noEmit`, eslint | CI blocking (typecheck добавлен в T0) |

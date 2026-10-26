@@ -36,18 +36,18 @@
 1. **Клиентский пересчёт vs серверные правки**: batch PUT состава сохранён, но «Закупка/По дням/На человека» считают из `calculations.ts` по необработанным копиям → правки не видны в цифрах. → R1.
 2. **tripStaging/localStorage vs сервер**: черновики факта и exclusions живут в браузере, серверные сущности — отдельно; другое устройство не видит. → R1/R2, `tripStaging.ts` удалить.
 3. **mock-фикстура FIX-1 vs реальный расчёт**: contract-ночь сравнивает фикстуру с бэком. → R8.
-4. **EXTRA ×people vs спека (абсолют на приём)**: ~~конвейер трактует `amount_per_serving` добавленных строк как на порцию~~ — mock закрыт PR #53 (contract-тесты зелёные); сверка бэкенда `SummaryService` — → R5.1.
+4. **EXTRA ×people vs спека (абсолют на приём)**: — **закрыто (econ-guardian)**: бэкенд хранит абсолют в `amount_per_serving` added-строк (V21-конвертация legacy), `SummaryService` не масштабирует absolute-строки; mock-паритет формы; страж — `EconomicConsistencyTest` EK-02/EK-05.
 5. **Дубль-редакторы состава**: историческое окно добавления приёма правила глобальный рецепт — устранено модалками A/B (PR #49); рецидивы запрещены (AGENTS §9).
 
-## Статус CI (2026-10-25, последние completed-раны + локальная верификация)
+## Статус CI (2026-10-26, после econ-guardian; локальная верификация на базе `d9683ede`)
 
 | Workflow | Статус | Причина / задача |
 |---|---|---|
-| CI → Backend Tests | 🟡 | **CI-1**: фикс влит (PR #51 — Testcontainers/LocalPgFallback для `EconomicConsistencyTest` + SCALED-substitution в `TripIngredientEditService`); ждём подтверждения ближайшим CI-раном |
-| CI → Frontend Tests | 🟡 | PR #52/#53 закрыли unused-vars, dup `state` (MCM), unused `products` (TDP) и 4 red contract-теста (фиксы mock-состава). Локально на базе `5c321995` + ui-consistency-патч: tsc/lint чисто, **251/251 зелёные** |
-| Docker Stack Smoke | 🔴 | падает `Up (detached)`, причина без логов раннера неизвестна; kickoff-патч добавляет `compose config -q`, диагностику на failure и teardown `if: always()`. **CI-2** |
-| E2E nightly | 🔴 | mock-прогон красной после редизайна (PR #48) и/или composition-контрактов; триаж и починка. **CI-3** |
-| Contract parity (nightly) | 🟢 (10-24) | после R5/R8 должен оставаться зелёным всегда |
+| CI → Backend Tests (main `d9683ede`) | 🔴 → 🟢 (патч) | старый `EconomicConsistencyTest` на main бил в несуществующий `POST /api/v1/recipes` (500, 8/8 red). Ветка `fixing-economic-consistency-tests-47f0b` не спасала: raw-SQL с выдуманными колонками (`protein_per_100g`…) → BadSqlGrammar 8/8 + «фиксы» SummaryService под собственный SQL-хак. **Ветку закрыть без merge.** Патч econ-guardian: тест переписан с нуля (10 сценариев, числа на бумаге, integrity-блок), продукт починен (B1–B10, V21). Локально: backend **91/91** (econ 10/10) |
+| CI → Frontend Tests | 🟢 (патч) | tsc/eslint чисто, **253/253** (251 + 2 новых free-text flow), coverage-гейт включённых файлов пройден (client.ts 80.94, calculations.ts 99.32) |
+| Docker Stack Smoke | 🔴 | причина без логов раннера неизвестна; диагностика (`compose config -q`, failure-логи, teardown `if: always()`) в составе ui-consistency-патча (уже в main). **CI-2** — читать логи нового рана |
+| E2E nightly | 🟢 | последние раны (вкл. ветку fixing-…) — success; продолжаем наблюдать |
+| Contract parity (nightly) | 🟢 (10-24) | после R1/R8 должен оставаться зелёным всегда |
 
 ## План прорыва: этапы R0–R9 (порядок = зависимости)
 
@@ -58,10 +58,10 @@
 4. **CI-3**: `npm run test:e2e` локально; снять падающие селекторы редизайна; flaky-спеки — в skip с TODO (R4-правило AGENTS).
 *Готово:* все workflow зелёные на main два рана подряд.
 
-### R5. Математика состава по спеке — mock закрыт, бэк проверяется
-1. Бэк: `SummaryService` — строки `added=true` добавляют абсолют на приём (не ×people); `MealCompositionService` — убрать конверсию абсолют↔per-serving с округлением; трактовку `amount_per_serving` для added зафиксировать в ARCHITECTURE. **Открыто**: PR #51 добавил SCALED-substitution в `TripIngredientEditService` — сверить с этим гейт ниже.
-2. ~~Mock: `buildCompositionResponse` — derived для SCALED при people≠base, обнуление qty(from) при замене, идемпотентность batch PUT~~ — **закрыто PR #53** (SCALE→SUBST перенос, EXTRA-абсолют, идемпотентный PUT, copy-on-write снепшоты).
-3. Гейт: `mealCompositionContract.test.ts` — **9/9 ✅ (локально, база `5c321995`)**; осталось: unit бэка «EXTRA-итог не меняется при people 4→6».
+### R5. Математика состава по спеке — **ЗАКРЫТО (econ-guardian, 2026-10-26)**
+1. ✅ Бэк: added-строки — абсолют на приём (`EffectiveLine.absolute`, SummaryService не масштабирует); `MealCompositionService` хранит абсолют без конверсии; семантика `amount_per_serving` зафиксирована в ARCHITECTURE; V21 сконвертировала legacy-строки и сняла V7-констрейнт, блокировавший SCALED.
+2. ✅ Mock: PR #53 + паритет формы хранения (amountPerServing=абсолют) и manual-строк закупки (absoluteAmount).
+3. ✅ Гейты: `mealCompositionContract.test.ts` 9/9; unit бэка `applyEditsMarksExtraAsAbsolute`; «EXTRA-итог не меняется при people/base» — внутри `EconomicConsistencyTest` EK-02/EK-05/EK-08 (реальная БД, полный стек).
 
 ### R1. Единый источник цифр (1–1.5 дня)
 1. `TripDetailPage`: вкладки меню/закупка/по дням/на человека читают `/trips/{id}/summary/*`; убрать импорт `calculations.ts` из страниц.
@@ -118,7 +118,8 @@ LICENSE-файл; мёртвые deps + `depcheck` в CI; `git filter-repo` (pac
 | PR #48, #52 | Дизайн-ревизия (токены/темы/ThemeToggle), lint-фикс | ✅ |
 | PR #51, #53 | Бэк: Testcontainers/LocalPgFallback (CI-1), SCALED-substitution; mock: состав §3/§4 (SCALE→SUBST, EXTRA-абсолют, идемпотентный PUT), copy-on-write снепшоты; contract-тесты 9/9 | ✅ |
 | Kickoff «Функциональный прорыв» | tsc/lint-хотфиксы (dup `state`, unused `products`) — superseded PR #51/#53; остаток патча: диагностика Docker Stack Smoke (CI-2) + ревизия MD | 🟡 в составе `ui-consistency-release1.patch` |
-| UI-consistency Release-1.0 | Единый формат чисел/единиц (`utils/format.ts`: запятая, целые ₽, «1,5 кг»), нормализация плоских DTO (`getTripRecipes`, `ingOf`) — «Unknown»/«шт» закрыты, категория-объект → строка («[object Object]» закрыт), KPI = «Итого» (один источник), «По дням» считает факт по количествам дня, дропдаун поиска в потоке модалки, плюрализация «+N продукта», общие расчёты в «Закупка и чеки» вместо локальной копии | 🟡 патч `ui-consistency-release1.patch` (ждёт merge; гейты на базе `5c321995`: tsc/lint чисто, **251/251**, format.ts coverage 100%) |
+| UI-consistency Release-1.0 | Единый формат чисел/единиц (`utils/format.ts`: запятая, целые ₽, «1,5 кг»), нормализация плоских DTO (`getTripRecipes`, `ingOf`) — «Unknown»/«шт» закрыты, категория-объект → строка («[object Object]» закрыт), KPI = «Итого» (один источник), «По дням» считает факт по количествам дня, дропдаун поиска в потоке модалки, плюрализация «+N продукта», общие расчёты в «Закупка и чеки» вместо локальной копии | ✅ влито в main как `d9683ede consist fix` |
+| econ-guardian (Release-1.0) | `EconomicConsistencyTest` переписан с нуля (10 сквозных сценариев: меню/закупка/дни/человек/состав/чеки/изоляция/updateMeal/DB-integrity/консистентность; числа на бумаге, только публичное API + read-only SQL). Продуктовые фиксы, которые он вскрыл и охраняет: дубли снепшотов на рецепт (B10), заморозка цены ≤ startDate (B6), EXTRA-абсолют (B2/R5), SCALED-констрейнт V7 → 500 при сохранении состава (B9, V21), SUBST-ноль источника в totals (B8), trip-scope резолв id состава (B1), снепшот в updateMeal (B3), редирект чеков на снепшот (B7), 400/405 вместо 500 (B4), free-text save-flow модалки (F2: check-name/create, «free-» id на сервер не уходят). V21: дедупликация legacy-снепшотов + конверсия EXTRA + прижим цен. Гейты: backend 91/91, frontend 253/253, tsc/lint чисто | 🟡 патч `econ-guardian-release1.patch` (base `d9683ede`); ветку `fixing-economic-consistency-tests-47f0b` закрыть без merge |
 | DESIGN_MIGRATION rev | пункты 0–8 закрыты владельцем, хвосты пункта 9 — отдельно | 🟡 вне аудита |
 
 ## Правила ведения

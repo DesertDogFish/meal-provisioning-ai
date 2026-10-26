@@ -151,7 +151,9 @@ function applyTripEditsToRows<T extends TripEditRow>(
     } else {
       // позиция добавлена руками (from=null либо 'from' отсутствует в базовых строках)
       if (out.some(r => idOf(r) === String(e.toIngredientId))) continue;
-      const amount = scaleAmount(e.amountPerServing || 0);
+      // §3/V21: EXTRA — абсолют на приём (absoluteAmount); scaleAmount-фолбэк — для
+      // legacy-правок без абсолютного значения.
+      const amount = e.absoluteAmount ?? scaleAmount(e.amountPerServing || 0);
       const product = products.find(pr => pr.id === String(e.toIngredientId));
       const p = priceOf(String(e.toIngredientId));
       const o = ovFor(tripId, String(e.toIngredientId));
@@ -942,9 +944,6 @@ export const mockServer = {
       removedItems[tripId] = (removedItems[tripId] || []).filter(x => x.id !== s.id);
     };
 
-    // people для EXTRA-конверсии — та же формула, что в buildCompositionResponse
-    const tripObj = trips.find(t => t.id === tripId);
-    const people = meal.peopleOverride ?? day?.peopleOverride ?? tripObj?.defaultPeople ?? 1;
     const keepScaled = new Set<string>();
     const keepExtra = new Set<string>();
     const keepExcluded = new Set<string>();
@@ -1076,15 +1075,17 @@ export const mockServer = {
         // per-serving-фолбэк для конвейера закупки; прямой absolute round-trip
         // без дрейфа округления при смене people (0,25 → 0,25, а не 0,25/6×6=0,252).
         const abs = Number(it.amount);
-        const perServing = r3(abs / people);
+        // V21-паритет с реальным бэкендом: amount_per_serving added-строки хранит
+        // АБСОЛЮТ на приём (без деления на people — SummaryService не масштабирует
+        // absolute-строки). absoluteAmount сохранён как страховка для legacy-читателей.
         // Целевой id правки — КАТАЛОЖНЫЙ ингредиент ('ing8'), а не trip-scoped снепшот
         // ('ing8::ttrip1'): composition резолвит расчёты по базовому рецепту (паритет с бэкендом).
         const targetId = editIngredientKey(ingId);
         const existing = editsOf().find(s => (s.added || s.fromIngredientId == null) && String(s.toIngredientId) === targetId);
-        if (existing) { existing.absoluteAmount = abs; existing.amountPerServing = perServing; }
+        if (existing) { existing.absoluteAmount = abs; existing.amountPerServing = abs; }
         else list.push({
           id: `sub-${substitutionSeq++}`, recipeId, fromIngredientId: null, toIngredientId: targetId,
-          amountPerServing: perServing, absoluteAmount: abs, ratio: 1, added: true, removed: false,
+          amountPerServing: abs, absoluteAmount: abs, ratio: 1, added: true, removed: false,
           mealId: String(meal.id), comment: 'EXTRA via composition',
         });
       } else if (st === 'EXCLUDED') {

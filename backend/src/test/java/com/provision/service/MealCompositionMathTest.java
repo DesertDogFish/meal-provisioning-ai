@@ -84,11 +84,12 @@ class MealCompositionMathTest {
         assertThat(lines.get(0).ingredient().getId()).isEqualTo(1L);
         // 0,12 × 1,5 = 0,18 на порцию (масштабированием людьми занимается SummaryService)
         assertThat(lines.get(0).amountPerServing()).isEqualByComparingTo("0.180");
+        assertThat(lines.get(0).absolute()).isFalse();
     }
 
     @Test
-    @DisplayName("applyEdits: EXTRA хранится как абсолют на приём — делится на people обратно")
-    void applyEditsConvertsExtraAbsoluteToPerServing() {
+    @DisplayName("applyEdits: EXTRA хранит АБСОЛЮТ на приём и помечается absolute (V21, spec §3)")
+    void applyEditsMarksExtraAsAbsolute() {
         Recipe recipe = new Recipe();
         recipe.setId(10L);
         recipe.setBaseServings(4);
@@ -97,15 +98,19 @@ class MealCompositionMathTest {
         extra.setToIngredient(pcsIng);
         extra.setFromIngredient(null);
         extra.setAdded(true);
-        extra.setAmountPerServing(new BigDecimal("0.0625")); // 0,25 абс / 4 чел (как пишет MealCompositionService)
+        // V21: amount_per_serving added-строки = абсолют на приём (0.25), без деления на people.
+        extra.setAmountPerServing(new BigDecimal("0.25"));
 
         TripIngredientEditService svc = new TripIngredientEditService(null, null);
         List<TripIngredientEditService.EffectiveLine> lines = svc.applyEdits(
                 1L, recipe, List.of(), Map.of(), List.of(extra));
 
         assertThat(lines).hasSize(1);
-        // EffectiveLine.amountPerServing = 0,0625 → в SummaryService ×4 чел = 0,25 на приём (фикс.)
-        assertThat(lines.get(0).amountPerServing()).isEqualByComparingTo("0.0625");
+        // SummaryService не масштабирует absolute-строки: на приём идёт ровно 0.25
+        // независимо от people и baseServings (старая схема abs/people/base ломала
+        // равенство «состав == закупка» при baseServings != 1).
+        assertThat(lines.get(0).amountPerServing()).isEqualByComparingTo("0.25");
+        assertThat(lines.get(0).absolute()).isTrue();
     }
 
     @Test

@@ -147,6 +147,11 @@ public class TripService {
         Recipe recipe = recipeRepository.findById(request.recipeId())
                 .orElseThrow(() -> new NotFoundException("Recipe not found"));
 
+        // Trip-scoped рецепт ЧУЖОГО похода для этого похода не существует (привязка V20).
+        if (recipe.getTripId() != null && !recipe.getTripId().equals(tripId)) {
+            throw new NotFoundException("Recipe not found");
+        }
+
         // V20: поход работает со снепшотом блюда, а не с глобальным справочником —
         // правки/удаления каталога и цен больше не затрагивают спланированный поход.
         recipe = snapshotService.snapshotRecipeForTrip(trip, recipe);
@@ -175,6 +180,17 @@ public class TripService {
 
         Recipe recipe = recipeRepository.findById(request.recipeId())
                 .orElseThrow(() -> new NotFoundException("Recipe not found"));
+
+        // Trip-scoped рецепт ЧУЖОГО похода для этого похода не существует (привязка V20).
+        if (recipe.getTripId() != null && !recipe.getTripId().equals(tripId)) {
+            throw new NotFoundException("Recipe not found");
+        }
+
+        // V20: как и addMeal — приём всегда указывает на trip-снепшот рецепта.
+        // Без этого редактирование приёма (смена people/блюда из пикера) возвращало
+        // meal на ГЛОБАЛЬНЫЙ каталог: изоляция похода ломалась, а правки состава
+        // (привязаны к снепшот-рецепту) молча переставали применяться.
+        recipe = snapshotService.snapshotRecipeForTrip(trip, recipe);
 
         meal.setMealType(request.mealType());
         meal.setRecipe(recipe);

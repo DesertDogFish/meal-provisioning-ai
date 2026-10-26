@@ -40,7 +40,9 @@ public class TripIngredientEditService {
      * Разворачивает список ингредиентов рецепта с учётом правок похода:
      *  - removed (to=null): позиция помечается удалённой (исключается из суммы);
      *  - замена from→to: количество переносится на 'to' × ratio, у источника — zero;
-     *  - added (from=null): новая позиция с amountPerServing.
+     *  - added (from=null): новая позиция; amountPerServing хранит АБСОЛЮТ на приём
+     *    (FORM-meal-composition-spec §3, EXTRA) — такие строки помечаются absolute=true
+     *    и НЕ масштабируются людьми/baseServings в SummaryService.
      * Возвращает плоский список строк для последующей агрегации.
      */
     public List<EffectiveLine> applyEdits(Long tripId, Recipe recipe, List<RecipeIngredient> baseLines,
@@ -51,26 +53,27 @@ public class TripIngredientEditService {
             Ingredient ing = ri.getIngredient();
             TripIngredientSubstitution edit = editsByFrom.get(ing.getId());
             if (edit == null) {
-                result.add(new EffectiveLine(ing, ri.getAmount(), null));
+                result.add(new EffectiveLine(ing, ri.getAmount(), null, false));
             } else if (isScaleInPlace(edit)) {
                 // FORM-meal-composition-spec §3: SCALED — правка количества «замена на себя»
                 // (from==to): строка остаётся одна, количество умножается на ratio.
                 BigDecimal ratio = edit.getRatio() != null ? edit.getRatio() : BigDecimal.ONE;
-                result.add(new EffectiveLine(ing, ri.getAmount().multiply(ratio), ing.getName()));
+                result.add(new EffectiveLine(ing, ri.getAmount().multiply(ratio), ing.getName(), false));
             } else if (edit.isRemoved() || edit.getToIngredient() == null) {
                 // мягкое удаление: позиция остаётся видимой (для UI), но с нулевой суммой не участвует
-                result.add(new EffectiveLine(ing, BigDecimal.ZERO, ing.getName()));
+                result.add(new EffectiveLine(ing, BigDecimal.ZERO, ing.getName(), false));
             } else {
                 // замена from→to: источник обнуляем, приёмник добавляем строкой ниже
-                result.add(new EffectiveLine(ing, BigDecimal.ZERO, ing.getName()));
+                result.add(new EffectiveLine(ing, BigDecimal.ZERO, ing.getName(), false));
                 BigDecimal ratio = edit.getRatio() != null ? edit.getRatio() : BigDecimal.ONE;
                 result.add(new EffectiveLine(edit.getToIngredient(),
-                        ri.getAmount().multiply(ratio), ing.getName()));
+                        ri.getAmount().multiply(ratio), ing.getName(), false));
             }
         }
         for (TripIngredientSubstitution a : addedLines) {
             if (a.getToIngredient() != null && a.getAmountPerServing() != null) {
-                result.add(new EffectiveLine(a.getToIngredient(), a.getAmountPerServing(), null));
+                // EXTRA: в amount_per_serving лежит абсолют на приём (V21) — без people/base-скейлинга.
+                result.add(new EffectiveLine(a.getToIngredient(), a.getAmountPerServing(), null, true));
             }
         }
         return result;
@@ -114,6 +117,11 @@ public class TripIngredientEditService {
         }
     }
 
-    /** Итоговая строка состава после применения правок. */
-    public record EffectiveLine(Ingredient ingredient, BigDecimal amountPerServing, String substitutedFromName) {}
+    /**
+     * Итоговая строка состава после применения правок.
+     * absolute=true — amountPerServing хранит АБСОЛЮТ на приём (EXTRA, V21-семантика):
+     * строка не умножается на people и не делится на baseServings.
+     */
+    public record EffectiveLine(Ingredient ingredient, BigDecimal amountPerServing,
+                                String substitutedFromName, boolean absolute) {}
 }

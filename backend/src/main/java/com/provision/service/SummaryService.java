@@ -258,11 +258,14 @@ public class SummaryService {
                         edits.subsFor(recipe.getId()), edits.addedFor(recipe.getId()));
 
                 for (TripIngredientEditService.EffectiveLine line : lines) {
-                    BigDecimal mealAmount = calculateAmountForMeal(
-                            line.amountPerServing(),
-                            recipe.getBaseServings(),
-                            mealPeople
-                    );
+                    // EXTRA (absolute) — количество на приём «как есть» (spec §3): не масштабируется.
+                    BigDecimal mealAmount = line.absolute()
+                            ? line.amountPerServing().setScale(3, RoundingMode.HALF_UP)
+                            : calculateAmountForMeal(
+                                    line.amountPerServing(),
+                                    recipe.getBaseServings(),
+                                    mealPeople
+                            );
 
                     ShoppingAggregation agg = dayAgg.computeIfAbsent(line.ingredient().getId(), k ->
                             new ShoppingAggregation(line.ingredient()));
@@ -481,11 +484,14 @@ public class SummaryService {
                                 edits.subsFor(recipe.getId()), edits.addedFor(recipe.getId()));
 
                         for (TripIngredientEditService.EffectiveLine line : lines) {
-                            BigDecimal mealAmount = calculateAmountForMeal(
-                                    line.amountPerServing(),
-                                    recipe.getBaseServings(),
-                                    mealPeople
-                            );
+                            // EXTRA (absolute) — количество на приём «как есть» (spec §3).
+                            BigDecimal mealAmount = line.absolute()
+                                    ? line.amountPerServing().setScale(3, RoundingMode.HALF_UP)
+                                    : calculateAmountForMeal(
+                                            line.amountPerServing(),
+                                            recipe.getBaseServings(),
+                                            mealPeople
+                                    );
 
                             ShoppingAggregation agg = dayAggregation.computeIfAbsent(line.ingredient().getId(), k ->
                                     new ShoppingAggregation(line.ingredient()));

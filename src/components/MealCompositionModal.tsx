@@ -76,7 +76,7 @@ export default function MealCompositionModal({
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<Record<string, RowDraft>>({});
-  const [extraRows, setExtraRows] = useState<Array<{ ingredientId: string; name: string; unit: UnitOfMeasure; amount: number }>>([]);
+  const [extraRows, setExtraRows] = useState<Array<{ ingredientId: string; name: string; unit: UnitOfMeasure; amount: number; categoryId?: string }>>([]);
   const [substitutes, setSubstitutes] = useState<SubstDraft[]>([]);
   const [saving, setSaving] = useState(false);
   const [saveProblem, setSaveProblem] = useState<ProblemDetail | null>(null);
@@ -90,6 +90,10 @@ export default function MealCompositionModal({
   const [mergeAsk, setMergeAsk] = useState<{ ingredientId: string; current: number; unit: UnitOfMeasure; wanted: number } | null>(null);
   // инлайн-предложение «добавить как новый продукт», если поиска в составе нет (§2.2)
   const [addAsk, setAddAsk] = useState<{ name: string; unit: UnitOfMeasure; amount: number } | null>(null);
+  // Категория нового продукта (свободный ввод): при сохранении продукт создаётся
+  // в справочнике через POST /admin/products — categoryId обязателен (ProductRequest).
+  const [categories, setCategories] = useState<Array<{ id: string; name: string }>>([]);
+  const [addAskCategory, setAddAskCategory] = useState<string>('');
   // инлайн-раскрытие замены (§2.2)
   const [substOpenFor, setSubstOpenFor] = useState<string | null>(null);
   const [substTarget, setSubstTarget] = useState<string>('');
@@ -127,6 +131,14 @@ export default function MealCompositionModal({
             .filter((p: Ingredient) => p.enabled !== false)
             .map((p: Ingredient) => ({ ...p, category: categoryName(p) as Ingredient['category'] }))
         );
+      })
+      .catch(() => {});
+    // Категории справочника — для создания продукта из свободного ввода (§2.2, save-flow).
+    api.get<any>('/product-categories')
+      .then((res) => {
+        if (cancelled) return;
+        const list = Array.isArray(res) ? res : (res?.content ?? []);
+        setCategories(list.map((c: any) => ({ id: String(c.id), name: String(c.name ?? '') })));
       })
       .catch(() => {});
     return () => { cancelled = true; };
@@ -297,7 +309,10 @@ export default function MealCompositionModal({
   const applyFreeTextAdd = () => {
     if (!addAsk) return;
     const id = `free-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-    setExtraRows((prev) => [...prev, { ingredientId: id, name: addAsk.name, unit: addAsk.unit, amount: addAsk.amount }]);
+    setExtraRows((prev) => [...prev, {
+      ingredientId: id, name: addAsk.name, unit: addAsk.unit, amount: addAsk.amount,
+      categoryId: addAskCategory || categories[0]?.id,
+    }]);
     setAddSelected(''); setAddAmount(''); setAddQuery(''); setMergeAsk(null); setAddAsk(null);
   };
 
@@ -332,10 +347,12 @@ export default function MealCompositionModal({
   };
 
   // ===== Коммит: один batch PUT (§2.2) =====
-  const buildPutBody = (): CompositionPutRequest => {
+  const buildPutBody = (idMap: Map<string, string>): CompositionPutRequest => {
     const items: CompositionPutRequest['items'] = [];
     for (const row of rows) {
-      const ingId = String(row.ingredientId);
+      // Черновые free-id (свободный ввод) к этому моменту уже отображены в реальные
+      // id справочника (resolveFreeRows) — на сервер уходят только числовые id.
+      const ingId = idMap.get(String(row.ingredientId)) ?? String(row.ingredientId);
       const d = row.draft;
       if (d?.state === 'EXCLUDED') { items.push({ ingredientId: ingId, state: 'EXCLUDED' }); continue; }
       if (d?.state === 'SCALED') {
@@ -359,12 +376,75 @@ export default function MealCompositionModal({
     return { items, substitutions: subs };
   };
 
+  /**
+   * §2.2 (save-flow): черновые позиции свободного ввода (id «free-…») НЕЛЬЗЯ отправлять
+   * на сервер — PUT composition принимает только числовые id справочника (иначе 400/500).
+   * Резолвим каждый free-id в реальный продукт: check-name → существующий id; иначе
+   * создание POST /admin/products с выбранной категорией (доступно админу).
+   * Возвращает карту free-id → реальный id, либо null (ошибка уже показана в saveProblem).
+   */
+  const resolveFreeRows = async (): Promise<Map<string, string> | null> => {
+    const idMap = new Map<string, string>();
+    const freeRows = extraRows.filter((e) => !/^\d+$/.test(String(e.ingredientId)));
+    if (!freeRows.length) return idMap;
+    if (!isAdmin) {
+      setSaveProblem({
+        status: 400, title: 'Новый продукт не сохранён', type: 'about:blank',
+        detail: `«${freeRows.map((r) => r.name).join('», «')}» нет в справочнике. Добавлять новые продукты может только администратор — уберите позицию или попросите админа завести продукт.`,
+      });
+      return null;
+    }
+    for (const row of freeRows) {
+      try {
+        const chk = await api.get<any>(
+          `/admin/products/check-name?name=${encodeURIComponent(row.name)}&unit=${encodeURIComponent(row.unit)}`
+        );
+        if (chk?.duplicate && chk?.existingId != null) {
+          if (chk.sameUnit === false) {
+            setSaveProblem({
+              status: 409, title: 'Новый продукт не сохранён', type: 'about:blank',
+              detail: `Продукт «${row.name}» уже есть в справочнике с другой единицей измерения — выберите существующий продукт из списка.`,
+            });
+            return null;
+          }
+          idMap.set(row.ingredientId, String(chk.existingId));
+          continue;
+        }
+        const categoryId = row.categoryId || categories[0]?.id;
+        if (!categoryId) {
+          setSaveProblem({
+            status: 400, title: 'Новый продукт не сохранён', type: 'about:blank',
+            detail: `Для продукта «${row.name}» не выбрана категория и справочник категорий пуст.`,
+          });
+          return null;
+        }
+        const created = await api.post<any>('/admin/products', {
+          name: row.name, unit: row.unit, categoryId: Number(categoryId),
+        });
+        if (created?.id == null) throw { status: 500, detail: 'Сервер не вернул id созданного продукта' };
+        idMap.set(row.ingredientId, String(created.id));
+      } catch (err: any) {
+        const e = err?.error ?? err;
+        setSaveProblem({
+          status: e?.status ?? 500,
+          title: e?.title ?? `Не удалось завести продукт «${row.name}» в справочнике`,
+          detail: e?.detail ?? e?.message ?? String(err),
+          type: e?.type ?? 'about:blank',
+        });
+        return null;
+      }
+    }
+    return idMap;
+  };
+
   const save = async () => {
     if (saving) return;
     setSaving(true);
     setSaveProblem(null);
     try {
-      const fresh = await putMealComposition(tripId, mealId, buildPutBody());
+      const idMap = await resolveFreeRows();
+      if (idMap == null) return; // проблема уже показана
+      const fresh = await putMealComposition(tripId, mealId, buildPutBody(idMap));
       setServer(fresh);
       setDrafts({});
       setExtraRows([]);
@@ -624,6 +704,26 @@ export default function MealCompositionModal({
               <div className="mt-2 rounded-lg p-3 text-sm flex flex-wrap items-center gap-3" data-testid="add-new-confirm"
                    style={{ background: 'color-mix(in srgb, var(--w1, #0ea5e9) 10%, transparent)', color: 'var(--text)' }}>
                 в составе нет продукта «{addAsk.name}» — добавить его позицией {fmtQty(addAsk.amount, addAsk.unit)}?
+                {isAdmin ? (
+                  <label className="flex items-center gap-1.5" style={{ color: 'var(--muted)' }}>
+                    Категория:
+                    <select
+                      data-testid="add-new-category"
+                      className="input py-1 text-sm"
+                      style={{ width: 'auto' }}
+                      value={addAskCategory || categories[0]?.id || ''}
+                      onChange={(ev) => setAddAskCategory(ev.target.value)}
+                    >
+                      {categories.map((c) => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      ))}
+                    </select>
+                  </label>
+                ) : (
+                  <span style={{ color: 'var(--muted)' }}>
+                    (новый продукт сможет завести только администратор — при сохранении)
+                  </span>
+                )}
                 <Button variant="primary" size="sm" onClick={applyFreeTextAdd}>Да, добавить</Button>
                 <Button variant="ghost" size="sm" onClick={() => setAddAsk(null)}>Отмена</Button>
               </div>
