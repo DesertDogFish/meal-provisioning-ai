@@ -30,6 +30,8 @@ export default function TripsPage() {
   const navigate = useNavigate();
   const { showError, showSuccess } = useToast();
   const [showCreate, setShowCreate] = useState(false);
+  // U36 (список 26.10): карандаш открывает редактирование похода (имя/описание/даты/люди)
+  const [editingTrip, setEditingTrip] = useState<Trip | null>(null);
   const [trips, setTrips] = useState<Trip[]>([]);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -82,6 +84,41 @@ export default function TripsPage() {
       await loadData();
     } catch (err: any) {
       showError(err.detail || 'Ошибка создания похода');
+    }
+  };
+
+  /** U36: сохранение правок похода. Смена дат стирает план по дням — спрашиваем
+   * подтверждение с перечислением того, что будет потеряно (и всё равно даём
+   * возможность удалить эти данные — «что поделать»). */
+  const handleUpdate = async (formData: TripFormData) => {
+    const trip = editingTrip;
+    if (!trip) return;
+    const datesChanged =
+      formData.startDate !== trip.startDate || formData.endDate !== trip.endDate;
+    if (datesChanged) {
+      const daysCount = trip.days?.length ?? 0;
+      const mealsCount = (trip.days ?? []).reduce(
+        (acc: number, d: any) => acc + (d.meals?.length ?? 0), 0);
+      const ok = window.confirm(
+        `Смена дат пересоздаст дни похода: план по дням будет стёрт` +
+        (daysCount > 0 ? ` (${daysCount} дн., ${mealsCount} приёмов пищи, правки состава и ручные позиции)` : '') +
+        `. Продолжить?`
+      );
+      if (!ok) return;
+    }
+    try {
+      await api.put(`/trips/${trip.id}`, {
+        name: formData.name,
+        startDate: formData.startDate,
+        endDate: formData.endDate,
+        defaultPeople: formData.defaultPeople,
+        notes: formData.notes || undefined,
+      });
+      setEditingTrip(null);
+      showSuccess('Поход обновлён');
+      await loadData();
+    } catch (err: any) {
+      showError(err?.detail || err?.error?.detail || 'Не удалось обновить поход');
     }
   };
 
@@ -140,6 +177,23 @@ export default function TripsPage() {
         />
       )}
 
+      {/* U36: Edit modal — имя, описание, даты и люди; смена дат — через предупреждение */}
+      {editingTrip && (
+        <TripForm
+          title="Редактирование похода"
+          submitLabel="Сохранить"
+          initial={{
+            name: editingTrip.name,
+            startDate: editingTrip.startDate,
+            endDate: editingTrip.endDate,
+            defaultPeople: editingTrip.defaultPeople,
+            notes: editingTrip.notes ?? '',
+          }}
+          onSubmit={handleUpdate}
+          onCancel={() => setEditingTrip(null)}
+        />
+      )}
+
       {/* Trips list */}
       {myTrips.length === 0 ? (
         <div className="rounded-xl p-12 text-center" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
@@ -182,7 +236,9 @@ export default function TripsPage() {
                 </div>
                 <div className="flex items-center gap-2 ml-4">
                   <button
-                    onClick={() => navigate(`/trips/${trip.id}`)}
+                    onClick={() => setEditingTrip(trip)}
+                    aria-label={`Редактировать поход: ${trip.name}`}
+                    title="Редактировать название, описание, даты"
                     className="p-2 rounded-lg transition-colors"
                     style={{ color: 'var(--muted)' }}
                     onMouseEnter={(e) => {

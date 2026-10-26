@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Pencil, Plus, Search, Trash2, Utensils, X } from 'lucide-react';
 import { MealType } from '../types';
 import { formatAmount } from '../utils/calculations';
@@ -30,6 +31,9 @@ const mealTypeLabels: Record<MealType, string> = {
 
 export default function RecipesPage() {
   const { showError, showSuccess } = useToast();
+  // U37 (список 26.10): переход из похода «Изменить блюдо в справочнике» ведёт на
+  // /recipes?edit=<id> — редактор должен открыться СРАЗУ, а не искать блюдо руками.
+  const [searchParams, setSearchParams] = useSearchParams();
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -98,6 +102,21 @@ export default function RecipesPage() {
   useEffect(() => {
     loadRecipes();
   }, [loadRecipes]);
+
+  // U37: авто-открытие редактора по ?edit=<recipeId> после загрузки каталога.
+  // Параметр чистим сразу (replace), чтобы повторный рендер не открывал модалку вновь.
+  useEffect(() => {
+    const editId = searchParams.get('edit');
+    if (!editId || loading || recipes.length === 0) return;
+    const base = editId.includes('::t') ? editId.split('::t')[0] : editId;
+    const target = recipes.find(r => String(r.id) === editId)
+      ?? recipes.find(r => String(r.id) === base)
+      ?? recipes.find(r => String((r as any).snapshotOf ?? '') === editId);
+    setSearchParams({}, { replace: true });
+    if (target) openEdit(target);
+    else showError('Блюдо для редактирования не найдено в каталоге');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, recipes, loading]);
 
   // Получить уникальные категории
   const categories = useMemo(() => {

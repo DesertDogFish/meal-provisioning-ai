@@ -82,6 +82,25 @@ let substitutionSeq = 1;
 const removedItems: Record<string, MockSubstitution[]> = {};
 let removedSeq = 1;
 
+/**
+ * U40 (список 26.10) / PLAN R3: ручные позиции закупки — продукты к дню или ко
+ * всему походу ВНЕ блюд (антисептик, аптечка…). dayId=null → на весь поход.
+ * Backend-задача R3: миграция `trip_manual_items` + контроллер с тем же контрактом.
+ */
+interface MockManualItem {
+  id: string;
+  tripId: string;
+  dayId: string | null;
+  ingredientId: string;
+  ingredientName: string;
+  unit: string;
+  amount: number;
+  note?: string;
+  createdAt: string;
+}
+const manualItems: Record<string, MockManualItem[]> = {};
+let manualSeq = 1;
+
 /** Все пер-походные правки состава (замещения + удаления) одним списком. */
 function allTripEdits(tripId: string): MockSubstitution[] {
   return [...(substitutions[tripId] || []), ...(removedItems[tripId] || [])];
@@ -1502,6 +1521,96 @@ export const mockServer = {
       return trips;
     }
     
+    // PUT /trips/:id — U36 (список 26.10): полноценное редактирование похода.
+    // Имя/заметки/люди — всегда; смена дат — с перегенерацией дней (план по дням
+    // стирается, состав-правки похода снимаются). Backend-задача: снять запрет
+    // «Cannot change trip dates» в TripService.updateTrip и повторить эту семантику.
+    if (parts.length === 2 && method === 'PUT') {
+      const tripId = parts[1];
+      const trip = trips.find(t => t.id === tripId);
+      if (!trip) {
+        throw { status: 404, message: 'Not found', detail: `Trip ${tripId} not found` } as any;
+      }
+      const datesChanged =
+        (body?.startDate != null && body.startDate !== trip.startDate) ||
+        (body?.endDate != null && body.endDate !== trip.endDate);
+      if (body?.name != null) trip.name = String(body.name);
+      if (body?.notes !== undefined) trip.notes = body.notes == null ? undefined : String(body.notes);
+      if (body?.defaultPeople != null) trip.defaultPeople = Number(body.defaultPeople) || trip.defaultPeople;
+      if (datesChanged) {
+        trip.startDate = String(body.startDate ?? trip.startDate);
+        trip.endDate = String(body.endDate ?? trip.endDate);
+        // перегенерация дней (паритет с createTrip): старый план стирается
+        const days: any[] = [];
+        const start = new Date(`${trip.startDate}T00:00:00`);
+        const end = new Date(`${trip.endDate}T00:00:00`);
+        for (let d = new Date(start), i = 0; d <= end; d.setDate(d.getDate() + 1), i++) {
+          days.push({
+            id: `d-${trip.id}-${i}`,
+            tripId: trip.id,
+            dayDate: d.toISOString().slice(0, 10),
+            meals: [],
+          });
+        }
+        (trip as any).days = days;
+        // правки состава привязаны к старым приёмам — снимаем, чтобы не «воскрешали» позиции
+        delete substitutions[trip.id];
+        delete removedItems[trip.id];
+        delete manualItems[trip.id];
+      }
+      return trip;
+    }
+
+    // U40 (список 26.10) / PLAN R3: ручные позиции закупки (продукты к дню/походу).
+    // GET/POST /trips/:id/manual-items
+    if (parts.length === 3 && parts[2] === 'manual-items' && (method === 'GET' || method === 'POST')) {
+      const tripId = parts[1];
+      const trip = trips.find(t => t.id === tripId);
+      if (!trip) {
+        throw { status: 404, message: 'Not found', detail: `Trip ${tripId} not found` } as any;
+      }
+      const list = manualItems[tripId] || (manualItems[tripId] = []);
+      if (method === 'GET') return list;
+      const ingredientId = body?.ingredientId == null ? null : String(body.ingredientId);
+      const amount = Number(body?.amount);
+      const product = ingredientId ? products.find(p => p.id === ingredientId) : null;
+      if (!product) {
+        throw { status: 404, message: 'Not found', detail: `Ingredient ${ingredientId} not found` } as any;
+      }
+      if (!(amount > 0)) {
+        throw { status: 400, message: 'Bad request', detail: 'amount must be > 0' } as any;
+      }
+      const dayId = body?.dayId == null || body.dayId === '' ? null : String(body.dayId);
+      if (dayId != null && !(trip.days || []).some((d: any) => d.id === dayId)) {
+        throw { status: 404, message: 'Not found', detail: `Trip day ${dayId} not found` } as any;
+      }
+      const created: MockManualItem = {
+        id: `mi-${manualSeq++}`,
+        tripId,
+        dayId,
+        ingredientId: product.id,
+        ingredientName: product.name,
+        unit: product.unit,
+        amount,
+        note: body?.note ? String(body.note) : undefined,
+        createdAt: new Date().toISOString(),
+      };
+      list.push(created);
+      return created;
+    }
+
+    // DELETE /trips/:id/manual-items/:itemId
+    if (parts.length === 4 && parts[2] === 'manual-items' && method === 'DELETE') {
+      const tripId = parts[1];
+      const list = manualItems[tripId] || [];
+      const idx = list.findIndex(x => x.id === parts[3]);
+      if (idx === -1) {
+        throw { status: 404, message: 'Not found', detail: `Manual item ${parts[3]} not found` } as any;
+      }
+      list.splice(idx, 1);
+      return null;
+    }
+
     // GET /trips/:id
     if (parts.length === 2 && method === 'GET') {
       const tripId = parts[1];
@@ -1708,9 +1817,31 @@ export const mockServer = {
       if (!trips.find(t => t.id === tripId)) {
         throw { status: 404, message: 'Not found', detail: `Trip ${tripId} not found` };
       }
+      // U30 (список 26.10): обогащение имён/единиц — паритет с backend
+      // SubstitutionResponse (recipeName/fromIngredientName/toIngredientName),
+      // плюс mock-поля absoluteAmount/mealId/scale для overlay меню и EXTRA-количеств.
+      const nameOf = (id: string | null): { name: string | null; unit: string | null } => {
+        if (id == null) return { name: null, unit: null };
+        const p = products.find(x => x.id === String(id))
+          ?? products.find(x => x.id === editIngredientKey(id));
+        return { name: p?.name ?? null, unit: p?.unit ?? null };
+      };
+      const enrich = (s: MockSubstitution) => {
+        const from = nameOf(s.fromIngredientId);
+        const to = nameOf(s.toIngredientId);
+        const rec = recipes.find(r => editRecipeKey(r.id) === editRecipeKey(s.recipeId));
+        return {
+          ...s,
+          recipeName: rec?.name ?? null,
+          fromIngredientName: from.name,
+          toIngredientName: to.name,
+          fromUnit: from.unit,
+          toUnit: to.unit,
+        };
+      };
       return [
-        ...(substitutions[tripId] || []),
-        ...(removedItems[tripId] || []),
+        ...(substitutions[tripId] || []).map(enrich),
+        ...(removedItems[tripId] || []).map(enrich),
       ];
     }
 

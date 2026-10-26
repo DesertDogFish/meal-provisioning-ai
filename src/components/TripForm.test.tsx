@@ -213,3 +213,46 @@ describe('humanize единиц (CR-2) — интеграция, использ�
     expect(humanize(3, 'PACK')).toBe('3 уп');
   });
 });
+
+// ---------- U36 (список 26.10): режим редактирования похода ----------
+
+describe('TripForm — edit-режим (U36)', () => {
+  it('initial заполняет поля; заголовок и кнопка — редактирование', () => {
+    const { startInput, endInput } = renderTripForm({
+      title: 'Редактирование похода',
+      submitLabel: 'Сохранить',
+      initial: {
+        name: 'Поход на Алтай',
+        startDate: '2026-07-01',
+        endDate: '2026-07-05',
+        defaultPeople: 6,
+        notes: 'старая строка',
+      },
+    });
+    expect(screen.getByText('Редактирование похода')).toBeTruthy();
+    expect((screen.getByLabelText('Название') as HTMLInputElement).value).toBe('Поход на Алтай');
+    expect((screen.getByLabelText('Количество человек') as HTMLInputElement).value).toBe('6');
+    expect((screen.getByLabelText('Заметки') as HTMLInputElement).value).toBe('старая строка');
+    expect(startInput().value).toBe('2026-07-01');
+    expect(endInput().value).toBe('2026-07-05');
+    expect(screen.getByRole('button', { name: 'Сохранить' })).toBeTruthy();
+  });
+
+  it('submit отправляет изменённые значения (включая новые даты — для предупреждения родителем)', async () => {
+    const onSubmit = vi.fn();
+    const { setStartDate, setEndDate } = renderTripForm({
+      submitLabel: 'Сохранить',
+      initial: { name: 'Поход', startDate: '2026-07-01', endDate: '2026-07-05', defaultPeople: 4, notes: '' },
+      onSubmit,
+    });
+    setStartDate('2026-08-01');
+    setEndDate('2026-08-03');
+    fireEvent.change(screen.getByLabelText('Название'), { target: { value: 'Поход v2' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Сохранить' }));
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    const data: TripFormData = onSubmit.mock.calls[0][0];
+    expect(data.name).toBe('Поход v2');
+    expect(data.startDate).toBe('2026-08-01');
+    expect(data.endDate).toBe('2026-08-03');
+  });
+});

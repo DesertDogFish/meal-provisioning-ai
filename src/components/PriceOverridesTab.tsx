@@ -2,8 +2,9 @@ import { Button } from './Button';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useToast } from './ToastProvider';
 import { Download, X } from 'lucide-react';
-import { formatAmount, calculateShoppingList, calculateDayShopping } from '../utils/calculations';
-import { formatPrice, formatRub, unitShortLabel } from '../utils/format'; // Release-1.0: единый формат чисел/единиц
+import { formatAmount, calculateShoppingList, calculateDayShopping, realTripPeople } from '../utils/calculations';
+import { formatPrice, formatRub, unitShortLabel, categoryName } from '../utils/format'; // Release-1.0: единый формат чисел/единиц
+import { compareRu } from '../utils/rowSort'; // U41: алфавитная сортировка
 import { mealsWord } from '../utils/text';
 import { NumberField } from './NumberField';
 import Modal from './Modal';
@@ -238,8 +239,58 @@ export default function PriceOverridesTab({ tripId }: Props) {
         overridden: ov != null,
         hasPlannedPrice: it.hasPrice,
       };
-    });
+    })
+    // U41: чек и закупка — по алфавиту (иначе длинный список невозможно вводить)
+    .sort((a, b) => compareRu(a.ingredientName, b.ingredientName));
   }, [trip, recipesMap, prices, draftOverrides]);
+
+  // ===== U41: категории продуктов для группировки чека =====
+  // Best effort: справочник продуктов (mock/admin) + вложенные ingredient-объекты
+  // trip-рецептов; фолбэк — «Прочее».
+  const [productCats, setProductCats] = useState<Record<string, string>>({});
+  useEffect(() => {
+    let cancelled = false;
+    api.get<any>('/admin/products', { params: { size: '1000' } })
+      .then((res) => {
+        if (cancelled) return;
+        const list = Array.isArray(res) ? res : (res?.content ?? []);
+        const map: Record<string, string> = {};
+        for (const p2 of list) map[String(p2.id)] = categoryName(p2) || 'Прочее';
+        setProductCats(map);
+      })
+      .catch(() => { /* не-админ в real-режиме — останутся категории из рецептов */ });
+    return () => { cancelled = true; };
+  }, []);
+
+  const categoryOf = useMemo(() => {
+    const m: Record<string, string> = {};
+    for (const r of allRecipes) {
+      for (const ri of ((r as any).ingredients || [])) {
+        const ing = ri?.ingredient ?? ri;
+        const iid = String(ri?.ingredientId ?? ing?.id ?? '');
+        const cat = categoryName(ing) || (typeof ri?.category === 'string' ? ri.category : '');
+        if (iid && cat) m[iid] = cat;
+      }
+    }
+    return { ...m, ...productCats };
+  }, [allRecipes, productCats]);
+
+  /** U41: группы чека — категории по алфавиту («Прочее» в конце), внутри алфавит. */
+  const checkGroups = useMemo(() => {
+    const groups = new Map<string, ShoppingItem[]>();
+    for (const it of shoppingItems) {
+      const cat = categoryOf[String(it.ingredientId)] || 'Прочее';
+      const list = groups.get(cat) ?? [];
+      list.push(it);
+      groups.set(cat, list);
+    }
+    const cats = [...groups.keys()].sort((a, b) => {
+      if (a === 'Прочее') return 1;
+      if (b === 'Прочее') return -1;
+      return compareRu(a, b);
+    });
+    return cats.map(c => ({ category: c, items: groups.get(c)! }));
+  }, [shoppingItems, categoryOf]);
 
   const dayShopping = useMemo<DayShopping[]>(() => {
     if (!trip) return [];
@@ -322,7 +373,10 @@ export default function PriceOverridesTab({ tripId }: Props) {
     );
   }
 
-  const defaultPeople = trip.defaultPeople || 1;
+  // U33/U34: «на человека» — по РЕАЛЬНОМУ количеству людей (среднее эффективных
+  // людей по дням, peopleOverride учитывается), подписи «делим на defaultPeople» убраны.
+  const realPeople = Math.max(1, realTripPeople(trip as any));
+  const realPeopleLabel = Number.isInteger(realPeople) ? String(realPeople) : realPeople.toLocaleString('ru-RU', { maximumFractionDigits: 1 });
   const totalPersonMeals = trip.days?.reduce((acc: number, d: TripDay) => 
     acc + (d.meals?.reduce((mealAcc: number, m: TripMeal) => mealAcc + (m.peopleOverride || d.peopleOverride || trip.defaultPeople || 1), 0) || 0)
   , 0) || 1;
@@ -549,19 +603,20 @@ export default function PriceOverridesTab({ tripId }: Props) {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="rounded-xl p-4" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
             <b style={{ color: 'var(--text)' }}>На одного человека</b>
+            {/* U34: никакой технической «кухни» — только результат и понятный контекст */}
             <p style={{ color: 'var(--muted)', fontSize: '12px', marginTop: '4px' }}>
-              делим на defaultPeople = {defaultPeople}
+              {realPeopleLabel} чел. в походе
             </p>
             <div className="flex justify-between py-2 mt-2" style={{ borderTop: '1px solid var(--border)' }}>
               <span style={{ color: 'var(--muted)' }}>План</span>
               <b style={{ color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>
-                {formatRub(totalPlanned / defaultPeople)}
+                {formatRub(totalPlanned / realPeople)}
               </b>
             </div>
             <div className="flex justify-between py-2" style={{ borderTop: '1px solid var(--border)' }}>
               <span style={{ color: 'var(--muted)' }}>Факт</span>
               <b style={{ color: 'var(--w1)', fontVariantNumeric: 'tabular-nums' }}>
-                {formatRub(totalActual / defaultPeople)}
+                {formatRub(totalActual / realPeople)}
               </b>
             </div>
           </div>
@@ -569,7 +624,7 @@ export default function PriceOverridesTab({ tripId }: Props) {
           <div className="rounded-xl p-4" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
             <b style={{ color: 'var(--text)' }}>На один человеко-приём</b>
             <p style={{ color: 'var(--muted)', fontSize: '12px', marginTop: '4px' }}>
-              делим на {totalPersonMeals} {mealsWord(totalPersonMeals)}
+              {totalPersonMeals} {mealsWord(totalPersonMeals)} за поход
             </p>
             <div className="flex justify-between py-2 mt-2" style={{ borderTop: '1px solid var(--border)' }}>
               <span style={{ color: 'var(--muted)' }}>План</span>
@@ -607,25 +662,35 @@ export default function PriceOverridesTab({ tripId }: Props) {
             <p style={{ color: 'var(--muted)', fontSize: '12px', margin: 'var(--sp-1) 0 var(--sp-4)' }}>
               Фактические цены за единицу (₽/кг, ₽/шт и т.д. — см. подпись в поле). Пусто = «= план».
             </p>
-            <div className="flex flex-col gap-3">
-              {shoppingItems.map(item => (
-                <div key={item.ingredientId} className="flex gap-3 items-center">
-                  <span style={{ flex: 1, fontSize: '13px', color: 'var(--text)' }}>
-                    {item.ingredientName}
-                    <span style={{ color: 'var(--muted)' }}> · {formatAmount(item.totalAmount, item.unit)}</span>
-                  </span>
-                  <span style={{ color: 'var(--muted)', fontSize: '12px', fontVariantNumeric: 'tabular-nums' }}>
-                    план {formatPrice(item.plannedUnitPrice)}
-                  </span>
-                  <NumberField
-                    size="sm"
-                    value={draftOverrides[item.ingredientId]?.price ?? item.actualUnitPrice ?? null}
-                    stepRef={item.plannedUnitPrice}
-                    placeholder={`${formatAmount(item.totalAmount, item.unit)} × ${priceUnitSuffix(item.unit)}`}
-                    onCommit={v => commitActualPrice(item, v)}
-                    testId={`modal-input-${item.ingredientId}`}
-                    ariaLabel={`Фактическая цена за единицу (${unitShortLabel(item.unit)}): ${item.ingredientName}, объём позиции ${formatAmount(item.totalAmount, item.unit)}`}
-                  />
+            {/* U41: чек разбит по категориям (алфавит), внутри категории — алфавит */}
+            <div className="flex flex-col gap-4">
+              {checkGroups.map(group => (
+                <div key={group.category}>
+                  <p className="text-xs font-bold mb-2 px-1 uppercase tracking-wide" style={{ color: 'var(--w1)' }}>
+                    {group.category}
+                  </p>
+                  <div className="flex flex-col gap-3">
+                    {group.items.map(item => (
+                      <div key={item.ingredientId} className="flex gap-3 items-center">
+                        <span style={{ flex: 1, fontSize: '13px', color: 'var(--text)' }}>
+                          {item.ingredientName}
+                          <span style={{ color: 'var(--muted)' }}> · {formatAmount(item.totalAmount, item.unit)}</span>
+                        </span>
+                        <span style={{ color: 'var(--muted)', fontSize: '12px', fontVariantNumeric: 'tabular-nums' }}>
+                          план {formatPrice(item.plannedUnitPrice)}
+                        </span>
+                        <NumberField
+                          size="sm"
+                          value={draftOverrides[item.ingredientId]?.price ?? item.actualUnitPrice ?? null}
+                          stepRef={item.plannedUnitPrice}
+                          placeholder={`${formatAmount(item.totalAmount, item.unit)} × ${priceUnitSuffix(item.unit)}`}
+                          onCommit={v => commitActualPrice(item, v)}
+                          testId={`modal-input-${item.ingredientId}`}
+                          ariaLabel={`Фактическая цена за единицу (${unitShortLabel(item.unit)}): ${item.ingredientName}, объём позиции ${formatAmount(item.totalAmount, item.unit)}`}
+                        />
+                      </div>
+                    ))}
+                  </div>
                 </div>
               ))}
             </div>

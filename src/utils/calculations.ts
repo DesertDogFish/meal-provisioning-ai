@@ -26,6 +26,19 @@ export function getEffectivePeople(trip: Trip, day: TripDay, meal?: TripMeal): n
   return trip.defaultPeople;
 }
 
+/**
+ * U33 (список 26.10): «на одного человека» должно делиться на РЕАЛЬНОЕ количество
+ * людей, а не на defaultPeople. Реальное = среднее эффективных людей по дням
+ * (peopleOverride дня учитывается; meal-override усредняется через день).
+ * Без override'ов совпадает с defaultPeople — обратная совместимость расчётов.
+ */
+export function realTripPeople(trip: Trip): number {
+  const days = trip.days ?? [];
+  if (days.length === 0) return Math.max(1, trip.defaultPeople || 1);
+  const total = days.reduce((sum, d) => sum + getEffectivePeople(trip, d), 0);
+  return Math.max(1, total / days.length);
+}
+
 export function calculateAmountPerPerson(amount: number, baseServings: number, people: number): number {
   return (amount / baseServings) * people;
 }
@@ -89,13 +102,17 @@ export function calculateMenuByDays(trip: Trip, recipes: Map<string, any>): Menu
         mealType: meal.mealType,
         recipeName: recipe?.name || 'Unknown',
         servings: people,
+        // U30: recipeId нужен странице для сопоставления серверных правок состава
+        recipeId: meal.recipeId,
         // FIX: отключённые продукты не отражаются в меню
         ingredients: (recipe?.ingredients || [])
           .filter((ri: any) => !isIngredientDisabled(ri))
           .map((ri: any) => ({
             name: ingOf(ri).name || 'Unknown',
             amount: calculateAmountPerPerson(ri.amount, recipe.baseServings, people),
-            unit: ingOf(ri).unit || 'PCS'
+            unit: ingOf(ri).unit || 'PCS',
+            // U30: id ингредиента — для overlay серверных правок (EXTRA/SUBST/EXCLUDE)
+            ingredientId: String(ri.ingredientId ?? ri?.ingredient?.id ?? ''),
           }))
       };
     })
@@ -221,7 +238,7 @@ export function calculateDayShopping(
   });
 }
 
-export function calculatePersonSummary(trip: Trip, recipes: Map<string, any>, prices: IngredientPrice[]): { summary: PersonSummary[]; tripSummary: TripSummary } {
+export function calculatePersonSummary(trip: Trip, recipes: Map<string, any>, prices: IngredientPrice[], realPeople?: number): { summary: PersonSummary[]; tripSummary: TripSummary } {
   const shopping = calculateShoppingList(trip, recipes, prices);
   
   let totalPersonMeals = 0;
@@ -268,12 +285,16 @@ export function calculatePersonSummary(trip: Trip, recipes: Map<string, any>, pr
     }
   }
   
+  // U33 (список 26.10): «на человека» — по РЕАЛЬНОМУ количеству людей
+  // (среднее по дням с учётом peopleOverride), а не по defaultPeople.
+  const people = Math.max(1, realPeople ?? realTripPeople(trip));
+
   const personSummary: PersonSummary[] = shopping.map(item => ({
     ingredientName: item.ingredientName,
     unit: item.unit,
-    amountPerDefaultPerson: item.totalAmount / trip.defaultPeople,
+    amountPerDefaultPerson: item.totalAmount / people,
     amountPerPersonMeal: totalPersonMeals > 0 ? item.totalAmount / totalPersonMeals : 0,
-    costPerDefaultPerson: item.estimatedCost ? item.estimatedCost / trip.defaultPeople : undefined,
+    costPerDefaultPerson: item.estimatedCost ? item.estimatedCost / people : undefined,
     costPerPersonMeal: item.estimatedCost && totalPersonMeals > 0 ? item.estimatedCost / totalPersonMeals : undefined,
   }));
   
@@ -287,7 +308,7 @@ export function calculatePersonSummary(trip: Trip, recipes: Map<string, any>, pr
       hasMissingPrices: missingIngredients.length > 0,
       missingIngredients,
       totalPersonMeals,
-      costPerDefaultPerson: totalCost / trip.defaultPeople,
+      costPerDefaultPerson: totalCost / people,
       costPerPersonMeal: totalPersonMeals > 0 ? totalCost / totalPersonMeals : 0,
       caloriesPerPersonMeal: totalPersonMeals > 0 ? totalCalories / totalPersonMeals : undefined
     }

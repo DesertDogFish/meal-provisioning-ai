@@ -1,0 +1,81 @@
+/* U42 (список багов 26.10): поле поиска+дропдауна без нагромождения.
+   - иконка поиска — ВНУТРИ поля (единый контрол, а не «иконка отдельно»);
+   - вводимый текст — с нормальными отступами, не прилипает к краям/выделению;
+   - справа ОДИН элемент: ✕ (сброс выбора) ИЛИ шеврон (список), не оба сразу;
+   - фокус подсвечивает весь контрол целиком (focus-within), иконка темнеет до акцента. */
+
+.rss-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 8px 2px 12px;
+  border-radius: 12px;
+  background: var(--elev);
+  border: 1px solid var(--border);
+  cursor: text;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.rss-field:hover {
+  border-color: color-mix(in srgb, var(--w1) 45%, var(--border));
+}
+
+.rss-field:focus-within {
+  border-color: var(--w1);
+  box-shadow: 0 0 0 3px rgba(45, 212, 191, 0.18);
+}
+
+.rss-icon {
+  color: var(--muted);
+  flex-shrink: 0;
+  transition: color 0.15s ease;
+}
+
+.rss-field:focus-within .rss-icon {
+  color: var(--w1);
+}
+
+.rss-input {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text);
+  font-size: 14px;
+  padding: 10px 0;
+}
+
+.rss-input::placeholder {
+  color: var(--muted);
+  opacity: 0.75;
+}
+
+.rss-trailing {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.rss-clear {
+  display: flex;
+  padding: 5px;
+  border-radius: 8px;
+  color: var(--muted);
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.rss-clear:hover {
+  color: var(--text);
+  background: color-mix(in srgb, var(--line-strong) 30%, transparent);
+}
+
+.rss-arrow {
+  color: var(--muted);
+  transition: transform 0.15s ease;
+}
+
+.rss-arrow.rotated {
+  transform: rotate(180deg);
+}

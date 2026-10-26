@@ -20,6 +20,7 @@ import {
   calculateDayShopping,
   calculatePersonSummary,
   shoppingPlannedTotal,
+  realTripPeople,
 } from './calculations';
 
 // ---------- фикстуры ----------
@@ -239,5 +240,58 @@ describe('shoppingPlannedTotal — ОДНА формула плановой су
   it('исключённые позиции (soft-disable) не входят в сумму — KPI не спорит с «Итого»', () => {
     expect(shoppingPlannedTotal(items, new Set(['1']))).toBeCloseTo(50.4);
     expect(shoppingPlannedTotal(items, new Set(['1', '2', '3']))).toBe(0);
+  });
+});
+
+// ---------- U33 (список 26.10): «на человека» — по реальному количеству людей ----------
+
+describe('realTripPeople — реальное число людей похода (U33)', () => {
+  it('без дней и без override’ов — defaultPeople', () => {
+    expect(realTripPeople(makeTrip([]))).toBe(4);
+  });
+
+  it('без override’ов — среднее равно defaultPeople (обратная совместимость)', () => {
+    const trip = makeTrip([
+      { id: 'd1', tripId: 'trip-1', dayDate: '2026-05-01', meals: [] },
+      { id: 'd2', tripId: 'trip-1', dayDate: '2026-05-02', meals: [] },
+    ]);
+    expect(realTripPeople(trip)).toBe(4);
+  });
+
+  it('peopleOverride дней учитывается: (2+6)/2 = 4', () => {
+    const trip = makeTrip([
+      { id: 'd1', tripId: 'trip-1', dayDate: '2026-05-01', peopleOverride: 2, meals: [] },
+      { id: 'd2', tripId: 'trip-1', dayDate: '2026-05-02', peopleOverride: 6, meals: [] },
+    ]);
+    expect(realTripPeople(trip)).toBe(4);
+  });
+
+  it('override только одного дня: (3+4)/2 = 3.5', () => {
+    const trip = makeTrip([
+      { id: 'd1', tripId: 'trip-1', dayDate: '2026-05-01', peopleOverride: 3, meals: [] },
+      { id: 'd2', tripId: 'trip-1', dayDate: '2026-05-02', meals: [] },
+    ]);
+    expect(realTripPeople(trip)).toBe(3.5);
+  });
+});
+
+describe('calculatePersonSummary с реальным числом людей (U33)', () => {
+  it('day-override 2 чел.: «на человека» делится на 2, а не на defaultPeople=4', () => {
+    const day: TripDay = {
+      id: 'd1', tripId: 'trip-1', dayDate: '2026-05-01', peopleOverride: 2,
+      meals: [{ id: 'm1', tripDayId: 'd1', mealType: 'BREAKFAST', recipeId: 'r-omelet', sortOrder: 1 }],
+    };
+    const { summary, tripSummary } = calculatePersonSummary(makeTrip([day]), recipesMap, PRICES);
+    // омлет: 4 яйца/2 порции × 2 чел. = 4 шт; хлеб 0.2/2×2 = 0.2 кг
+    const egg = summary.find(s => s.ingredientName === 'Яйцо')!;
+    expect(egg.amountPerDefaultPerson).toBeCloseTo(4 / 2); // /2 чел., а не /4
+    // стоимость: яйца по цене 15 (05-01 ≥ 04-01): 4×15=60; хлеб 0.2×200=40 → итого 100
+    expect(tripSummary.costPerDefaultPerson).toBeCloseTo(100 / 2);
+  });
+
+  it('явный параметр realPeople переопределяет среднее по дням', () => {
+    const { tripSummary } = calculatePersonSummary(makeTrip([day1]), recipesMap, PRICES, 10);
+    // день без override: 4 чел. → 8 яиц ×15 = 120 + 0.4 кг хлеба ×200 = 80 → 200
+    expect(tripSummary.costPerDefaultPerson).toBeCloseTo(200 / 10);
   });
 });

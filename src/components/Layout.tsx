@@ -1,6 +1,6 @@
 import { NavLink, useNavigate } from 'react-router-dom';
-import { LogOut, Menu, Mountain, Ship } from 'lucide-react';
-import { useState, useEffect, useCallback } from 'react';
+import { ChevronUp, LogOut, Menu, Mountain, Ship } from 'lucide-react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import ApiModeBadge from './ApiModeBadge';
 import BrandMark from './BrandMark';
 import ThemeToggle from './ThemeToggle';
@@ -20,6 +20,23 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const { showError } = useToast();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  // U29: поповер профиля («Выйти» — внутри меню, а не отдельная крайняя кнопка)
+  const [profileOpen, setProfileOpen] = useState(false);
+  const profileRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!profileOpen) return;
+    const onDocDown = (e: MouseEvent) => {
+      if (profileRef.current && !profileRef.current.contains(e.target as Node)) setProfileOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setProfileOpen(false); };
+    document.addEventListener('mousedown', onDocDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDocDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [profileOpen]);
 
   const loadUser = useCallback(async () => {
     try {
@@ -65,7 +82,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     // единственный раздел походов ведёт на /dashboard, где рендерится TripsPage.
     { to: '/dashboard', label: 'Походы', icon: <Mountain size={20} /> },
     { to: '/recipes', label: 'Каталог блюд', icon: <Ship size={20} /> },
-    { to: '/errors-demo', label: 'Ошибки (демо)', icon: <Menu size={20} /> },
+    // U35 (список 26.10): «Ошибки (демо)» скрыты из навигации (роут редиректит)
     ...(isAdmin ? [
       { to: '/products', label: 'Продукты', icon: <Menu size={20} /> },
       { to: '/integrations', label: 'Интеграции', icon: <Menu size={20} /> },
@@ -117,35 +134,57 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           ))}
         </nav>
 
-        {/* Футер сайдбара: профиль, тогл темы (U17 — фиксированное предсказуемое
-            место, а не втиснут в бренд-строку) и «Выйти» — всегда в зоне видимости. */}
+        {/* Футер сайдбара. U29 (список 26.10): «Выйти» больше не торчит отдельной
+            кнопкой с краю — профиль стал меню: клик по карточке пользователя открывает
+            поповер с выходом (danger-акцент), тогл темы остался в строке. */}
         <div className="mt-auto p-4" style={{ borderTop: '1px solid var(--line)' }}>
-          <div className="flex items-center gap-3 px-4 py-2 mb-2">
-            <div className="avatar-chip">
-              {currentUser?.firstName?.[0]}{currentUser?.lastName?.[0]}
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium truncate" style={{ color: 'var(--text-1)' }}>{currentUser?.firstName} {currentUser?.lastName}</p>
-              <p className="text-xs truncate" style={{ color: 'var(--text-3)' }}>{currentUser?.email}</p>
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1 min-w-0" ref={profileRef}>
+              {profileOpen && (
+                <div
+                  role="menu"
+                  aria-label="Меню пользователя"
+                  className="absolute bottom-full left-0 right-0 mb-2 rounded-xl p-1.5 shadow-xl"
+                  style={{ background: 'var(--bg-1)', border: '1px solid var(--line)', zIndex: 'var(--z-pop)' }}
+                >
+                  <div className="px-3 py-2 mb-1" style={{ borderBottom: '1px solid var(--line)' }}>
+                    <p className="text-sm font-medium truncate" style={{ color: 'var(--text-1)' }}>{currentUser?.firstName} {currentUser?.lastName}</p>
+                    <p className="text-xs truncate" style={{ color: 'var(--text-3)' }}>{currentUser?.email}</p>
+                  </div>
+                  <button
+                    role="menuitem"
+                    onClick={handleLogout}
+                    className="flex items-center gap-3 w-full px-3 py-2 rounded-lg transition-colors text-sm"
+                    style={{ color: 'var(--danger, #ef4444)' }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = 'color-mix(in srgb, var(--danger, #ef4444) 10%, transparent)'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                  >
+                    <LogOut size={16} />
+                    <span>Выйти</span>
+                  </button>
+                </div>
+              )}
+              <button
+                type="button"
+                onClick={() => setProfileOpen(v => !v)}
+                aria-expanded={profileOpen}
+                aria-haspopup="menu"
+                aria-label="Меню пользователя"
+                className="flex items-center gap-3 w-full px-3 py-2 rounded-[12px] transition-colors"
+                style={{ color: 'var(--text-2)', background: profileOpen ? 'var(--bg-2)' : 'transparent' }}
+              >
+                <span className="avatar-chip">
+                  {currentUser?.firstName?.[0]}{currentUser?.lastName?.[0]}
+                </span>
+                <span className="flex-1 min-w-0 text-left">
+                  <span className="block text-sm font-medium truncate" style={{ color: 'var(--text-1)' }}>{currentUser?.firstName} {currentUser?.lastName}</span>
+                  <span className="block text-xs truncate" style={{ color: 'var(--text-3)' }}>Профиль</span>
+                </span>
+                <ChevronUp size={16} style={{ transform: profileOpen ? 'rotate(180deg)' : 'none', transition: 'transform 150ms', flexShrink: 0 }} />
+              </button>
             </div>
             <ThemeToggle />
           </div>
-          <button
-            onClick={handleLogout}
-            className="flex items-center gap-3 w-full px-4 py-2 rounded-[12px] transition-colors"
-            style={{ color: 'var(--text-2)' }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.color = 'var(--text-1)';
-              e.currentTarget.style.background = 'var(--bg-2)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.color = 'var(--text-2)';
-              e.currentTarget.style.background = 'transparent';
-            }}
-          >
-            <LogOut size={18} />
-            <span className="text-sm">Выйти</span>
-          </button>
         </div>
       </aside>
 
