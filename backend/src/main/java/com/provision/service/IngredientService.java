@@ -90,6 +90,8 @@ public class IngredientService {
                 .category(defaultCategory)
                 .kcalPer100g(request.kcalPer100g())
                 .pieceWeightG(request.pieceWeightG())
+                .packSize(request.packSize())
+                .roundToPacks(request.roundToPacks() != null ? request.roundToPacks() : false)
                 .build();
 
         ingredient = ingredientRepository.save(ingredient);
@@ -126,6 +128,13 @@ public class IngredientService {
         // Категория не меняется в deprecated API
         ingredient.setKcalPer100g(request.kcalPer100g());
         ingredient.setPieceWeightG(request.pieceWeightG());
+        // Fix-4: фасовка обновляется вместе с остальными полями
+        if (request.packSize() != null) {
+            ingredient.setPackSize(request.packSize());
+        }
+        if (request.roundToPacks() != null) {
+            ingredient.setRoundToPacks(request.roundToPacks());
+        }
 
         ingredient = ingredientRepository.save(ingredient);
         log.info("Updated ingredient: {}", ingredient.getName());

@@ -24,11 +24,13 @@ interface NumberFieldProps {
   size?: 'md' | 'sm';
   testId?: string;
   ariaLabel?: string;
+  /** Fix-3 (п.2): блокировка ввода (например, чек — до подтверждения закупки) */
+  disabled?: boolean;
 }
 
 export function NumberField({
   value, onCommit, stepRef, placeholder = '= план', min = 0,
-  maxDecimals = 2, minStep = 0, size = 'md', testId, ariaLabel,
+  maxDecimals = 2, minStep = 0, size = 'md', testId, ariaLabel, disabled = false,
 }: NumberFieldProps) {
   const [draft, setDraft] = useState<string>(value == null ? '' : String(value));
   useEffect(() => setDraft(value == null ? '' : String(value)), [value]);
@@ -50,12 +52,13 @@ export function NumberField({
   };
 
   return (
-    <span className={`nf nf-${size}`} data-testid={testId ? `${testId}-wrap` : undefined}>
+    <span className={`nf nf-${size}${disabled ? ' nf-disabled' : ''}`} data-testid={testId ? `${testId}-wrap` : undefined}>
       <button 
         type="button" 
         className="nf-btn" 
         aria-label="Уменьшить" 
         title={`−${step}`}
+        disabled={disabled}
         onClick={() => bump(-1)}
       >
         −
@@ -68,6 +71,7 @@ export function NumberField({
         data-testid={testId} 
         aria-label={ariaLabel} 
         placeholder={placeholder}
+        disabled={disabled}
         value={draft}
         onChange={e => setDraft(e.target.value)}
         onBlur={e => commit(e.target.value)}
@@ -88,6 +92,7 @@ export function NumberField({
         className="nf-btn" 
         aria-label="Увеличить" 
         title={`+${step}`}
+        disabled={disabled}
         onClick={() => bump(1)}
       >
         +

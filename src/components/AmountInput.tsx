@@ -122,11 +122,17 @@ export function AmountInput({
     return null;
   })();
 
-  const pad = size === 'sm' ? 'px-2 py-1' : 'px-2 py-1.5';
+  const pad = size === 'sm' ? 'px-2 py-1.5' : 'px-2 py-2';
 
   return (
-    <span className="inline-flex items-center gap-1" data-testid={testId ? `${testId}-wrap` : undefined}>
-      <span className="inline-flex items-center rounded" style={{ border: '1px solid var(--border)', background: 'var(--elev)' }}>
+    <span className="inline-flex items-center gap-1.5" data-testid={testId ? `${testId}-wrap` : undefined}>
+      {/* Fix-4 (п.4): переключатель единиц подсвечивается ПОЛНОЙ высотой — контейнер
+          items-stretch + overflow-hidden, активная кнопка тянется от верха до низа.
+          Fix-4 (п.2): единый «квадратный» радиус всех полей ввода (--r-input). */}
+      <span
+        className="inline-flex items-stretch overflow-hidden"
+        style={{ border: '1px solid var(--border)', background: 'var(--elev)', borderRadius: 'var(--r-input, 8px)' }}
+      >
         <input
           type="text"
           inputMode="decimal"
@@ -148,21 +154,21 @@ export function AmountInput({
             setText(raw);
             emit(raw, mode);
           }}
-          className={`${pad} w-20 rounded-l text-right text-sm outline-none bg-transparent`}
+          className={`${pad} w-20 text-right text-sm outline-none bg-transparent`}
           style={{ color: 'var(--text)' }}
         />
         {weight ? (
-          <span className="flex items-stretch" style={{ borderLeft: '1px solid var(--border)' }}>
+          <span className="flex flex-col items-stretch" style={{ borderLeft: '1px solid var(--border)' }}>
             <button
               type="button"
               aria-label={`Единица: ${smallLabel}`}
               aria-pressed={mode === 'small'}
               onClick={() => switchMode('small')}
-              className="px-1.5 text-xs transition-colors"
+              className="flex-1 px-2 text-xs transition-colors flex items-center justify-center"
               style={{
-                color: mode === 'small' ? 'var(--w1)' : 'var(--muted)',
+                color: mode === 'small' ? 'var(--on-fire)' : 'var(--muted)',
                 fontWeight: mode === 'small' ? 700 : 400,
-                background: mode === 'small' ? 'color-mix(in srgb, var(--wave-400) 10%, transparent)' : 'transparent',
+                background: mode === 'small' ? 'var(--wave-400)' : 'transparent',
               }}
             >
               {smallLabel}
@@ -172,11 +178,12 @@ export function AmountInput({
               aria-label={`Единица: ${baseLabel}`}
               aria-pressed={mode === 'base'}
               onClick={() => switchMode('base')}
-              className="px-1.5 text-xs transition-colors rounded-r"
+              className="flex-1 px-2 text-xs transition-colors flex items-center justify-center"
               style={{
-                color: mode === 'base' ? 'var(--w1)' : 'var(--muted)',
+                color: mode === 'base' ? 'var(--on-fire)' : 'var(--muted)',
                 fontWeight: mode === 'base' ? 700 : 400,
-                background: mode === 'base' ? 'color-mix(in srgb, var(--wave-400) 10%, transparent)' : 'transparent',
+                background: mode === 'base' ? 'var(--wave-400)' : 'transparent',
+                borderTop: '1px solid var(--border)',
               }}
             >
               {baseLabel}
@@ -184,7 +191,7 @@ export function AmountInput({
           </span>
         ) : (
           <span
-            className="px-2 text-xs"
+            className="px-2 text-xs flex items-center"
             style={{ color: 'var(--muted)', borderLeft: '1px solid var(--border)' }}
             aria-hidden
           >

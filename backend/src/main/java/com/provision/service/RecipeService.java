@@ -107,22 +107,36 @@ public class RecipeService {
         recipe.setBaseServings(request.baseServings());
         recipe.setCaloriesPerServing(request.caloriesPerServing());
 
-        // Очищаем старые ингредиенты
-        recipe.getIngredients().clear();
-
-        // Добавляем новые
+        // Fix-4 (список 26.10): раньше clear() + повторный add тех же ингредиентов
+        // давал 500 «An unexpected error occurred» на ЛЮБОМ блюде с существующим
+        // составом: Hibernate flush'ит INSERT раньше DELETE коллекции и упирается
+        // в unique(recipe_id, ingredient_id). Теперь дифф на месте:
+        //  - существующая строка → обновляем amount (UPDATE);
+        //  - отсутствующая в запросе → удаляем (orphanRemoval DELETE);
+        //  - новая → добавляем (INSERT без коллизии).
+        // Дубли ingredientId в запросе: побеждает последнее значение amount.
+        java.util.Map<Long, RecipeIngredient> existingByIngredient = new java.util.HashMap<>();
+        for (RecipeIngredient ri : recipe.getIngredients()) {
+            existingByIngredient.put(ri.getIngredient().getId(), ri);
+        }
+        java.util.Set<Long> keepIngredientIds = new java.util.HashSet<>();
         for (RecipeRequest.RecipeIngredientItem item : request.ingredients()) {
             Ingredient ingredient = ingredientRepository.findById(item.ingredientId())
                     .orElseThrow(() -> new NotFoundException("Ingredient not found with id: " + item.ingredientId()));
 
-            RecipeIngredient recipeIngredient = RecipeIngredient.builder()
-                    .recipe(recipe)
-                    .ingredient(ingredient)
-                    .amount(item.amount())
-                    .build();
-
-            recipe.getIngredients().add(recipeIngredient);
+            RecipeIngredient existing = existingByIngredient.get(ingredient.getId());
+            if (existing != null) {
+                existing.setAmount(item.amount());
+            } else {
+                recipe.getIngredients().add(RecipeIngredient.builder()
+                        .recipe(recipe)
+                        .ingredient(ingredient)
+                        .amount(item.amount())
+                        .build());
+            }
+            keepIngredientIds.add(ingredient.getId());
         }
+        recipe.getIngredients().removeIf(ri -> !keepIngredientIds.contains(ri.getIngredient().getId()));
 
         recipe = recipeRepository.save(recipe);
         log.info("Updated recipe: {}", recipe.getName());

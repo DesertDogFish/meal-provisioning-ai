@@ -57,6 +57,10 @@ export default defineConfig({
         'src/utils/checklist.ts',
         'src/components/AmountInput.tsx',
         'src/components/ManualItemsModal.tsx',
+        // Fix-3 (список 26.10, итерация 3): готовность похода, ввод чека суммой, CSV-экспорт
+        'src/utils/readiness.ts',
+        'src/utils/checkInput.ts',
+        'src/utils/checkExport.ts',
       ],
     },
   },

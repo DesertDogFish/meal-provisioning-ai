@@ -28,6 +28,15 @@ public class SummaryService {
     private final TripIngredientEditService tripIngredientEditService; // Фаза 14 (N3)
     private final EntityManager entityManager; // FIX N+1: пакетная инициализация LAZY-проксей category
 
+    /**
+     * R3 (Fix-3): ручные позиции закупки (trip_manual_items, V22).
+     * Опциональная инъекция: существующие unit-тесты конструируют сервис старыми
+     * конструкторами (null-репозитории) — при null ручные позиции просто не
+     * участвуют (поведение прежних тестов не меняется).
+     */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private TripManualItemRepository manualItemRepository;
+
     public SummaryService(TripRepository tripRepository,
                           IngredientPriceRepository priceRepository,
                           RecipeRepository recipeRepository,
@@ -277,6 +286,30 @@ public class SummaryService {
                     // (упаковки/имя); суммы считаются по дням ниже.
                     aggregation.computeIfAbsent(line.ingredient().getId(), k ->
                             new ShoppingAggregation(line.ingredient()));
+                }
+            }
+        }
+
+        // R3 (Fix-3): ручные позиции закупки (продукты к дню/походу вне блюд) —
+        // участвуют в агрегации наравне с позициями блюд: дневные попадают в свой
+        // день, походные (day_id IS NULL) — в последний день похода (плановая цена
+        // этого дня = срез endDate, тот же механизм, что у общего списка).
+        if (manualItemRepository != null) {
+            List<TripManualItem> manualItems = manualItemRepository.findByTripIdWithRefs(tripId);
+            if (!manualItems.isEmpty()) {
+                LocalDate lastDay = trip.getDays().stream()
+                        .map(TripDay::getDayDate)
+                        .max(LocalDate::compareTo)
+                        .orElse(trip.getEndDate());
+                for (TripManualItem mi : manualItems) {
+                    LocalDate key = mi.getDay() != null ? mi.getDay().getDayDate() : lastDay;
+                    Map<Long, ShoppingAggregation> dayAgg =
+                            perDayAggregation.computeIfAbsent(key, k -> new LinkedHashMap<>());
+                    ShoppingAggregation agg = dayAgg.computeIfAbsent(
+                            mi.getIngredient().getId(), k -> new ShoppingAggregation(mi.getIngredient()));
+                    agg.addAmount(mi.getAmount());
+                    aggregation.computeIfAbsent(
+                            mi.getIngredient().getId(), k -> new ShoppingAggregation(mi.getIngredient()));
                 }
             }
         }

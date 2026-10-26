@@ -148,7 +148,9 @@ export default function ManualItemsModal({ tripId, dayId, dayLabel, items, produ
               </p>
             )}
           </div>
-          <div className="flex flex-wrap items-end gap-3">
+          {/* Fix-4 (п.1): единая линия контролов — одинаковая высота (40px),
+              один радиус (--r-input), кнопка того же роста: больше нет «лесенки» */}
+          <div className="flex flex-wrap items-center gap-3">
             <div>
               <label className="block text-xs mb-1" style={{ color: 'var(--muted)' }}>Количество</label>
               <AmountInput
@@ -167,11 +169,12 @@ export default function ManualItemsModal({ tripId, dayId, dayLabel, items, produ
                 onChange={e => setNote(e.target.value)}
                 aria-label="Примечание к позиции"
                 placeholder="например, 1 на группу"
-                className="w-full px-3 py-2 rounded-lg outline-none text-sm"
-                style={{ background: 'var(--elev)', border: '1px solid var(--border)', color: 'var(--text)' }}
+                className="w-full px-3 outline-none text-sm"
+                style={{ background: 'var(--elev)', border: '1px solid var(--border)', color: 'var(--text)', height: 'var(--h-control, 40px)' }}
               />
             </div>
-            <Button variant="primary" size="sm" onClick={() => void handleAdd()} disabled={busy} aria-label="Добавить позицию">
+            <Button variant="primary" onClick={() => void handleAdd()} disabled={busy} aria-label="Добавить позицию"
+                    className="self-end" style={{ height: 'var(--h-control, 40px)' }}>
               <Plus size={14} /> Добавить
             </Button>
           </div>

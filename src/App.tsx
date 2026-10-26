@@ -6,6 +6,7 @@ import ProtectedRoute from './components/ProtectedRoute';
 import LoginPage from './pages/LoginPage';
 import TripsPage from './pages/TripsPage';
 import TripDetailPage from './pages/TripDetailPage';
+import TripPrintPage from './pages/TripPrintPage';
 import RecipesPage from './pages/RecipesPage';
 import AdminPage from './pages/AdminPage';
 import IntegrationsPage from './pages/IntegrationsPage';
@@ -31,6 +32,14 @@ function App() {
               } />
               {/* /trips — прежний адрес списка; теперь ведёт на /dashboard */}
               <Route path="/trips" element={<Navigate to="/dashboard" replace />} />
+              {/* Fix-4 (п.6): печатная версия похода (меню по дням + закупка +
+                  итоги «кто сколько должен») — без Layout, открывается в новой
+                  вкладке и сохраняется в PDF через диалог печати. */}
+              <Route path="/trips/:id/print" element={
+                <ProtectedRoute>
+                  <TripPrintPage />
+                </ProtectedRoute>
+              } />
               <Route path="/trips/:id" element={
                 <ProtectedRoute>
                   <Layout><TripDetailPage /></Layout>

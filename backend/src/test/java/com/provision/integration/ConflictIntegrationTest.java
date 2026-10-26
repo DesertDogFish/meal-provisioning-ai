@@ -101,7 +101,9 @@ class ConflictIntegrationTest {
                 UnitOfMeasure.KG,
                 "Крупы",
                 null,  // kcalPer100g
-                null   // pieceWeightG
+                null,  // pieceWeightG
+                null,  // packSize (Fix-4)
+                null   // roundToPacks (Fix-4)
         );
         MvcResult ingredientResult = mockMvc.perform(post("/api/v1/admin/ingredients")
                         .header("Authorization", "Bearer " + adminToken)
@@ -149,7 +151,9 @@ class ConflictIntegrationTest {
                 UnitOfMeasure.KG,
                 "Крупы",
                 null,  // kcalPer100g
-                null   // pieceWeightG
+                null,  // pieceWeightG
+                null,  // packSize (Fix-4)
+                null   // roundToPacks (Fix-4)
         );
         MvcResult ingredientResult = mockMvc.perform(post("/api/v1/admin/ingredients")
                         .header("Authorization", "Bearer " + adminToken)
@@ -185,7 +189,9 @@ class ConflictIntegrationTest {
                 UnitOfMeasure.KG,
                 "Крупы",
                 null,  // kcalPer100g
-                null   // pieceWeightG
+                null,  // pieceWeightG
+                null,  // packSize (Fix-4)
+                null   // roundToPacks (Fix-4)
         );
         mockMvc.perform(put("/api/v1/admin/ingredients/" + ingredientId)
                         .header("Authorization", "Bearer " + adminToken)
@@ -206,7 +212,9 @@ class ConflictIntegrationTest {
                 UnitOfMeasure.KG,
                 "Крупы",
                 null,  // kcalPer100g
-                null   // pieceWeightG
+                null,  // pieceWeightG
+                null,  // packSize (Fix-4)
+                null   // roundToPacks (Fix-4)
         );
         MvcResult ingredientResult = mockMvc.perform(post("/api/v1/admin/ingredients")
                         .header("Authorization", "Bearer " + adminToken)

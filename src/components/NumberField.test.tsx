@@ -159,3 +159,16 @@ describe('NumberField Component', () => {
     expect(input).toBeInTheDocument();
   });
 });
+
+// Fix-3 (п.2): блокировка ввода — чек не вводится до подтверждения закупки
+describe('NumberField — disabled (Fix-3)', () => {
+  it('disabled блокирует input и обе кнопки степпера', () => {
+    const { getByLabelText, getByTestId } = render(
+      <NumberField value={100} onCommit={() => {}} disabled testId="nf-x" ariaLabel="Сумма" />
+    );
+    expect((getByLabelText('Сумма') as HTMLInputElement).disabled).toBe(true);
+    expect((getByLabelText('Уменьшить') as HTMLButtonElement).disabled).toBe(true);
+    expect((getByLabelText('Увеличить') as HTMLButtonElement).disabled).toBe(true);
+    expect(getByTestId('nf-x-wrap').className).toContain('nf-disabled');
+  });
+});

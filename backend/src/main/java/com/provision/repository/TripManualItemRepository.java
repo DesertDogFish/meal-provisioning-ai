@@ -15,4 +15,8 @@ public interface TripManualItemRepository extends JpaRepository<TripManualItem, 
             "JOIN FETCH i.ingredient " +
             "WHERE i.trip.id = :tripId ORDER BY i.id ASC")
     List<TripManualItem> findByTripIdWithRefs(@Param("tripId") Long tripId);
+
+    /** R3 (Fix-3): usedIn-проверка удаления продукта — ручные позиции, ссылающиеся на него. */
+    @Query("SELECT i FROM TripManualItem i JOIN FETCH i.trip WHERE i.ingredient.id = :ingredientId")
+    List<TripManualItem> findByIngredientId(@Param("ingredientId") Long ingredientId);
 }

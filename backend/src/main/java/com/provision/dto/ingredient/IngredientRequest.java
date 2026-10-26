@@ -22,5 +22,11 @@ public record IngredientRequest(
     
     BigDecimal kcalPer100g,
     
-    BigDecimal pieceWeightG
+    BigDecimal pieceWeightG,
+
+    // Fix-4 (чеклист/чек в real-режиме): фасовка нужна не только в ProductRequest —
+    // ингредиент, созданный через /admin/ingredients, обязан уметь нести pack_size.
+    BigDecimal packSize,
+
+    Boolean roundToPacks
 ) {}

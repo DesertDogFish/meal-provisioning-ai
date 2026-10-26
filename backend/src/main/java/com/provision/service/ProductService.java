@@ -33,6 +33,8 @@ public class ProductService {
     private final IngredientPriceRepository priceRepository;
     private final RecipeIngredientRepository recipeIngredientRepository;
     private final RecipeRepository recipeRepository;
+    // R3 (Fix-3): ручные позиции закупки — продукт, занятый ими, нельзя удалить молча
+    private final com.provision.repository.TripManualItemRepository manualItemRepository;
 
     @Transactional(readOnly = true)
     public List<ProductCategoryDto> getAllCategories() {
@@ -218,6 +220,20 @@ public class ProductService {
             throw new ProductInUseConflictException(
                     "PRODUCT_IN_USE: Product is used in recipes",
                     buildUsedInRecipes(recipeIds));
+        }
+
+        // R3 (Fix-3): продукт, добавленный вручную в закупку похода (аптечка и т.п.),
+        // тоже «занят» — отдаём PRODUCT_IN_USE со списком походов.
+        List<com.provision.entity.TripManualItem> manualRefs = manualItemRepository.findByIngredientId(id);
+        if (!manualRefs.isEmpty()) {
+            List<ErrorResponse.UsedInResource> usedInTrips = manualRefs.stream()
+                    .map(mi -> new ErrorResponse.UsedInResource(
+                            "TRIP", mi.getTrip().getId(), mi.getTrip().getName()))
+                    .distinct()
+                    .toList();
+            throw new ProductInUseConflictException(
+                    "PRODUCT_IN_USE: Product is used as manual item in trips",
+                    usedInTrips);
         }
 
         ingredientRepository.deleteById(id);

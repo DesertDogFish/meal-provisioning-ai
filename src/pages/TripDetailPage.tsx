@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { calculateMenuByDays, calculateShoppingList, calculateDayShopping, calculatePersonSummary, formatAmount, realTripPeople, isRowExcluded, dayScopedExclusions } from '../utils/calculations';
 import { formatRub } from '../utils/formatRub'; // Фаза 13: итоги — целые рубли
-import { ArrowLeft, Plus, Trash2, Users, ShoppingCart, BookOpen, TrendingUp, Calendar, ChevronDown, ChevronRight, ListChecks, ClipboardCheck, PackagePlus, ArrowUpDown, X } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Users, ShoppingCart, BookOpen, TrendingUp, Calendar, ChevronDown, ChevronRight, ListChecks, ClipboardCheck, PackagePlus, ArrowUpDown, X, FileDown } from 'lucide-react';
 import { MealType } from '../types';
 import PriceOverridesTab from '../components/PriceOverridesTab';
 import AddMealModal, { type AddMealDayContext } from '../components/AddMealModal';
@@ -13,13 +13,15 @@ import { api, getRecipes, getTripRecipes } from '../api/client';
 import { useToast } from '../components/ToastProvider';
 import { Button } from '../components/Button';
 // Патч «UX-список 26.10»:
-import { loadActualPrices, loadExcluded, setExcluded as persistExcluded, loadBought, setBought as persistBought, onTripStageChange } from '../utils/tripStaging'; // U32 + Fix-2(п.6)
+import { loadActualPrices, loadExcluded, setExcluded as persistExcluded, loadBought, setBought as persistBought, loadPacks, setPackCount, onTripStageChange } from '../utils/tripStaging'; // U32 + Fix-2(п.6) + Fix-4(п.8)
 import { getTripEdits, type TripIngredientEdit } from '../api/tripEdits'; // U30
 import { getManualItems, deleteManualItem, type TripManualItem } from '../api/tripManualItems'; // U40
 import { mergeManualIntoShopping, manualForDay, manualForTrip } from '../utils/manualItems'; // U40
 import { overlayEditsOnIngredients, editMatchesRecipe } from '../utils/menuOverlay'; // U30
 import { buildChecklist, type ChecklistProductInfo } from '../utils/checklist'; // U38
 import { sortRows, nextDir, compareRu, type SortDir } from '../utils/rowSort'; // U26–U28
+import { tripReadiness } from '../utils/readiness'; // Fix-3 (п.2): сквозной статус
+import { getServerExclusions, syncServerExclusions } from '../api/shoppingExclusions'; // Fix-3 / R2
 import { categoryName } from '../utils/format';
 
 /** Фаза 13: черновик фактической цены (₽ за единицу измерения продукта). */
@@ -83,11 +85,14 @@ const mealTypeLabels: Record<MealType, string> = {
 };
 
 // Бейджи приёмов пищи в палитре «Провиант» (wave/teal + amber)
+// Fix-4 (п.7): четыре РАЗЛИЧИМЫХ цвета приёмов (раньше обед/ужин/перекус сливались
+// в один «зелёный»): завтрак — янтарь, обед — волна/тил, ужин — сумеречный синий,
+// перекус — коралл. Классы .badge-meal-* в index.css (токены дизайн-пака).
 const mealTypeColors: Record<MealType, string> = {
-  BREAKFAST: 'badge-warning',
-  LUNCH: 'badge-success',
-  DINNER: 'badge-neutral',
-  SNACK: 'badge-success',
+  BREAKFAST: 'badge-meal-breakfast',
+  LUNCH: 'badge-meal-lunch',
+  DINNER: 'badge-meal-dinner',
+  SNACK: 'badge-meal-snack',
 };
 
 type TabType = 'menu' | 'shopping' | 'dayShopping' | 'person' | 'overrides' | 'checklist';
@@ -143,10 +148,29 @@ export default function TripDetailPage() {
       setDraftOverrides(loadActualPrices(tripKey));
       setShoppingExcluded(loadExcluded(tripKey));
       setChecklistBought(loadBought(tripKey));
+      setPackOverrides(loadPacks(tripKey));
     };
     sync();
     return onTripStageChange(tripKey, sync);
   }, [tripKey]);
+
+  // Fix-3 / PLAN R2: серверные исключения — источник истины для глобальных ключей.
+  // При загрузке мержим серверный набор в локальный стейдж (union), переключения
+  // синхронизируем идемпотентным PUT. По-дневные ключи ('дата::id') остаются
+  // клиентскими до расширения серверного контракта (PLAN, R2 шаг 2).
+  useEffect(() => {
+    if (!id) return;
+    let cancelled = false;
+    void (async () => {
+      const server = await getServerExclusions(String(id));
+      if (cancelled || server.length === 0) return;
+      const merged = new Set(loadExcluded(String(id)));
+      let changed = false;
+      for (const k of server) if (!merged.has(k)) { merged.add(k); changed = true; }
+      if (changed) persistExcluded(String(id), merged);
+    })();
+    return () => { cancelled = true; };
+  }, [id]);
 
   // ===== Патч «UX-список 26.10»: серверные правки состава (U30), ручные позиции (U40),
   // справочник продуктов для фасовки/категорий (U38/U40), сортировка закупки (U26),
@@ -158,6 +182,8 @@ export default function TripDetailPage() {
   // Fix-2 (п.6): отметки «взято» чеклиста ПЕРСИСТЕНТНЫ (общий стейдж похода) —
   // чеклист переживает перезагрузку и используется как рабочий лист в магазине.
   const [checklistBought, setChecklistBought] = useState<Set<string>>(new Set());
+  // Fix-4 (п.8): переопределённое число упаковок чеклиста («в магазине пачка другая»)
+  const [packOverrides, setPackOverrides] = useState<Record<string, number>>({});
   const [manualCtx, setManualCtx] = useState<{ dayId: string | null; dayLabel?: string } | null>(null);
 
   useEffect(() => {
@@ -342,6 +368,8 @@ export default function TripDetailPage() {
     // U32: пишем в общий стейдж — событие обновит и эту страницу, и «Закупка и чеки»
     persistExcluded(tripKey, next);
     setShoppingExcluded(next);
+    // Fix-3 / R2: глобальные ключи синхронизируем с сервером (best effort)
+    void syncServerExclusions(tripKey, next);
   };
 
   /** U40: перечитать ручные позиции после добавления/удаления. */
@@ -490,14 +518,38 @@ export default function TripDetailPage() {
     setChecklistBought(next);
   };
 
+  // Fix-3 (п.2): сквозной статус «меню → закупка → чеки» + отметки «взято» всего
+  // чеклиста одной кнопкой (чтобы блокировка чека не была тупиковой).
+  const checklistRowIds = checklist.flatMap(g => g.rows.map(r => r.ingredientId));
+  const boughtInList = checklistRowIds.filter(k => checklistBought.has(k)).length;
+  // Fix-4 (п.11): «введено 57… а должно быть?» — знаменатель = число позиций
+  // закупки, по которым нужно ввести факт; числитель — сколько из них уже с фактом.
+  const factsTotal = includedShoppingFinal.length;
+  const factCount = includedShoppingFinal.filter(i => draftOverrides[String(i.ingredientId)] != null).length;
+  const readiness = tripReadiness({
+    mealsCount: (trip.days ?? []).reduce((a, d) => a + (d.meals?.length ?? 0), 0),
+    checklistTotal: checklistRowIds.length,
+    boughtCount: boughtInList,
+    factCount,
+    checksTotal: factsTotal,
+  });
+  const changePacks = (ingredientId: string, current: number, delta: number) =>
+    setPackCount(tripKey, ingredientId, Math.max(1, current + delta));
+  const setAllBought = (on: boolean) => {
+    const next = on ? new Set(checklistRowIds) : new Set<string>();
+    persistBought(tripKey, next);
+    setChecklistBought(next);
+  };
+
   const tabs = [
     { id: 'menu' as TabType, label: 'Меню по дням', icon: <BookOpen size={16} /> },
     { id: 'shopping' as TabType, label: 'Закупка на поход', icon: <ShoppingCart size={16} /> },
     { id: 'dayShopping' as TabType, label: 'Закупка по дням', icon: <Calendar size={16} /> },
     { id: 'person' as TabType, label: 'На человека', icon: <Users size={16} /> },
-    { id: 'overrides' as TabType, label: 'Закупка и чеки', icon: <TrendingUp size={16} /> },
-    // U38: чеклист закупки в упаковках — рядом с вводом чека
+    // Fix-3 (п.3): чеклист (список покупок) идёт РАНЬШЕ «Закупка и чеки» —
+    // сначала подтверждаем покупку, потом вводим чек
     { id: 'checklist' as TabType, label: 'Чеклист', icon: <ClipboardCheck size={16} /> },
+    { id: 'overrides' as TabType, label: 'Закупка и чеки', icon: <TrendingUp size={16} /> },
   ];
 
   return (
@@ -511,17 +563,16 @@ export default function TripDetailPage() {
             {new Date(trip.startDate).toLocaleDateString('ru-RU')} — {new Date(trip.endDate).toLocaleDateString('ru-RU')} • {trip.defaultPeople} чел.
           </p>
         </div>
-        {/* U40 + Fix-2 (п.2): продукты к походу (аптечка, антисептик…) — заметная
-            подписанная кнопка в шапке, а не голая иконка «хрен пойми где» */}
+        {/* Fix-4 (п.6): экспорт — красивая печатная версия (сохраняется в PDF).
+            Продукты к походу переехали в карточку «На весь поход» внизу меню (п.3). */}
         <Button
-          variant="primary"
-          onClick={() => setManualCtx({ dayId: null })}
-          aria-label="Продукты к походу"
-          title="Добавить продукты ко всему походу: аптечка, антисептик, топливо…"
-          icon={<PackagePlus size={18} />}
+          variant="ghost"
+          onClick={() => window.open(`/trips/${trip.id}/print`, '_blank')}
+          aria-label="Экспорт PDF"
+          title="Печатная версия похода: меню по дням, закупка, итоги — сохранить в PDF"
+          icon={<FileDown size={18} />}
         >
-          Продукты к походу
-          {manualForTrip(manualItems).length > 0 ? ` (${manualForTrip(manualItems).length})` : ''}
+          PDF
         </Button>
       </div>
 
@@ -544,6 +595,31 @@ export default function TripDetailPage() {
           <p className="text-xs mb-1" style={{ color: 'var(--muted)' }}>На человека</p>
           <p className="stat-value text-xl font-bold">{formatRub(tripSummary.costPerDefaultPerson)}</p>
         </div>
+      </div>
+
+      {/* Fix-3 (п.2) + Fix-4 (п.9): готовность похода — СКВОЗНАЯ, видна на каждой
+          вкладке, а не только в меню: цепочка «меню → закупка → чеки» */}
+      <div className="rounded-xl px-4 py-3 flex flex-wrap items-center gap-2 text-sm"
+           style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+        <span className="font-semibold" style={{ color: 'var(--text)' }}>Готовность похода:</span>
+        <span className={`px-2 py-0.5 text-xs rounded-full ${readiness.menu === 'done' ? 'badge-success' : 'badge-neutral'}`}>
+          Меню {readiness.menu === 'done' ? 'собрано' : 'пустое'}
+        </span>
+        <span className={`px-2 py-0.5 text-xs rounded-full ${readiness.shopping === 'done' ? 'badge-success' : readiness.shopping === 'partial' ? 'badge-warning' : 'badge-neutral'}`}>
+          Закупка: взято {boughtInList} из {checklistRowIds.length}
+        </span>
+        <span className={`px-2 py-0.5 text-xs rounded-full ${readiness.checks === 'done' ? 'badge-success' : readiness.checks === 'partial' ? 'badge-warning' : 'badge-neutral'}`}>
+          Чек: введено {factCount} из {factsTotal}
+        </span>
+        {readiness.ready ? (
+          <span className="text-xs" style={{ color: 'var(--wave-300)' }}>Поход готов ✓</span>
+        ) : (
+          <span className="text-xs" style={{ color: 'var(--muted)' }}>
+            {readiness.canEnterCheck
+              ? 'Подтвердите закупку целиком и введите чек по всем позициям — тогда поход будет готов.'
+              : 'Отметьте покупки в чеклисте — без этого чек не ввести.'}
+          </span>
+        )}
       </div>
 
       {/* Tabs — сегментированный контрол (.seg) из брендбука */}
@@ -737,11 +813,54 @@ export default function TripDetailPage() {
               </div>
             );
           })}
+
+          {/* Fix-4 (п.3): «Продукты к походу» — не одинокая кнопка в шапке, а
+              логичная карточка-«дополнительный день» в конце списка дней: те же
+              формы/чипы, что у дней, понятно что это про ВЕСЬ поход. */}
+          <div className="rounded-xl overflow-hidden" style={{ background: 'var(--surface)', border: '1px dashed var(--line-strong)' }}>
+            <div className="flex items-center justify-between p-4">
+              <div className="flex items-center gap-3">
+                <span className="p-2 rounded-[10px]" style={{ background: 'color-mix(in srgb, var(--wave-400) 12%, transparent)' }}>
+                  <PackagePlus size={18} style={{ color: 'var(--w1)' }} />
+                </span>
+                <div>
+                  <p className="font-semibold" style={{ color: 'var(--text)' }}>На весь поход</p>
+                  <p className="text-xs" style={{ color: 'var(--muted)' }}>
+                    Не блюда: аптечка, антисептик, топливо… {manualForTrip(manualItems).length > 0 ? `· ${manualForTrip(manualItems).length} поз.` : ''}
+                  </p>
+                </div>
+              </div>
+              <Button variant="soft" size="sm" onClick={() => setManualCtx({ dayId: null })} aria-label="Добавить продукт к походу">
+                <Plus size={14} /> Добавить продукт
+              </Button>
+            </div>
+            {manualForTrip(manualItems).length > 0 && (
+              <div className="px-4 pb-3 flex flex-wrap gap-2">
+                {manualForTrip(manualItems).map(mi => (
+                  <span key={mi.id} className="text-xs px-2 py-1 rounded inline-flex items-center gap-1.5"
+                    style={{ background: 'color-mix(in srgb, var(--wave-400) 12%, transparent)', color: 'var(--text)' }}>
+                    <PackagePlus size={11} style={{ color: 'var(--w1)' }} />
+                    {mi.ingredientName}: {formatAmount(mi.amount, mi.unit)}
+                    {mi.note ? ` · ${mi.note}` : ''}
+                    <button
+                      onClick={() => void handleDeleteManual(mi.id)}
+                      aria-label={`Удалить позицию: ${mi.ingredientName}`}
+                      className="p-0.5 rounded"
+                      style={{ color: 'var(--muted)' }}
+                    >
+                      <X size={11} />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       )}
 
       {activeTab === 'shopping' && (
-        <div className="rounded-xl overflow-hidden" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+        /* Fix-3 (п.4): компактнее — таблица не растягивает «Стоимость» на весь экран */
+        <div className="rounded-xl overflow-hidden max-w-4xl" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
           <div className="p-4" style={{ borderBottom: '1px solid var(--border)' }}>
             <h3 className="font-bold" style={{ color: 'var(--text)' }}>Список закупок на весь поход</h3>
             {/* Фаза 13 (п.5): итог учитывает фактические цены (draftOverrides) и исключения (shoppingExcluded) */}
@@ -814,7 +933,7 @@ export default function TripDetailPage() {
       )}
 
       {activeTab === 'dayShopping' && (
-        <div className="space-y-3">
+        <div className="space-y-3 max-w-3xl">
           {dayShopping.map(day => (
             <div key={day.dayDate} className="rounded-xl overflow-hidden" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
               <div className="p-4 flex items-center justify-between" style={{ borderBottom: '1px solid var(--border)' }}>
@@ -882,7 +1001,7 @@ export default function TripDetailPage() {
           </div>
 
           {/* Per person products */}
-          <div className="rounded-xl overflow-hidden" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+          <div className="rounded-xl overflow-hidden max-w-4xl" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
             <div className="p-4" style={{ borderBottom: '1px solid var(--border)' }}>
               <h3 className="font-bold" style={{ color: 'var(--text)' }}>Продукты на человека</h3>
             </div>
@@ -922,13 +1041,26 @@ export default function TripDetailPage() {
           группы по категориям, алфавит. Исключённые позиции не попадают (их не берём).
           Отметки «взято» живут в рамках сессии — это рабочий лист магазина, не данные похода. */}
       {activeTab === 'checklist' && (
-        <div className="space-y-3">
-          <div className="rounded-xl p-4" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
-            <h3 className="font-bold" style={{ color: 'var(--text)' }}>Чеклист закупки</h3>
-            <p className="text-sm mt-1" style={{ color: 'var(--muted)' }}>
-              Целые упаковки к покупке (округление вверх — излишек остаётся на следующий поход).
-              Отмечайте, что уже взяли.
-            </p>
+        <div className="space-y-3 max-w-3xl">
+          <div className="rounded-xl p-4 flex flex-wrap items-center justify-between gap-3" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+            <div>
+              <h3 className="font-bold" style={{ color: 'var(--text)' }}>Чеклист закупки</h3>
+              <p className="text-sm mt-1" style={{ color: 'var(--muted)' }}>
+                Целые упаковки к покупке (округление вверх — излишек остаётся на следующий поход).
+                Взято {boughtInList} из {checklistRowIds.length}.
+              </p>
+            </div>
+            {/* Fix-3 (п.2): одной кнопкой — всё куплено / сброс (чтобы чек не блокировался намертво) */}
+            <div className="flex gap-2 shrink-0">
+              <Button variant="soft" size="sm" onClick={() => setAllBought(true)}
+                      aria-label="Отметить всё купленным" disabled={checklistRowIds.length === 0 || boughtInList === checklistRowIds.length}>
+                Отметить всё
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => setAllBought(false)}
+                      aria-label="Снять все отметки" disabled={boughtInList === 0}>
+                Снять всё
+              </Button>
+            </div>
           </div>
           {checklist.length === 0 && (
             <div className="rounded-xl p-8 text-center text-sm" style={{ background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--muted)' }}>
@@ -942,13 +1074,27 @@ export default function TripDetailPage() {
               </div>
               {group.rows.map(row => {
                 const bought = checklistBought.has(row.ingredientId);
+                // Fix-4 (п.8): число упаковок можно поправить под реальный магазин
+                // («пачка аджики 30 г, а не 100») — [− N +], значение персистентно.
+                const packs = row.packsToBuy != null ? (packOverrides[row.ingredientId] ?? row.packsToBuy) : null;
+                const buyAmount = packs != null && row.packSize ? packs * row.packSize : row.needed;
+                const leftover = packs != null && row.packSize ? Math.max(0, buyAmount - row.needed) : 0;
                 return (
-                  <div key={row.ingredientId} className="flex items-center gap-3 px-4 py-2.5 text-sm"
-                       style={{ borderTop: '1px solid var(--border)', opacity: bought ? 0.55 : 1 }}>
+                  <div
+                    key={row.ingredientId}
+                    className="checklist-row flex items-center gap-3 px-4 py-3 text-sm"
+                    style={{ borderTop: '1px solid var(--border)', opacity: bought ? 0.55 : 1 }}
+                    onClick={() => toggleBought(row.ingredientId)}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleBought(row.ingredientId); } }}
+                    aria-label={`${bought ? 'Взято' : 'Отметить взятым'}: ${row.name}`}
+                  >
                     <input
                       type="checkbox"
                       checked={bought}
                       onChange={() => toggleBought(row.ingredientId)}
+                      onClick={(e) => e.stopPropagation()}
                       aria-label={`Взято: ${row.name}`}
                       className="cursor-pointer shrink-0"
                       style={{ accentColor: 'var(--w2)' }}
@@ -956,19 +1102,41 @@ export default function TripDetailPage() {
                     <span className="flex-1" style={{ color: 'var(--text)', textDecoration: bought ? 'line-through' : 'none' }}>
                       {row.name}
                     </span>
-                    {row.packsToBuy != null ? (
-                      <span className="text-right shrink-0">
-                        <b style={{ color: 'var(--w1)' }}>{row.packsToBuy} × {formatAmount(row.packSize ?? 0, row.unit)}</b>
-                        <span className="text-xs block" style={{ color: 'var(--muted)' }}>
-                          нужно {formatAmount(row.needed, row.unit)}{row.leftover > 1e-9 ? `, излишек ${formatAmount(row.leftover, row.unit)}` : ''}
-                        </span>
+                    {/* Fix-4 (п.8): ЕДИНЫЙ акцент — главное число (упаковки или
+                        количество) жирным текстовым цветом, пояснения приглушены;
+                        зелёным больше ничего не «выделено» */}
+                    {packs != null ? (
+                      <span className="flex items-center gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          type="button"
+                          aria-label={`Меньше упаковок: ${row.name}`}
+                          onClick={() => changePacks(row.ingredientId, packs, -1)}
+                          className="w-8 h-8 rounded-[8px] text-base font-bold flex items-center justify-center"
+                          style={{ border: '1px solid var(--border)', color: 'var(--text-2)', background: 'var(--elev)' }}
+                        >
+                          −
+                        </button>
+                        <b className="text-center" style={{ color: 'var(--text)', minWidth: 88, fontVariantNumeric: 'tabular-nums' }}>
+                          {packs} × {formatAmount(row.packSize ?? 0, row.unit)}
+                        </b>
+                        <button
+                          type="button"
+                          aria-label={`Больше упаковок: ${row.name}`}
+                          onClick={() => changePacks(row.ingredientId, packs, 1)}
+                          className="w-8 h-8 rounded-[8px] text-base font-bold flex items-center justify-center"
+                          style={{ border: '1px solid var(--border)', color: 'var(--text-2)', background: 'var(--elev)' }}
+                        >
+                          +
+                        </button>
                       </span>
                     ) : (
-                      <span className="text-right shrink-0">
-                        <b style={{ color: 'var(--text)' }}>{formatAmount(row.needed, row.unit)}</b>
-                        <span className="text-xs block" style={{ color: 'var(--muted)' }}>по потребности</span>
-                      </span>
+                      <b style={{ color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>{formatAmount(row.needed, row.unit)}</b>
                     )}
+                    <span className="text-xs text-right shrink-0" style={{ color: 'var(--muted)', minWidth: 130 }}>
+                      взять {formatAmount(buyAmount, row.unit)}
+                      {leftover > 1e-9 ? ` · излишек ${formatAmount(leftover, row.unit)}` : ''}
+                      <span className="block">нужно {formatAmount(row.needed, row.unit)}</span>
+                    </span>
                   </div>
                 );
               })}
