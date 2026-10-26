@@ -1,5 +1,6 @@
 /// <reference types="vitest/globals" />
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import RecipesPage from './RecipesPage';
 import { ToastProvider } from '../components/ToastProvider';
@@ -25,11 +26,14 @@ const recipeStub = {
   ingredients: [],
 };
 
-const renderPage = () =>
+// U37: страница читает ?edit= через useSearchParams — нужен роутер-контекст
+const renderPage = (route = '/recipes') =>
   render(
-    <ToastProvider>
-      <RecipesPage />
-    </ToastProvider>
+    <MemoryRouter initialEntries={[route]}>
+      <ToastProvider>
+        <RecipesPage />
+      </ToastProvider>
+    </MemoryRouter>
   );
 
 beforeEach(() => {
@@ -88,5 +92,25 @@ describe('RecipesPage — админ-режим каталога', () => {
     fireEvent.click(screen.getByLabelText('Удалить Уха из рыбных консервов'));
     await waitFor(() => expect(api.del).toHaveBeenCalledWith('/admin/recipes/r1'));
     expect(screen.queryByText(/используется в походах/)).toBeNull();
+  });
+});
+
+describe('RecipesPage — ?edit= (U37, список 26.10)', () => {
+  it('переход из похода сразу открывает редактор нужного блюда', async () => {
+    renderPage('/recipes?edit=r1');
+    // редактор открылся сам, без ручного поиска и клика по карандашу
+    expect(await screen.findByLabelText('Название')).toBeTruthy();
+    expect((screen.getByLabelText('Название') as HTMLInputElement).value).toBe('Уха из рыбных консервов');
+  });
+
+  it('edit по trip-scoped id (суффикс ::t) находит базовое блюдо', async () => {
+    renderPage('/recipes?edit=r1::ttrip9');
+    expect(await screen.findByLabelText('Название')).toBeTruthy();
+  });
+
+  it('несуществующий id — редактор не открывается, показана ошибка', async () => {
+    renderPage('/recipes?edit=nope');
+    await screen.findByText('Уха из рыбных консервов');
+    expect(screen.queryByLabelText('Название')).toBeNull();
   });
 });

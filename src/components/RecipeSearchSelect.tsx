@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDown, Search, X } from 'lucide-react';
+import './RecipeSearchSelect.css'; // U42: единый контрол поиска (иконка внутри, один правый элемент)
 
 export interface RecipeSearchOption {
   value: string;
@@ -123,12 +124,14 @@ export default function RecipeSearchSelect({
 
   return (
     <div ref={rootRef} style={{ position: 'relative' }}>
+      {/* U42: иконка поиска интегрирована в поле; справа только ОДИН элемент —
+          ✕ (когда выбрано и список закрыт) ИЛИ шеврон. Текст — с отступами,
+          фокус подсвечивает весь контрол (см. RecipeSearchSelect.css). */}
       <div
-        className="flex items-center gap-2 px-3 rounded-lg"
-        style={{ background: 'var(--elev)', border: '1px solid var(--border)' }}
+        className="rss-field"
         onClick={() => { setOpen(true); inputRef.current?.focus(); }}
       >
-        <Search size={15} style={{ color: 'var(--muted)', flexShrink: 0 }} />
+        <Search size={15} className="rss-icon" aria-hidden />
         <input
           ref={inputRef}
           type="text"
@@ -137,34 +140,27 @@ export default function RecipeSearchSelect({
           aria-haspopup="listbox"
           aria-label={ariaLabel ?? 'Поиск блюда'}
           autoFocus={autoFocus}
-          className="flex-1 py-2.5 bg-transparent outline-none text-sm"
-          style={{ color: 'var(--text)', minWidth: 0 }}
+          className="rss-input"
           placeholder={placeholder}
           value={displayValue}
           onChange={e => { setQuery(e.target.value); onQueryChange?.(e.target.value); setOpen(true); }}
           onFocus={() => setOpen(true)}
           onKeyDown={onKeyDown}
         />
-        {selected && !open && (
-          <button
-            type="button"
-            aria-label="Сбросить выбор блюда"
-            className="p-1 rounded transition-opacity hover:opacity-70"
-            style={{ color: 'var(--muted)' }}
-            onClick={(e) => { e.stopPropagation(); onChange(''); setQuery(''); }}
-          >
-            <X size={14} />
-          </button>
-        )}
-        <ChevronDown
-          size={15}
-          style={{
-            color: 'var(--muted)',
-            flexShrink: 0,
-            transform: open ? 'rotate(180deg)' : 'none',
-            transition: 'transform 150ms',
-          }}
-        />
+        <span className="rss-trailing">
+          {selected && !open ? (
+            <button
+              type="button"
+              aria-label="Сбросить выбор блюда"
+              className="rss-clear"
+              onClick={(e) => { e.stopPropagation(); onChange(''); setQuery(''); }}
+            >
+              <X size={14} />
+            </button>
+          ) : (
+            <ChevronDown size={15} className={`rss-arrow ${open ? 'rotated' : ''}`} aria-hidden />
+          )}
+        </span>
       </div>
 
       {open && (

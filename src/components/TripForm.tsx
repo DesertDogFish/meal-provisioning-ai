@@ -28,14 +28,16 @@ interface TripFormProps {
   externalErrors?: { field: string; message: string }[];
   submitLabel?: string;
   title?: string;
+  /** U36 (список 26.10): режим редактирования — стартовые значения полей */
+  initial?: Partial<TripFormData>;
 }
 
 /**
  * Форма создания похода: название, спаренные даты (CR-3), количество человек, заметки.
  * Валидация через validateTrip (общая с бэкендом). Ошибки подсвечиваются по полям.
  */
-export function TripForm({ onSubmit, onCancel, externalErrors = [], submitLabel = 'Создать', title = 'Новый поход' }: TripFormProps) {
-  const [data, setData] = useState<TripFormData>(EMPTY_TRIP_FORM);
+export function TripForm({ onSubmit, onCancel, externalErrors = [], submitLabel = 'Создать', title = 'Новый поход', initial }: TripFormProps) {
+  const [data, setData] = useState<TripFormData>({ ...EMPTY_TRIP_FORM, ...(initial ?? {}) });
   const [formErrors, setFormErrors] = useState<FieldError[]>([]);
   const [submitting, setSubmitting] = useState(false);
 

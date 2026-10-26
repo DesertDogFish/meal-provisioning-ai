@@ -8,7 +8,6 @@ import TripsPage from './pages/TripsPage';
 import TripDetailPage from './pages/TripDetailPage';
 import RecipesPage from './pages/RecipesPage';
 import AdminPage from './pages/AdminPage';
-import ErrorsDemoPage from './pages/ErrorsDemoPage';
 import IntegrationsPage from './pages/IntegrationsPage';
 import ProductsPage from './pages/ProductsPage';
 import SyncLogsPage from './pages/SyncLogsPage';
@@ -62,11 +61,10 @@ function App() {
               <Layout><SyncLogsPage /></Layout>
             </ProtectedRoute>
           } />
-          <Route path="/errors-demo" element={
-            <ProtectedRoute>
-              <Layout><ErrorsDemoPage /></Layout>
-            </ProtectedRoute>
-          } />
+          {/* U35 (список 26.10): страница «Ошибки (демо)» скрыта — не нужна ни
+              пользователю, ни админу. Файл ErrorsDemoPage.tsx сохранён; старый
+              адрес редиректит на список походов. */}
+          <Route path="/errors-demo" element={<Navigate to="/dashboard" replace />} />
           <Route path="*" element={<Navigate to="/login" replace />} />
             </Routes>
           </BrowserRouter>

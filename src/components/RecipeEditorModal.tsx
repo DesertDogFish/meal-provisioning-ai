@@ -5,6 +5,7 @@ import Modal from './Modal';
 import { api } from '../api/client';
 import { useToast } from './ToastProvider';
 import { validateRecipe } from '../utils/validation';
+import AmountInput from './AmountInput';
 import type { MealType, UnitOfMeasure } from '../types';
 
 /**
@@ -61,7 +62,11 @@ const MEAL_TYPES: Array<{ value: MealType; label: string }> = [
   { value: 'SNACK', label: 'Перекус' },
 ];
 
-const UNIT_SHORT: Record<UnitOfMeasure, string> = { KG: 'кг', L: 'л', PCS: 'шт', PACK: 'уп' };
+/** U31: значение строки состава — число|null для AmountInput (запятая/точка). */
+const rowAmountValue = (raw: string): number | null => {
+  const n = Number(String(raw).replace(',', '.'));
+  return Number.isFinite(n) && String(raw).trim() !== '' ? n : null;
+};
 
 export function parseAmount(raw: string): number | null {
   const n = Number(raw.replace(',', '.').trim());
@@ -384,7 +389,7 @@ export default function RecipeEditorModal({ recipe, categories, onClose, onSaved
                 const product = row.ingredientId ? productById.get(String(row.ingredientId)) : undefined;
                 const suggestions = openPicker === row.key ? suggestionsFor(row) : [];
                 return (
-                  <div key={row.key} className="relative grid grid-cols-[1fr_110px_56px_36px] gap-2 items-center">
+                  <div key={row.key} className="relative grid grid-cols-[1fr_auto_36px] gap-2 items-center">
                     <div className="relative">
                       <input
                         type="text"
@@ -423,19 +428,15 @@ export default function RecipeEditorModal({ recipe, categories, onClose, onSaved
                         </ul>
                       )}
                     </div>
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      aria-label="Количество"
-                      value={row.amount}
-                      onChange={e => updateRow(row.key, { amount: e.target.value })}
-                      placeholder="кол-во"
-                      className="px-2 py-2 rounded-lg outline-none text-sm text-right"
-                      style={inputStyle}
+                    {/* U31 (список 26.10): количество в г/мл с переключателем «г↔кг» —
+                        без «0,015 кг»; наружу по-прежнему базовые единицы (контракт T0) */}
+                    <AmountInput
+                      size="sm"
+                      value={rowAmountValue(row.amount)}
+                      unit={product?.unit ?? 'PCS'}
+                      onChange={v => updateRow(row.key, { amount: String(v) })}
+                      ariaLabel="Количество"
                     />
-                    <span className="text-sm" style={{ color: 'var(--muted)' }}>
-                      {product ? UNIT_SHORT[product.unit] : '—'}
-                    </span>
                     <Button
                       type="button"
                       variant="ghost"

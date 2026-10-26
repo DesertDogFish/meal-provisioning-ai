@@ -165,7 +165,18 @@ export interface MenuDay {
     mealType: MealType;
     recipeName: string;
     servings: number;
-    ingredients: { name: string; amount: number; unit: UnitOfMeasure }[];
+    /** U30: id блюда приёма — для сопоставления серверных правок состава */
+    recipeId?: string;
+    ingredients: {
+      name: string;
+      amount: number;
+      unit: UnitOfMeasure;
+      ingredientId?: string;
+      /** U30: позиция добавлена пользователем в походе (EXTRA-правка) */
+      added?: boolean;
+      /** U30: позиция — получатель замены (имя исходного продукта) */
+      substitutedFrom?: string;
+    }[];
   }[];
 }
 

@@ -20,6 +20,18 @@ export interface TripIngredientEdit {
   added: boolean;
   removed?: boolean;
   comment?: string;
+  /** §3: EXTRA — абсолют на приём (если заполнено, amountPerServing не масштабируем) */
+  absoluteAmount?: number | null;
+  /** SCALED-правка хранится как «замена на себя» (from === to, scale=true) */
+  scale?: boolean;
+  /** U30 (mock-обогащение, паритет с backend SubstitutionResponse): имена для overlay меню */
+  recipeName?: string | null;
+  fromIngredientName?: string | null;
+  toIngredientName?: string | null;
+  fromUnit?: string | null;
+  toUnit?: string | null;
+  /** правка привязана к конкретному приёму (composition-поток) */
+  mealId?: string | null;
 }
 
 export async function getTripEdits(tripId: string): Promise<TripIngredientEdit[]> {

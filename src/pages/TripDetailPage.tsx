@@ -1,16 +1,26 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { calculateMenuByDays, calculateShoppingList, calculateDayShopping, calculatePersonSummary, formatAmount } from '../utils/calculations';
+import { calculateMenuByDays, calculateShoppingList, calculateDayShopping, calculatePersonSummary, formatAmount, realTripPeople } from '../utils/calculations';
 import { formatRub } from '../utils/formatRub'; // Фаза 13: итоги — целые рубли
-import { ArrowLeft, Plus, Trash2, Users, ShoppingCart, BookOpen, TrendingUp, Calendar, ChevronDown, ChevronRight, ListChecks } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Users, ShoppingCart, BookOpen, TrendingUp, Calendar, ChevronDown, ChevronRight, ListChecks, ClipboardCheck, PackagePlus, ArrowUpDown, X } from 'lucide-react';
 import { MealType } from '../types';
 import PriceOverridesTab from '../components/PriceOverridesTab';
 import AddMealModal, { type AddMealDayContext } from '../components/AddMealModal';
 import MealCompositionModal from '../components/MealCompositionModal';
+import ManualItemsModal from '../components/ManualItemsModal';
 import { servingsWord } from '../utils/text';
 import { api, getRecipes, getTripRecipes } from '../api/client';
 import { useToast } from '../components/ToastProvider';
 import { Button } from '../components/Button';
+// Патч «UX-список 26.10»:
+import { loadActualPrices, loadExcluded, setExcluded as persistExcluded, onTripStageChange } from '../utils/tripStaging'; // U32
+import { getTripEdits, type TripIngredientEdit } from '../api/tripEdits'; // U30
+import { getManualItems, deleteManualItem, type TripManualItem } from '../api/tripManualItems'; // U40
+import { mergeManualIntoShopping, manualForDay, manualForTrip } from '../utils/manualItems'; // U40
+import { overlayEditsOnIngredients, editMatchesRecipe } from '../utils/menuOverlay'; // U30
+import { buildChecklist, type ChecklistProductInfo } from '../utils/checklist'; // U38
+import { sortRows, nextDir, compareRu, type SortDir } from '../utils/rowSort'; // U26–U28
+import { categoryName } from '../utils/format';
 
 /** Фаза 13: черновик фактической цены (₽ за единицу измерения продукта). */
 export interface ActualPriceDraft {
@@ -80,7 +90,10 @@ const mealTypeColors: Record<MealType, string> = {
   SNACK: 'badge-success',
 };
 
-type TabType = 'menu' | 'shopping' | 'dayShopping' | 'person' | 'overrides';
+type TabType = 'menu' | 'shopping' | 'dayShopping' | 'person' | 'overrides' | 'checklist';
+
+/** U26: поле сортировки таблицы «Закупка на поход». */
+type ShoppingSortField = 'ingredientName' | 'totalAmount' | 'effectiveCost';
 
 export default function TripDetailPage() {
   const { showError } = useToast();
@@ -116,30 +129,33 @@ export default function TripDetailPage() {
   // «Закупка и чеки» читают ОДИН источник — цифры синхронны между вкладками,
   // а черновики не теряются при размонтировании вкладок.
   // Сохранение между сессиями — per-trip localStorage (по требованию задачи).
-  const draftKey = `trip-actual-prices-${id ?? ''}`;
-  // setDraftOverrides не нужен: черновики цен пишет только сама вкладка
-  // «Закупка» (инлайн-поле), PriceOverridesTab работает с серверными оверрайдами.
-  const [draftOverrides] = useState<Record<string, ActualPriceDraft>>(() => {
-    try { return JSON.parse(localStorage.getItem(draftKey) || '{}'); } catch { return {}; }
-  });
+  // U32 (список 26.10): ЕДИНЫЙ стейдж tripStaging + подписка на его события.
+  // Раньше страница читала localStorage один раз при монтировании и не слышала
+  // изменения из вкладки «Закупка и чеки» — ввод чека не перерисовывал
+  // «Закупка/По дням/На человека». Теперь saveActualPrice/setExcluded рассылают
+  // событие, sync() ниже обновляет оба набора — зависимые экраны перерисовываются.
+  const tripKey = String(id ?? '');
+  const [draftOverrides, setDraftOverrides] = useState<Record<string, ActualPriceDraft>>({});
+  const [shoppingExcluded, setShoppingExcluded] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    try { localStorage.setItem(draftKey, JSON.stringify(draftOverrides)); } catch { /* quota/SSR — не критично */ }
-  }, [draftKey, draftOverrides]);
+    const sync = () => {
+      setDraftOverrides(loadActualPrices(tripKey));
+      setShoppingExcluded(loadExcluded(tripKey));
+    };
+    sync();
+    return onTripStageChange(tripKey, sync);
+  }, [tripKey]);
 
-  // ===== Фаза 13 (п.5): soft-disable позиций — только на клиенте =====
-  // Хуки ОБЯЗАТЕЛЬНО до ранних return-ов (loading/error) — иначе rules-of-hooks.
-  const excludedKey = `trip-shopping-excluded-${id ?? ''}`;
-  const [shoppingExcluded, setShoppingExcluded] = useState<Set<string>>(() => {
-    try {
-      const raw = JSON.parse(localStorage.getItem(excludedKey) || '[]') as unknown;
-      return Array.isArray(raw) ? new Set(raw.filter((x): x is string => typeof x === 'string')) : new Set();
-    } catch { return new Set(); }
-  });
-
-  useEffect(() => {
-    try { localStorage.setItem(excludedKey, JSON.stringify([...shoppingExcluded])); } catch { /* noop */ }
-  }, [excludedKey, shoppingExcluded]);
+  // ===== Патч «UX-список 26.10»: серверные правки состава (U30), ручные позиции (U40),
+  // справочник продуктов для фасовки/категорий (U38/U40), сортировка закупки (U26),
+  // чекбокс-чеклист «куплено» в рамках сессии (U38). =====
+  const [tripEdits, setTripEdits] = useState<TripIngredientEdit[]>([]);
+  const [manualItems, setManualItems] = useState<TripManualItem[]>([]);
+  const [products, setProducts] = useState<any[]>([]);
+  const [sortSpec, setSortSpec] = useState<{ field: ShoppingSortField; dir: SortDir }>({ field: 'ingredientName', dir: 'asc' });
+  const [checklistBought, setChecklistBought] = useState<Set<string>>(new Set());
+  const [manualCtx, setManualCtx] = useState<{ dayId: string | null; dayLabel?: string } | null>(null);
 
   useEffect(() => {
     if (id) {
@@ -152,7 +168,7 @@ export default function TripDetailPage() {
     try {
       setLoading(true);
       setError(null);
-      const [tripData, recipesData, pricesData, tripRecipesData] = await Promise.all([
+      const [tripData, recipesData, pricesData, tripRecipesData, editsData, manualData, productsData] = await Promise.all([
         api.get<Trip>(`/trips/${id}`),
         getRecipes(),
         // V20: цены КОНКРЕТНОГО похода (trip-scoped копии продуктов, замороженный план);
@@ -161,12 +177,23 @@ export default function TripDetailPage() {
         // V20: trip-scoped копии блюд (меню похода ссылается на них).
         // Release-1.0: через getTripRecipes — нормализация плоских DTO снапшотов
         // (иначе в меню/закупке «Unknown» и единица «шт» по умолчанию).
-        getTripRecipes(String(id)).catch(() => [] as Recipe[])
+        getTripRecipes(String(id)).catch(() => [] as Recipe[]),
+        // U30: серверные правки состава — overlay на карточки меню
+        getTripEdits(String(id)).catch(() => [] as TripIngredientEdit[]),
+        // U40: ручные позиции закупки (продукты к дню/походу)
+        getManualItems(String(id)).catch(() => [] as TripManualItem[]),
+        // U38/U40: фасовка и категории продуктов для чеклиста/модалки (best effort:
+        // в real-режиме не-админ может не иметь доступа — тогда чеклист без упаковок)
+        api.get<any>('/admin/products', { params: { size: '1000' } }).catch(() => null),
       ]);
       setTrip(tripData);
       setRecipes(recipesData);
       setTripRecipes(tripRecipesData);
       setPrices(pricesData);
+      setTripEdits(editsData);
+      setManualItems(manualData);
+      const prodList = Array.isArray(productsData) ? productsData : (productsData?.content ?? []);
+      setProducts(prodList.map((p: any) => ({ ...p, category: categoryName(p) })));
     } catch (err: any) {
       console.error('Failed to load trip:', err);
       // ЗАДАЧА 3: тост; устаревшие данные не сбрасываем намеренно —
@@ -261,8 +288,28 @@ export default function TripDetailPage() {
   // Calculations
   // Фаза 13 (п.6): фактические цены и исключения применяются поверх базового
   // расчёта — все вкладки и KPI-карточки считают из одного источника.
-  const menuByDays = calculateMenuByDays(trip as any, recipesMap);
-  const baseShoppingList = calculateShoppingList(trip as any, recipesMap, prices);
+  // U30: карта «trip-scoped копия блюда → базовый рецепт» (real-снепшоты; mock
+  // использует суффикс '::t', который снимает stripSnapshotSuffix внутри overlay).
+  const snapshotOfMap = new Map<string, string>();
+  for (const r of tripRecipes) {
+    const so = (r as any).snapshotOf;
+    if (so != null) snapshotOfMap.set(String(r.id), String(so));
+  }
+  const menuByDays = calculateMenuByDays(trip as any, recipesMap).map(day => ({
+    ...day,
+    meals: day.meals.map(m => {
+      const rid = String((m as any).recipeId ?? '');
+      const mEdits = tripEdits.filter(e => editMatchesRecipe(e, rid, snapshotOfMap));
+      if (!mEdits.length) return m;
+      // добавленные/исключённые/замещённые/масштабированные позиции — как на сервере
+      return { ...m, ingredients: overlayEditsOnIngredients(m.ingredients as any, mEdits as any, m.servings) as typeof m.ingredients };
+    }),
+  }));
+  // U40: ручные позиции (к дню и к походу) вливаются в закупку на весь поход
+  const baseShoppingList = mergeManualIntoShopping(
+    calculateShoppingList(trip as any, recipesMap, prices),
+    manualItems,
+  );
 
   const shoppingList = baseShoppingList.map((item, idx) => {
     void idx;
@@ -282,12 +329,26 @@ export default function TripDetailPage() {
   // ВАЖНО: хуки объявлены ДО ранних return-ов выше — порядок одинаковый всегда.
 
   const toggleShoppingExcluded = (ingredientId: string) => {
-    setShoppingExcluded(prev => {
-      const next = new Set(prev);
-      if (next.has(ingredientId)) next.delete(ingredientId);
-      else next.add(ingredientId);
-      return next;
-    });
+    const next = new Set(shoppingExcluded);
+    if (next.has(ingredientId)) next.delete(ingredientId);
+    else next.add(ingredientId);
+    // U32: пишем в общий стейдж — событие обновит и эту страницу, и «Закупка и чеки»
+    persistExcluded(tripKey, next);
+    setShoppingExcluded(next);
+  };
+
+  /** U40: перечитать ручные позиции после добавления/удаления. */
+  const refreshManual = async () => {
+    try { setManualItems(await getManualItems(String(id))); } catch { /* список останется прежним */ }
+  };
+
+  const handleDeleteManual = async (itemId: string) => {
+    try {
+      await deleteManualItem(String(id), itemId);
+      await refreshManual();
+    } catch (err: any) {
+      showError(err?.detail || 'Не удалось удалить позицию');
+    }
   };
 
   const visibleShopping = shoppingList.map(i => ({ ...i, excluded: i.excluded || shoppingExcluded.has(i.ingredientId) }));
@@ -307,7 +368,12 @@ export default function TripDetailPage() {
     />
   );
 
-  const baseDayShopping = calculateDayShopping(trip as any, recipesMap, prices);
+  // U40: позиции дня (dayId) добавляются к закупке этого дня; U27: алфавитная сортировка
+  const dayIdByDate = new Map((trip.days ?? []).map(d => [d.dayDate, d.id]));
+  const baseDayShopping = calculateDayShopping(trip as any, recipesMap, prices).map(day => ({
+    ...day,
+    items: mergeManualIntoShopping(day.items, manualForDay(manualItems, dayIdByDate.get(day.dayDate) ?? '')),
+  }));
   const dayShopping = baseDayShopping.map(day => {
     const items = day.items.map(item => {
       const cost = item.estimatedCost ?? 0;
@@ -319,10 +385,15 @@ export default function TripDetailPage() {
       };
     });
     const dayCost = items.filter(i => !i.excluded).reduce((a, i) => a + (i.effectiveCost || 0), 0);
-    return { ...day, items, dayCost };
+    // U27: «Закупка по дням» — по алфавиту, чтобы можно было найти позиции
+    const sorted = [...items].sort((a, b) => compareRu(a.ingredientName, b.ingredientName));
+    return { ...day, items: sorted, dayCost };
   });
 
-  const { summary: personSummaryBase, tripSummary: tripSummaryBase } = calculatePersonSummary(trip as any, recipesMap, prices);
+  // U33: «на человека» — по реальному количеству людей (среднее по дням с учётом
+  // peopleOverride), а не по defaultPeople
+  const realPeople = realTripPeople(trip as any);
+  const { summary: personSummaryBase, tripSummary: tripSummaryBase } = calculatePersonSummary(trip as any, recipesMap, prices, realPeople);
   // Release-1.0 (UI-consistency): KPI шапки и «Итого» в закупке — ОДИН источник.
   // Раньше при отсутствии чеков/исключений KPI брал tripSummaryBase.totalCost, а с ними —
   // shoppingTotalFinal; суммы считались разными путями и спорили друг с другом
@@ -332,7 +403,8 @@ export default function TripDetailPage() {
   const tripSummary = {
     ...tripSummaryBase,
     totalCost: totalCostFinal,
-    costPerDefaultPerson: totalCostFinal / Math.max(1, trip.defaultPeople || 1),
+    // U33: реальное число людей (без override'ов равно defaultPeople — совместимость)
+    costPerDefaultPerson: totalCostFinal / Math.max(1, realPeople),
     costPerPersonMeal: totalCostFinal / Math.max(1, tripSummaryBase.totalPersonMeals || 1),
   };
   // «На человека»: фактические цены (unit price) применяются к каждой доле напрямую;
@@ -346,7 +418,64 @@ export default function TripDetailPage() {
         ? actualUnit * p.amountPerDefaultPerson
         : (p.costPerDefaultPerson != null && match && shoppingExcluded.has(match.ingredientId) ? 0 : p.costPerDefaultPerson),
     };
-  });
+  })
+  // U28: «На человека» — по алфавиту
+  .sort((a, b) => compareRu(a.ingredientName, b.ingredientName));
+
+  // U26: сортируемая таблица «Закупка на поход»
+  const sortedShopping = sortRows(visibleShopping, sortSpec as any);
+
+  // U38: чеклист закупки в упаковках. Информация о фасовке/категориях — из
+  // справочника продуктов (best effort), фолбэк — вложенные ingredient-объекты
+  // trip-рецептов (mock отдаёт их полностью; real-плоские DTO — без фасовки,
+  // тогда строки идут «по потребности», backend-долг в PLAN).
+  const productInfo = new Map<string, ChecklistProductInfo>();
+  for (const r of [...recipes, ...tripRecipes]) {
+    for (const ri of ((r as any).ingredients || [])) {
+      const ing = ri?.ingredient ?? ri;
+      if (ing?.id != null && !productInfo.has(String(ing.id))) {
+        productInfo.set(String(ing.id), { packSize: ing.packSize, roundToPacks: ing.roundToPacks, category: categoryName(ing) });
+      }
+    }
+  }
+  for (const p of products) {
+    productInfo.set(String(p.id), { packSize: p.packSize, roundToPacks: p.roundToPacks, category: categoryName(p) });
+  }
+  // U40: опции продуктов для модалки ручных позиций. Если /admin/products недоступен
+  // (real-режим, не-админ) — фолбэк из ингредиентов блюд похода (ограниченный набор).
+  const manualProductOptions = (() => {
+    if (products.length > 0) return products;
+    const seen = new Map<string, any>();
+    for (const r of [...recipes, ...tripRecipes]) {
+      for (const ri of ((r as any).ingredients || [])) {
+        const ing = ri?.ingredient ?? ri;
+        if (ing?.id != null && ing?.name && !seen.has(String(ing.id))) {
+          seen.set(String(ing.id), {
+            id: String(ing.id), name: String(ing.name),
+            unit: ing.unit ?? 'PCS', category: categoryName(ing), enabled: ing.enabled,
+          });
+        }
+      }
+    }
+    return [...seen.values()];
+  })();
+
+  const checklist = buildChecklist(
+    includedShoppingFinal.map(i => ({
+      ingredientId: String(i.ingredientId),
+      ingredientName: i.ingredientName,
+      unit: i.unit,
+      totalAmount: i.totalAmount,
+    })),
+    productInfo,
+  );
+  const toggleBought = (key: string) => {
+    setChecklistBought(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  };
 
   const tabs = [
     { id: 'menu' as TabType, label: 'Меню по дням', icon: <BookOpen size={16} /> },
@@ -354,6 +483,8 @@ export default function TripDetailPage() {
     { id: 'dayShopping' as TabType, label: 'Закупка по дням', icon: <Calendar size={16} /> },
     { id: 'person' as TabType, label: 'На человека', icon: <Users size={16} /> },
     { id: 'overrides' as TabType, label: 'Закупка и чеки', icon: <TrendingUp size={16} /> },
+    // U38: чеклист закупки в упаковках — рядом с вводом чека
+    { id: 'checklist' as TabType, label: 'Чеклист', icon: <ClipboardCheck size={16} /> },
   ];
 
   return (
@@ -367,6 +498,18 @@ export default function TripDetailPage() {
             {new Date(trip.startDate).toLocaleDateString('ru-RU')} — {new Date(trip.endDate).toLocaleDateString('ru-RU')} • {trip.defaultPeople} чел.
           </p>
         </div>
+        {/* U40: продукты к походу в целом (аптечка, антисептик…) — вне блюд */}
+        <Button
+          variant="ghost"
+          onClick={() => setManualCtx({ dayId: null })}
+          aria-label="Продукты к походу"
+          title="Продукты к походу (аптечка, антисептик и т.п.)"
+        >
+          <PackagePlus size={20} />
+          {manualForTrip(manualItems).length > 0 && (
+            <span className="text-xs font-bold" style={{ color: 'var(--w1)' }}>{manualForTrip(manualItems).length}</span>
+          )}
+        </Button>
       </div>
 
       {/* Summary cards */}
@@ -446,6 +589,17 @@ export default function TripDetailPage() {
                       <Users size={16} />
                     </button>
                     <button
+                      onClick={(e) => { e.stopPropagation(); setManualCtx({ dayId: tripDay.id, dayLabel: new Date(tripDay.dayDate).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' }) }); }}
+                      className="p-1.5 rounded transition-colors"
+                      style={{ color: 'var(--muted)' }}
+                      onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--w1)'; e.currentTarget.style.background = 'color-mix(in srgb, var(--wave-400) 10%, transparent)'; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--muted)'; e.currentTarget.style.background = 'transparent'; }}
+                      title="Добавить продукт к дню (не блюдо)"
+                      aria-label="Добавить продукт к дню"
+                    >
+                      <PackagePlus size={16} />
+                    </button>
+                    <button
                       onClick={(e) => { e.stopPropagation(); setAddMealCtx({ dayId: tripDay.id, dayDate: tripDay.dayDate, dayIndex: idx + 1 }); }}
                       className="p-1.5 rounded transition-colors"
                       style={{ color: 'var(--muted)' }}
@@ -517,9 +671,22 @@ export default function TripDetailPage() {
                           </div>
                         </div>
                         <div className="flex flex-wrap gap-2 mt-2">
+                          {/* U30: добавленные в походе позиции видны рядом со «старыми»
+                              ингредиентами (бейдж «+»), замены подписываются источником */}
                           {meal.ingredients.map((ing, i) => (
-                            <span key={i} className="text-xs px-2 py-0.5 rounded" style={{ background: 'var(--elev)', color: 'var(--muted)' }}>
-                              {ing.name}: {formatAmount(ing.amount, ing.unit)}
+                            <span
+                              key={i}
+                              className="text-xs px-2 py-0.5 rounded"
+                              title={ing.added ? 'Добавлено в походе' : ing.substitutedFrom ? `Замена: ${ing.substitutedFrom} → ${ing.name}` : undefined}
+                              style={ing.added ? {
+                                background: 'color-mix(in srgb, var(--wave-400) 14%, transparent)',
+                                color: 'var(--w1)',
+                                border: '1px solid color-mix(in srgb, var(--wave-400) 40%, transparent)',
+                                fontWeight: 600,
+                              } : { background: 'var(--elev)', color: 'var(--muted)' }}
+                            >
+                              {ing.added ? '+ ' : ''}{ing.name}: {formatAmount(ing.amount, ing.unit)}
+                              {ing.substitutedFrom ? ` ← ${ing.substitutedFrom}` : ''}
                             </span>
                           ))}
                         </div>
@@ -529,6 +696,27 @@ export default function TripDetailPage() {
                     {day.meals.length === 0 && (
                       <div className="px-4 py-6 text-center text-sm" style={{ color: 'var(--muted)' }}>
                         Нет приёмов пищи. Нажмите + чтобы добавить.
+                      </div>
+                    )}
+                    {/* U40: ручные позиции дня (антисептик во вторник и т.п.) */}
+                    {manualForDay(manualItems, tripDay.id).length > 0 && (
+                      <div className="px-4 py-2 pl-12 flex flex-wrap gap-2" style={{ borderTop: '1px solid var(--border)' }}>
+                        {manualForDay(manualItems, tripDay.id).map(mi => (
+                          <span key={mi.id} className="text-xs px-2 py-1 rounded inline-flex items-center gap-1.5"
+                            style={{ background: 'color-mix(in srgb, var(--wave-400) 12%, transparent)', color: 'var(--text)' }}>
+                            <PackagePlus size={11} style={{ color: 'var(--w1)' }} />
+                            {mi.ingredientName}: {formatAmount(mi.amount, mi.unit)}
+                            {mi.note ? ` · ${mi.note}` : ''}
+                            <button
+                              onClick={() => void handleDeleteManual(mi.id)}
+                              aria-label={`Удалить позицию: ${mi.ingredientName}`}
+                              className="p-0.5 rounded"
+                              style={{ color: 'var(--muted)' }}
+                            >
+                              <X size={11} />
+                            </button>
+                          </span>
+                        ))}
                       </div>
                     )}
                   </div>
@@ -555,13 +743,36 @@ export default function TripDetailPage() {
                 <tr>
                   {/* Фаза 13 (п.5): чекбокс soft-disable — исключить из расчёта, не удаляя */}
                   <th className="px-4 py-3 font-medium" style={{ color: 'var(--muted)' }} aria-label="В расчёт" />
-                  <th className="text-left px-4 py-3 font-medium" style={{ color: 'var(--muted)' }}>Продукт</th>
-                  <th className="text-right px-4 py-3 font-medium" style={{ color: 'var(--muted)' }}>Количество</th>
-                  <th className="text-right px-4 py-3 font-medium" style={{ color: 'var(--muted)' }}>Стоимость</th>
+                  {/* U26: сортируемые заголовки — клик переключает asc/desc */}
+                  {([
+                    { field: 'ingredientName' as ShoppingSortField, label: 'Продукт', align: 'left' },
+                    { field: 'totalAmount' as ShoppingSortField, label: 'Количество', align: 'right' },
+                    { field: 'effectiveCost' as ShoppingSortField, label: 'Стоимость', align: 'right' },
+                  ]).map(col => (
+                    <th
+                      key={col.field}
+                      className={`text-${col.align} px-4 py-3 font-medium`}
+                      style={{ color: 'var(--muted)' }}
+                      aria-sort={sortSpec.field === col.field ? (sortSpec.dir === 'asc' ? 'ascending' : 'descending') : 'none'}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => setSortSpec(prev => prev.field === col.field
+                          ? { field: col.field, dir: nextDir(prev.dir) }
+                          : { field: col.field, dir: 'asc' })}
+                        className={`inline-flex items-center gap-1 transition-colors ${col.align === 'right' ? 'flex-row-reverse' : ''}`}
+                        style={{ color: sortSpec.field === col.field ? 'var(--w1)' : 'var(--muted)', fontWeight: sortSpec.field === col.field ? 700 : 500 }}
+                        aria-label={`Сортировать по: ${col.label}`}
+                      >
+                        {col.label}
+                        <ArrowUpDown size={12} style={{ opacity: sortSpec.field === col.field ? 1 : 0.45 }} />
+                      </button>
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody style={{ borderTop: '1px solid var(--border)' }}>
-                {visibleShopping.map(item => (
+                {sortedShopping.map(item => (
                   <tr key={item.ingredientId} style={{ borderTop: '1px solid var(--border)', opacity: item.excluded ? 0.45 : 1 }}>
                     <td className="px-4 py-3">
                       <ExclusionCheckbox ingredientId={item.ingredientId} />
@@ -632,10 +843,15 @@ export default function TripDetailPage() {
           {/* Summary */}
           <div className="rounded-xl p-5" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
             <h3 className="font-bold mb-3" style={{ color: 'var(--text)' }}>Сводка</h3>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
               <div>
                 <p className="text-xs" style={{ color: 'var(--muted)' }}>Человеко-приёмов</p>
                 <p className="text-lg font-bold" style={{ color: 'var(--text)' }}>{tripSummary.totalPersonMeals}</p>
+              </div>
+              <div>
+                {/* U33: реальное число людей (среднее по дням с учётом override'ов) */}
+                <p className="text-xs" style={{ color: 'var(--muted)' }}>Людей в походе</p>
+                <p className="text-lg font-bold" style={{ color: 'var(--text)' }}>{Math.round(realPeople * 10) / 10}</p>
               </div>
               <div>
                 <p className="text-xs" style={{ color: 'var(--muted)' }}>На 1 чел. (общее)</p>
@@ -689,6 +905,65 @@ export default function TripDetailPage() {
         <PriceOverridesTab tripId={trip.id} />
       )}
 
+      {/* U38: «Чеклист» — что брать в магазине: ЦЕЛЫЕ упаковки (округление вверх),
+          группы по категориям, алфавит. Исключённые позиции не попадают (их не берём).
+          Отметки «взято» живут в рамках сессии — это рабочий лист магазина, не данные похода. */}
+      {activeTab === 'checklist' && (
+        <div className="space-y-3">
+          <div className="rounded-xl p-4" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+            <h3 className="font-bold" style={{ color: 'var(--text)' }}>Чеклист закупки</h3>
+            <p className="text-sm mt-1" style={{ color: 'var(--muted)' }}>
+              Целые упаковки к покупке (округление вверх — излишек остаётся на следующий поход).
+              Отмечайте, что уже взяли.
+            </p>
+          </div>
+          {checklist.length === 0 && (
+            <div className="rounded-xl p-8 text-center text-sm" style={{ background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--muted)' }}>
+              В закупке нет позиций — добавьте приёмы пищи или продукты к дню/походу.
+            </div>
+          )}
+          {checklist.map(group => (
+            <div key={group.category} className="rounded-xl overflow-hidden" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+              <div className="px-4 py-2.5" style={{ borderBottom: '1px solid var(--border)', background: 'var(--elev)' }}>
+                <h4 className="text-sm font-bold" style={{ color: 'var(--text)' }}>{group.category}</h4>
+              </div>
+              {group.rows.map(row => {
+                const bought = checklistBought.has(row.ingredientId);
+                return (
+                  <div key={row.ingredientId} className="flex items-center gap-3 px-4 py-2.5 text-sm"
+                       style={{ borderTop: '1px solid var(--border)', opacity: bought ? 0.55 : 1 }}>
+                    <input
+                      type="checkbox"
+                      checked={bought}
+                      onChange={() => toggleBought(row.ingredientId)}
+                      aria-label={`Взято: ${row.name}`}
+                      className="cursor-pointer shrink-0"
+                      style={{ accentColor: 'var(--w2)' }}
+                    />
+                    <span className="flex-1" style={{ color: 'var(--text)', textDecoration: bought ? 'line-through' : 'none' }}>
+                      {row.name}
+                    </span>
+                    {row.packsToBuy != null ? (
+                      <span className="text-right shrink-0">
+                        <b style={{ color: 'var(--w1)' }}>{row.packsToBuy} × {formatAmount(row.packSize ?? 0, row.unit)}</b>
+                        <span className="text-xs block" style={{ color: 'var(--muted)' }}>
+                          нужно {formatAmount(row.needed, row.unit)}{row.leftover > 1e-9 ? `, излишек ${formatAmount(row.leftover, row.unit)}` : ''}
+                        </span>
+                      </span>
+                    ) : (
+                      <span className="text-right shrink-0">
+                        <b style={{ color: 'var(--text)' }}>{formatAmount(row.needed, row.unit)}</b>
+                        <span className="text-xs block" style={{ color: 'var(--muted)' }}>по потребности</span>
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Модалка A — «Добавить приём пищи» (FORM-spec §2.1): одна commit-кнопка,
           контекст дня, превью блюда; состав здесь НЕ редактируется */}
       {addMealCtx && trip && (
@@ -713,6 +988,21 @@ export default function TripDetailPage() {
           onClose={() => setCompositionMeal(null)}
           onSaved={() => { void loadData(); }}
           onEditCatalogRecipe={(recipeId) => { navigate(`/recipes?edit=${recipeId}`); }}
+        />
+      )}
+
+      {/* Модалка ручных позиций (U40): продукты к дню (dayId) или ко всему походу (null) */}
+      {manualCtx && trip && (
+        <ManualItemsModal
+          tripId={trip.id}
+          dayId={manualCtx.dayId}
+          dayLabel={manualCtx.dayLabel}
+          items={manualCtx.dayId == null
+            ? manualForTrip(manualItems)
+            : manualForDay(manualItems, manualCtx.dayId)}
+          products={manualProductOptions}
+          onClose={() => setManualCtx(null)}
+          onChanged={() => { void refreshManual(); }}
         />
       )}
     </div>

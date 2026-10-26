@@ -13,6 +13,7 @@ import { formatRub, categoryName } from '../utils/format'; // Release-1.0: ед�
 import type { CompositionItem, CompositionPutRequest, CompositionResponse } from '../api/client';
 import type { Ingredient, MealType, UnitOfMeasure } from '../types';
 import { parseAmount } from './AddMealModal';
+import AmountInput from './AmountInput';
 
 /**
  * FORM-meal-composition-spec §2.2 — Модалка B «Состав приёма».
@@ -36,8 +37,11 @@ const MEAL_TYPE_LABELS: Record<MealType, string> = {
   BREAKFAST: 'Завтрак', LUNCH: 'Обед', DINNER: 'Ужин', SNACK: 'Перекус',
 };
 
-/** Черновик строки в desired-состоянии PUT (диф считается от серверного snapshot). */
-type DraftState = 'RECIPE' | 'SCALED' | 'EXTRA' | 'EXCLUDED';
+/** Черновик строки в desired-состоянии PUT (диф считается от серверного snapshot).
+ * REMOVED — клиентский маркер U39: серверная EXTRA-строка удалена пользователем;
+ * в desired-PUT такая строка НЕ попадает (keepExtra-семантика бэкенда/mock:
+ * EXTRA отсутствует в items ⇒ правка удаляется). */
+type DraftState = 'RECIPE' | 'SCALED' | 'EXTRA' | 'EXCLUDED' | 'REMOVED';
 
 interface RowDraft {
   state: DraftState;
@@ -85,7 +89,8 @@ export default function MealCompositionModal({
   const [products, setProducts] = useState<Ingredient[]>([]);
   const [addQuery, setAddQuery] = useState('');
   const [addSelected, setAddSelected] = useState<string>('');
-  const [addAmount, setAddAmount] = useState('');
+  // U31: количество добавляемого продукта — число в базовых единицах (AmountInput)
+  const [addAmount, setAddAmount] = useState<number | null>(null);
   // инлайн-подтверждение merge для уже присутствующего продукта (§2.2)
   const [mergeAsk, setMergeAsk] = useState<{ ingredientId: string; current: number; unit: UnitOfMeasure; wanted: number } | null>(null);
   // инлайн-предложение «добавить как новый продукт», если поиска в составе нет (§2.2)
@@ -146,12 +151,16 @@ export default function MealCompositionModal({
     return () => { cancelled = true; };
   }, []);
 
-  /** Все видимые строки таблицы: серверные + черновые EXTRA (дедуп по ingredientId). */
+  /** Все видимые строки таблицы: серверные + черновые EXTRA (дедуп по ingredientId).
+   * U39: строки с черновиком REMOVED скрываются сразу (до сохранения), а в desired-PUT
+   * не попадают — сервер удаляет EXTRA-правку (keepExtra). */
   const rows = useMemo(() => {
-    const base: Array<CompositionItem & { draft?: RowDraft }> = (server?.items ?? []).map((it) => ({
-      ...it,
-      draft: drafts[String(it.ingredientId)],
-    }));
+    const base: Array<CompositionItem & { draft?: RowDraft }> = (server?.items ?? [])
+      .filter((it) => drafts[String(it.ingredientId)]?.state !== 'REMOVED')
+      .map((it) => ({
+        ...it,
+        draft: drafts[String(it.ingredientId)],
+      }));
     const known = new Set(base.map((b) => String(b.ingredientId)));
     for (const e of extraRows) {
       if (known.has(e.ingredientId)) continue;
@@ -171,7 +180,7 @@ export default function MealCompositionModal({
   const effOf = useCallback((row: CompositionItem & { draft?: RowDraft }): number => {
     const d = row.draft;
     if (!d) return row.effectiveAmount;
-    if (d.state === 'EXCLUDED') return 0;
+    if (d.state === 'EXCLUDED' || d.state === 'REMOVED') return 0;
     if (d.state === 'SCALED') return d.amount ?? row.effectiveAmount;
     if (d.state === 'EXTRA') return d.extraAmount ?? row.effectiveAmount;
     return row.effectiveAmount;
@@ -246,10 +255,23 @@ export default function MealCompositionModal({
 
   const resetRow = (row: CompositionItem) => setDraft(String(row.ingredientId), null);
 
+  /**
+   * U39 (red-green): «Удалить» у добавленного продукта.
+   * Баг: для СЕРВЕРНОЙ EXTRA-строки прежний код лишь сбрасывал draft, а buildPutBody
+   * снова отправлял {state:'EXTRA'} из серверного состояния — строка воскресала
+   * после сохранения. Теперь: черновая (ещё не сохранённая) EXTRA-строка просто
+   * убирается из extraRows, а серверная помечается черновиком REMOVED и не
+   * попадает в desired-PUT → бэкенд/mock удаляют EXTRA-правку при коммите.
+   */
   const removeExtra = (row: CompositionItem) => {
     const ingId = String(row.ingredientId);
+    const isDraftRow = extraRows.some((e) => e.ingredientId === ingId);
     setExtraRows((prev) => prev.filter((e) => e.ingredientId !== ingId));
-    setDraft(ingId, null);
+    if (isDraftRow) {
+      setDraft(ingId, null);
+    } else {
+      setDraft(ingId, { state: 'REMOVED' });
+    }
   };
 
   // ===== Добавление продукта (§2.2: поиск + обязательное количество > 0, merge-подтверждение) =====
@@ -271,7 +293,7 @@ export default function MealCompositionModal({
   };
 
   const addProduct = (confirmed = false) => {
-    const n = parseAmount(addAmount);
+    const n = addAmount;
     if (!addSelected || !(n != null && n > 0)) {
       showError('Укажите продукт и количество больше нуля');
       return;
@@ -290,7 +312,7 @@ export default function MealCompositionModal({
       return;
     }
     commitAdd(prod, n);
-    setAddSelected(''); setAddAmount(''); setAddQuery(''); setMergeAsk(null); setAddAsk(null);
+    setAddSelected(''); setAddAmount(null); setAddQuery(''); setMergeAsk(null); setAddAsk(null);
   };
 
   /**
@@ -298,7 +320,7 @@ export default function MealCompositionModal({
    * предлагаем добавить его отдельным подтверждением — иначе набранное название молча терялось.
    */
   const offerFreeTextAdd = () => {
-    const n = parseAmount(addAmount);
+    const n = addAmount;
     const q = addQuery.trim();
     if (!(q && n != null && n > 0)) return;
     // совпадение с уже добавленным черновым EXTRA — merge, а не новая строка
@@ -315,7 +337,7 @@ export default function MealCompositionModal({
       ingredientId: id, name: addAsk.name, unit: addAsk.unit, amount: addAsk.amount,
       categoryId: addAskCategory || categories[0]?.id,
     }]);
-    setAddSelected(''); setAddAmount(''); setAddQuery(''); setMergeAsk(null); setAddAsk(null);
+    setAddSelected(''); setAddAmount(null); setAddQuery(''); setMergeAsk(null); setAddAsk(null);
   };
 
   // ===== Замена (инлайн-раскрытие строки, §2.2) =====
@@ -356,6 +378,8 @@ export default function MealCompositionModal({
       // id справочника (resolveFreeRows) — на сервер уходят только числовые id.
       const ingId = idMap.get(String(row.ingredientId)) ?? String(row.ingredientId);
       const d = row.draft;
+      // U39: удалённая EXTRA-строка НЕ входит в desired-PUT — сервер снимет правку сам
+      if (d?.state === 'REMOVED') continue;
       if (d?.state === 'EXCLUDED') { items.push({ ingredientId: ingId, state: 'EXCLUDED' }); continue; }
       if (d?.state === 'SCALED') {
         const eff = d.amount ?? row.effectiveAmount;
@@ -564,9 +588,6 @@ export default function MealCompositionModal({
                   const subActive = substitutes.find((s) => s.fromIngredientId === ingId);
                   const fromReplaced = (server.substitutions ?? []).some((s) => String(s.fromIngredientId) === ingId) || !!subActive;
                   const hint = packHint(row);
-                  const inputValue = excluded ? '' : String(
-                    Math.round(eff * 1000) / 1000,
-                  ).replace('.', ',');
                   return (
                     <tr key={ingId} data-row={ingId} style={{ borderTop: '1px solid var(--border)', opacity: excluded || fromReplaced ? 0.55 : 1 }}>
                       <td className="py-2 pr-2 align-top">
@@ -577,19 +598,16 @@ export default function MealCompositionModal({
                           <span style={{ color: 'var(--muted)' }}>———</span>
                         ) : (
                           <>
-                            <div className="flex items-center gap-1">
-                              <input
-                                type="text"
-                                inputMode="decimal"
-                                aria-label={`Количество: ${row.name}`}
-                                value={inputValue}
-                                disabled={fromReplaced}
-                                onChange={(e) => onQuantityChange(row, e.target.value)}
-                                className="w-20 px-2 py-1 rounded text-right"
-                                style={{ background: 'var(--elev)', border: '1px solid var(--border)', color: 'var(--text)' }}
-                              />
-                              <span style={{ color: 'var(--muted)' }}>{row.unit ? humanize(1, row.unit).split(' ')[1] ?? row.unit : ''}</span>
-                            </div>
+                            {/* U31: ввод в г/мл с переключателем — без «0,015 кг» */}
+                            <AmountInput
+                              size="sm"
+                              value={eff}
+                              unit={row.unit}
+                              disabled={fromReplaced}
+                              onChange={(n) => onQuantityChange(row, String(n))}
+                              ariaLabel={`Количество: ${row.name}`}
+                              testId={`qty-${ingId}`}
+                            />
                             {hint && <div className="text-xs mt-0.5" style={{ color: 'var(--muted)' }}>{hint}</div>}
                           </>
                         )}
@@ -695,13 +713,13 @@ export default function MealCompositionModal({
                 </div>
                 <div>
                   <label className="block text-xs mb-1" style={{ color: 'var(--muted)' }}>Кол-во</label>
-                  <input
-                    type="text" inputMode="decimal" aria-label="Количество добавляемого продукта"
+                  {/* U31: AmountInput — г/мл для KG/L, шт/уп для PCS/PACK */}
+                  <AmountInput
                     value={addAmount}
-                    onChange={(e) => { setAddAmount(e.target.value); setMergeAsk(null); }}
-                    className="w-full px-2 py-2 rounded-lg"
-                    style={{ background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text)' }}
-                    placeholder="0,25"
+                    unit={products.find((p) => String(p.id) === addSelected)?.unit ?? 'PCS'}
+                    onChange={(v) => { setAddAmount(v); setMergeAsk(null); }}
+                    ariaLabel="Количество добавляемого продукта"
+                    testId="add-amount"
                   />
                 </div>
                 <Button variant="primary" size="sm" onClick={() => { if (addSelected) addProduct(false); else offerFreeTextAdd(); }} aria-label="Добавить продукт в состав">

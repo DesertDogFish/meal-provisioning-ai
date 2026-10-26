@@ -50,6 +50,13 @@ export default defineConfig({
         'src/components/NumberField.tsx',
         // админ-редактор блюд (экран «Каталог блюд»)
         'src/components/RecipeEditorModal.tsx',
+        // Патч «UX-список 26.10» (R5): новые утилиты и компоненты
+        'src/utils/rowSort.ts',
+        'src/utils/menuOverlay.ts',
+        'src/utils/manualItems.ts',
+        'src/utils/checklist.ts',
+        'src/components/AmountInput.tsx',
+        'src/components/ManualItemsModal.tsx',
       ],
     },
   },

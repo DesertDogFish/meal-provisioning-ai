@@ -53,7 +53,8 @@ describe('RecipeEditorModal — создание', () => {
     fireEvent.focus(productInput);
     fireEvent.change(productInput, { target: { value: 'греч' } });
     fireEvent.mouseDown(screen.getByRole('button', { name: /Гречка/ }));
-    fireEvent.change(screen.getByLabelText('Количество'), { target: { value: '0,1' } });
+    // U31: AmountInput для KG — ввод в граммах: 100 г = 0,1 кг (без «0,1 кг» дробями)
+    fireEvent.change(screen.getByLabelText('Количество'), { target: { value: '100' } });
 
     fireEvent.click(screen.getByRole('button', { name: 'Создать блюдо' }));
 
@@ -107,7 +108,10 @@ describe('RecipeEditorModal — редактирование', () => {
     renderEditor(recipe);
     await screen.findByDisplayValue('Гречка'); // продукты загрузились, строка сматчена
     expect((screen.getByLabelText('Название') as HTMLInputElement).value).toBe('Уха из рыбных консервов');
-    expect((screen.getByLabelText('Количество') as HTMLInputElement).value).toBe('0.05');
+    // U31: 0,05 кг отображается в граммах — «50» (после загрузки справочника продуктов)
+    await waitFor(() =>
+      expect((screen.getByLabelText('Количество') as HTMLInputElement).value).toBe('50'),
+    );
     expect((screen.getByLabelText('Продукт') as HTMLInputElement).value).toBe('Гречка');
   });
 

@@ -50,6 +50,16 @@ PostgreSQL 15 + Flyway V1–V20 (без.hand-right схем: ddl-auto=validate)
 
 Агрегат по ингредиенту: сумма по приёмам дня (by-days) и по дням (shopping). Упаковки: при `round_to_packs` и `pack_size`: `packsToBuy = ceil(total/pack_size)`, `buyAmount = packs×pack_size`, `leftover = buyAmount − total`.
 
+### Патч «UX-список 26.10» (U26–U42) — клиентские контракты
+
+- **Чеклист закупки (вкладка «Чеклист»)** — та же упаковочная формула (`utils/checklist.ts`, паритет `SummaryService.calculatePacks`), но считается из клиентской закупки (единый источник вкладок) + информации о фасовке/категориях из справочника продуктов (best effort) и trip-рецептов. Группы — по категориям (алфавит, «Прочее» последняя), внутри — алфавит. Отметки «взято» — сессионные (не данные похода).
+- **«На человека» (U33)** — делитель `realPeople = Σ effectivePeople(дни) / число дней` (min 1); без peopleOverride совпадает с `defaultPeople` (обратная совместимость фикстур). Формула в `utils/calculations.ts: realTripPeople`.
+- **Overlay меню (U30)** — карточка приёма показывает серверные правки состава (`GET /trips/{id}/substitutions`): EXTRA (+бейдж), EXCLUDED (скрыт), SUBST (`from → to × ratio`), SCALE (`× ratio`). Id-сопоставление — по базовому id (mock-суффикс `::t…` снимается) и `snapshotOf` trip-копий. Semantics — паритет `classifyEdits` c mock `classifyMealEdits`/backend `MealCompositionService`. EXTRA: `absoluteAmount` (абсолют на приём, §3) либо legacy `amountPerServing × people`.
+- **Ручные позиции (U40, mock+UI-часть R3)** — `GET/POST /trips/{id}/manual-items`, `DELETE /trips/{id}/manual-items/{itemId}`; DTO `TripManualItem {id, tripId, dayId|null, ingredientId, ingredientName, unit, amount, note?}`; amount — абсолют (не на порцию). Вливаются в «Закупка на поход» (все), «По дням» (dayId), «Чеклист» (все). Backend-долг: миграция `trip_manual_items` (следующий номер — V22) + контроллер по этому контракту.
+- **PUT /trips/{id} (U36, mock)** — имя/заметки/defaultPeople всегда; смена дат перегенерирует дни (план, правки состава и ручные позиции стираются — UI предупреждает confirm'ом). Backend-долг: снять запрет смены дат в `TripService.updateTrip` с той же семантикой.
+- **Модалка B (U39)** — desired-PUT не включает EXTRA-строку, помеченную «Удалить» (черновой state `REMOVED`); отсутствие EXTRA в items = удаление правки (keepExtra-семантика backend/mock).
+- **Единицы ввода (U31)** — `AmountInput`: для KG/L ввод в г/мл с переключателем «г↔кг» (порог 1000), наружу всегда базовые единицы (контракт T0 не меняется). Промежуточный 0 не эмитится (исключение — кнопкой «Искл.»).
+
 ### Стоимость (план/факт)
 
 - **План по дням:** `qty_day × plannedUnitPrice(ingredient, day)` — цена = последняя с `effective_from ≤ date` (price-series кэш, DISTINCT ON-запросы).
