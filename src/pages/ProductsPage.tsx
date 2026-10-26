@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useToast } from '../components/ToastProvider';
 import { Plus, Search, X } from 'lucide-react';
 import { NumberField } from '../components/NumberField';
@@ -93,8 +93,17 @@ export default function ProductsPage() {
   };
 
 
-  // Проверка дубликата
+  // Проверка дубликата.
+  // U23 (flaky e2e): две защиты от гонок —
+  // 1) отменяемый debounce: клик по единице отменяет незавершённую проверку
+  //    со старой единицей (иначе медленный ответ перезаписывал свежий warning);
+  // 2) сторож по порядковому номеру: устаревший асинхронный ответ не влияет
+  //    на состояние, если уже запущена более новая проверка.
+  const dupCheckSeq = useRef(0);
+  const dupDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const checkDuplicate = async (name: string, unit: UnitOfMeasure) => {
+    const seq = ++dupCheckSeq.current;
     if (!name) {
       setDuplicateWarning(null);
       return;
@@ -104,7 +113,8 @@ export default function ProductsPage() {
       const response = await api.get<any>(
         `/admin/products/check-name?name=${encodeURIComponent(name)}&unit=${unit}`
       );
-      
+      if (seq !== dupCheckSeq.current) return; // уже запущена более новая проверка
+
       if (response.duplicate) {
         if (response.sameUnit) {
           setDuplicateWarning({
@@ -121,10 +131,17 @@ export default function ProductsPage() {
         setDuplicateWarning(null);
       }
     } catch (error) {
+      if (seq !== dupCheckSeq.current) return;
       console.error('Failed to check duplicate:', error);
       // ЗАДАЧА 3: пользователь узнаёт, что проверка дубля не выполнена
       showError('Не удалось проверить наличие такого же продукта');
     }
+  };
+
+  /** Отменяет незавершённый debounce и планирует проверку дубля через 300 мс. */
+  const scheduleDuplicateCheck = (name: string, unit: UnitOfMeasure) => {
+    if (dupDebounce.current) clearTimeout(dupDebounce.current);
+    dupDebounce.current = setTimeout(() => checkDuplicate(name, unit), 300);
   };
 
   const handleSave = async () => {
@@ -391,7 +408,7 @@ export default function ProductsPage() {
                   value={formName}
                   onChange={e => {
                     setFormName(e.target.value);
-                    setTimeout(() => checkDuplicate(e.target.value, formUnit), 300);
+                    scheduleDuplicateCheck(e.target.value, formUnit);
                   }}
                   className="w-full px-3 py-2.5 rounded-lg outline-none"
                   style={{ background: 'var(--elev)', border: '1px solid var(--border)', color: 'var(--text)' }}
@@ -433,7 +450,8 @@ export default function ProductsPage() {
                       key={u}
                       onClick={() => {
                         setFormUnit(u);
-                        checkDuplicate(formName, u);
+                        // U23: отменяем незавершённый debounce-чек со старой единицей
+                        scheduleDuplicateCheck(formName, u);
                       }}
                       className="flex-1 px-4 py-2.5 rounded-lg font-bold transition-all"
                       style={{

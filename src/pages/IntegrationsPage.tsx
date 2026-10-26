@@ -60,7 +60,7 @@ export default function IntegrationsPage() {
   const handleApiError = (error: any, fallback: string) => {
     const msg = extractErrorMessage(error);
     if (/not connected|Provider is not connected/i.test(msg)) {
-      showError('Функция в разработке: интеграция OFF пока недоступна');
+      showError('Интеграция OFF не подключена — сначала подключите её, чтобы обновлять цены');
       return;
     }
     showError(msg || fallback);
@@ -288,8 +288,10 @@ export default function IntegrationsPage() {
             <div>
               <h2 className="text-xl font-bold" style={{ color: 'var(--text)' }}>Open Food Facts</h2>
               <p className="text-sm mt-1" style={{ color: 'var(--muted)' }}>
-                Open Food Facts используется для идентификации продуктов (штрихкод, название, бренд, фото).
-                Цены необходимо вводить вручную или импортировать из других источников.
+                Open Food Facts идентифицирует продукты (штрихкод, название, бренд, фото)
+                и обновляет данные карточек. Цены синхронизируются из Open Prices —
+                краудсорсинговой базы цен OFF — и конвертируются в рубли по ежедневному
+                курсу ЦБ РФ. Введённые вручную цены не перезаписываются.
               </p>
               <div className="flex items-center gap-2 mt-2">
                 {offIntegration && getStatusIcon(offIntegration.status)}

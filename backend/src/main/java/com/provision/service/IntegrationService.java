@@ -286,6 +286,23 @@ public class IntegrationService {
                     int[] counts = applyMappingPricesInTx(mapping, product, prices, providerCode);
                     created += counts[0];
                     updated += counts[1];
+
+                    // FIX (U11): обновление карточки внешнего продукта
+                    // (название/бренд/фасовка/фото) — только для провайдеров,
+                    // умеющих ProductInfoProvider. Провал не считаем ошибкой
+                    // синхронизации: цены уже сохранены, карточка вторична.
+                    if (provider instanceof ProductInfoProvider infoProvider) {
+                        try {
+                            Optional<ExternalProductDto> info =
+                                    infoProvider.fetchProductInfo(mapping.getExternalCode());
+                            if (info.isPresent()) {
+                                updated += updateExternalProductInTx(product, info.get());
+                            }
+                        } catch (Exception e) {
+                            log.warn("Product card update failed for external code {}: {}",
+                                    mapping.getExternalCode(), e.getMessage());
+                        }
+                    }
                 } catch (Exception e) {
                     log.error("Failed to sync prices for mapping {}: {}", mapping.getId(), e.getMessage());
                     errors++;
@@ -357,6 +374,48 @@ public class IntegrationService {
             }
         }
         return new int[]{created, updated};
+    }
+
+    /**
+     * FIX (U11): короткая транзакция — обновление полей карточки внешнего
+     * продукта свежими данными провайдера (название, бренд, фасовка, фото).
+     * Пустые значения из ответа не затирают существующие данные.
+     *
+     * @return 1, если изменено хотя бы одно поле (идёт в SyncLog.updatedCount), иначе 0
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public int updateExternalProductInTx(ExternalProduct product, ExternalProductDto info) {
+        boolean changed = false;
+        if (hasText(info.name()) && !info.name().equals(product.getName())) {
+            product.setName(info.name());
+            changed = true;
+        }
+        if (hasText(info.brand()) && !info.brand().equals(product.getBrand())) {
+            product.setBrand(info.brand());
+            changed = true;
+        }
+        if (info.packAmount() != null
+                && (product.getPackAmount() == null
+                    || product.getPackAmount().compareTo(info.packAmount()) != 0)) {
+            product.setPackAmount(info.packAmount());
+            changed = true;
+        }
+        if (hasText(info.packUnit()) && !info.packUnit().equals(product.getPackUnit())) {
+            product.setPackUnit(info.packUnit());
+            changed = true;
+        }
+        if (hasText(info.imageUrl()) && !info.imageUrl().equals(product.getImageUrl())) {
+            product.setImageUrl(info.imageUrl());
+            changed = true;
+        }
+        if (changed) {
+            externalProductRepository.save(product);
+        }
+        return changed ? 1 : 0;
+    }
+
+    private static boolean hasText(String s) {
+        return s != null && !s.isBlank();
     }
 
     /** Финализация лога и last_sync_at в отдельной короткой транзакции (фон без TX). */

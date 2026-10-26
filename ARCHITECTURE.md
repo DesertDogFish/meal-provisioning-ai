@@ -100,6 +100,8 @@ DTO-рассинхрон имён/единиц закрыт нормализац
 - страницы похода берут блюда через `GET /trips/{id}/recipes`, цены — через `GET /trips/{id}/prices` (trip-scoped срезы; fallback на глобальные для походов без снепшотов, созданных до V20);
 - уникальность имени продукта (`name_norm`, `unit`) — partial-индекс только по глобальным.
 
+Семантика удаления блюд (U16): `DELETE /admin/recipes/{id}` отвечает 409 только если приёмы походов ссылаются НАПРЯМУЮ на этот id — после V20 это возможно лишь для legacy-строк до миграции (бэкфил V20 перевёл все походы на снепшоты). Походы, держащие snapshot-копии, от удаления глобального оригинала не страдают, поэтому клиент (RecipesPage/AdminPage) больше не блокирует удаление превентивно по `usedIn`, а просто вызывает DELETE и показывает ответ сервера. Mock-сервер держит паритет: при удалении занятого глобального блюда mock перепривязывает такие приёмы на снепшот-копии (`snapRecipeForTrip`) вместо 409.
+
 Расчётное ядро (SummaryService) не изменилось: копии лежат в тех же таблицах и читаются теми же запросами по id ингредиентов похода.
 
 Правила привязки (Release-1.0, econ-guardian — охраняются `EconomicConsistencyTest`):
@@ -109,6 +111,17 @@ DTO-рассинхрон имён/единиц закрыт нормализац
 - миграция V21 дополнительно дедуплицировала legacy-снепшоты (канон — MIN(id) на (trip_id, snapshot_of), перепривязка recipe_ingredients/substitutions/overrides).
 
 Бэкфил: миграция V20 перевела существовавшие походы на снепшоты (temp-таблицы соответствий, перепривязка overrides/exclusions/substitutions). Повторный прогон миграций безопасен (IF NOT EXISTS + DROP temp-таблиц в начале).
+
+## Внешние цены и карточки продуктов (U11: Open Prices + ЦБ РФ)
+
+Пайплайн синхронизации цен (`POST /admin/integrations/{provider}/sync/prices` → 202 `{logId}` → фоновый `IntegrationService.executePriceSync`) берёт реальные данные из проектов Open Food Facts:
+
+- **Цены — Open Prices** (`prices.openfoodfacts.org`, `GET /api/v1/prices?product_code=…&order_by=-date&size=10`): краудсорсинговые цены по штрихкоду в валюте магазина. Провайдер конвертирует их в RUB по ежедневному курсу ЦБ РФ; цена в валюте без доступного курса пропускается (graceful degradation — локальная база хранит только рубли).
+- **Курсы — ЦБ РФ** (`ExchangeRateService`, `cbr-xml-daily.ru/daily_json.js`): курс = `Value / Nominal` (у части валют Nominal = 10/100), RUB всегда 1; кэш на календарные сутки; при недоступности ЦБ используется предыдущий кэш, а без кэша цены в иностранных валютах просто пропускаются — синхронизация не падает.
+- **Карточки продуктов — OFF Product API v2** (`ProductInfoProvider.fetchProductInfo`): при синхронизации цен для провайдеров, реализующих интерфейс (`instanceof`-хук в `executePriceSync`), освежаются название/бренд/фасовка/фото `ExternalProduct`; изменения идут в `SyncLog.updatedCount`, провал обновления карточки не считается ошибкой синхронизации (цены уже сохранены).
+- Пайплайн записи цен прежний: `applyMappingPricesInTx` фильтрует RUB, считает цену за единицу из фасовки (`calculateUnitPrice`), upsert-ит `IngredientPrice` по датам и никогда не перезаписывает `source=MANUAL`.
+- Все HTTP-запросы OFF/Open Prices проходят единый throttling (`acquireSearchSlot`: ≤10 req/min, интервал 6.5 c, экспоненциальный backoff на 429/5xx). U11 попутно исправил критический баг main: формула ожидания была инвертирована («прошло − интервал» вместо «интервал − прошло») — при стартовом `lastSearchAt = EPOCH` первый запрос засыпал на ~56 лет (полный hang поиска/синка), а permit семафора не освобождался (deadlock второго запроса). Теперь permit освобождается в `finally`, регресс охраняет `throttleDoesNotSleepForeverAndReleasesPermit`.
+- Конфигурация: `integration.off.products-url`, `integration.off.prices-url`, `integration.cbr.url`. Mock-сервер повторяет контракт роутов `/admin/integrations*` (список IntegrationDto, connect/disconnect, sync-logs, sync → `{logId}` с фоновым переходом лога в SUCCESS со счётчиками, products/search → ExternalProductDto, ingredients/:id/mapping), включая коды 409 `INTEGRATION_DISCONNECTED` / `SYNC_ALREADY_RUNNING` и 404 для неизвестного провайдера (`mockIntegrations.test.ts`).
 
 ## Правки состава приёма (V19 + composition API)
 
@@ -180,11 +193,13 @@ GET  /api/v1/trips/{id}/summary/{menu|shopping|shopping/by-days|person}
 - `PriceResolutionService` — actual = override ?: planned.
 - `SecurityConfig` + `JwtService`/`JwtAuthenticationFilter` — stateless JWT, CORS из ENV, fail-fast секрета (`JwtProperties.validate`).
 - `DevDataInitializer` / `DevTripsInitializer` — демо-пользователи и демо-походы (profile `dev` + `SEED_DEMO_USERS=true`), демо-походы создаются через снепшот-сервис.
+- `OpenFoodFactsProvider` (`PriceProvider` + `ProductInfoProvider`) — поиск/карточки продуктов OFF + цены Open Prices (U11); `ExchangeRateService` — ежедневные курсы ЦБ РФ к RUB (кэш на сутки, graceful degradation).
 - `GlobalExceptionHandler` — коды конфликтов и field-errors.
 
 ### Frontend
 
 - `api/client.ts` — режимы, refresh single-flight, `auth:session-lost`; `api/mockServer.ts` — mock-паритет роутов.
+- `Modal` — единая портальная модалка (U3/U21): оверлей `.modal-overlay`, закрытие крестиком / Esc / кликом по фону; все модальные окна (TripForm, AddMealModal, MealCompositionModal, RecipeEditorModal, ApiModeBadge, детали рецепта/продукта, ввод чека) рендерятся через портал, e2e-селекторы скопятся на `.modal-overlay`.
 - `TripDetailPage` (5 вкладок) + `PriceOverridesTab` (чеки план/факт); `RecipeEditorModal` (админ-редактор блюда с составом); `ProductsPage` (CRUD + цена срезу); `CustomSelect/NumberField/DateRange/DatePicker` (контракты CR-3/CR-4).
 - Дизайн-система «Провиант»: токены в `src/index.css`, design-pack в `provisions/` (источник правды дизайна; миграция — DESIGN_MIGRATION.md, ведётся отдельно).
 

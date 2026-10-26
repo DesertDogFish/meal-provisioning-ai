@@ -121,3 +121,32 @@ test('E2E-08 очистка демо-кеша с подтверждением', 
   // после resetSeedData() идёт reload — снова видимый бейдж demo-режима
   await expect(page.getByText(/демо-режим/).first()).toBeVisible({ timeout: 15_000 });
 });
+
+test('E2E-09 поход с сидами: открывается, имена блюд видны, добавление приёма (U6/U7)', async ({ page }) => {
+  await login(page, { email: 'user@provision.app', password: 'password123' });
+  await page.goto('/dashboard');
+  // U6: сидовый поход (userId 2 = user@) открывается без белого экрана/краша
+  await page.locator('[data-testid^="trip-card-"]', { hasText: 'Карельский' }).first().click();
+  await expect(page).toHaveURL(/\/trips\/trip1/, { timeout: 15_000 });
+  await expect(page.getByText('Поход на Карельский перешеек').first()).toBeVisible();
+
+  // День по умолчанию свёрнут — раскрываем первый (5 приёмов пищи)
+  await page.getByText('5 приёмов пищи').first().click();
+
+  // U7: в меню видны НАЗВАНИЯ блюд, а не пустые строки
+  await expect(page.getByText('Овсяная каша').first()).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByText('Гречка с тушёнкой').first()).toBeVisible();
+  await expect(page.locator('[aria-label="Состав приёма: Рис с рыбой"]')).toHaveCount(1);
+
+  // Добавление приёма: модалка не должна ломаться (U6), комбобокс блюда внутри оверлея
+  await page.locator('button[title="Добавить приём пищи"]').first().click();
+  const overlay = page.locator('.modal-overlay');
+  await expect(overlay.getByRole('heading', { name: 'Добавить приём пищи' })).toBeVisible();
+  await overlay.getByRole('combobox', { name: 'Поиск блюда' }).fill('Рис с рыбой');
+  await page.getByRole('option', { name: /Рис с рыбой/ }).first().click();
+  await overlay.getByRole('button', { name: 'Добавить', exact: true }).click();
+
+  // Модалка закрылась, в дне стало два приёма «Рис с рыбой» (был обед + новый)
+  await expect(page.locator('.modal-overlay')).toHaveCount(0, { timeout: 10_000 });
+  await expect(page.locator('[aria-label="Состав приёма: Рис с рыбой"]')).toHaveCount(2, { timeout: 10_000 });
+});
