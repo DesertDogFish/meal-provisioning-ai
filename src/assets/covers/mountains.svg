@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 400" role="img" aria-label="Горы">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1e293b"/>
+      <stop offset="1" stop-color="#f59e0b"/>
+    </linearGradient>
+  </defs>
+  <rect width="800" height="400" fill="url(#sky)"/>
+  <circle cx="180" cy="86" r="34" fill="#fef3c7" opacity="0.9"/>
+  <path d="M-40 400 L 200 130 L 420 400 Z" fill="#334155"/>
+  <path d="M200 130 L 262 208 L 232 214 L 208 196 L 182 216 L 152 206 Z" fill="#e2e8f0"/>
+  <path d="M260 400 L 520 90 L 780 400 Z" fill="#475569"/>
+  <path d="M520 90 L 596 182 L 560 190 L 528 168 L 496 192 L 458 180 Z" fill="#f1f5f9"/>
+  <path d="M520 400 L 700 210 L 880 400 Z" fill="#1e293b" opacity="0.9"/>
+  <rect y="360" width="800" height="40" fill="#0f172a" opacity="0.6"/>
+</svg>

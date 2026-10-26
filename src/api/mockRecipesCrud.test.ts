@@ -4,7 +4,8 @@ import { mockServer } from './mockServer';
 
 /**
  * CONTRACT-P1: CRUD рецептов в mock-режиме должен повторять бэкенд:
- * POST/PUT/DELETE /admin/recipes, 400 c errors[], 404, 409 RECIPE_IN_USE.
+ * POST/PUT/DELETE /admin/recipes, 400 c errors[], 404; U16: DELETE занятого
+ * рецепта больше не 409 — приём перепривязывается на снепшот-копию (паритет V20).
  */
 const call = (method: string, path: string, body?: unknown) =>
   mockServer.handleRequest<any>(method, path, body as any);
@@ -86,20 +87,24 @@ describe('MOCK-RECIPES: CRUD /admin/recipes', () => {
     expect(caught2?.status).toBe(404);
   });
 
-  it('DELETE рецепта, занятого в походе → 409 RECIPE_IN_USE с usedIn', () => {
+  it('U16: DELETE рецепта, занятого в походе, — без 409: каталог чист, приём перепривязан на снепшот-копию', () => {
     const trips = call('GET', '/trips', null);
     const usedRecipeId = trips
       .flatMap((t: any) => t.days ?? [])
       .flatMap((d: any) => d.meals ?? [])
       .map((m: any) => m.recipeId)[0];
     expect(usedRecipeId).toBeTruthy();
-    let caught: any = null;
-    try {
-      call('DELETE', `/admin/recipes/${usedRecipeId}`, null);
-    } catch (e) {
-      caught = e;
-    }
-    expect(caught?.status).toBe(409);
-    expect(caught?.usedIn?.length).toBeGreaterThanOrEqual(1);
+    const tripId = trips.find((t: any) =>
+      (t.days ?? []).some((d: any) => (d.meals ?? []).some((m: any) => m.recipeId === usedRecipeId))
+    ).id;
+    // не бросает — удаление занятого рецепта больше не конфликт
+    call('DELETE', `/admin/recipes/${usedRecipeId}`, null);
+    // из глобального каталога блюдо исчезло
+    const globals = call('GET', '/recipes', null);
+    expect(globals.some((r: any) => r.id === usedRecipeId)).toBe(false);
+    // поход жив: приём ссылается на trip-scoped копию `${id}::t${tripId}`
+    const trip = call('GET', `/trips/${tripId}`, null);
+    const meals = (trip.days ?? []).flatMap((d: any) => d.meals ?? []);
+    expect(meals.some((m: any) => m.recipeId === `${usedRecipeId}::t${tripId}`)).toBe(true);
   });
 });

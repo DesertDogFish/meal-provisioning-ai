@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 400" role="img" aria-label="Море">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0c4a6e"/>
+      <stop offset="1" stop-color="#38bdf8"/>
+    </linearGradient>
+    <linearGradient id="sea" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0ea5e9"/>
+      <stop offset="1" stop-color="#082f49"/>
+    </linearGradient>
+  </defs>
+  <rect width="800" height="400" fill="url(#sky)"/>
+  <circle cx="640" cy="90" r="42" fill="#fbbf24" opacity="0.9"/>
+  <rect y="220" width="800" height="180" fill="url(#sea)"/>
+  <path d="M0 240 Q 100 224 200 240 T 400 240 T 600 240 T 800 240 V 400 H 0 Z" fill="#0369a1" opacity="0.55"/>
+  <path d="M0 280 Q 120 262 240 280 T 480 280 T 800 280 V 400 H 0 Z" fill="#075985" opacity="0.6"/>
+  <path d="M0 330 Q 140 312 280 330 T 560 330 T 800 330 V 400 H 0 Z" fill="#0c4a6e" opacity="0.75"/>
+  <path d="M120 250 l14 -34 l14 34 z" fill="#f8fafc" opacity="0.85"/>
+  <rect x="132" y="248" width="4" height="18" fill="#e2e8f0" opacity="0.8"/>
+</svg>

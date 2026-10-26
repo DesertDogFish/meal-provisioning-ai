@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 400" role="img" aria-label="Лес">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#064e3b"/>
+      <stop offset="1" stop-color="#34d399"/>
+    </linearGradient>
+  </defs>
+  <rect width="800" height="400" fill="url(#sky)"/>
+  <circle cx="620" cy="80" r="30" fill="#ecfccb" opacity="0.85"/>
+  <rect y="330" width="800" height="70" fill="#022c22"/>
+  <g fill="#065f46">
+    <path d="M60 340 L110 180 L160 340 Z"/><path d="M70 280 L110 150 L150 280 Z"/>
+    <path d="M220 340 L280 150 L340 340 Z"/><path d="M232 270 L280 120 L328 270 Z"/>
+    <path d="M420 340 L470 190 L520 340 Z"/><path d="M430 285 L470 160 L510 285 Z"/>
+    <path d="M600 340 L660 160 L720 340 Z"/><path d="M612 275 L660 130 L708 275 Z"/>
+  </g>
+  <g fill="#022c22">
+    <rect x="104" y="330" width="12" height="26"/><rect x="274" y="330" width="12" height="26"/>
+    <rect x="464" y="330" width="12" height="26"/><rect x="654" y="330" width="12" height="26"/>
+  </g>
+  <path d="M0 366 Q 200 352 400 366 T 800 366 V 400 H 0 Z" fill="#052e16"/>
+</svg>

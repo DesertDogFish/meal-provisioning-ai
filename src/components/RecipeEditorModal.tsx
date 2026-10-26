@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Plus, Trash2, X } from 'lucide-react';
 import { Button } from './Button';
+import Modal from './Modal';
 import { api } from '../api/client';
 import { useToast } from './ToastProvider';
 import { validateRecipe } from '../utils/validation';
@@ -97,6 +98,9 @@ export default function RecipeEditorModal({ recipe, categories, onClose, onSaved
     }))
   );
   const [openPicker, setOpenPicker] = useState<number | null>(null);
+  // U15 (список багов 25.10): категория — свободный ввод со стилизованными
+  // подсказками существующих категорий (нативный datalist выглядел чужеродно).
+  const [catOpen, setCatOpen] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
 
@@ -153,6 +157,14 @@ export default function RecipeEditorModal({ recipe, categories, onClose, onSaved
       .filter(p => p.name.toLowerCase().includes(q) && !taken.has(String(p.id)))
       .slice(0, 7);
   };
+
+  /** U15: подсказки категорий — фильтр по введённой подстроке, без точного дубля. */
+  const catSuggestions = useMemo(() => {
+    const q = category.trim().toLowerCase();
+    return categories
+      .filter(c => c.toLowerCase() !== q && (!q || c.toLowerCase().includes(q)))
+      .slice(0, 8);
+  }, [categories, category]);
 
   const updateRow = (key: number, patch: Partial<Row>) =>
     setRows(prev => prev.map(r => (r.key === key ? { ...r, ...patch } : r)));
@@ -225,11 +237,14 @@ export default function RecipeEditorModal({ recipe, categories, onClose, onSaved
   const inputStyle = { background: 'var(--elev)', border: '1px solid var(--border)', color: 'var(--text)' };
 
   return (
-    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4" onClick={onClose}>
+    /* Список багов 25.10 (U3/U14): единый оверлей приложения — общий <Modal>
+       (портал в body + .modal-overlay: затемнение+blur, всегда по центру вьюпорта).
+       Прежний собственный `fixed bg-black/60` без портала центрировался по
+       скролл-контейнеру страницы и «уезжал» за экран. */
+    <Modal onClose={onClose}>
       <div
         className="rounded-2xl shadow-xl w-full max-w-2xl p-6 max-h-[85vh] overflow-y-auto"
         style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
-        onClick={e => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
         aria-label={recipe ? 'Редактирование блюда' : 'Новое блюдо'}
@@ -281,21 +296,44 @@ export default function RecipeEditorModal({ recipe, categories, onClose, onSaved
               <label className="block text-sm mb-1" style={{ color: 'var(--muted)' }} htmlFor="recipe-category">
                 Категория
               </label>
-              <input
-                id="recipe-category"
-                type="text"
-                list="recipe-categories"
-                value={category}
-                onChange={e => setCategory(e.target.value)}
-                placeholder="Супы, Каши, Второе…"
-                className="w-full px-3 py-2.5 rounded-lg outline-none"
-                style={inputStyle}
-              />
-              <datalist id="recipe-categories">
-                {categories.map(c => (
-                  <option key={c} value={c} />
-                ))}
-              </datalist>
+              <div className="relative">
+                <input
+                  id="recipe-category"
+                  type="text"
+                  value={category}
+                  onChange={e => { setCategory(e.target.value); setCatOpen(true); }}
+                  onFocus={() => setCatOpen(true)}
+                  onBlur={() => setTimeout(() => setCatOpen(false), 150)}
+                  placeholder="Супы, Каши, Второе…"
+                  aria-describedby="recipe-category-hint"
+                  className="w-full px-3 py-2.5 rounded-lg outline-none"
+                  style={inputStyle}
+                />
+                {catOpen && catSuggestions.length > 0 && (
+                  <ul
+                    className="absolute z-10 mt-1 w-full rounded-lg overflow-hidden text-sm"
+                    style={{ background: 'var(--elev)', border: '1px solid var(--border)' }}
+                    role="listbox"
+                    aria-label="Существующие категории"
+                  >
+                    {catSuggestions.map(c => (
+                      <li key={c}>
+                        <button
+                          type="button"
+                          className="w-full text-left px-3 py-2 hover:opacity-80"
+                          style={{ color: 'var(--text)' }}
+                          onMouseDown={() => { setCategory(c); setCatOpen(false); }}
+                        >
+                          {c}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+              <p id="recipe-category-hint" className="text-xs mt-1" style={{ color: 'var(--muted)' }}>
+                Свободный ввод: выберите существующую или впишите свою.
+              </p>
             </div>
             <div>
               <label className="block text-sm mb-1" style={{ color: 'var(--muted)' }} htmlFor="recipe-cook">
@@ -435,6 +473,6 @@ export default function RecipeEditorModal({ recipe, categories, onClose, onSaved
           </Button>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }

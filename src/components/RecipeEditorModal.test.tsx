@@ -124,3 +124,27 @@ describe('RecipeEditorModal — редактирование', () => {
     );
   });
 });
+
+describe('RecipeEditorModal — категория (U15: свободный ввод + подсказки)', () => {
+  it('фокус открывает стилизованный список существующих категорий', async () => {
+    renderEditor();
+    await waitFor(() => expect(api.get).toHaveBeenCalled());
+    const cat = screen.getByLabelText('Категория') as HTMLInputElement;
+    fireEvent.focus(cat);
+    expect(await screen.findByRole('listbox', { name: 'Существующие категории' })).toBeTruthy();
+    expect(screen.getByText('Каши')).toBeTruthy();
+  });
+
+  it('клик по подсказке подставляет категорию; свой текст сохраняется', async () => {
+    renderEditor();
+    await waitFor(() => expect(api.get).toHaveBeenCalled());
+    const cat = screen.getByLabelText('Категория') as HTMLInputElement;
+    fireEvent.focus(cat);
+    fireEvent.change(cat, { target: { value: 'Суп' } });
+    fireEvent.mouseDown(await screen.findByText('Супы'));
+    expect(cat.value).toBe('Супы');
+    // категория — свободный ввод: можно вписать своё значение, которого нет в списке
+    fireEvent.change(cat, { target: { value: 'Десерты' } });
+    expect(cat.value).toBe('Десерты');
+  });
+});

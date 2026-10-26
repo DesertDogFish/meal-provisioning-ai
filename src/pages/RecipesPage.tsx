@@ -2,12 +2,11 @@ import { useState, useMemo, useEffect, useCallback } from 'react';
 import { Pencil, Plus, Search, Trash2, Utensils, X } from 'lucide-react';
 import { MealType } from '../types';
 import { formatAmount } from '../utils/calculations';
-import { humanizeCategory, servingsWord } from '../utils/text';
+import { humanizeCategory, servingsWord, ingredientsWord } from '../utils/text';
 import { api, getRecipes } from '../api/client';
 import { useToast } from '../components/ToastProvider';
 import Modal from '../components/Modal';
 import RecipeEditorModal from '../components/RecipeEditorModal';
-import { ConflictError } from '../utils/errors';
 import { Button } from '../components/Button';
 
 interface Recipe {
@@ -64,18 +63,10 @@ export default function RecipesPage() {
   };
 
   const handleDelete = async (recipe: Recipe) => {
-    let used = false;
-    try {
-      const trips = await api.get<Array<{ days?: Array<{ meals?: Array<{ recipeId: string | number }> }> }>>('/trips');
-      used = trips.some(t => t.days?.some(d => d.meals?.some(m => String(m.recipeId) === String(recipe.id))));
-    } catch {
-      showError('Не удалось проверить использование рецепта в походах');
-      return;
-    }
-    if (used) {
-      showError(new ConflictError(`Рецепт «${recipe.name}» используется в походах и не может быть удалён`).toProblemDetail());
-      return;
-    }
+    // U16 (список багов 25.10): блюда — сущность верхнего уровня. Походы с V20
+    // живут на снапшотах рецептов, поэтому клиентская блокировка «используется
+    // в походах» устарела: удаление спрашивает только подтверждение, а сервер
+    // гарантирует изоляцию походов (доснепшотит висящие ссылки при удалении).
     if (!window.confirm(`Удалить рецепт «${recipe.name}»? Действие необратимо.`)) return;
     try {
       await api.del(`/admin/recipes/${recipe.id}`);
@@ -217,15 +208,27 @@ export default function RecipesPage() {
             />
           </div>
           
-          <Button variant="primary" size="sm" onClick={() => setFilterMealType('')} aria-label="Показать все рецепты">Все {counts.all}</Button>
-          
-          <Button variant="primary" size="sm" onClick={() => setFilterMealType('BREAKFAST')} aria-label="Фильтр: Завтрак">Завтрак {counts.breakfast}</Button>
-          
-          <Button variant="primary" size="sm" onClick={() => setFilterMealType('LUNCH')} aria-label="Фильтр: Обед">Обед {counts.lunch}</Button>
-          
-          <Button variant="primary" size="sm" onClick={() => setFilterMealType('DINNER')} aria-label="Фильтр: Ужин">Ужин {counts.dinner}</Button>
-          
-          <Button variant="primary" size="sm" onClick={() => setFilterMealType('SNACK')} aria-label="Фильтр: Перекус">Перекус {counts.snack}</Button>
+          {/* U2 (список багов 25.10): активный фильтр — primary («рыжий» полный),
+              неактивные — soft (приглушённые) + aria-pressed: сразу видно,
+              какой фильтр применён. */}
+          {([
+            { value: '' as MealType | '', label: 'Все', count: counts.all, aria: 'Показать все рецепты' },
+            { value: 'BREAKFAST' as MealType, label: 'Завтрак', count: counts.breakfast, aria: 'Фильтр: Завтрак' },
+            { value: 'LUNCH' as MealType, label: 'Обед', count: counts.lunch, aria: 'Фильтр: Обед' },
+            { value: 'DINNER' as MealType, label: 'Ужин', count: counts.dinner, aria: 'Фильтр: Ужин' },
+            { value: 'SNACK' as MealType, label: 'Перекус', count: counts.snack, aria: 'Фильтр: Перекус' },
+          ]).map(chip => (
+            <Button
+              key={chip.value || 'all'}
+              variant={filterMealType === chip.value ? 'primary' : 'soft'}
+              size="sm"
+              aria-pressed={filterMealType === chip.value}
+              onClick={() => setFilterMealType(chip.value)}
+              aria-label={chip.aria}
+            >
+              {chip.label} {chip.count}
+            </Button>
+          ))}
         </div>
 
         {/* Вторая строка: категория, без огня, сброс */}
@@ -275,7 +278,7 @@ export default function RecipesPage() {
               <div
                 key={recipe.id}
                 onClick={() => setSelectedRecipe(recipe.id)}
-                className="rounded-xl p-4 transition-all hover:scale-[1.02] cursor-pointer flex flex-col"
+                className="rounded-xl p-4 lift cursor-pointer flex flex-col"
                 style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
               >
                 <h3 className="font-bold mb-2" style={{ color: 'var(--text)' }}>{recipe.name}</h3>
@@ -301,9 +304,25 @@ export default function RecipesPage() {
                   )}
                 </div>
                 <div className="mt-auto pt-3 flex items-center justify-between gap-2" style={{ borderTop: '1px solid var(--border)' }}>
-                  <span className="text-sm" style={{ color: 'var(--muted)' }}>
-                    {recipe.ingredients.length} ингр.
-                  </span>
+                  {/* U20 (список багов 25.10): состав виден прямо на карточке —
+                      первые два названия + «+N», полный список в title. */}
+                  {(() => {
+                    const names = (recipe.ingredients ?? [])
+                      .map((ri: any) => ri.ingredient?.name ?? ri.ingredientName)
+                      .filter((n: unknown): n is string => Boolean(n));
+                    const shown = names.slice(0, 2).join(', ');
+                    const rest = Math.max(0, names.length - 2);
+                    return (
+                      <span
+                        className="text-xs truncate"
+                        style={{ color: 'var(--muted)', maxWidth: '62%' }}
+                        title={`${recipe.ingredients.length} ${ingredientsWord(recipe.ingredients.length)}: ${names.join(', ')}`}
+                      >
+                        {recipe.ingredients.length} {ingredientsWord(recipe.ingredients.length)}
+                        {shown && <> · {shown}{rest > 0 && ` +${rest}`}</>}
+                      </span>
+                    );
+                  })()}
                   <span className="flex items-center gap-1">
                     {isAdmin && (
                       <>
@@ -357,25 +376,43 @@ export default function RecipesPage() {
         </div>
       )}
 
-      {/* Модалка деталей рецепта */}
+      {/* Модалка деталей рецепта. U13/U21 (список багов 25.10): единая шапка —
+          название, бейджи и действия (править/удалить/крестик) в одном месте;
+          «огромная кнопка Закрыть» внизу убрана, крестик — как во всех модалках.
+          U4: «1 порция» не переносится на две строки (whitespace-nowrap). */}
       {selected && (
         <Modal onClose={() => setSelectedRecipe(null)}>
-          <div className="rounded-2xl shadow-xl w-full max-w-lg p-6 max-h-[80vh] overflow-y-auto" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
-            <div className="flex items-start justify-between mb-4">
-              <div>
+          <div className="rounded-2xl shadow-xl w-full max-w-lg p-6 max-h-[80vh] overflow-y-auto" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }} role="dialog" aria-modal="true" aria-label={`Блюдо: ${selected.name}`}>
+            <div className="flex items-start justify-between gap-3 mb-4">
+              <div className="min-w-0">
                 <h2 className="text-xl font-bold" style={{ color: 'var(--text)' }}>{selected.name}</h2>
-                <div className="flex items-center gap-3 mt-1 text-sm" style={{ color: 'var(--muted)' }}>
-                  <span className="px-2 py-0.5 text-xs font-medium rounded-full" style={{ background: 'color-mix(in srgb, var(--wave-400) 14%, transparent)', color: 'var(--wave-300)' }}>
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-sm" style={{ color: 'var(--muted)' }}>
+                  <span className="px-2 py-0.5 text-xs font-medium rounded-full whitespace-nowrap" style={{ background: 'color-mix(in srgb, var(--wave-400) 14%, transparent)', color: 'var(--wave-300)' }}>
                     {mealTypeLabels[selected.mealType]}
                   </span>
-                  {selected.category && <span className="recipe-category-badge">{humanizeCategory(selected.category)}</span>}
-                  <span>{selected.baseServings} {servingsWord(selected.baseServings)}</span>
-                  {selected.caloriesPerServing && <span>{Math.round(selected.caloriesPerServing)} ккал/{servingsWord(1)} · рассчитано из продуктов</span>}
+                  {selected.category && <span className="recipe-category-badge whitespace-nowrap">{humanizeCategory(selected.category)}</span>}
+                  <span className="whitespace-nowrap">{selected.baseServings} {servingsWord(selected.baseServings)}</span>
+                  {selected.caloriesPerServing && <span className="whitespace-nowrap">{Math.round(selected.caloriesPerServing)} ккал/{servingsWord(1)} · рассчитано из продуктов</span>}
+                  <span className="px-2 py-0.5 text-xs rounded-full whitespace-nowrap" style={{ background: 'var(--elev)', color: 'var(--muted)' }}>
+                    {selected.source === 'MANUAL' ? 'Вручную' : selected.source === 'API' ? 'API' : 'AI'}
+                  </span>
                 </div>
               </div>
-              <span className="px-2 py-0.5 text-xs rounded-full" style={{ background: 'var(--elev)', color: 'var(--muted)' }}>
-                {selected.source === 'MANUAL' ? 'Вручную' : selected.source === 'API' ? 'API' : 'AI'}
-              </span>
+              <div className="flex items-center gap-1 shrink-0">
+                {isAdmin && (
+                  <>
+                    <Button variant="ghost" size="sm" onClick={() => openEdit(selected)} aria-label="Редактировать рецепт" title="Редактировать">
+                      <Pencil size={16} />
+                    </Button>
+                    <Button variant="danger" size="sm" onClick={() => handleDelete(selected)} aria-label="Удалить рецепт" title="Удалить">
+                      <Trash2 size={16} />
+                    </Button>
+                  </>
+                )}
+                <Button variant="ghost" size="sm" onClick={() => setSelectedRecipe(null)} aria-label="Закрыть" title="Закрыть">
+                  <X size={18} />
+                </Button>
+              </div>
             </div>
 
             <h3 className="font-semibold mb-2" style={{ color: 'var(--text)' }}>Ингредиенты:</h3>
@@ -387,19 +424,6 @@ export default function RecipesPage() {
                 </div>
               ))}
             </div>
-            
-            {isAdmin && (
-              <div className="flex gap-3 mt-6">
-                <Button variant="soft" size="sm" onClick={() => openEdit(selected)} aria-label="Редактировать рецепт">
-                                  <Pencil size={15} /> Редактировать
-                                </Button>
-                                <Button variant="danger" size="sm" onClick={() => handleDelete(selected)} aria-label="Удалить рецепт">
-                                  <Trash2 size={15} /> Удалить
-                                </Button>
-              </div>
-            )}
-
-            <Button variant="ghost" size="sm" onClick={() => setSelectedRecipe(null)} className="w-full mt-3" aria-label="Закрыть модалку">Закрыть</Button>
           </div>
         </Modal>
       )}

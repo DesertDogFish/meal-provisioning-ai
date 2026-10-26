@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 400" role="img" aria-label="Кемпинг">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#312e81"/>
+      <stop offset="1" stop-color="#f97316"/>
+    </linearGradient>
+  </defs>
+  <rect width="800" height="400" fill="url(#sky)"/>
+  <circle cx="140" cy="76" r="26" fill="#fef9c3" opacity="0.9"/>
+  <circle cx="300" cy="52" r="3" fill="#fff7ed"/><circle cx="420" cy="88" r="2.5" fill="#fff7ed"/>
+  <circle cx="560" cy="46" r="3" fill="#fff7ed"/><circle cx="700" cy="96" r="2.5" fill="#fff7ed"/>
+  <rect y="320" width="800" height="80" fill="#1c1917"/>
+  <path d="M300 330 L420 170 L540 330 Z" fill="#b45309"/>
+  <path d="M420 170 L420 330 L300 330 Z" fill="#92400e"/>
+  <path d="M404 330 L420 250 L436 330 Z" fill="#292524"/>
+  <g>
+    <path d="M620 322 q6 -18 0 -30 q14 8 12 26 z" fill="#f59e0b"/>
+    <path d="M626 322 q4 -12 0 -20 q9 5 8 17 z" fill="#fbbf24"/>
+    <rect x="606" y="322" width="40" height="6" rx="3" fill="#44403c"/>
+  </g>
+  <path d="M0 352 Q 200 340 400 352 T 800 352 V 400 H 0 Z" fill="#0c0a09"/>
+</svg>

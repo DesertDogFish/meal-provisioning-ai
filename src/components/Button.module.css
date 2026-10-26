@@ -7,13 +7,14 @@
   font: 700 15px/1 var(--font-body);
   border: 1px solid transparent;
   cursor: pointer;
-  transition: transform var(--t-fast) var(--ease), filter var(--t-fast) var(--ease),
+  transition: filter var(--t-fast) var(--ease),
               background var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease);
 }
 
-.btn:hover { transform: translateY(-2px); }
-.btn:active { transform: translateY(1px); }
-.btn:focus-visible { outline: 2px solid var(--amber-500); outline-offset: 2px; }
+/* UX-фикс (список 25.10): без сдвига на hover/active — только «загорание»; рамка по краю */
+.btn:hover { filter: brightness(1.05); }
+.btn:active { filter: brightness(0.97); }
+.btn:focus-visible { outline: 2px solid var(--amber-500); outline-offset: 0; }
 .btn:disabled { opacity: .45; pointer-events: none; }
 
 .primary { background: var(--grad-brand); color: var(--on-fire); box-shadow: var(--shadow-glow); }
@@ -56,4 +57,4 @@
 }
 
 .ibtn:hover { color: var(--text-1); background: var(--bg-3); }
-.ibtn:focus-visible { outline: 2px solid var(--amber-500); outline-offset: 2px; }
+.ibtn:focus-visible { outline: 2px solid var(--amber-500); outline-offset: 0; }

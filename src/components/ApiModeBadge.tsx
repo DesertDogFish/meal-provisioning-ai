@@ -3,6 +3,7 @@ import { api } from '../api/client';
 import { startWatchdog, stopWatchdog, onWatchdogChange } from '../api/watchdog';
 import { X, AlertCircle, Wifi, WifiOff } from 'lucide-react';
 import { Button } from './Button';
+import Modal from './Modal';
 import { useToast } from './ToastProvider';
 
 export default function ApiModeBadge() {
@@ -85,7 +86,7 @@ export default function ApiModeBadge() {
     <>
       {/* Бейдж */}
       <div
-        className="fixed top-4 right-4 flex items-center gap-2 px-3 py-1.5 rounded-[var(--r-pill)] cursor-pointer transition-all hover:scale-105"
+        className="fixed top-20 lg:top-4 right-4 flex items-center gap-2 px-3 py-1.5 rounded-[var(--r-pill)] cursor-pointer transition-colors"
         style={{
           zIndex: 'var(--z-nav)',
           background: 'var(--surface)',
@@ -109,17 +110,14 @@ export default function ApiModeBadge() {
         </span>
       </div>
 
-      {/* Модалка */}
+      {/* Модалка. Список багов 25.10 (U3/U14): единый оверлей приложения —
+          общий <Modal> (портал в body, .modal-overlay), а не собственный fixed-div. */}
       {showModal && (
-        <div
-          className="fixed inset-0 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Режим API"
-          style={{ background: 'color-mix(in srgb, var(--bg-0) 70%, transparent)', backdropFilter: 'blur(6px)', zIndex: 'var(--z-modal)' }}
-          onClick={() => setShowModal(false)}
-        >
+        <Modal onClose={() => setShowModal(false)}>
           <div
             className="rounded-2xl shadow-2xl w-full max-w-md p-6"
             style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
-            onClick={e => e.stopPropagation()}
+            role="dialog" aria-modal="true" aria-label="Режим API"
           >
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl font-bold" style={{ color: 'var(--text)' }}>Режим данных</h2>
@@ -232,7 +230,7 @@ export default function ApiModeBadge() {
               )}
             </div>
           </div>
-        </div>
+        </Modal>
       )}
     </>
   );

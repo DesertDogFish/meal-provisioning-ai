@@ -17,7 +17,7 @@
 /* 6.2: outline убирать без замены запрещено — кольцо по стандарту пакета */
 .date-picker-input:focus-visible {
   outline: 2px solid var(--amber-500);
-  outline-offset: 2px;
+  outline-offset: 0;
 }
 
 /* ФАЗА 13 (UX): поле — input[type=text]; нативный браузерный пикер подавлен
@@ -71,7 +71,7 @@ input::-webkit-calendar-picker-indicator {
 .date-picker-input:focus {
   border-color: var(--amber-500);
   outline: 2px solid var(--amber-500);
-  outline-offset: 2px;
+  outline-offset: 0;
 }
 
 .date-picker-input.error {

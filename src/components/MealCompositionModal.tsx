@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Info, Plus, Undo2 } from 'lucide-react';
+import { Info, Plus, Undo2, X } from 'lucide-react';
 import Modal from './Modal';
 import { Button } from './Button';
 import RecipeSearchSelect from './RecipeSearchSelect';
@@ -119,7 +119,9 @@ export default function MealCompositionModal({
 
   useEffect(() => {
     let cancelled = false;
-    api.get<any>('/admin/products')
+    // U8 (список багов 25.10): «подгружается какой-то мизер» — бэкенд по умолчанию отдаёт
+    // первую страницу (size=20 из 204). Просим весь справочник, как RecipeEditorModal.
+    api.get<any>('/admin/products', { params: { size: '1000' } })
       .then((res) => {
         if (cancelled) return;
         const list = Array.isArray(res) ? res : (res?.content ?? []);
@@ -506,7 +508,8 @@ export default function MealCompositionModal({
               </p>
             )}
           </div>
-          <Button variant="ghost" size="sm" onClick={requestClose} aria-label="Закрыть">✕</Button>
+          {/* U21: крестик — иконка приложения, а не текстовый глиф «✕» */}
+          <Button variant="ghost" size="sm" onClick={requestClose} aria-label="Закрыть"><X size={18} /></Button>
         </div>
 
         <p className="text-xs mt-2 mb-3 flex items-start gap-1.5" style={{ color: 'var(--muted)' }}>
@@ -669,35 +672,42 @@ export default function MealCompositionModal({
               );
             })()}
 
-            {/* Строка добавления продукта (§2.3: количество — поле рядом с поиском, обязательное) */}
-            <div className="mt-4 pt-4 flex flex-wrap items-end gap-3" style={{ borderTop: '1px solid var(--border)' }}>
-              <div className="flex-1" style={{ minWidth: 220 }}>
-                <label className="block text-xs mb-1" style={{ color: 'var(--muted)' }}>Найти продукт в справочнике</label>
-                <RecipeSearchSelect
-                  value={addSelected}
-                  onChange={(v) => { setAddSelected(v); setMergeAsk(null); }}
-                  onQueryChange={setAddQuery}
-                  options={products.map((p) => ({ value: String(p.id), label: p.name, hint: `${p.category} · ${humanize(1, p.unit)}` }))}
-                  placeholder="Название продукта…"
-                  emptyText="Не найдено"
-                  ariaLabel="Поиск продукта"
-                />
+            {/* Строка добавления продукта (§2.3: количество — поле рядом с поиском, обязательное).
+                U9 (список багов 25.10): «всё наляпано» — блок собран в панель с
+                аккуратной сеткой поиск/количество/кнопка (на узких экранах — в колонку);
+                подтверждения (новый продукт / merge) живут в той же панели. */}
+            <div className="mt-4 p-3 rounded-lg" style={{ background: 'var(--elev)', border: '1px solid var(--border)' }}>
+              <span className="block text-xs font-semibold mb-2" style={{ color: 'var(--text)' }}>
+                Добавить продукт к приёму
+              </span>
+              <div className="grid grid-cols-1 sm:grid-cols-[minmax(200px,1fr)_110px_auto] gap-2 items-end">
+                <div>
+                  <label className="block text-xs mb-1" style={{ color: 'var(--muted)' }}>Найти продукт в справочнике</label>
+                  <RecipeSearchSelect
+                    value={addSelected}
+                    onChange={(v) => { setAddSelected(v); setMergeAsk(null); }}
+                    onQueryChange={setAddQuery}
+                    options={products.map((p) => ({ value: String(p.id), label: p.name, hint: `${p.category} · ${humanize(1, p.unit)}` }))}
+                    placeholder="Название продукта…"
+                    emptyText="Не найдено"
+                    ariaLabel="Поиск продукта"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs mb-1" style={{ color: 'var(--muted)' }}>Кол-во</label>
+                  <input
+                    type="text" inputMode="decimal" aria-label="Количество добавляемого продукта"
+                    value={addAmount}
+                    onChange={(e) => { setAddAmount(e.target.value); setMergeAsk(null); }}
+                    className="w-full px-2 py-2 rounded-lg"
+                    style={{ background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text)' }}
+                    placeholder="0,25"
+                  />
+                </div>
+                <Button variant="primary" size="sm" onClick={() => { if (addSelected) addProduct(false); else offerFreeTextAdd(); }} aria-label="Добавить продукт в состав">
+                  <Plus size={14} /> Добавить
+                </Button>
               </div>
-              <div>
-                <label className="block text-xs mb-1" style={{ color: 'var(--muted)' }}>Кол-во</label>
-                <input
-                  type="text" inputMode="decimal" aria-label="Количество добавляемого продукта"
-                  value={addAmount}
-                  onChange={(e) => { setAddAmount(e.target.value); setMergeAsk(null); }}
-                  className="w-24 px-2 py-2 rounded-lg"
-                  style={{ background: 'var(--elev)', border: '1px solid var(--border)', color: 'var(--text)' }}
-                  placeholder="0,25"
-                />
-              </div>
-              <Button variant="primary" size="sm" onClick={() => { if (addSelected) addProduct(false); else offerFreeTextAdd(); }} aria-label="Добавить продукт в состав">
-                <Plus size={14} /> Добавить
-              </Button>
-            </div>
 
             {/* Инлайн-предложение добавить набранное название как новый продукт (§2.2) */}
             {addAsk && (
@@ -740,6 +750,7 @@ export default function MealCompositionModal({
                 <Button variant="ghost" size="sm" onClick={() => setMergeAsk(null)}>Отмена</Button>
               </div>
             )}
+            </div>
 
             {/* Итоги live (§2.2) */}
             {liveTotals && (

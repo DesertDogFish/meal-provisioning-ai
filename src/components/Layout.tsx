@@ -1,5 +1,5 @@
 import { NavLink, useNavigate } from 'react-router-dom';
-import { Compass, LogOut, Menu, Mountain, Ship } from 'lucide-react';
+import { LogOut, Menu, Mountain, Ship } from 'lucide-react';
 import { useState, useEffect, useCallback } from 'react';
 import ApiModeBadge from './ApiModeBadge';
 import BrandMark from './BrandMark';
@@ -61,8 +61,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   };
 
   const navItems = [
-    { to: '/dashboard', label: 'Мои походы', icon: <Compass size={20} /> },
-    { to: '/trips', label: 'Походы', icon: <Mountain size={20} /> },
+    // Список багов 25.10 (U1): дашборд «Мои походы» со статистикой временно скрыт —
+    // единственный раздел походов ведёт на /dashboard, где рендерится TripsPage.
+    { to: '/dashboard', label: 'Походы', icon: <Mountain size={20} /> },
     { to: '/recipes', label: 'Каталог блюд', icon: <Ship size={20} /> },
     { to: '/errors-demo', label: 'Ошибки (демо)', icon: <Menu size={20} /> },
     ...(isAdmin ? [
@@ -73,9 +74,12 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   ];
 
   return (
-    <div className="min-h-screen flex fade-in-up" style={{ background: 'var(--bg-0)' }}>
-      {/* Sidebar */}
-      <aside className={`fixed inset-y-0 left-0 w-64 transform transition-transform lg:translate-x-0 lg:static lg:inset-auto ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`} style={{ background: 'color-mix(in srgb, var(--bg-1) 72%, transparent)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)', borderRight: '1px solid var(--line)', zIndex: 'var(--z-nav)' }}>
+    <div className="min-h-screen flex" style={{ background: 'var(--bg-0)' }}>
+      {/* Sidebar. Список багов 25.10 (U18): на десктопе — sticky h-screen, навигация
+          скроллится внутри, футер («Выйти», профиль, тогл темы) ПРИКОЛАН к низу
+          вьюпорта и виден всегда — раньше absolute bottom-0 уезжал за экран вместе
+          со страницей, и до «Выйти» надо было скроллить. */}
+      <aside className={`fixed inset-y-0 left-0 w-64 flex flex-col transform transition-transform lg:translate-x-0 lg:sticky lg:top-0 lg:h-screen lg:inset-auto ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`} style={{ background: 'color-mix(in srgb, var(--bg-1) 72%, transparent)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)', borderRight: '1px solid var(--line)', zIndex: 'var(--z-nav)' }}>
         <div className="flex items-center gap-3 px-6 py-5" style={{ borderBottom: '1px solid var(--line)' }}>
           {/* DESIGN_MIGRATION 4.1: знак только из design-pack assets/ (mark.svg / mark-light.svg),
               инлайн-перерисовка и самопальная тень убраны — тень --shadow-glow из токена */}
@@ -86,11 +90,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <h1 className="text-lg font-bold logo-word" style={{ fontFamily: 'var(--font-display)', color: 'var(--text-1)' }}>Провиант</h1>
             <p className="text-xs" style={{ color: 'var(--text-3)' }}>Планировщик питания</p>
           </div>
-          {/* DESIGN_MIGRATION 1.1: переключатель тем виден и на десктопе (was only в мобильном header) */}
-          <ThemeToggle />
         </div>
         
-        <nav className="px-4 py-6 space-y-1">
+        <nav className="flex-1 overflow-y-auto px-4 py-6 space-y-1">
           {navItems.map(item => (
             <NavLink
               key={item.to}
@@ -115,7 +117,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           ))}
         </nav>
 
-        <div className="absolute bottom-0 left-0 right-0 p-4" style={{ borderTop: '1px solid var(--line)' }}>
+        {/* Футер сайдбара: профиль, тогл темы (U17 — фиксированное предсказуемое
+            место, а не втиснут в бренд-строку) и «Выйти» — всегда в зоне видимости. */}
+        <div className="mt-auto p-4" style={{ borderTop: '1px solid var(--line)' }}>
           <div className="flex items-center gap-3 px-4 py-2 mb-2">
             <div className="avatar-chip">
               {currentUser?.firstName?.[0]}{currentUser?.lastName?.[0]}
@@ -124,6 +128,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               <p className="text-sm font-medium truncate" style={{ color: 'var(--text-1)' }}>{currentUser?.firstName} {currentUser?.lastName}</p>
               <p className="text-xs truncate" style={{ color: 'var(--text-3)' }}>{currentUser?.email}</p>
             </div>
+            <ThemeToggle />
           </div>
           <button
             onClick={handleLogout}

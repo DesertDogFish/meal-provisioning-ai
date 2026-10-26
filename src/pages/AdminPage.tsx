@@ -1,7 +1,7 @@
 ﻿import { useState, useEffect } from 'react';
 import { DollarSign, BookOpen, Download, Plus, Trash2, Check, X } from 'lucide-react';
 import { UnitOfMeasure, MealType } from '../types';
-import { ConflictError, ValidationError } from '../utils/errors';
+import { ValidationError } from '../utils/errors';
 import { validateRecipe } from '../utils/validation';
 import { DatePicker } from '../components/DatePicker';
 import { useToast } from '../components/ToastProvider';
@@ -105,19 +105,6 @@ export default function AdminPage() {
     }
   };
 
-  const isRecipeUsed = async (recId: string): Promise<boolean> => {
-    try {
-      const trips = await api.get<any[]>('/trips');
-      return trips.some(t => t.days?.some((d: any) => d.meals?.some((m: any) => m.recipeId === recId)));
-    } catch (err) {
-      console.error('Failed to check recipe usage:', err);
-      // ЗАДАЧА 3: раньше ошибка была невидима — удаление «используемого» рецепта
-      // могло пройти молча. Предупреждаем, что проверку выполнить не удалось.
-      showError('Не удалось проверить использование рецепта в походах');
-      return false;
-    }
-  };
-
   const handleSavePrice = async () => {
     if (!priceForm.ingredientId || !priceForm.pricePerUnit || !priceForm.effectiveFrom) return;
     
@@ -175,16 +162,9 @@ export default function AdminPage() {
   };
 
   const handleDeleteRecipe = async (id: string) => {
-    const used = await isRecipeUsed(id);
-    if (used) {
-      const recipe = recipes.find(r => r.id === id);
-      const conflictError = new ConflictError(
-        `Рецепт "${recipe?.name}" используется в походах и не может быть удалён`
-      );
-      showError(conflictError.toProblemDetail());
-      return;
-    }
-    
+    // U16 (список багов 25.10): клиентской блокировки «используется в походах»
+    // больше нет — походы живут на снепшотах блюд (V20), сервер сам разрешает
+    // ссылки при удалении. Блюдо — сущность верхнего уровня.
     try {
       await api.del(`/admin/recipes/${id}`);
       showSuccess('Рецепт удалён');

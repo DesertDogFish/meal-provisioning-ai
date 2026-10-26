@@ -4,7 +4,6 @@ import { ToastProvider } from './components/ToastProvider';
 import Layout from './components/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
 import LoginPage from './pages/LoginPage';
-import DashboardPage from './pages/DashboardPage';
 import TripsPage from './pages/TripsPage';
 import TripDetailPage from './pages/TripDetailPage';
 import RecipesPage from './pages/RecipesPage';
@@ -21,16 +20,18 @@ function App() {
           <BrowserRouter>
             <Routes>
               <Route path="/login" element={<LoginPage />} />
+              {/* Список багов 25.10: страница-дашборд «Мои походы» со статистикой
+                  временно скрыта (статистика считалась из пустого списка — бэкенд
+                  не отдаёт userId в TripResponse, «моих походов» не было видно).
+                  /dashboard остаётся точкой входа после логина и рендерит список
+                  походов (TripsPage); DashboardPage.tsx сохранён до возвращения. */}
               <Route path="/dashboard" element={
-                <ProtectedRoute>
-                  <Layout><DashboardPage /></Layout>
-                </ProtectedRoute>
-              } />
-              <Route path="/trips" element={
                 <ProtectedRoute>
                   <Layout><TripsPage /></Layout>
                 </ProtectedRoute>
               } />
+              {/* /trips — прежний адрес списка; теперь ведёт на /dashboard */}
+              <Route path="/trips" element={<Navigate to="/dashboard" replace />} />
               <Route path="/trips/:id" element={
                 <ProtectedRoute>
                   <Layout><TripDetailPage /></Layout>
