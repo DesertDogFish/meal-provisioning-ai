@@ -2,7 +2,7 @@ import { Button } from './Button';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useToast } from './ToastProvider';
 import { Download, X } from 'lucide-react';
-import { formatAmount, calculateShoppingList, calculateDayShopping, realTripPeople } from '../utils/calculations';
+import { formatAmount, calculateShoppingList, calculateDayShopping, realTripPeople, dayScopedExclusions } from '../utils/calculations';
 import { formatPrice, formatRub, unitShortLabel, categoryName } from '../utils/format'; // Release-1.0: единый формат чисел/единиц
 import { compareRu } from '../utils/rowSort'; // U41: алфавитная сортировка
 import { mealsWord } from '../utils/text';
@@ -218,7 +218,9 @@ export default function PriceOverridesTab({ tripId }: Props) {
   const shoppingItems = useMemo<ShoppingItem[]>(() => {
     if (!trip) return [];
     const stage = { ...(serverOverridesRef.current || {}), ...draftOverrides };
-    return calculateShoppingList(trip as any, recipesMap as any, prices as any).map(it => {
+    // Fix-2 (п.5): по-дневные исключения уменьшают количества агрегата;
+    // глобально исключённые строки отфильтровываются из итогов ниже.
+    return calculateShoppingList(trip as any, recipesMap as any, prices as any, dayScopedExclusions(shoppingExcluded)).map(it => {
       // Плановая ₽/ед — из плановой стоимости позиции (та же цена по дням, что в «План ₽»),
       // чтобы строка таблицы была самосогласована: plannedCost = plannedUnitPrice × totalAmount.
       const plannedCost = it.estimatedCost;
@@ -242,7 +244,7 @@ export default function PriceOverridesTab({ tripId }: Props) {
     })
     // U41: чек и закупка — по алфавиту (иначе длинный список невозможно вводить)
     .sort((a, b) => compareRu(a.ingredientName, b.ingredientName));
-  }, [trip, recipesMap, prices, draftOverrides]);
+  }, [trip, recipesMap, prices, draftOverrides, shoppingExcluded]);
 
   // ===== U41: категории продуктов для группировки чека =====
   // Best effort: справочник продуктов (mock/admin) + вложенные ingredient-объекты

@@ -95,17 +95,47 @@ public class TripService {
         Trip trip = tripRepository.findByIdWithDaysAndMeals(tripId, userId)
                 .orElseThrow(() -> new NotFoundException("Trip not found or access denied"));
 
-        // Нельзя менять даты
-        if (!trip.getStartDate().equals(request.startDate()) || !trip.getEndDate().equals(request.endDate())) {
-            throw new IllegalArgumentException("Cannot change trip dates. Create a new trip instead.");
+        LocalDate newStart = request.startDate();
+        LocalDate newEnd = request.endDate();
+        if (newEnd.isBefore(newStart)) {
+            throw new IllegalArgumentException("endDate must not be before startDate");
         }
 
         trip.setName(request.name());
         trip.setDefaultPeople(request.defaultPeople());
         trip.setNotes(request.notes());
 
+        // Fix-2 (список 26.10, п.1): смена дат разрешена. Стирание — ЧАСТИЧНОЕ:
+        // удаляются только дни, ушедшие за новые границы (вместе с приёмами —
+        // orphanRemoval, и ручными позициями дня — FK ON DELETE CASCADE, V22).
+        // Пересекающиеся дни сохраняют план полностью; недостающие даты добавляются.
+        // Ранее: throw new IllegalArgumentException("Cannot change trip dates...").
+        boolean datesChanged = !trip.getStartDate().equals(newStart) || !trip.getEndDate().equals(newEnd);
+        if (datesChanged) {
+            trip.getDays().removeIf(d -> d.getDayDate().isBefore(newStart) || d.getDayDate().isAfter(newEnd));
+
+            java.util.Set<LocalDate> existingDates = new java.util.HashSet<>();
+            for (TripDay d : trip.getDays()) {
+                existingDates.add(d.getDayDate());
+            }
+            LocalDate cursor = newStart;
+            while (!cursor.isAfter(newEnd)) {
+                if (!existingDates.contains(cursor)) {
+                    TripDay day = TripDay.builder()
+                            .trip(trip)
+                            .dayDate(cursor)
+                            .meals(new java.util.LinkedHashSet<>())
+                            .build();
+                    trip.getDays().add(day);
+                }
+                cursor = cursor.plusDays(1);
+            }
+            trip.setStartDate(newStart);
+            trip.setEndDate(newEnd);
+        }
+
         trip = tripRepository.save(trip);
-        log.info("Updated trip: {}", trip.getName());
+        log.info("Updated trip: {} (datesChanged={})", trip.getName(), datesChanged);
         return toResponse(trip);
     }
 

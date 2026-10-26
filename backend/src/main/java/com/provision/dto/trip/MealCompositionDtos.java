@@ -25,6 +25,13 @@ public final class MealCompositionDtos {
             int people,
             int baseServings,
             Long recipeId,
+            /**
+             * Fix-2 (список 26.10, п.7): id блюда в ГЛОБАЛЬНОМ каталоге.
+             * recipeId приёма может указывать на trip-scoped снепшот (V20), которого
+             * нет в GET /recipes — навигация «Изменить блюдо в справочнике»
+             * (/recipes?edit=…) обязана использовать catalogRecipeId.
+             */
+            Long catalogRecipeId,
             String recipeName,
             List<Item> items,
             List<Substitution> substitutions,

@@ -39,9 +39,8 @@ describe('mock PUT /trips/:id (U36)', () => {
     expect(updated.days.map((d: any) => d.id)).toEqual(before);
   });
 
-  it('смена дат — дни перегенерируются, приёмы пищи стираются', () => {
+  it('смена дат БЕЗ пересечения — старые дни стираются вместе с приёмами', () => {
     const trip = createTrip('2026-06-01', '2026-06-03');
-    // добавим приём в первый день, чтобы проверить стирание плана
     const dayId = trip.days[0].id;
     const recipes = req<any[]>('GET', '/recipes');
     req('POST', `/trips/${trip.id}/days/${dayId}/meals`, { recipeId: recipes[0].id, mealType: 'LUNCH' });
@@ -55,6 +54,28 @@ describe('mock PUT /trips/:id (U36)', () => {
     expect(updated.startDate).toBe('2026-07-05');
     expect(updated.days).toHaveLength(2);
     for (const d of updated.days) expect(d.meals).toHaveLength(0);
+  });
+
+  it('Fix-2 (п.1): смена дат с пересечением — общие дни сохраняются (те же id и приёмы), стираются только ушедшие', () => {
+    const trip = createTrip('2026-06-01', '2026-06-03'); // дни: 01, 02, 03
+    const recipes = req<any[]>('GET', '/recipes');
+    // приём во ВТОРОЙ день (06-02) — он попадёт в новый диапазон
+    req('POST', `/trips/${trip.id}/days/${trip.days[1].id}/meals`, { recipeId: recipes[0].id, mealType: 'LUNCH' });
+    const secondDayId = trip.days[1].id;
+
+    const updated = req<any>('PUT', `/trips/${trip.id}`, {
+      name: trip.name,
+      startDate: '2026-06-02', // 06-01 уходит, 06-02/03 остаются, 06-04 добавляется
+      endDate: '2026-06-04',
+      defaultPeople: trip.defaultPeople,
+    });
+    expect(updated.days).toHaveLength(3);
+    expect(updated.days.map((d: any) => d.dayDate)).toEqual(['2026-06-02', '2026-06-03', '2026-06-04']);
+    // пересекшийся день — ТОТ ЖЕ (id сохранён) и с приёмом
+    expect(updated.days[0].id).toBe(secondDayId);
+    expect(updated.days[0].meals).toHaveLength(1);
+    // новый день — пустой
+    expect(updated.days[2].meals).toHaveLength(0);
   });
 
   it('чужой/несуществующий поход — 404', () => {
@@ -100,12 +121,37 @@ describe('mock manual-items (U40)', () => {
       .toThrow(/404|Not found/i);
   });
 
-  it('смена дат стирает ручные позиции (привязаны к старым дням/плану)', () => {
-    const trip = createTrip();
+  it('Fix-2 (п.1): смена дат — дневная позиция ушедшего дня стирается, походная (dayId=null) survives', () => {
+    const trip = createTrip('2026-06-01', '2026-06-03');
     const products = req<any>('GET', '/admin/products');
-    req('POST', `/trips/${trip.id}/manual-items`, { ingredientId: products.content[0].id, amount: 2 });
-    req<any>('PUT', `/trips/${trip.id}`, { ...trip, startDate: '2026-09-01', endDate: '2026-09-02' });
-    expect(req<any[]>('GET', `/trips/${trip.id}/manual-items`)).toHaveLength(0);
+    const pid = products.content[0].id;
+    const firstDayId = trip.days[0].id;   // 06-01 — уйдёт из диапазона
+    const secondDayId = trip.days[1].id;  // 06-02 — останется
+    req('POST', `/trips/${trip.id}/manual-items`, { ingredientId: pid, amount: 2, dayId: firstDayId });
+    req('POST', `/trips/${trip.id}/manual-items`, { ingredientId: pid, amount: 1, dayId: secondDayId });
+    req('POST', `/trips/${trip.id}/manual-items`, { ingredientId: pid, amount: 1 }); // на поход
+
+    req<any>('PUT', `/trips/${trip.id}`, { ...trip, startDate: '2026-06-02', endDate: '2026-06-04' });
+    const items = req<any[]>('GET', `/trips/${trip.id}/manual-items`);
+    expect(items).toHaveLength(2);
+    expect(items.some(i => i.dayId == null)).toBe(true);
+    expect(items.some(i => i.dayId === secondDayId)).toBe(true);
+  });
+
+  it('GET /trips/:id/ingredient-edits — полный список правок с именами (паритет с backend)', () => {
+    const trip = createTrip();
+    const recipes = req<any[]>('GET', '/recipes');
+    const recipe = recipes.find(r => (r.ingredients || []).length >= 2) ?? recipes[0];
+    const [a, b] = recipe.ingredients;
+    req('POST', `/trips/${trip.id}/substitutions`, {
+      recipeId: recipe.id, fromIngredientId: a.ingredientId, toIngredientId: b.ingredientId, ratio: 1,
+    });
+    const edits = req<any[]>('GET', `/trips/${trip.id}/ingredient-edits`);
+    expect(edits.length).toBeGreaterThan(0);
+    const sub = edits.find(e => String(e.fromIngredientId) === String(a.ingredientId))!;
+    expect(sub.recipeName).toBe(recipe.name);
+    expect(typeof sub.fromIngredientName).toBe('string');
+    expect(sub.fromIngredientName.length).toBeGreaterThan(0);
   });
 });
 

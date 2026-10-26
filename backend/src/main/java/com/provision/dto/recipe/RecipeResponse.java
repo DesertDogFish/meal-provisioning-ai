@@ -27,6 +27,16 @@ public record RecipeResponse(
         String ingredientName,
         UnitOfMeasure unit,
         String unitLabel,
-        BigDecimal amount
+        BigDecimal amount,
+        // Fix-2 (список 26.10, п.3/4): категория и фасовка продукта — нужны фронту
+        // для группировки чека/чеклиста и расчёта упаковок в real-режиме без
+        // админского /admin/products. Паритет: mock отдаёт их вложенным объектом
+        // ingredient (category/packSize/roundToPacks/pieceWeightG/kcalPer100g),
+        // фронтовая normalizeRecipe собирает из плоских полей тот же объект.
+        String categoryName,
+        BigDecimal packSize,
+        Boolean roundToPacks,
+        BigDecimal pieceWeightG,
+        BigDecimal kcalPer100g
     ) {}
 }

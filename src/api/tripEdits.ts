@@ -35,7 +35,10 @@ export interface TripIngredientEdit {
 }
 
 export async function getTripEdits(tripId: string): Promise<TripIngredientEdit[]> {
-  const data = await api.get<TripIngredientEdit[]>(`/trips/${tripId}/substitutions`);
+  // Fix-2 (п.3): читаем ПОЛНЫЙ список правок состава — ingredient-edits
+  // (backend TripIngredientEditResponse: имена + amountPerServing + added/removed).
+  // GET /substitutions в real-режиме отдаёт только «чистые» замены и без количеств.
+  const data = await api.get<TripIngredientEdit[]>(`/trips/${tripId}/ingredient-edits`);
   return Array.isArray(data) ? data : [];
 }
 

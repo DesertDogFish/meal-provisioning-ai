@@ -170,12 +170,20 @@ public class RecipeService {
                 .map(ri -> {
                     String unitLabel = com.provision.dto.product.ProductResponse.UNIT_LABELS
                         .getOrDefault(ri.getIngredient().getUnit(), ri.getIngredient().getUnit().name());
+                    com.provision.entity.Ingredient ing = ri.getIngredient();
                     return new RecipeResponse.RecipeIngredientResponse(
-                            ri.getIngredient().getId(),
-                            ri.getIngredient().getName(),
-                            ri.getIngredient().getUnit(),
+                            ing.getId(),
+                            ing.getName(),
+                            ing.getUnit(),
                             unitLabel,
-                            ri.getAmount()
+                            ri.getAmount(),
+                            // Fix-2 (п.3/4): категория/фасовка для чека и чеклиста.
+                            // category LAZY — батчинг через hibernate.default_batch_fetch_size
+                            ing.getCategory() != null ? ing.getCategory().getName() : null,
+                            ing.getPackSize(),
+                            ing.getRoundToPacks(),
+                            ing.getPieceWeightG(),
+                            ing.getKcalPer100g()
                     );
                 })
                 .toList();
