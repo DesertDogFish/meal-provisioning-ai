@@ -186,7 +186,7 @@ describe('FORM-meal-composition-spec §4.4 — mock composition contract', () =>
     expect(second.items).toEqual(first.items);
     expect(second.totals).toEqual(first.totals);
     expect(second.substitutions).toEqual(first.substitutions);
-    // и третий GET稳定
+    // и третий GET стабилен
     expect(getComposition().items).toEqual(first.items);
   });
 

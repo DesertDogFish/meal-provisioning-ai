@@ -4,6 +4,8 @@ import { Plus, Search, X } from 'lucide-react';
 import { NumberField } from '../components/NumberField';
 import { ProductTable, type ProductRow } from '../components/ProductTable';
 import Modal from '../components/Modal';
+import CustomSelect from '../components/CustomSelect';
+import { DatePicker } from '../components/DatePicker';
 import { api } from '../api/client';
 import type { UnitOfMeasure, ProductCategory, IngredientPrice } from '../types';
 import { humanizeUnit, recipesWord } from '../utils/text';
@@ -363,9 +365,21 @@ export default function ProductsPage() {
       {showModal && (
         <Modal onClose={() => setShowModal(false)}>
           <div className="rounded-2xl shadow-xl w-full max-w-md p-6" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
-            <h2 className="text-xl font-bold mb-4" style={{ color: 'var(--text)' }}>
-              {editingProduct ? 'Редактировать продукт' : 'Новый продукт'}
-            </h2>
+            {/* U21: единый крестик в шапке модалки */}
+            <div className="flex items-start justify-between gap-3 mb-4">
+              <h2 className="text-xl font-bold" style={{ color: 'var(--text)' }}>
+                {editingProduct ? 'Редактировать продукт' : 'Новый продукт'}
+              </h2>
+              <button
+                type="button"
+                onClick={() => setShowModal(false)}
+                aria-label="Закрыть"
+                className="p-2 rounded-lg transition-colors shrink-0"
+                style={{ color: 'var(--muted)' }}
+              >
+                <X size={18} />
+              </button>
+            </div>
 
             <div className="space-y-4">
               <div>
@@ -398,17 +412,15 @@ export default function ProductsPage() {
                 <label className="block text-sm font-medium mb-1" style={{ color: 'var(--muted)' }}>
                   Категория *
                 </label>
-                <select
+                {/* U12 (список багов 25.10): нативный <select> выглядел чужеродно —
+                    кастомный dropdown в стиле приложения (Фаза 13, CustomSelect). */}
+                <CustomSelect
                   value={formCategory}
-                  onChange={e => setFormCategory(e.target.value)}
-                  className="w-full px-3 py-2.5 rounded-lg outline-none"
-                  style={{ background: 'var(--elev)', border: '1px solid var(--border)', color: 'var(--text)' }}
-                >
-                  <option value="">Выберите категорию...</option>
-                  {categories.map(cat => (
-                    <option key={cat.id} value={cat.id}>{cat.name}</option>
-                  ))}
-                </select>
+                  onChange={setFormCategory}
+                  options={categories.map(cat => ({ value: String(cat.id), label: cat.name }))}
+                  placeholder="Выберите категорию..."
+                  ariaLabel="Категория"
+                />
               </div>
 
               <div>
@@ -484,17 +496,20 @@ export default function ProductsPage() {
                     value={formPrice}
                     onChange={e => setFormPrice(e.target.value)}
                     placeholder="например, 210"
+                    aria-label="Цена"
                     className="flex-1 px-3 py-2 rounded-lg outline-none"
                     style={{ background: 'var(--elev)', border: '1px solid var(--border)', color: 'var(--text)' }}
                   />
-                  <input
-                    type="date"
-                    aria-label="Дата действия цены"
-                    value={formPriceDate}
-                    onChange={e => setFormPriceDate(e.target.value)}
-                    className="px-3 py-2 rounded-lg outline-none"
-                    style={{ background: 'var(--elev)', border: '1px solid var(--border)', color: 'var(--text)' }}
-                  />
+                  {/* U10 (список багов 25.10): единый календарь приложения —
+                      DatePicker (react-datepicker, ru-локаль), а не нативный
+                      input[type=date] с системным пикером. */}
+                  <div style={{ width: 170 }}>
+                    <DatePicker
+                      value={formPriceDate || null}
+                      onChange={setFormPriceDate}
+                      placeholder="Дата действия цены"
+                    />
+                  </div>
                 </div>
                 <p className="text-xs mt-1" style={{ color: 'var(--muted)' }}>
                   Пусто = не менять. Новая цена добавляется срезом с даты (история сохраняется).

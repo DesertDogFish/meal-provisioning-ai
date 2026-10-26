@@ -98,7 +98,7 @@ export default function ErrorsDemoPage() {
             <button
               key={idx}
               onClick={example.onClick}
-              className="flex items-center gap-3 p-4 rounded-xl transition-all hover:scale-[1.02] text-left"
+              className="flex items-center gap-3 p-4 rounded-xl lift text-left"
               style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
             >
               <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ background: 'var(--elev)' }}>

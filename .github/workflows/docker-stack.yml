@@ -71,10 +71,6 @@ jobs:
       - name: Smoke — nginx proxy through frontend (same-origin path)
         run: curl -fsS http://localhost:3000/api/v1/meta
 
-      - name: Tear down stack (не оставлять состояние раннеру)
-        if: always()
-        run: docker compose down -v || true
-
       - name: Smoke — frontend index
         run: curl -fsS http://localhost:3000/ | grep -qi '<div id="root">'
 
@@ -94,3 +90,11 @@ jobs:
       - name: Always show stack status on failure
         if: failure()
         run: docker compose ps -a
+
+      # CI-2 (фикс 2026-10-26): teardown стоял ВЫШЕ по файлу и с if: always()
+      # выполнялся раньше «Smoke — frontend index» и «register/login roundtrip» —
+      # стек гасился, curl стучался в мёртвый :3000, job краснел при живом стеке.
+      # Teardown — всегда последний шаг.
+      - name: Tear down stack (не оставлять состояние раннеру)
+        if: always()
+        run: docker compose down -v || true

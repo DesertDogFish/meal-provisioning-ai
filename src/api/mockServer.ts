@@ -27,7 +27,7 @@ const priceOverrides: Record<string, Record<string, { actualPrice: number; comme
 const shoppingExcluded: Record<string, string[]> = {};
 
 // Фаза 13 (п.6): пер-походные замещения ингредиентов (TripIngredientSubstitution).
-// Хранят ДЛЬТУ черновика состава блюда относительно каталога: from/to/ratio и
+// Хранят дельту черновика состава блюда относительно каталога: from/to/ratio и
 // добавленные вручную позиции (added=true). Закупка/дни/человек считают с ними.
 interface MockSubstitution {
   id: string;
@@ -744,22 +744,25 @@ export const mockServer = {
       return this.recipeToResponse(rec);
     }
 
-    // CONTRACT-P1: DELETE /admin/recipes/:id — 404 на неизвестный, 409 RECIPE_IN_USE
-    // с usedIn, если рецепт занят приёмами пищи походов (как бэкенд)
+    // U16 (список багов 25.10) + паритет V20: блюдо — сущность верхнего уровня.
+    // Семантика бэкенда (ConflictIntegrationTest «409 RECIPE_IN_USE ушёл в историю»):
+    // приём пищи держит trip-scoped копию, удаление глобального блюда всегда 204,
+    // поход продолжает считаться из копии. В mock-сиде походы ссылаются на глобальные
+    // id напрямую (legacy) — при удалении переводим такие ссылки на снепшот-копии
+    // (snapRecipeForTrip идемпотентен), вместо 409.
     if (method === 'DELETE' && url.pathname.startsWith('/admin/recipes/')) {
       const id = url.pathname.split('/')[3];
       const idx = recipes.findIndex(r => r.id === id);
       if (idx === -1) throw { status: 404, message: 'Not found', detail: `Recipe ${id} not found` } as any;
-      const usedBy = trips.filter(t =>
-        (t as any).days?.some((d: any) => d.meals?.some((m: any) => String(m.recipeId) === String(id)))
-      );
-      if (usedBy.length > 0) {
-        throw {
-          status: 409,
-          title: 'Conflict',
-          detail: 'Recipe is used in trip meals and cannot be deleted',
-          usedIn: usedBy.map(t => ({ resourceType: 'TRIP', resourceId: t.id, resourceName: t.name })),
-        } as any;
+      const target = recipes[idx];
+      for (const t of trips) {
+        for (const d of (t as any).days || []) {
+          for (const m of d.meals || []) {
+            if (String(m.recipeId) === String(id)) {
+              m.recipeId = this.snapRecipeForTrip(t.id, target).id;
+            }
+          }
+        }
       }
       recipes.splice(idx, 1);
       return null;

@@ -195,6 +195,13 @@ describe('TripForm — успешный submit с humanize-корректным�
     fireEvent.click(screen.getByRole('button', { name: 'Отмена' }));
     expect(onCancel).toHaveBeenCalledTimes(1);
   });
+
+  it('U21: крестик в шапке вызывает onCancel (единый способ закрытия модалок)', () => {
+    const onCancel = vi.fn();
+    renderTripForm({ onCancel });
+    fireEvent.click(screen.getByRole('button', { name: 'Закрыть' }));
+    expect(onCancel).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('humanize единиц (CR-2) — интеграция, используемая формой/строками', () => {

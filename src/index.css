@@ -121,9 +121,11 @@
   transition: transform var(--t-fast) var(--ease), filter var(--t-fast) var(--ease),
               background var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease);
 }
-.btn:hover { transform: translateY(-2px); }
-.btn:active { transform: translateY(1px); }
-.btn:focus-visible { outline: 2px solid var(--amber-500); outline-offset: 2px; }
+/* UX-фикс (список 25.10): кнопки не «прыгают» — состояние читается цветом/свечением,
+   а focus-рамка идёт по краю элемента (offset 0) и не «залезает» на соседей. */
+.btn:hover { filter: brightness(1.05); }
+.btn:active { filter: brightness(0.97); }
+.btn:focus-visible { outline: 2px solid var(--amber-500); outline-offset: 0; }
 .btn:disabled { opacity: .45; pointer-events: none; }
 
 .btn-primary,
@@ -293,11 +295,10 @@ h1, h2, h3, .logo-word, .font-display {
   padding: var(--sp-3) var(--sp-5);
   font: 800 13px Manrope;
   cursor: pointer;
-  transition: transform var(--t-base) var(--ease), filter var(--t-base) var(--ease), box-shadow var(--t-base) var(--ease);
+  transition: filter var(--t-base) var(--ease), box-shadow var(--t-base) var(--ease);
 }
 
 .grad-btn:hover {
-  transform: translateY(-2px);
   filter: brightness(1.07);
 }
 
@@ -353,10 +354,13 @@ h1, h2, h3, .logo-word, .font-display {
   border-bottom: 0;
 }
 
-/* Появление контента */
+/* Появление контента. Важно: финальный кадр — `transform: none`, а не translateY(0):
+   ненулевой transform (даже «нулевой») создаёт containing block для position:fixed
+   потомков — модалки/бейджи внутри анимированного контейнера «уезжают» (список
+   багов 25.10: «формы появляются черт пойми где»). */
 @keyframes fade-in-up {
   from { opacity: 0; transform: translateY(14px); }
-  to   { opacity: 1; transform: translateY(0); }
+  to   { opacity: 1; transform: none; }
 }
 .fade-in-up {
   animation: fade-in-up var(--t-slow) var(--ease) both;
@@ -372,16 +376,16 @@ h1, h2, h3, .logo-word, .font-display {
     scroll-behavior: auto !important;
   }
   .fade-in-up { animation: none; }
-  .lift:hover { transform: none !important; }
 }
 
-/* Подъём интерактивных элементов при наведении */
+/* Подсветка интерактивных карточек при наведении — БЕЗ сдвига: элемент не сдвигается,
+   «загорается» только граница/тень (иначе у соседей «едет» верстка). */
 .lift {
-  transition: transform var(--t-base) var(--ease), border-color var(--t-base) var(--ease), box-shadow var(--t-base) var(--ease);
+  transition: border-color var(--t-base) var(--ease), box-shadow var(--t-base) var(--ease);
 }
 .lift:hover {
-  transform: translateY(-2px);
   border-color: var(--line-strong);
+  box-shadow: var(--shadow-1);
 }
 
 /* Price Overrides v2 */
@@ -455,7 +459,7 @@ input[type=number]::-webkit-outer-spin-button {
 
 .nf-input:focus {
   outline: 2px solid var(--amber-500);
-  outline-offset: 2px;
+  outline-offset: 0;
   border-color: var(--amber-500);
 }
 
@@ -603,7 +607,7 @@ input:not([type="checkbox"]):not([type="radio"]):focus-visible,
 select:focus-visible,
 textarea:focus-visible {
   outline: 2px solid var(--amber-500);
-  outline-offset: 2px;
+  outline-offset: 0;
 }
 
 /* Fix Date Picker icon color */

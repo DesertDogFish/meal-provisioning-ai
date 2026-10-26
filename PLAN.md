@@ -39,14 +39,14 @@
 4. **EXTRA ×people vs спека (абсолют на приём)**: — **закрыто (econ-guardian)**: бэкенд хранит абсолют в `amount_per_serving` added-строк (V21-конвертация legacy), `SummaryService` не масштабирует absolute-строки; mock-паритет формы; страж — `EconomicConsistencyTest` EK-02/EK-05.
 5. **Дубль-редакторы состава**: историческое окно добавления приёма правила глобальный рецепт — устранено модалками A/B (PR #49); рецидивы запрещены (AGENTS §9).
 
-## Статус CI (2026-10-26, после econ-guardian; локальная верификация на базе `d9683ede`)
+## Статус CI (2026-10-26, main `f05c360d` + патч `ci-green-release1.patch`)
 
 | Workflow | Статус | Причина / задача |
 |---|---|---|
 | CI → Backend Tests (main `d9683ede`) | 🔴 → 🟢 (патч) | старый `EconomicConsistencyTest` на main бил в несуществующий `POST /api/v1/recipes` (500, 8/8 red). Ветка `fixing-economic-consistency-tests-47f0b` не спасала: raw-SQL с выдуманными колонками (`protein_per_100g`…) → BadSqlGrammar 8/8 + «фиксы» SummaryService под собственный SQL-хак. **Ветку закрыть без merge.** Патч econ-guardian: тест переписан с нуля (10 сценариев, числа на бумаге, integrity-блок), продукт починен (B1–B10, V21). Локально: backend **91/91** (econ 10/10) |
 | CI → Frontend Tests | 🟢 (патч) | tsc/eslint чисто, **253/253** (251 + 2 новых free-text flow), coverage-гейт включённых файлов пройден (client.ts 80.94, calculations.ts 99.32) |
-| Docker Stack Smoke | 🔴 | причина без логов раннера неизвестна; диагностика (`compose config -q`, failure-логи, teardown `if: always()`) в составе ui-consistency-патча (уже в main). **CI-2** — читать логи нового рана |
-| E2E nightly | 🟢 | последние раны (вкл. ветку fixing-…) — success; продолжаем наблюдать |
+| Docker Stack Smoke | 🔴 → 🟢 (патч) | **CI-2 закрыт**: причина — порядок шагов в `docker-stack.yml`. «Tear down stack» (`if: always()`) стоял ВЫШЕ «Smoke — frontend index» и «register/login roundtrip»: гасил стек, и шаги 12–13 курили мёртвый `:3000` (шаги 1–11 зелёные, run 40249907291). Фикс: teardown перенесён последним шагом. Доказательство — следующий push-ран |
+| E2E nightly | 🔴 → 🟢 (патч) | **CI-3 закрыт**: run 40298200774 (26.10, schedule) — устаревшие селекторы после дизайн-пака: E2E-03 ждал `/Продукт/` (кнопка получила aria-label «Добавить продукт», `a273d7e7`), E2E-04/05 скопились на `.fixed` (класс уехал из модалки TripForm в `af41bc3c`, теперь портал `.modal-overlay`). Фикс: селекторы сняты с фактического UI; локально **8 passed / 1 skipped** (skip = REAL-01, нужен compose-стек). Доказательство — следующий nightly |
 | Contract parity (nightly) | 🟢 (10-24) | после R1/R8 должен оставаться зелёным всегда |
 
 ## План прорыва: этапы R0–R9 (порядок = зависимости)
@@ -54,8 +54,8 @@
 ### R0. Разблокировать CI (0.5–1 день)
 1. Влить kickoff-патч (tsc/lint-остаток, docker-stack-диагностика, MD).
 2. **CI-1**: в `EconomicConsistencyTest` добавить `LOCAL_PG` + `@DynamicPropertySource` по образцу `MetaControllerTest`; локально снять стек 500 из `createIngredient` (запустить один тест с логом; чинить тест или эндпоинт — не маскировать).
-3. **CI-2**: прочитать логи нового рана с диагностикой; починить по факту (compose/воркфлоу/раннер).
-4. **CI-3**: `npm run test:e2e` локально; снять падающие селекторы редизайна; flaky-спеки — в skip с TODO (R4-правило AGENTS).
+3. **CI-2**: ✅ закрыт — teardown `if: always()` выполнялся до последних двух смоуков и гасил стек; перенесён в конец воркфлоу (патч `ci-green-release1.patch`).
+4. **CI-3**: ✅ закрыт — `npm run test:e2e` локально: 8 passed / 1 skipped; устаревшие селекторы E2E-03/04/05 сняты с фактического UI (aria-label «Добавить продукт», скоуп `.modal-overlay` вместо `.fixed`).
 *Готово:* все workflow зелёные на main два рана подряд.
 
 ### R5. Математика состава по спеке — **ЗАКРЫТО (econ-guardian, 2026-10-26)**
@@ -119,7 +119,8 @@ LICENSE-файл; мёртвые deps + `depcheck` в CI; `git filter-repo` (pac
 | PR #51, #53 | Бэк: Testcontainers/LocalPgFallback (CI-1), SCALED-substitution; mock: состав §3/§4 (SCALE→SUBST, EXTRA-абсолют, идемпотентный PUT), copy-on-write снепшоты; contract-тесты 9/9 | ✅ |
 | Kickoff «Функциональный прорыв» | tsc/lint-хотфиксы (dup `state`, unused `products`) — superseded PR #51/#53; остаток патча: диагностика Docker Stack Smoke (CI-2) + ревизия MD | 🟡 в составе `ui-consistency-release1.patch` |
 | UI-consistency Release-1.0 | Единый формат чисел/единиц (`utils/format.ts`: запятая, целые ₽, «1,5 кг»), нормализация плоских DTO (`getTripRecipes`, `ingOf`) — «Unknown»/«шт» закрыты, категория-объект → строка («[object Object]» закрыт), KPI = «Итого» (один источник), «По дням» считает факт по количествам дня, дропдаун поиска в потоке модалки, плюрализация «+N продукта», общие расчёты в «Закупка и чеки» вместо локальной копии | ✅ влито в main как `d9683ede consist fix` |
-| econ-guardian (Release-1.0) | `EconomicConsistencyTest` переписан с нуля (10 сквозных сценариев: меню/закупка/дни/человек/состав/чеки/изоляция/updateMeal/DB-integrity/консистентность; числа на бумаге, только публичное API + read-only SQL). Продуктовые фиксы, которые он вскрыл и охраняет: дубли снепшотов на рецепт (B10), заморозка цены ≤ startDate (B6), EXTRA-абсолют (B2/R5), SCALED-констрейнт V7 → 500 при сохранении состава (B9, V21), SUBST-ноль источника в totals (B8), trip-scope резолв id состава (B1), снепшот в updateMeal (B3), редирект чеков на снепшот (B7), 400/405 вместо 500 (B4), free-text save-flow модалки (F2: check-name/create, «free-» id на сервер не уходят). V21: дедупликация legacy-снепшотов + конверсия EXTRA + прижим цен. Гейты: backend 91/91, frontend 253/253, tsc/lint чисто | 🟡 патч `econ-guardian-release1.patch` (base `d9683ede`); ветку `fixing-economic-consistency-tests-47f0b` закрыть без merge |
+| econ-guardian (Release-1.0) | `EconomicConsistencyTest` переписан с нуля (10 сквозных сценариев: меню/закупка/дни/человек/состав/чеки/изоляция/updateMeal/DB-integrity/консистентность; числа на бумаге, только публичное API + read-only SQL). Продуктовые фиксы, которые он вскрыл и охраняет: дубли снепшотов на рецепт (B10), заморозка цены ≤ startDate (B6), EXTRA-абсолют (B2/R5), SCALED-констрейнт V7 → 500 при сохранении состава (B9, V21), SUBST-ноль источника в totals (B8), trip-scope резолв id состава (B1), снепшот в updateMeal (B3), редирект чеков на снепшот (B7), 400/405 вместо 500 (B4), free-text save-flow модалки (F2: check-name/create, «free-» id на сервер не уходят). V21: дедупликация legacy-снепшотов + конверсия EXTRA + прижим цен. Гейты: backend 91/91, frontend 253/253, tsc/lint чисто | ✅ влито в main как `f05c360d math test fix`; push-run CI зелёный |
+| ci-green (Release-1.0) | CI-2: `docker-stack.yml` — teardown (`if: always()`) перенесён в конец (гасил стек до «frontend index» и «register/login» смоуков). CI-3: `e2e/main-flow.spec.ts` — селекторы E2E-03/04/05 сняты с фактического UI (aria-label «Добавить продукт»; скоуп `.modal-overlay` вместо удалённого `.fixed`). Локально: playwright **8 passed / 1 skipped** | 🟡 патч `ci-green-release1.patch` (base `f05c360d`); доказательство — следующий push/nightly ран |
 | DESIGN_MIGRATION rev | пункты 0–8 закрыты владельцем, хвосты пункта 9 — отдельно | 🟡 вне аудита |
 
 ## Правила ведения

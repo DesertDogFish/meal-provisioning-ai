@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { X } from 'lucide-react';
 import { DateRange } from './DateRange';
 import { validateTrip } from '../utils/validation';
 import Modal from './Modal';
@@ -68,7 +69,20 @@ export function TripForm({ onSubmit, onCancel, externalErrors = [], submitLabel 
         className="rounded-2xl shadow-xl w-full max-w-md p-6"
         style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
       >
-        <h2 className="text-xl font-bold mb-4" style={{ color: 'var(--text)' }}>{title}</h2>
+        {/* U21 (список багов 25.10): крестик в шапке — единый способ закрытия
+            модалок во всём приложении (кроме кнопок «Отмена» в подвале). */}
+        <div className="flex items-start justify-between gap-3 mb-4">
+          <h2 className="text-xl font-bold" style={{ color: 'var(--text)' }}>{title}</h2>
+          <button
+            type="button"
+            onClick={onCancel}
+            aria-label="Закрыть"
+            className="p-2 rounded-lg transition-colors shrink-0"
+            style={{ color: 'var(--muted)' }}
+          >
+            <X size={18} />
+          </button>
+        </div>
 
         {(formErrors.length > 0 || externalErrors.length > 0) && (
           <div className="mb-4 space-y-1" role="alert">

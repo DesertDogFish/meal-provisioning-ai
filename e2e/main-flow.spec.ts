@@ -38,7 +38,9 @@ test('E2E-02 пользователь без прав на /products (redirect)'
 test('E2E-03 продукт + предупреждение о дубле', async ({ page }) => {
   await login(page);
   await page.goto('/products');
-  await page.getByRole('button', { name: /Продукт/ }).first().click();
+  // CI-3: кнопка получила aria-label «Добавить продукт» (доступное имя целиком),
+  // прежний регистрозависимый /Продукт/ его не матчил → таймаут.
+  await page.getByRole('button', { name: 'Добавить продукт' }).click();
   // soft-duplicate: в сиде есть «Гречка» (KG); форма по умолчанию тоже KG →
   // жёсткий дубль. Берём другую единицу ('л') — тогда checkDuplicate даёт soft-предупреждение.
   await page.getByPlaceholder('Например: Гречка ядрица').fill('Гречка');
@@ -59,8 +61,10 @@ test('E2E-04 создание похода со спаренными датам�
   await expect(end).toHaveAttribute('min', '2026-07-01');
   await end.fill('2026-07-05');
   await page.getByLabel('Количество человек').fill('4');
-  // в модалке и под ней есть похожие кнопки — скопимся к форме, чтобы не словить strict-mode
-  await page.locator('.fixed').getByRole('button', { name: 'Создать', exact: true }).click();
+  // в модалке и под ней есть похожие кнопки («Создать первый поход») — скопимся
+  // на оверлее модалки, чтобы не словить strict-mode. CI-3: прежний скоуп .fixed
+  // уехал вместе с дизайн-паком — модалки теперь рендерятся порталом в .modal-overlay.
+  await page.locator('.modal-overlay').getByRole('button', { name: 'Создать', exact: true }).click();
   await expect(page.getByText('Поход на Алтай').first()).toBeVisible({ timeout: 15_000 });
 });
 
@@ -72,7 +76,7 @@ test('E2E-05 сводка поездки: закупки/стоимость/ка
   await page.getByLabel(/Название/).fill('Тестовый маршрут');
   await page.locator('#start-date').fill('2026-08-01');
   await page.locator('#end-date').fill('2026-08-03');
-  await page.locator('.fixed').getByRole('button', { name: 'Создать', exact: true }).click();
+  await page.locator('.modal-overlay').getByRole('button', { name: 'Создать', exact: true }).click();
   await expect(page.getByText('Тестовый маршрут').first()).toBeVisible({ timeout: 15_000 });
   const card = page.locator('[data-testid^="trip-card-"]').first();
   await card.click();

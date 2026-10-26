@@ -69,32 +69,24 @@ describe('RecipesPage — админ-режим каталога', () => {
     expect(await screen.findByLabelText('Название')).toBeTruthy();
   });
 
-  it('удаление: проверка использования + confirm + DELETE', async () => {
+  it('удаление: только confirm + DELETE (клиентской проверки использования больше нет)', async () => {
     const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
     renderPage();
     await screen.findByText('Уха из рыбных консервов');
     fireEvent.click(screen.getByLabelText('Удалить Уха из рыбных консервов'));
     await waitFor(() => expect(api.del).toHaveBeenCalledWith('/admin/recipes/r1'));
     expect(confirmSpy).toHaveBeenCalled();
+    // U16: список походов клиентом больше не запрашивается — изоляцию гарантирует сервер
+    expect(api.get).not.toHaveBeenCalledWith('/trips');
     confirmSpy.mockRestore();
   });
 
-  it('удаление занятого рецепта не вызывает DELETE (409-логика на клиенте)', async () => {
+  it('U16: рецепт, используемый в походах, всё равно удаляется — походы живут на снапшотах', async () => {
     vi.spyOn(window, 'confirm').mockReturnValue(true);
-    (api.get as any).mockImplementation((path: string) => {
-      if (path === '/auth/me') return Promise.resolve({ role: 'ADMIN' });
-      if (path === '/trips') {
-        return Promise.resolve([
-          { id: 't1', days: [{ meals: [{ recipeId: 'r1' }] }] },
-        ]);
-      }
-      return Promise.resolve([]);
-    });
     renderPage();
     await screen.findByText('Уха из рыбных консервов');
     fireEvent.click(screen.getByLabelText('Удалить Уха из рыбных консервов'));
-    await waitFor(() => expect(api.get).toHaveBeenCalledWith('/trips'));
-    expect(api.del).not.toHaveBeenCalled();
-    expect(await screen.findByText(/используется в походах/)).toBeTruthy();
+    await waitFor(() => expect(api.del).toHaveBeenCalledWith('/admin/recipes/r1'));
+    expect(screen.queryByText(/используется в походах/)).toBeNull();
   });
 });

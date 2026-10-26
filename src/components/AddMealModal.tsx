@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Minus, Plus } from 'lucide-react';
+import { Minus, Plus, X } from 'lucide-react';
 import Modal from './Modal';
 import { Button } from './Button';
 import RecipeSearchSelect from './RecipeSearchSelect';
@@ -132,8 +132,19 @@ export default function AddMealModal({
         role="dialog"
         aria-label="Добавить приём пищи"
       >
-        {/* Шапка + контекст дня (§2.1, проблема №6 макета) */}
-        <h2 className="text-xl font-bold" style={{ color: 'var(--text)' }}>Добавить приём пищи</h2>
+        {/* Шапка + контекст дня (§2.1, проблема №6 макета); U21: крестик закрытия */}
+        <div className="flex items-start justify-between gap-3">
+          <h2 className="text-xl font-bold" style={{ color: 'var(--text)' }}>Добавить приём пищи</h2>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Закрыть"
+            className="p-2 rounded-lg transition-colors shrink-0"
+            style={{ color: 'var(--muted)' }}
+          >
+            <X size={18} />
+          </button>
+        </div>
         <p className="text-sm mt-1 mb-4" style={{ color: 'var(--muted)' }}>
           {day.dayIndex != null ? `День ${day.dayIndex} · ` : ''}
           {formatDayDate(day.dayDate)} · «{tripName}»

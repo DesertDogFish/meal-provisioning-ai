@@ -1,7 +1,7 @@
 import { Button } from './Button';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useToast } from './ToastProvider';
-import { Download } from 'lucide-react';
+import { Download, X } from 'lucide-react';
 import { formatAmount, calculateShoppingList, calculateDayShopping } from '../utils/calculations';
 import { formatPrice, formatRub, unitShortLabel } from '../utils/format'; // Release-1.0: единый формат чисел/единиц
 import { mealsWord } from '../utils/text';
@@ -591,7 +591,19 @@ export default function PriceOverridesTab({ tripId }: Props) {
       {showModal && (
         <Modal onClose={() => setShowModal(false)}>
           <div className="modal-sheet">
-            <b style={{ fontFamily: 'Unbounded', fontSize: '15px', color: 'var(--text)' }}>Ввести чек</b>
+            {/* U21: единый крестик в шапке модалки */}
+            <div className="flex items-start justify-between gap-3">
+              <b style={{ fontFamily: 'Unbounded', fontSize: '15px', color: 'var(--text)' }}>Ввести чек</b>
+              <button
+                type="button"
+                onClick={() => setShowModal(false)}
+                aria-label="Закрыть"
+                className="p-2 rounded-lg transition-colors shrink-0"
+                style={{ color: 'var(--muted)' }}
+              >
+                <X size={18} />
+              </button>
+            </div>
             <p style={{ color: 'var(--muted)', fontSize: '12px', margin: 'var(--sp-1) 0 var(--sp-4)' }}>
               Фактические цены за единицу (₽/кг, ₽/шт и т.д. — см. подпись в поле). Пусто = «= план».
             </p>
