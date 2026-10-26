@@ -20,6 +20,30 @@ const prices: IngredientPrice[] = [...mockPrices];
 // CONTRACT-P1: состояние синхронизации интеграций для SYNC_ALREADY_RUNNING
 let syncRunning = false;
 
+// U11 mock-parity: состояние /admin/integrations* (как IntegrationController +
+// IntegrationService). По умолчанию интеграция подключена — в демо-режиме
+// «Обновить цены» работает сразу. errorMessage='Connected successfully' —
+// как у реального бэкенда (фронт не должен трактовать его как ошибку).
+let integrationState: {
+  id: number; provider: string; status: string; baseUrl: string;
+  lastConnectedAt: string | null; lastSyncAt: string | null; errorMessage: string | null;
+} = {
+  id: 1,
+  provider: 'OFF',
+  status: 'CONNECTED',
+  baseUrl: 'https://world.openfoodfacts.org',
+  lastConnectedAt: new Date().toISOString(),
+  lastSyncAt: null,
+  errorMessage: 'Connected successfully',
+};
+
+// Журнал синхронизаций (SyncLogDto), свежие записи первыми
+const integrationSyncLogs: Array<{
+  id: number; provider: string; type: string; status: string;
+  startedAt: string; finishedAt: string | null;
+  createdCount: number; updatedCount: number; errorCount: number;
+}> = [];
+
 // Price overrides хранилище (tripId -> ingredientId -> override)
 const priceOverrides: Record<string, Record<string, { actualPrice: number; comment?: string }>> = {};
 
@@ -365,7 +389,62 @@ export const mockServer = {
     if (pathWithoutQuery === '/admin/sync-logs' && method === 'GET') {
       return [] as T;
     }
-    if (pathWithoutQuery === '/admin/integrations/OFF/sync/prices' && method === 'POST') {
+    // U11 mock-parity: список интеграций — GET /admin/integrations (IntegrationDto)
+    if (pathWithoutQuery === '/admin/integrations' && method === 'GET') {
+      return [{ ...integrationState }] as T;
+    }
+    // U11 mock-parity: журнал синхронизаций — GET /admin/integrations/sync-logs (SyncLogDto)
+    if (pathWithoutQuery === '/admin/integrations/sync-logs' && method === 'GET') {
+      return integrationSyncLogs.map(l => ({ ...l })) as T;
+    }
+    // U11 mock-parity: подключение/отключение — POST /admin/integrations/:provider/(dis)connect
+    const integConn = pathWithoutQuery.match(/^\/admin\/integrations\/([^/]+)\/(connect|disconnect)$/);
+    if (integConn && method === 'POST') {
+      const [, provider, action] = integConn;
+      if (provider !== integrationState.provider) {
+        throw { status: 404, message: 'Integration not found: ' + provider, detail: `Unknown provider ${provider}` } as any;
+      }
+      integrationState = {
+        ...integrationState,
+        status: action === 'connect' ? 'CONNECTED' : 'DISCONNECTED',
+        lastConnectedAt: action === 'connect' ? new Date().toISOString() : integrationState.lastConnectedAt,
+        errorMessage: action === 'connect' ? 'Connected successfully' : null,
+      };
+      return { ...integrationState } as T;
+    }
+    // U11 mock-parity: поиск внешних товаров — GET /admin/integrations/:provider/products/search
+    const integSearch = pathWithoutQuery.match(/^\/admin\/integrations\/([^/]+)\/products\/search$/);
+    if (integSearch && method === 'GET') {
+      const url = new URL(`http://localhost${path}`);
+      const query = (url.searchParams.get('query') || '').trim();
+      // Демо-результат в форме ExternalProductDto (code/name/brand/packAmount/packUnit/imageUrl)
+      return [{
+        code: '3017620422003',
+        name: query ? `${query} — Nutella Hazelnut Spread` : 'Nutella Hazelnut Spread',
+        brand: 'Ferrero',
+        packAmount: 0.35,
+        packUnit: 'KG',
+        imageUrl: null,
+      }] as T;
+    }
+    // U11 mock-parity: создание связи ингредиента с внешним товаром (200 void, как реальный)
+    if (/^\/admin\/integrations\/ingredients\/[^/]+\/mapping$/.test(pathWithoutQuery) && method === 'POST') {
+      return null as T;
+    }
+    // U11 mock-parity: синхронизация цен — POST /admin/integrations/:provider/sync/prices.
+    // Порядок проверок как в IntegrationService.syncPrices: неизвестный провайдер → 404,
+    // не подключено → 409 INTEGRATION_DISCONNECTED, уже идёт → 409 SYNC_ALREADY_RUNNING.
+    // Успех: 202-подобное тело { logId }, лог асинхронно становится SUCCESS (через 1.5 с)
+    // со счётчиками created/updated — как фоновая executePriceSync на реальном бэкенде.
+    const integSync = pathWithoutQuery.match(/^\/admin\/integrations\/([^/]+)\/sync\/prices$/);
+    if (integSync && method === 'POST') {
+      const provider = integSync[1];
+      if (provider !== integrationState.provider) {
+        throw { status: 404, message: 'Integration not found: ' + provider, detail: `Unknown provider ${provider}` } as any;
+      }
+      if (integrationState.status !== 'CONNECTED') {
+        throw { status: 409, message: 'INTEGRATION_DISCONNECTED', detail: 'Provider is not connected' } as any;
+      }
       if (syncRunning) {
         throw {
           status: 409,
@@ -374,10 +453,27 @@ export const mockServer = {
         } as any;
       }
       syncRunning = true;
-      // Как в handleIntegrations: синк «происходит» асинхронно и освобождает флаг,
-      // иначе последующие sync-запросы вечно получают 409.
-      setTimeout(() => { syncRunning = false; }, 1500);
-      return { status: 'RUNNING', startedAt: new Date().toISOString() } as T;
+      const log = {
+        id: integrationSyncLogs.length + 1,
+        provider,
+        type: 'PRICES',
+        status: 'RUNNING',
+        startedAt: new Date().toISOString(),
+        finishedAt: null as string | null,
+        createdCount: 0,
+        updatedCount: 0,
+        errorCount: 0,
+      };
+      integrationSyncLogs.unshift(log);
+      setTimeout(() => {
+        log.status = 'SUCCESS';
+        log.finishedAt = new Date().toISOString();
+        log.createdCount = 3;
+        log.updatedCount = 1;
+        integrationState = { ...integrationState, lastSyncAt: log.finishedAt };
+        syncRunning = false;
+      }, 1500);
+      return { logId: log.id } as T;
     }
     // CONTRACT-P1: CRUD рецептов админа живёт в handleRecipes (POST/PUT/DELETE /admin/recipes)
     if (pathWithoutQuery.startsWith('/admin/recipes')) {

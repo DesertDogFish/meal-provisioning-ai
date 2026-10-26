@@ -11,12 +11,14 @@ import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.client.RestClient;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
@@ -42,14 +44,20 @@ import java.util.regex.Pattern;
  *    при финальном провале — graceful degradation (пустой список вместо
  *    исключения).
  *
- * 5. Цены: карточки продуктов ОFF обогащает данными (штрихкод, название,
- *    бренд, фасовка, фото), но локальных цен в RUB для России НЕ предоставляет.
- *    Синхронизация цен через OFF отключена: fetchPrices() — заглушка,
- *    logOnly-сообщение "OFF does not provide local prices...".
+ * 5. Цены (fix U11): прайсы берутся из проекта Open Prices
+ *    (https://prices.openfoodfacts.org, GET /api/v1/prices?product_code=...) —
+ *    краудсорсинговая база цен OFF по штрихкоду. Цены в иностранных валютах
+ *    конвертируются в RUB по ежедневному курсу ЦБ РФ ({@link ExchangeRateService});
+ *    без доступного курса такая цена пропускается (graceful degradation —
+ *    локальная база хранит только рубли).
+ *
+ * 6. Обновление карточек продуктов: fetchProductInfo() (см. {@link ProductInfoProvider})
+ *    освежает название/бренд/фасовку/фото через OFF Product API v2; изменения
+ *    учитываются в SyncLog.updatedCount при синхронизации цен.
  */
 @Component
 @Slf4j
-public class OpenFoodFactsProvider implements PriceProvider {
+public class OpenFoodFactsProvider implements PriceProvider, ProductInfoProvider {
 
     /**
      * User-Agent строго по доке OFF: "AppName/Version (ContactEmail)".
@@ -62,7 +70,13 @@ public class OpenFoodFactsProvider implements PriceProvider {
     /** Максимум повторных попыток при 429/5xx. */
     private static final int MAX_RETRIES = 3;
 
+    /** Сколько последних цен на продукт тянуть из Open Prices (история по датам). */
+    static final int PRICES_PAGE_SIZE = 10;
+
     private final RestClient restClient;
+
+    /** Курсы ЦБ РФ для конвертации цен Open Prices в рубли (fix U11). */
+    private final ExchangeRateService exchangeRateService;
 
     /** Двусторонний семафор: одновременно только один поисковый запрос... */
     private final Semaphore searchPermits = new Semaphore(1, true);
@@ -73,7 +87,12 @@ public class OpenFoodFactsProvider implements PriceProvider {
     @Value("${integration.off.products-url:https://world.openfoodfacts.org}")
     private String productsUrl;
 
-    public OpenFoodFactsProvider() {
+    /** Open Prices API — источник краудсорсинговых цен по штрихкоду (fix U11). */
+    @Value("${integration.off.prices-url:https://prices.openfoodfacts.org}")
+    private String pricesUrl;
+
+    public OpenFoodFactsProvider(ExchangeRateService exchangeRateService) {
+        this.exchangeRateService = exchangeRateService;
         this.restClient = RestClient.builder()
                 .defaultHeader(HttpHeaders.USER_AGENT, USER_AGENT)
                 .build();
@@ -82,8 +101,8 @@ public class OpenFoodFactsProvider implements PriceProvider {
     @PostConstruct
     void logConfig() {
         log.info("Open Food Facts provider initialized with User-Agent: {}", USER_AGENT);
-        log.info("OFF is used for product enrichment only (barcode/name/brand/pack/photo). "
-                + "Price sync via OFF is disabled: OFF does not provide local prices.");
+        log.info("OFF: product cards/search via {}; prices via Open Prices {} (converted to RUB using CBR rates)",
+                productsUrl, pricesUrl);
     }
 
     @Override
@@ -129,43 +148,140 @@ public class OpenFoodFactsProvider implements PriceProvider {
         List<ExternalProductDto> results = new ArrayList<>();
         if (response.has("products")) {
             for (JsonNode product : response.get("products")) {
-                String code = product.has("code") ? product.get("code").asText() : null;
-                String name = product.has("product_name") ? product.get("product_name").asText() : null;
-                String brand = product.has("brands") ? product.get("brands").asText() : null;
-                String quantity = product.has("quantity") ? product.get("quantity").asText() : null;
-                String imageUrl = product.has("image_url") ? product.get("image_url").asText() : null;
-
-                if (code != null && name != null) {
-                    PackInfo packInfo = parseQuantity(quantity);
-                    results.add(new ExternalProductDto(
-                            code,
-                            name,
-                            brand,
-                            packInfo.amount(),
-                            packInfo.unit(),
-                            imageUrl
-                    ));
-                }
+                // Общий билдер карточки (fix U11): code и name обязательны,
+                // brand/фасовка/фото — best-effort.
+                buildProductDto(null, product).ifPresent(results::add);
             }
         }
         return results;
     }
 
     /**
-     * Синхронизация цен через OFF ОТКЛЮЧЕНА (бизнес-фикс).
+     * Синхронизация цен (fix U11): Open Prices (prices.openfoodfacts.org) —
+     * краудсорсинговые цены OFF по штрихкоду. Берём последние PRICES_PAGE_SIZE
+     * цен (order_by=-date), конвертируем в RUB по курсу ЦБ РФ и возвращаем
+     * как ExternalPriceDto(currency="RUB") — пайплайн IntegrationService
+     * пишет их в IngredientPrice по датам.
      *
-     * OFF (включая crowdsourced prices.openfoodfacts.org) не предоставляет
-     * актуальные локальные цены в рублях для РФ: там нет RUB-прайсов российских
-     * магазинов. Попытки парсить цены давали только пустые/мусорные данные и
-     * лишние HTTP-запросы к API, усугубляющие rate limiting.
-     *
-     * Цены необходимо вводить вручную или импортировать из другого источника.
+     * Graceful degradation: URL не настроен / сеть недоступна / курс валюты
+     * неизвестен — возвращаем пустой список (или пропускаем цену), не роняем
+     * синхронизацию.
      */
     @Override
     public List<ExternalPriceDto> fetchPrices(String externalCode, LocalDate since) {
-        log.warn("OFF does not provide local prices. Please enter manually or use another source."
-                + " (price sync requested for code {}, ignored)", externalCode);
-        return Collections.emptyList();
+        if (externalCode == null || externalCode.isBlank() || pricesUrl == null) {
+            return Collections.emptyList();
+        }
+        String uri = buildPricesUri(pricesUrl, externalCode, since, PRICES_PAGE_SIZE);
+        JsonNode response = executeWithThrottlingAndRetry(uri, "prices for code " + externalCode);
+        if (response == null) {
+            return Collections.emptyList();
+        }
+        List<ExternalPriceDto> prices = parsePricesResponse(response, exchangeRateService::rateToRub);
+        log.info("Open Prices: {} RUB price(s) for code {} (requested since {})",
+                prices.size(), externalCode, since);
+        return prices;
+    }
+
+    /**
+     * Обновление карточки продукта (fix U11): OFF Product API v2 —
+     * название, бренд, фасовка, фото по штрихкоду.
+     */
+    @Override
+    public Optional<ExternalProductDto> fetchProductInfo(String externalCode) {
+        if (externalCode == null || externalCode.isBlank() || productsUrl == null) {
+            return Optional.empty();
+        }
+        String uri = UriStringBuilder.from(productsUrl)
+                .path("/api/v2/product/" + externalCode)
+                .queryParam("fields", "code,product_name,brands,quantity,image_url")
+                .build();
+        JsonNode response = executeWithThrottlingAndRetry(uri, "product card " + externalCode);
+        if (response == null || !response.has("product") || response.get("product").isNull()) {
+            return Optional.empty();
+        }
+        return buildProductDto(externalCode, response.get("product"));
+    }
+
+    /**
+     * Чистый строитель URI Open Prices (без HTTP) — вынесен для юнит-тестов.
+     * date_gte добавляется только если задан since.
+     */
+    static String buildPricesUri(String baseUrl, String productCode, LocalDate since, int size) {
+        UriStringBuilder builder = UriStringBuilder.from(baseUrl)
+                .path("/api/v1/prices")
+                .queryParam("product_code", productCode)
+                .queryParam("order_by", "-date")
+                .queryParam("size", size);
+        if (since != null) {
+            builder.queryParam("date_gte", since.toString());
+        }
+        return builder.build();
+    }
+
+    /**
+     * Чистый парсер ответа Open Prices (без HTTP) — вынесен для юнит-тестов.
+     *
+     * Формат items[]: {"price":2.5,"currency":"EUR","date":"2026-10-01",
+     * "product_code":"3017620422003",...}. Цена конвертируется в RUB через
+     * rateToRub; валюта без курса и битые элементы пропускаются.
+     */
+    static List<ExternalPriceDto> parsePricesResponse(JsonNode response,
+                                                      java.util.function.Function<String, BigDecimal> rateToRub) {
+        List<ExternalPriceDto> result = new ArrayList<>();
+        if (response == null || !response.has("items") || !response.get("items").isArray()) {
+            return result;
+        }
+        for (JsonNode item : response.get("items")) {
+            JsonNode priceNode = item.get("price");
+            JsonNode currencyNode = item.get("currency");
+            JsonNode dateNode = item.get("date");
+            JsonNode codeNode = item.get("product_code");
+            if (priceNode == null || !priceNode.isNumber() || currencyNode == null
+                    || dateNode == null || codeNode == null) {
+                continue;
+            }
+            BigDecimal price = priceNode.decimalValue();
+            if (price.signum() <= 0) {
+                continue;
+            }
+            String currency = currencyNode.asText().trim().toUpperCase();
+            BigDecimal rate = rateToRub.apply(currency);
+            if (rate == null || rate.signum() <= 0) {
+                log.debug("Skipping Open Prices item in {}: no CBR rate to RUB", currency);
+                continue;
+            }
+            try {
+                LocalDate date = LocalDate.parse(dateNode.asText().trim().substring(0, 10));
+                BigDecimal rub = price.multiply(rate).setScale(2, RoundingMode.HALF_UP);
+                result.add(new ExternalPriceDto(codeNode.asText(), rub, "RUB", date));
+            } catch (Exception e) {
+                log.warn("Skipping Open Prices item with unparsable date '{}': {}",
+                        dateNode.asText(), e.getMessage());
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Общий билдер ExternalProductDto из JSON-узла продукта OFF
+     * (используется и поиском, и обновлением карточки).
+     */
+    private Optional<ExternalProductDto> buildProductDto(String fallbackCode, JsonNode product) {
+        String code = product.hasNonNull("code") ? product.get("code").asText() : fallbackCode;
+        if (code == null || code.isBlank()) {
+            return Optional.empty();
+        }
+        String name = product.hasNonNull("product_name") ? product.get("product_name").asText() : null;
+        if (name == null || name.isBlank()) {
+            return Optional.empty();
+        }
+        String brand = product.hasNonNull("brands") ? product.get("brands").asText() : null;
+        String quantity = product.hasNonNull("quantity") ? product.get("quantity").asText() : null;
+        String imageUrl = product.hasNonNull("image_url") ? product.get("image_url").asText() : null;
+        PackInfo packInfo = parseQuantity(quantity);
+        return Optional.of(new ExternalProductDto(code, name, brand,
+                packInfo.amount(), packInfo.unit(), imageUrl));
     }
 
     /**
@@ -228,15 +344,25 @@ public class OpenFoodFactsProvider implements PriceProvider {
     /**
      * Блокирует слот поиска и выдерживает паузу, чтобы суммарная частота
      * не превысила 10 запросов в минуту (интервал >= 6.5 с).
+     *
+     * FIX (U11): раньше ожидание считалось как «прошло − интервал» — при
+     * стартовом lastSearchAt = EPOCH первый запрос уходил в сон ~56 лет
+     * (полный hang провайдера), а permit никогда не возвращался в семафор —
+     * второй запрос блокировался навсегда. Корректная формула:
+     * «интервал − прошло»; permit освобождается в finally.
      */
     private void acquireSearchSlot() throws InterruptedException {
         searchPermits.acquire();
-        long waitMs = Duration.between(lastSearchAt, Instant.now()).minus(MIN_SEARCH_INTERVAL).toMillis();
-        if (waitMs > 0) {
-            log.debug("Throttling OFF request: sleeping {} ms (limit 10 req/min)", waitMs);
-            TimeUnit.MILLISECONDS.sleep(waitMs);
+        try {
+            long waitMs = Duration.between(Instant.now(), lastSearchAt.plus(MIN_SEARCH_INTERVAL)).toMillis();
+            if (waitMs > 0) {
+                log.debug("Throttling OFF request: sleeping {} ms (limit 10 req/min)", waitMs);
+                TimeUnit.MILLISECONDS.sleep(waitMs);
+            }
+            lastSearchAt = Instant.now();
+        } finally {
+            searchPermits.release();
         }
-        lastSearchAt = Instant.now();
     }
 
     /**
