@@ -21,6 +21,7 @@ import {
   calculatePersonSummary,
   shoppingPlannedTotal,
   realTripPeople,
+  isRowExcluded,
 } from './calculations';
 
 // ---------- фикстуры ----------
@@ -293,5 +294,56 @@ describe('calculatePersonSummary с реальным числом людей (U3
     const { tripSummary } = calculatePersonSummary(makeTrip([day1]), recipesMap, PRICES, 10);
     // день без override: 4 чел. → 8 яиц ×15 = 120 + 0.4 кг хлеба ×200 = 80 → 200
     expect(tripSummary.costPerDefaultPerson).toBeCloseTo(200 / 10);
+  });
+});
+
+// ---------- Fix-2 (список 26.10, п.5): по-дневные исключения ----------
+
+describe('по-дневные исключения (Fix-2)', () => {
+  // Два дня, один и тот же рецепт: 4 яйца/2 порции × 4 чел. = 8 яиц в день
+  const mkDay = (id: string, date: string): TripDay => ({
+    id, tripId: 'trip-1', dayDate: date,
+    meals: [{ id: `m-${id}`, tripDayId: id, mealType: 'BREAKFAST', recipeId: 'r-omelet', sortOrder: 1 }],
+  });
+  const trip2 = makeTrip([mkDay('d1', '2026-05-01'), mkDay('d2', '2026-05-02')]);
+
+  it('глобальный ключ исключает позицию во всех днях (прежнее поведение)', () => {
+    const days = calculateDayShopping(trip2, recipesMap, PRICES, new Set(['ing-egg']));
+    for (const d of days) {
+      expect(d.items.find(i => i.ingredientId === 'ing-egg')).toBeUndefined();
+    }
+    const total = calculateShoppingList(trip2, recipesMap, PRICES, new Set(['ing-egg']));
+    expect(total.find(i => i.ingredientId === 'ing-egg')).toBeUndefined();
+  });
+
+  it('ключ «день::продукт» исключает позицию ТОЛЬКО в этот день', () => {
+    const days = calculateDayShopping(trip2, recipesMap, PRICES, new Set(['2026-05-01::ing-egg']));
+    const d1 = days.find(d => d.dayDate === '2026-05-01')!;
+    const d2 = days.find(d => d.dayDate === '2026-05-02')!;
+    expect(d1.items.find(i => i.ingredientId === 'ing-egg')).toBeUndefined();
+    expect(d2.items.find(i => i.ingredientId === 'ing-egg')!.totalAmount).toBeCloseTo(8);
+  });
+
+  it('агрегат закупки уменьшается только на количество исключённого дня', () => {
+    // без исключений: 16 яиц (8+8); с исключением дня d1: 8
+    const full = calculateShoppingList(trip2, recipesMap, PRICES);
+    expect(full.find(i => i.ingredientId === 'ing-egg')!.totalAmount).toBeCloseTo(16);
+    const partial = calculateShoppingList(trip2, recipesMap, PRICES, new Set(['2026-05-01::ing-egg']));
+    expect(partial.find(i => i.ingredientId === 'ing-egg')!.totalAmount).toBeCloseTo(8);
+    // стоимость пересчитана: яйца d2 по цене 15 (май) → 8×15=120 (вместо 240)
+    expect(partial.find(i => i.ingredientId === 'ing-egg')!.estimatedCost).toBeCloseTo(120);
+  });
+
+  it('person-сводка учитывает по-дневные исключения (инвариант сумм)', () => {
+    const { summary } = calculatePersonSummary(trip2, recipesMap, PRICES, 4, new Set(['2026-05-01::ing-egg']));
+    const egg = summary.find(s => s.ingredientName === 'Яйцо')!;
+    expect(egg.amountPerDefaultPerson).toBeCloseTo(8 / 4);
+  });
+
+  it('isRowExcluded: пустое множество — ничего не исключено', () => {
+    expect(isRowExcluded(undefined, '2026-05-01', 'x')).toBe(false);
+    expect(isRowExcluded(new Set(), '2026-05-01', 'x')).toBe(false);
+    expect(isRowExcluded(new Set(['2026-05-01::x']), '2026-05-01', 'x')).toBe(true);
+    expect(isRowExcluded(new Set(['2026-05-01::x']), '2026-05-02', 'x')).toBe(false);
   });
 });

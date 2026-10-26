@@ -51,11 +51,11 @@ describe('menuOverlay (U30) — правки состава видны в кар
     expect(out[0].amount).toBeCloseTo(0.4);
   });
 
-  it('EXTRA legacy (amountPerServing, без absoluteAmount) масштабируется на людей', () => {
+  it('EXTRA c amountPerServing (V21: абсолют на приём) — НЕ масштабируется на людей', () => {
     const out = overlayEditsOnIngredients([ing('ing1', 'Гречка', 0.4)], [
       { fromIngredientId: null, toIngredientId: 'ing9', added: true, amountPerServing: 0.05, toIngredientName: 'Сгущёнка' },
     ], 6);
-    expect(out.find(i => i.added)!.amount).toBeCloseTo(0.3);
+    expect(out.find(i => i.added)!.amount).toBeCloseTo(0.05);
   });
 
   it('EXCLUDE: исключённый продукт исчезает из карточки', () => {

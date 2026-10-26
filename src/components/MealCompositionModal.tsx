@@ -543,7 +543,7 @@ export default function MealCompositionModal({
             <button
               type="button"
               className="underline ml-1"
-              onClick={() => onEditCatalogRecipe(server.recipeId)}
+              onClick={() => onEditCatalogRecipe(server.catalogRecipeId ?? server.recipeId)}
             >
               Изменить блюдо в справочнике
             </button>

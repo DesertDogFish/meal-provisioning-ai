@@ -1378,7 +1378,10 @@ export const mockServer = {
 
     return {
       mealId: meal.id, dayDate: day.dayDate, mealType: meal.mealType, people,
-      baseServings, recipeId: recipe.id, recipeName: recipe.name,
+      // recipe в mock уже резолвится к базовому каталожному блюду; catalogRecipeId —
+      // паритет с backend CompositionResponse (id ГЛОБАЛЬНОГО рецепта для «Изменить
+      // блюдо в справочнике» — meal.recipeId может быть trip-scoped снепшотом).
+      baseServings, recipeId: recipe.id, catalogRecipeId: recipe.id, recipeName: recipe.name,
       items, substitutions: subDtos,
       totals: { kcal: r3(kcal), weightGrams: r3(weightGrams), plannedCost: r2(plannedCost) },
     };
@@ -1540,23 +1543,40 @@ export const mockServer = {
       if (datesChanged) {
         trip.startDate = String(body.startDate ?? trip.startDate);
         trip.endDate = String(body.endDate ?? trip.endDate);
-        // перегенерация дней (паритет с createTrip): старый план стирается
-        const days: any[] = [];
+        // Fix-2 (п.1): стираются данные ТОЛЬКО дней, ушедших из диапазона.
+        // Пересекающиеся дни сохраняются вместе с приёмами; новые даты добавляются.
+        const oldDays: any[] = (trip as any).days || [];
+        const removedDayIds = new Set(
+          oldDays
+            .filter(d => d.dayDate < trip.startDate || d.dayDate > trip.endDate)
+            .map(d => d.id)
+        );
+        const kept = oldDays.filter(d => !removedDayIds.has(d.id));
+        const keptDates = new Set(kept.map(d => d.dayDate));
         const start = new Date(`${trip.startDate}T00:00:00`);
         const end = new Date(`${trip.endDate}T00:00:00`);
-        for (let d = new Date(start), i = 0; d <= end; d.setDate(d.getDate() + 1), i++) {
-          days.push({
-            id: `d-${trip.id}-${i}`,
-            tripId: trip.id,
-            dayDate: d.toISOString().slice(0, 10),
-            meals: [],
-          });
+        // seq — за максимальным числовым суффиксом существующих id (несколько PUT
+        // подряд не должны давать коллизии 'd-<trip>-N')
+        let seq = kept.reduce((mx: number, d: any) => {
+          const m = String(d.id).match(/-(\d+)$/);
+          return m ? Math.max(mx, Number(m[1]) + 1) : mx;
+        }, oldDays.length);
+        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+          const iso = d.toISOString().slice(0, 10);
+          if (!keptDates.has(iso)) {
+            kept.push({ id: `d-${trip.id}-${seq++}`, tripId: trip.id, dayDate: iso, meals: [] });
+          }
         }
-        (trip as any).days = days;
-        // правки состава привязаны к старым приёмам — снимаем, чтобы не «воскрешали» позиции
-        delete substitutions[trip.id];
-        delete removedItems[trip.id];
-        delete manualItems[trip.id];
+        kept.sort((a, b) => a.dayDate.localeCompare(b.dayDate));
+        (trip as any).days = kept;
+        // ручные позиции удалённых дней — стираются; походные (dayId=null) — живут
+        if (removedDayIds.size > 0 && manualItems[trip.id]) {
+          manualItems[trip.id] = manualItems[trip.id].filter(
+            mi => mi.dayId == null || !removedDayIds.has(mi.dayId)
+          );
+        }
+        // правки состава привязаны к РЕЦЕПТАМ похода (не к дням) — остаются,
+        // пока жив хотя бы один приём; «воскрешения» удалённых дней больше нет.
       }
       return trip;
     }
@@ -1584,11 +1604,16 @@ export const mockServer = {
       if (dayId != null && !(trip.days || []).some((d: any) => d.id === dayId)) {
         throw { status: 404, message: 'Not found', detail: `Trip day ${dayId} not found` } as any;
       }
+      // AGENTS §9 / Fix-2: ссылка «поход → продукт» указывает на trip-scoped копию,
+      // если она есть (иначе id ручной позиции и id строки закупки не сольются в одну).
+      const snap = products.find(
+        (x: any) => (x as any).tripId === tripId && String((x as any).snapshotOf ?? '') === String(product.id)
+      );
       const created: MockManualItem = {
         id: `mi-${manualSeq++}`,
         tripId,
         dayId,
-        ingredientId: product.id,
+        ingredientId: snap ? snap.id : product.id,
         ingredientName: product.name,
         unit: product.unit,
         amount,
@@ -1811,6 +1836,36 @@ export const mockServer = {
     }
 
     // ===== Фаза 13 (п.1): пер-походные замещения состава (TripIngredientSubstitution) =====
+    // GET /trips/:id/ingredient-edits — паритет с backend TripIngredientEditResponse:
+    // ПОЛНЫЙ список правок состава (замены + добавления + удаления) с именами и
+    // количествами. Фронт (getTripEdits) читает именно его — в real-режиме
+    // GET /substitutions отдаёт только «чистые» замены без количеств.
+    if (parts.length === 3 && parts[2] === 'ingredient-edits' && method === 'GET') {
+      const tripId = parts[1];
+      if (!trips.find(t => t.id === tripId)) {
+        throw { status: 404, message: 'Not found', detail: `Trip ${tripId} not found` } as any;
+      }
+      const nameOf = (id: string | null): { name: string | null; unit: string | null } => {
+        if (id == null) return { name: null, unit: null };
+        const pr = products.find(x => x.id === String(id))
+          ?? products.find(x => x.id === editIngredientKey(id));
+        return { name: pr?.name ?? null, unit: pr?.unit ?? null };
+      };
+      return allTripEdits(tripId).map((sub) => {
+        const from = nameOf(sub.fromIngredientId);
+        const to = nameOf(sub.toIngredientId);
+        const rec = recipes.find(r => editRecipeKey(r.id) === editRecipeKey(sub.recipeId));
+        return {
+          ...sub,
+          recipeName: rec?.name ?? null,
+          fromIngredientName: from.name,
+          toIngredientName: to.name,
+          fromUnit: from.unit,
+          toUnit: to.unit,
+        };
+      });
+    }
+
     // GET /trips/:id/substitutions
     if (parts.length === 3 && parts[2] === 'substitutions' && method === 'GET') {
       const tripId = parts[1];

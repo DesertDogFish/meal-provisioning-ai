@@ -478,7 +478,10 @@ public class MealCompositionService {
 
         return new CompositionResponse(
                 ctx.meal.getId(), ctx.day.getDayDate(), ctx.meal.getMealType(), ctx.people,
-                baseServings, ctx.recipe.getId(), ctx.recipe.getName(),
+                baseServings, ctx.recipe.getId(),
+                // Fix-2 (п.7): глобальный id блюда — snapshotOf снепшота или сам id
+                ctx.recipe.getSnapshotOf() != null ? ctx.recipe.getSnapshotOf() : ctx.recipe.getId(),
+                ctx.recipe.getName(),
                 orderedItems, subDtos,
                 new Totals(kcal.setScale(1, RoundingMode.HALF_UP),
                         weightGrams.setScale(1, RoundingMode.HALF_UP),

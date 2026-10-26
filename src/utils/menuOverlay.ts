@@ -86,11 +86,13 @@ export function classifyEdits(edits: OverlayEdit[]) {
     const to = e.toIngredientId == null ? null : stripSnapshotSuffix(e.toIngredientId);
     if (e.added || from == null) {
       if (to == null) continue;
-      // §3: absoluteAmount — абсолют на приём; amountPerServing — legacy (× people)
+      // §3/V21: amount_per_serving added-строк хранит АБСОЛЮТ на приём (backend V21
+      // конвертировал legacy per-serving); mock дублирует его в absoluteAmount.
+      // Оба поля трактуются как абсолют — people НЕ умножается.
       const amount = e.absoluteAmount != null
         ? Number(e.absoluteAmount)
         : e.amountPerServing != null ? Number(e.amountPerServing) : null;
-      extras.push({ to, amount, perServing: e.absoluteAmount == null && e.amountPerServing != null, name: e.toIngredientName || to, unit: e.toUnit || 'PCS' });
+      extras.push({ to, amount, perServing: false, name: e.toIngredientName || to, unit: e.toUnit || 'PCS' });
     } else if (e.removed || to == null) {
       excluded.add(from);
     } else if (from === to) {

@@ -96,15 +96,20 @@ export default function TripsPage() {
     const datesChanged =
       formData.startDate !== trip.startDate || formData.endDate !== trip.endDate;
     if (datesChanged) {
-      const daysCount = trip.days?.length ?? 0;
-      const mealsCount = (trip.days ?? []).reduce(
-        (acc: number, d: any) => acc + (d.meals?.length ?? 0), 0);
-      const ok = window.confirm(
-        `Смена дат пересоздаст дни похода: план по дням будет стёрт` +
-        (daysCount > 0 ? ` (${daysCount} дн., ${mealsCount} приёмов пищи, правки состава и ручные позиции)` : '') +
-        `. Продолжить?`
-      );
-      if (!ok) return;
+      // Fix-2 (п.1): стираются данные ТОЛЬКО дней, уходящих за новые границы;
+      // пересекающиеся дни сохраняют меню, правки и позиции.
+      const lostDays = (trip.days ?? []).filter(
+        (d: any) => d.dayDate < formData.startDate || d.dayDate > formData.endDate);
+      const lostMeals = lostDays.reduce((acc: number, d: any) => acc + (d.meals?.length ?? 0), 0);
+      if (lostDays.length > 0) {
+        const ok = window.confirm(
+          `Из похода уйдут ${lostDays.length} дн. (${lostDays.map((d: any) =>
+            new Date(d.dayDate).toLocaleDateString('ru-RU')).join(', ')})` +
+          (lostMeals > 0 ? ` — вместе с ними удалятся ${lostMeals} приёмов пищи и их позиции` : '') +
+          `. Остальные дни сохранятся. Продолжить?`
+        );
+        if (!ok) return;
+      }
     }
     try {
       await api.put(`/trips/${trip.id}`, {

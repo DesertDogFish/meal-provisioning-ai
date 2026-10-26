@@ -325,7 +325,14 @@ export function normalizeRecipe(recipe: Recipe): Recipe {
           unit: ((ri as unknown as { unit?: UnitOfMeasure }).unit ??
             (ri as unknown as { unitLabel?: UnitOfMeasure }).unitLabel ??
             'PCS') as UnitOfMeasure,
-          category: '',
+          // Fix-2 (п.3/4): плоский DTO бэкенда расширен categoryName/packSize/roundToPacks/
+          // pieceWeightG/kcalPer100g — без них чеклист и чек в real-режиме
+          // не-админа попадали целиком в «Прочее» и не знали фасовку.
+          category: (ri as unknown as { categoryName?: string }).categoryName ?? '',
+          packSize: (ri as unknown as { packSize?: number }).packSize,
+          roundToPacks: (ri as unknown as { roundToPacks?: boolean }).roundToPacks,
+          pieceWeightG: (ri as unknown as { pieceWeightG?: number }).pieceWeightG,
+          kcalPer100g: (ri as unknown as { kcalPer100g?: number }).kcalPer100g,
           createdAt: '',
         } as import('../types').Ingredient),
     })),
@@ -414,6 +421,9 @@ export interface CompositionResponse {
   people: number;
   baseServings: number;
   recipeId: string;
+  /** Fix-2 (п.7): id блюда в ГЛОБАЛЬНОМ каталоге (recipeId может быть trip-scoped
+   * снепшотом) — для навигации «Изменить блюдо в справочнике» → /recipes?edit=. */
+  catalogRecipeId?: string;
   recipeName: string;
   items: CompositionItem[];
   substitutions: CompositionSubstitution[];

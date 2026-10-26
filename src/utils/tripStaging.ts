@@ -31,11 +31,15 @@ export interface TripSubstitution {
 const PRICES_KEY = (tripId: string) => `trip-actual-prices-${tripId}`;
 const EXCLUDED_KEY = (tripId: string) => `trip-shopping-excluded-${tripId}`;
 const SUBST_KEY = (tripId: string) => `trip-substitutions-${tripId}`;
+/** Fix-2 (п.6): отметки «взято» в чеклисте закупки.
+ * Осознанное отклонение от AGENTS §9 (серверное хранение появится вместе с R2/R4);
+ * до этого — общий стейдж похода, как у исключений. */
+const BOUGHT_KEY = (tripId: string) => `trip-checklist-bought-${tripId}`;
 
 /** Собственное событие — синхронизация между вкладками компонента в одной странице. */
 const STAGE_EVENT = 'provision-trip-stage-changed';
 
-type StageKind = 'prices' | 'excluded' | 'subs';
+type StageKind = 'prices' | 'excluded' | 'subs' | 'bought';
 
 function readJson<T>(key: string, fallback: T): T {
   try {
@@ -101,6 +105,20 @@ export function saveRecipeSubstitutions(tripId: string, recipeId: string, subs: 
   notify(tripId, 'subs');
 }
 
+// ===================== Чеклист: отметки «взято» =====================
+
+export function loadBought(tripId: string): Set<string> {
+  const raw = readJson<unknown>(BOUGHT_KEY(tripId), []);
+  return Array.isArray(raw)
+    ? new Set(raw.filter((x): x is string => typeof x === 'string'))
+    : new Set();
+}
+
+export function setBought(tripId: string, next: Set<string>) {
+  writeJson(BOUGHT_KEY(tripId), [...next]);
+  notify(tripId, 'bought');
+}
+
 // ===================== Подписка на изменения =====================
 
 /**
@@ -113,7 +131,7 @@ export function onTripStageChange(tripId: string, handler: () => void): () => vo
     if (detail?.tripId === tripId) handler();
   };
   const storage = (e: StorageEvent) => {
-    const keys = [PRICES_KEY(tripId), EXCLUDED_KEY(tripId), SUBST_KEY(tripId)];
+    const keys = [PRICES_KEY(tripId), EXCLUDED_KEY(tripId), SUBST_KEY(tripId), BOUGHT_KEY(tripId)];
     if (e.key && keys.includes(e.key)) handler();
   };
   window.addEventListener(STAGE_EVENT, local);

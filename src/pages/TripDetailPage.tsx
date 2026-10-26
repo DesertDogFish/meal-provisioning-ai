@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { calculateMenuByDays, calculateShoppingList, calculateDayShopping, calculatePersonSummary, formatAmount, realTripPeople } from '../utils/calculations';
+import { calculateMenuByDays, calculateShoppingList, calculateDayShopping, calculatePersonSummary, formatAmount, realTripPeople, isRowExcluded, dayScopedExclusions } from '../utils/calculations';
 import { formatRub } from '../utils/formatRub'; // Фаза 13: итоги — целые рубли
 import { ArrowLeft, Plus, Trash2, Users, ShoppingCart, BookOpen, TrendingUp, Calendar, ChevronDown, ChevronRight, ListChecks, ClipboardCheck, PackagePlus, ArrowUpDown, X } from 'lucide-react';
 import { MealType } from '../types';
@@ -13,7 +13,7 @@ import { api, getRecipes, getTripRecipes } from '../api/client';
 import { useToast } from '../components/ToastProvider';
 import { Button } from '../components/Button';
 // Патч «UX-список 26.10»:
-import { loadActualPrices, loadExcluded, setExcluded as persistExcluded, onTripStageChange } from '../utils/tripStaging'; // U32
+import { loadActualPrices, loadExcluded, setExcluded as persistExcluded, loadBought, setBought as persistBought, onTripStageChange } from '../utils/tripStaging'; // U32 + Fix-2(п.6)
 import { getTripEdits, type TripIngredientEdit } from '../api/tripEdits'; // U30
 import { getManualItems, deleteManualItem, type TripManualItem } from '../api/tripManualItems'; // U40
 import { mergeManualIntoShopping, manualForDay, manualForTrip } from '../utils/manualItems'; // U40
@@ -142,6 +142,7 @@ export default function TripDetailPage() {
     const sync = () => {
       setDraftOverrides(loadActualPrices(tripKey));
       setShoppingExcluded(loadExcluded(tripKey));
+      setChecklistBought(loadBought(tripKey));
     };
     sync();
     return onTripStageChange(tripKey, sync);
@@ -154,6 +155,8 @@ export default function TripDetailPage() {
   const [manualItems, setManualItems] = useState<TripManualItem[]>([]);
   const [products, setProducts] = useState<any[]>([]);
   const [sortSpec, setSortSpec] = useState<{ field: ShoppingSortField; dir: SortDir }>({ field: 'ingredientName', dir: 'asc' });
+  // Fix-2 (п.6): отметки «взято» чеклиста ПЕРСИСТЕНТНЫ (общий стейдж похода) —
+  // чеклист переживает перезагрузку и используется как рабочий лист в магазине.
   const [checklistBought, setChecklistBought] = useState<Set<string>>(new Set());
   const [manualCtx, setManualCtx] = useState<{ dayId: string | null; dayLabel?: string } | null>(null);
 
@@ -305,9 +308,12 @@ export default function TripDetailPage() {
       return { ...m, ingredients: overlayEditsOnIngredients(m.ingredients as any, mEdits as any, m.servings) as typeof m.ingredients };
     }),
   }));
-  // U40: ручные позиции (к дню и к походу) вливаются в закупку на весь поход
+  // U40: ручные позиции (к дню и к походу) вливаются в закупку на весь поход.
+  // Fix-2 (п.5): по-дневные исключения УМЕНЬШАЮТ количество в агрегате закупки;
+  // глобально исключённые строки остаются в списке (рисуются зачёркнутыми) и
+  // вычитаются из итогов ниже (includedShoppingFinal).
   const baseShoppingList = mergeManualIntoShopping(
-    calculateShoppingList(trip as any, recipesMap, prices),
+    calculateShoppingList(trip as any, recipesMap, prices, dayScopedExclusions(shoppingExcluded)),
     manualItems,
   );
 
@@ -328,10 +334,11 @@ export default function TripDetailPage() {
   // черновик живёт в localStorage по id похода (переживает навигацию/релоад).
   // ВАЖНО: хуки объявлены ДО ранних return-ов выше — порядок одинаковый всегда.
 
-  const toggleShoppingExcluded = (ingredientId: string) => {
+  /** Fix-2 (п.5): key = ingredientId (весь поход) ИЛИ `${dayDate}::${ingredientId}` (только день). */
+  const toggleShoppingExcluded = (key: string) => {
     const next = new Set(shoppingExcluded);
-    if (next.has(ingredientId)) next.delete(ingredientId);
-    else next.add(ingredientId);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
     // U32: пишем в общий стейдж — событие обновит и эту страницу, и «Закупка и чеки»
     persistExcluded(tripKey, next);
     setShoppingExcluded(next);
@@ -355,18 +362,24 @@ export default function TripDetailPage() {
   const includedShoppingFinal = visibleShopping.filter(i => !i.excluded);
   const shoppingTotalFinal = includedShoppingFinal.reduce((a, i) => a + (i.effectiveCost || 0), 0);
 
-  /** Фаза 13 (п.5): переключатель soft-disable позиции в расчёте (клиентский чекбокс). */
-  const ExclusionCheckbox = ({ ingredientId }: { ingredientId: string }) => (
-    <input
-      type="checkbox"
-      checked={!shoppingExcluded.has(ingredientId)}
-      onChange={() => toggleShoppingExcluded(ingredientId)}
-      aria-label={shoppingExcluded.has(ingredientId) ? 'Включить в расчёт' : 'Исключить из расчёта'}
-      title={shoppingExcluded.has(ingredientId) ? 'Включить в расчёт' : 'Исключить из расчёта (не удаляя)'}
-      className="cursor-pointer"
-      style={{ accentColor: 'var(--w2)' }}
-    />
-  );
+  /** Фаза 13 (п.5) + Fix-2 (п.5): переключатель soft-disable.
+   * С dayDate — исключение ТОЛЬКО этого дня (количество дня уходит из закупки,
+   * в остальные дни позиция продолжает закупаться); без — глобальное. */
+  const ExclusionCheckbox = ({ ingredientId, dayDate }: { ingredientId: string; dayDate?: string }) => {
+    const key = dayDate ? `${dayDate}::${ingredientId}` : ingredientId;
+    const off = shoppingExcluded.has(key) || (!!dayDate && shoppingExcluded.has(ingredientId));
+    return (
+      <input
+        type="checkbox"
+        checked={!off}
+        onChange={() => toggleShoppingExcluded(key)}
+        aria-label={off ? 'Включить в расчёт' : dayDate ? 'Исключить из этого дня' : 'Исключить из расчёта'}
+        title={off ? 'Включить в расчёт' : dayDate ? 'Не покупать в этот день (остальные дни не затрагиваются)' : 'Исключить из расчёта (не удаляя)'}
+        className="cursor-pointer"
+        style={{ accentColor: 'var(--w2)' }}
+      />
+    );
+  };
 
   // U40: позиции дня (dayId) добавляются к закупке этого дня; U27: алфавитная сортировка
   const dayIdByDate = new Map((trip.days ?? []).map(d => [d.dayDate, d.id]));
@@ -380,7 +393,8 @@ export default function TripDetailPage() {
       const actualUnit = draftOverrides[item.ingredientId]?.price;
       return {
         ...item,
-        excluded: shoppingExcluded.has(item.ingredientId),
+        // Fix-2 (п.5): исключение дня — составной ключ, глобальное — по id
+        excluded: isRowExcluded(shoppingExcluded, day.dayDate, item.ingredientId),
         effectiveCost: actualUnit != null ? actualUnit * item.totalAmount : cost,
       };
     });
@@ -393,7 +407,7 @@ export default function TripDetailPage() {
   // U33: «на человека» — по реальному количеству людей (среднее по дням с учётом
   // peopleOverride), а не по defaultPeople
   const realPeople = realTripPeople(trip as any);
-  const { summary: personSummaryBase, tripSummary: tripSummaryBase } = calculatePersonSummary(trip as any, recipesMap, prices, realPeople);
+  const { summary: personSummaryBase, tripSummary: tripSummaryBase } = calculatePersonSummary(trip as any, recipesMap, prices, realPeople, shoppingExcluded);
   // Release-1.0 (UI-consistency): KPI шапки и «Итого» в закупке — ОДИН источник.
   // Раньше при отсутствии чеков/исключений KPI брал tripSummaryBase.totalCost, а с ними —
   // shoppingTotalFinal; суммы считались разными путями и спорили друг с другом
@@ -470,11 +484,10 @@ export default function TripDetailPage() {
     productInfo,
   );
   const toggleBought = (key: string) => {
-    setChecklistBought(prev => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key); else next.add(key);
-      return next;
-    });
+    const next = new Set(checklistBought);
+    if (next.has(key)) next.delete(key); else next.add(key);
+    persistBought(tripKey, next);
+    setChecklistBought(next);
   };
 
   const tabs = [
@@ -498,17 +511,17 @@ export default function TripDetailPage() {
             {new Date(trip.startDate).toLocaleDateString('ru-RU')} — {new Date(trip.endDate).toLocaleDateString('ru-RU')} • {trip.defaultPeople} чел.
           </p>
         </div>
-        {/* U40: продукты к походу в целом (аптечка, антисептик…) — вне блюд */}
+        {/* U40 + Fix-2 (п.2): продукты к походу (аптечка, антисептик…) — заметная
+            подписанная кнопка в шапке, а не голая иконка «хрен пойми где» */}
         <Button
-          variant="ghost"
+          variant="primary"
           onClick={() => setManualCtx({ dayId: null })}
           aria-label="Продукты к походу"
-          title="Продукты к походу (аптечка, антисептик и т.п.)"
+          title="Добавить продукты ко всему походу: аптечка, антисептик, топливо…"
+          icon={<PackagePlus size={18} />}
         >
-          <PackagePlus size={20} />
-          {manualForTrip(manualItems).length > 0 && (
-            <span className="text-xs font-bold" style={{ color: 'var(--w1)' }}>{manualForTrip(manualItems).length}</span>
-          )}
+          Продукты к походу
+          {manualForTrip(manualItems).length > 0 ? ` (${manualForTrip(manualItems).length})` : ''}
         </Button>
       </div>
 
@@ -821,7 +834,7 @@ export default function TripDetailPage() {
                 {day.items.map(item => (
                   <div key={item.ingredientId} className="flex items-center justify-between py-1.5 text-sm" style={{ opacity: item.excluded ? 0.45 : 1 }}>
                     <span className="flex items-center gap-2" style={{ color: 'var(--text)', textDecoration: item.excluded ? 'line-through' : 'none' }}>
-                      <ExclusionCheckbox ingredientId={item.ingredientId} />
+                      <ExclusionCheckbox ingredientId={item.ingredientId} dayDate={day.dayDate} />
                       {item.ingredientName}
                     </span>
                     <div className="flex items-center gap-4">
@@ -987,7 +1000,16 @@ export default function TripDetailPage() {
           isAdmin={isEditorAdmin === true}
           onClose={() => setCompositionMeal(null)}
           onSaved={() => { void loadData(); }}
-          onEditCatalogRecipe={(recipeId) => { navigate(`/recipes?edit=${recipeId}`); }}
+          onEditCatalogRecipe={(recipeId) => {
+            // Fix-2 (п.7): recipeId может быть trip-scoped снепшотом — резолвим
+            // в глобальный каталог (mock: суффикс '::t…'; real: snapshotOf копии),
+            // иначе /recipes?edit= не находит блюдо и редактор не открывается.
+            const snap = tripRecipes.find(r => String(r.id) === String(recipeId)) as any;
+            let globalId = String(recipeId);
+            if (snap?.snapshotOf != null) globalId = String(snap.snapshotOf);
+            else if (globalId.includes('::t')) globalId = globalId.split('::t')[0];
+            navigate(`/recipes?edit=${globalId}`);
+          }}
         />
       )}
 

@@ -77,6 +77,29 @@ export function findPriceForDate(prices: IngredientPrice[], date: string): Ingre
   return sorted[0];
 }
 
+/**
+ * Fix-2 (список 26.10, п.5): исключение позиции — по-дневное или глобальное.
+ * Ключи множества: '<ingredientId>' = исключить во всём походе;
+ * '<dayDate>::<ingredientId>' = исключить только в конкретный день.
+ * Исключение дня уменьшает количество этого дня (и агрегат закупки),
+ * но НЕ вычёркивает позицию в остальные дни.
+ */
+export function isRowExcluded(excluded: ReadonlySet<string> | undefined, dayDate: string, ingredientId: string): boolean {
+  if (!excluded || excluded.size === 0) return false;
+  const id = String(ingredientId);
+  return excluded.has(id) || excluded.has(`${dayDate}::${id}`);
+}
+
+/**
+ * Fix-2 (п.5): выделить из множества исключений только ПО-ДНЕВНЫЕ ключи
+ * ('<dayDate>::<id>'). Нужно поверхностям, которые рисуют глобально исключённые
+ * строки зачёркнутыми (закупка/дни), но количества хотят считать уже без
+ * снятых по дням позиций.
+ */
+export function dayScopedExclusions(excluded: ReadonlySet<string> | undefined): Set<string> {
+  return new Set([...(excluded ?? [])].filter(k => k.includes('::')));
+}
+
 /** Количество с единицей (см. formatQty — единые правила вывода Release-1.0). */
 export function formatAmount(amount: number, unit: string): string {
   return formatQty(amount, unit);
@@ -119,7 +142,7 @@ export function calculateMenuByDays(trip: Trip, recipes: Map<string, any>): Menu
   }));
 }
 
-export function calculateShoppingList(trip: Trip, recipes: Map<string, any>, prices: IngredientPrice[]): ShoppingItem[] {
+export function calculateShoppingList(trip: Trip, recipes: Map<string, any>, prices: IngredientPrice[], excluded?: ReadonlySet<string>): ShoppingItem[] {
   const items: Map<string, ShoppingItem> = new Map();
   
   if (!trip.days) return [];
@@ -133,6 +156,8 @@ export function calculateShoppingList(trip: Trip, recipes: Map<string, any>, pri
       for (const ri of recipe.ingredients) {
         // Release-1.0: выключенные продукты не попадают ни в меню, ни в закупку (паритет)
         if (isIngredientDisabled(ri)) continue;
+        // Fix-2 (п.5): по-дневное исключение снимает количество ЭТОГО дня, глобальное — всех
+        if (isRowExcluded(excluded, day.dayDate, ri.ingredientId)) continue;
         const amountPerMeal = calculateAmountPerPerson(ri.amount, recipe.baseServings, people);
         const existing = items.get(ri.ingredientId);
         
@@ -195,8 +220,8 @@ export function calculateDayShopping(
       const people = getEffectivePeople(trip, day, meal);
       
       for (const ri of recipe.ingredients) {
-        // Release-1.0: исключённые позиции (soft-disable) не влияют ни на одну сумму
-        if (excluded?.has(String(ri.ingredientId))) continue;
+        // Release-1.0 + Fix-2 (п.5): soft-disable — глобальный ключ или ключ конкретного дня
+        if (isRowExcluded(excluded, day.dayDate, ri.ingredientId)) continue;
         // Release-1.0: выключенные продукты не попадают ни в меню, ни в закупку (паритет)
         if (isIngredientDisabled(ri)) continue;
         const amountPerMeal = calculateAmountPerPerson(ri.amount, recipe.baseServings, people);
@@ -238,8 +263,9 @@ export function calculateDayShopping(
   });
 }
 
-export function calculatePersonSummary(trip: Trip, recipes: Map<string, any>, prices: IngredientPrice[], realPeople?: number): { summary: PersonSummary[]; tripSummary: TripSummary } {
-  const shopping = calculateShoppingList(trip, recipes, prices);
+export function calculatePersonSummary(trip: Trip, recipes: Map<string, any>, prices: IngredientPrice[], realPeople?: number, excluded?: ReadonlySet<string>): { summary: PersonSummary[]; tripSummary: TripSummary } {
+  // Fix-2 (п.5): person-сводка считает закупку с теми же исключениями (инвариант сумм)
+  const shopping = calculateShoppingList(trip, recipes, prices, excluded);
   
   let totalPersonMeals = 0;
   let totalCalories = 0;
