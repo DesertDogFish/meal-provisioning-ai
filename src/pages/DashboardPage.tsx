@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import { useToast } from '../components/ToastProvider';
 import { Button } from '../components/Button';
+import PageLoader from '../components/PageLoader';
 
 interface User {
   id: string;
@@ -54,7 +55,7 @@ export default function DashboardPage() {
   }, [loadData]);
 
   if (loading) {
-    return <div style={{ padding: 'var(--sp-5)', color: 'var(--muted)' }}>Загрузка...</div>;
+    return <PageLoader />;
   }
 
   const myTrips = trips.filter(t => t.userId === currentUser?.id);

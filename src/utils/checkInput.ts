@@ -31,3 +31,17 @@ export function roundMoney(n: number | null | undefined): number | null {
   if (n == null || !Number.isFinite(n)) return null;
   return Math.round((n + Number.EPSILON) * 100) / 100;
 }
+
+/**
+ * Fix-10 (п.1): «Заплатили» по умолчанию ПУСТО — в поле ввода чека показывается
+ * ТОЛЬКО введённый пользователем факт (цена за единицу из стейджа × текущее
+ * «нужно»). Плановая цена сюда НЕ фолбэчится: план виден в плейсхолдере
+ * («думали X ₽»), а пустое поле честно означает «чек ещё не введён».
+ * Итоги/отклонения продолжают использовать плановый фолбэк (см. consumers).
+ */
+export function enteredCheckTotal(
+  enteredUnitPrice: number | null | undefined,
+  amount: number | null | undefined,
+): number | null {
+  return roundMoney(totalFromUnit(enteredUnitPrice ?? null, amount));
+}

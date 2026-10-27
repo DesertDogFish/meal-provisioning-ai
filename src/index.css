@@ -476,6 +476,27 @@ input[type=number]::-webkit-outer-spin-button {
   width: 74px;
 }
 
+/* Fix-10 (п.3): компактный NumberField — той же высоты, что составные
+   контролы количества (input.compact-input, 28px): в строке чека «Взяли»
+   и «Заплатили» теперь одного размера. Специфичность .nf-sm input.nf-input
+   перекрывает глобальное правило min-height 36px у input[type=number]. */
+.nf-sm input.nf-input {
+  min-height: 28px;
+  padding-top: 4px;
+  padding-bottom: 4px;
+  font-size: 12px;
+}
+
+.nf-sm .nf-btn {
+  width: 20px;
+  height: 20px;
+  font: 800 11px/1 Manrope;
+}
+
+.nf-sm {
+  gap: 4px;
+}
+
 /* Перчаточная зона на мобиле */
 @media (pointer: coarse) {
   .nf-btn {
@@ -716,10 +737,19 @@ input:-webkit-autofill:active {
   --h-control: 36px;   /* Fix-7 (п.15): единая высота контролов — компактнее (было 40px) */
 }
 
-input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="hidden"]),
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="hidden"]):not(.compact-input),
 textarea,
 select {
   border-radius: var(--r-input) !important;
+}
+
+/* Fix-10 (п.2): инпут составных контролов количества (AmountInput/
+   FreeAmountInput) — ПЛОСКИЙ: справа к нему вплотную примыкают кнопки единиц,
+   слева скругление даёт обёртка (единый радиус + overflow-hidden, Fix-7 п.13).
+   Глобальный !important-радиус раньше скруглял сам инпут с обеих сторон —
+   на стыке с кнопками возникала «ступенька». */
+input.compact-input {
+  border-radius: 0 !important;
 }
 
 /* поисковый комбобокс, кастомный селект и NumberField — тот же радиус */
@@ -891,6 +921,42 @@ input.compact-input {
   max-width: 1200px;
   margin-left: auto;
   margin-right: auto;
+}
+
+/* Fix-10 (п.4/5): брендовый лоаджер страниц — префлоадер design-pack (парус)
+   + «дышащая» подпись; плавное появление, чтобы не «выстреливал» на ленивых роутах */
+.page-loader {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-3);
+  min-height: 40vh;
+  padding: var(--sp-6) var(--sp-4);
+  animation: page-loader-in var(--t-slow, .3s) var(--ease, ease) both;
+}
+
+.page-loader__mark {
+  filter: drop-shadow(var(--shadow-glow));
+}
+
+.page-loader__text {
+  margin: 0;
+  font: 600 13px/1 var(--font-body);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  animation: page-loader-breathe 1.8s var(--ease, ease) infinite;
+}
+
+@keyframes page-loader-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: none; }
+}
+
+@keyframes page-loader-breathe {
+  0%, 100% { opacity: .45; }
+  50%      { opacity: 1; }
 }
 
 /* Fix-8 (п.3): «оторван от центра» ВЕСЬ макет — сайдбар + контент.

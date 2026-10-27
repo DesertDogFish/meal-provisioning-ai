@@ -172,3 +172,16 @@ describe('NumberField — disabled (Fix-3)', () => {
     expect(getByTestId('nf-x-wrap').className).toContain('nf-disabled');
   });
 });
+
+describe('NumberField — компактный размер sm (Fix-10, п.3)', () => {
+  it('size="sm" добавляет класс nf-sm (CSS делает поле 28px — вровень с compact-input)', () => {
+    const { container } = render(<NumberField value={null} onCommit={() => {}} size="sm" testId="nf-sm" />);
+    const wrap = container.querySelector('.nf');
+    expect(wrap?.className).toContain('nf-sm');
+  });
+
+  it('без size — прежний md (класс nf-sm отсутствует)', () => {
+    const { container } = render(<NumberField value={null} onCommit={() => {}} testId="nf-md" />);
+    expect(container.querySelector('.nf')?.className).not.toContain('nf-sm');
+  });
+});

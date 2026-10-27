@@ -1,6 +1,6 @@
 import { Button } from './Button';
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { unitFromTotal, totalFromUnit, roundMoney } from '../utils/checkInput'; // Fix-3 (п.5) + Fix-4 (п.10): ввод чека СУММОЙ, без float-хвостов
+import { unitFromTotal, enteredCheckTotal } from '../utils/checkInput'; // Fix-3 (п.5) + Fix-10 (п.1): ввод чека СУММОЙ; «Заплатили» пусто до ввода
 import { syncServerExclusions } from '../api/shoppingExclusions';      // Fix-3 / R2
 import { formatAmount, calculateShoppingList, calculateDayShopping, realTripPeople, dayScopedExclusions, findPriceForDate } from '../utils/calculations';
 import { formatRub, categoryName } from '../utils/format'; // Release-1.0: единый формат чисел/единиц
@@ -679,14 +679,15 @@ function GroupRows(props: GroupRowsProps) {
         // Fix-8 (п.6): введённый факт цены НЕ сбрасывается при изменении
         // потребности (люди/состав) — он продолжает действовать для нового количества
         const rowDraft = draftOverrides[String(item.ingredientId)];
-        const freshDraftPrice = rowDraft?.price;
-        const actualUnit = freshDraftPrice ?? item.actualUnitPrice ?? null;
+        const enteredUnit = rowDraft?.price ?? null;
         const excluded = shoppingExcluded.has(item.ingredientId);
         // Fix-7 (п.22): «Взяли» предзаполняется ожидаемым количеством (как в чеклисте);
         // Fix-8 (п.6): сохранённый ввод переживает смену потребности
         const storedTook = actualMap[String(item.ingredientId)] ?? null;
         const tookValue = storedTook ?? neededAsActual(item.totalAmount, item.unit);
-        const actualTotal = roundMoney(totalFromUnit(actualUnit, item.totalAmount));
+        // Fix-10 (п.1): «Заплатили» по умолчанию ПУСТО — в поле только введённый
+        // чек (план подсказывает плейсхолдер «думали X»); итоги/Δ — с плановым фолбэком
+        const actualTotal = enteredCheckTotal(enteredUnit, item.totalAmount);
         const actualCostView = actualTotal ?? item.actualCost;
         const delta = calculateDelta(item.plannedCost, actualCostView);
         const deltaChipClass = getDeltaChipClass(delta);
@@ -729,8 +730,10 @@ function GroupRows(props: GroupRowsProps) {
               {excluded ? '—' : formatRub(item.plannedCost)}
             </td>
             <td className="px-2 py-2.5 text-right">
+              {/* Fix-10 (п.3): sm — одной высоты с «Взяли» (FreeAmountInput) в этой строке */}
               <NumberField
                 value={actualTotal}
+                size="sm"
                 stepRef={item.plannedCost}
                 placeholder={`думали ${formatRub(item.plannedCost)}`}
                 disabled={!canEnterCheck}

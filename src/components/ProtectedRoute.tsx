@@ -1,6 +1,7 @@
 import { Navigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import { api } from '../api/client';
+import PageLoader from './PageLoader'; // Fix-10 (п.4): брендовый лоаджер вместо голой надписи
 
 interface User {
   id: string;
@@ -50,7 +51,7 @@ export default function ProtectedRoute({ children, adminOnly = false }: { childr
   }, []);
 
   if (loading) {
-    return <div style={{ padding: 'var(--sp-5)', color: 'var(--muted)' }}>Загрузка...</div>;
+    return <PageLoader label="Проверяем сессию…" />;
   }
   
   if (!isAuthenticated) {

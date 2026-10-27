@@ -1,23 +1,34 @@
+import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { ToastProvider } from './components/ToastProvider';
 import Layout from './components/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
+import PageLoader from './components/PageLoader';
 import LoginPage from './pages/LoginPage';
-import TripsPage from './pages/TripsPage';
-import TripDetailPage from './pages/TripDetailPage';
-import TripPrintPage from './pages/TripPrintPage';
-import RecipesPage from './pages/RecipesPage';
-import AdminPage from './pages/AdminPage';
-import IntegrationsPage from './pages/IntegrationsPage';
-import ProductsPage from './pages/ProductsPage';
-import SyncLogsPage from './pages/SyncLogsPage';
+
+/**
+ * Fix-10 (п.4): тяжёлые страницы — ленивые чанки (React.lazy). Первый пейнт
+ * на деплое (Vercel) больше не тащит весь_bundle разом: TripDetailPage,
+ * recharts, datepicker, framer-motion и пр. доезжают только к своему роуту,
+ * а на время дозагрузки показывается брендовый PageLoader (Suspense-фолбэк).
+ * LoginPage/Layout/ProtectedRoute остаются в базовом чанке — это первый экран.
+ */
+const TripsPage = lazy(() => import('./pages/TripsPage'));
+const TripDetailPage = lazy(() => import('./pages/TripDetailPage'));
+const TripPrintPage = lazy(() => import('./pages/TripPrintPage'));
+const RecipesPage = lazy(() => import('./pages/RecipesPage'));
+const AdminPage = lazy(() => import('./pages/AdminPage'));
+const IntegrationsPage = lazy(() => import('./pages/IntegrationsPage'));
+const ProductsPage = lazy(() => import('./pages/ProductsPage'));
+const SyncLogsPage = lazy(() => import('./pages/SyncLogsPage'));
 
 function App() {
   return (
     <ErrorBoundary>
       <ToastProvider>
           <BrowserRouter>
+            <Suspense fallback={<PageLoader />}>
             <Routes>
               <Route path="/login" element={<LoginPage />} />
               {/* Список багов 25.10: страница-дашборд «Мои походы» со статистикой
@@ -34,7 +45,9 @@ function App() {
               <Route path="/trips" element={<Navigate to="/dashboard" replace />} />
               {/* Fix-4 (п.6): печатная версия похода (меню по дням + закупка +
                   итоги «кто сколько должен») — без Layout, открывается в новой
-                  вкладке и сохраняется в PDF через диалог печати. */}
+                  вкладке и сохраняется в PDF через диалог печати.
+                  Fix-10 (п.4): на Vercel прямой заход/новая вкладка работали как
+                  404 — SPA-фолбэк добавлен в vercel.json (rewrites → index.html). */}
               <Route path="/trips/:id/print" element={
                 <ProtectedRoute>
                   <TripPrintPage />
@@ -76,6 +89,7 @@ function App() {
           <Route path="/errors-demo" element={<Navigate to="/dashboard" replace />} />
           <Route path="*" element={<Navigate to="/login" replace />} />
             </Routes>
+            </Suspense>
           </BrowserRouter>
         </ToastProvider>
     </ErrorBoundary>

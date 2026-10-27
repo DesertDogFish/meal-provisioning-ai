@@ -49,3 +49,18 @@ describe('FreeAmountInput (Fix-6, п.8) — свободные единицы ф
     expect(onChange).not.toHaveBeenCalled();
   });
 });
+
+describe('FreeAmountInput — единый контур, плоский стык (Fix-7 п.13 + Fix-10 п.2)', () => {
+  it('обёртка скруглена ЦЕЛИКОМ и скрывает переполнение; инпут — плоский (compact-input)', () => {
+    render(<FreeAmountInput value={null} baseUnit="KG" onChange={() => {}} testId="fa-joint" />);
+    const wrap = screen.getByTestId('fa-joint-wrap');
+    // внешний контур: единый радиус (инлайн) + overflow-hidden (класс) —
+    // левое скругление даёт обёртка
+    expect(wrap.className).toContain('overflow-hidden');
+    expect(wrap.style.borderRadius).toContain('var(--r-input');
+    // инпут: compact-input (глобальный CSS Fix-10 п.2 обнуляет его собственный радиус —
+    // справа вплотную примыкают кнопки единиц, «ступеньки» на стыке нет)
+    const input = screen.getByTestId('fa-joint');
+    expect(input.className).toContain('compact-input');
+  });
+});

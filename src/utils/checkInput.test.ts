@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { unitFromTotal, totalFromUnit, roundMoney } from './checkInput';
+import { unitFromTotal, totalFromUnit, roundMoney, enteredCheckTotal } from './checkInput';
 
 describe('checkInput (Fix-3, п.5) — сумма чека ↔ цена за единицу', () => {
   it('купил 2 кг гречки за 380 ₽ → 190 ₽/кг', () => {
@@ -38,5 +38,22 @@ describe('roundMoney (Fix-4, п.10) — никаких 165,50240000000002', () =
     expect(roundMoney(null)).toBeNull();
     expect(roundMoney(NaN)).toBeNull();
     expect(roundMoney(undefined)).toBeNull();
+  });
+});
+
+describe('enteredCheckTotal (Fix-10, п.1) — «Заплатили» пусто до ввода', () => {
+  it('нет введённой цены → null (поле пустое, план не подставляется)', () => {
+    expect(enteredCheckTotal(null, 5)).toBeNull();
+    expect(enteredCheckTotal(undefined, 5)).toBeNull();
+  });
+
+  it('введённая цена за единицу → сумма по текущему «нужно», без float-хвостов', () => {
+    expect(enteredCheckTotal(100, 5)).toBe(500);
+    expect(enteredCheckTotal(33.1, 3)).toBe(99.3);
+    expect(enteredCheckTotal(55.17, 3)).toBe(165.51);
+  });
+
+  it('нулевая цена — валидный ввод (бесплатно), не пустота', () => {
+    expect(enteredCheckTotal(0, 5)).toBe(0);
   });
 });

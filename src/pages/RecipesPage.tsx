@@ -12,6 +12,7 @@ import Modal from '../components/Modal';
 import RecipeEditorModal from '../components/RecipeEditorModal';
 import { Button } from '../components/Button';
 
+import PageLoader from '../components/PageLoader';
 interface Recipe {
   id: string;
   name: string;
@@ -188,8 +189,9 @@ export default function RecipesPage() {
       <div className="space-y-6">
         <div>
           <h1 className="text-2xl md:text-3xl font-bold" style={{ color: 'var(--text)' }}>Каталог блюд</h1>
-          <p className="mt-1" style={{ color: 'var(--muted)' }}>Загрузка...</p>
         </div>
+        {/* Fix-10 (п.4): брендовый лоаджер вместо «Загрузка…» */}
+        <PageLoader />
       </div>
     );
   }

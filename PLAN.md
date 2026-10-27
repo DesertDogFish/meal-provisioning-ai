@@ -2,7 +2,7 @@
 
 Живой статус проекта. Формулы и контракты — `ARCHITECTURE.md`, правила агентов — `AGENTS.md`, дизайн — `DESIGN_MIGRATION.md`/`provisions/design-pack` (ведётся владельцем отдельно, агентами не трогается). Факт = коммит + зелёный гейт; записей «в рабочем дереве» не бывает.
 
-**Обновлено:** 2026-10-27 · патч Fix-8 (восьмая итерация UX-проверки: «голые» кнопки/центрирование, единый app-frame сайдбар+контент, постоянный размер модалки добавления приёма, «В меню» nowrap, факты закупки переживают смену числа людей — Fix-7 п.17 superseded) — см. раздел «Fix-8»; ожидающие патчи `ux-list-26.10` (rev1) → `-fix2+3` → `-fix4` → `-fix5` (нейминг/иконки, TabHeader+InfoTip, ручные позиции в чеке и «на человека», «Взяли», чеклист-факт, PDF-отчёт, R2-шаг2/V23) — см. раздел «Патч «UX-список 26.10»».
+**Обновлено:** 2026-10-27 · свежие разделы: «Fix-10» (чек/инпуты + Vercel-деплой: tokens.css в dist, SPA-rewrites, lazy-чанки, PageLoader из design-pack), «Fix-9» (интеграция OFF: API v2 + Basic Auth + YAML-ловушка off:false), «Fix-8» (UI восьмой итерации) — статусы и тесты в соответствующих разделах.
 
 ## Release 1.0 — критерии функционального прорыва
 
@@ -167,6 +167,23 @@ shoppingExclusions ≥80%). Backend — `mvn compile`/`test-compile` зелён�
 primary/ghost дизайн-системы), `RecipesPage.test.tsx` (+«В меню» nowrap/shrink-0).
 Backend не менялся (все пункты клиентские). Fix-7 п.17 в ARCHITECTURE §«Свежесть фактов»
 помечен как superseded (Fix-8 п.6).
+
+### Fix-10 — чек/инпуты + деплой на Vercel (27.10, девятая итерация)
+
+| # | Замечание | Решение | Статус |
+|---|---|---|---|
+| п.1 | «Заплатили» в чеке предзаполнено плановой ценой | поле по умолчанию ПУСТО — показывается только введённый чек (`enteredCheckTotal` в `utils/checkInput.ts`: факт-цена × текущее «нужно», БЕЗ планового фолбэка); план виден в плейсхолдере «думали X ₽»; итоги/Δ сохраняют плановый фолбэк | ✅ |
+| п.2 | Инпут «Взяли» (qty-input) скруглён справа, где к нему примыкают кнопки единиц | глобальное правило радиуса `!important` больше не трогает `.compact-input` (+ явный `border-radius: 0`): левое скругление даёт обёртка (единый радиус + overflow-hidden, Fix-7 п.13), стык с чипами единиц — плоский | ✅ |
+| п.3 | Инпуты разного размера в рамках страницы | в строке чека «Заплатили» (NumberField) переведён на `size="sm"`: `.nf-sm input.nf-input` = 28px/4px — вровень с «Взяли» (compact-input); степпер-кнопки 20px. Остальные страницы: обычные инпуты 36px (глобальное правило), модалки 32px — без «лесенок» в одном контексте | ✅ |
+| п.4 | Vercel-деплой: PDF-отчёт/прямые заходы — 404; «странные переходы»; всё медленно; загрузка — голая надпись | (а) `vercel.json` — SPA-rewrites на index.html; (б) КОРЕНЬ «странного вида»: `dist` НЕ содержал `/provisions/design-pack/tokens.css` (vite копирует только public/) → тема в проде падала в дефолты; плагин `copy-design-pack-assets` в vite.config.js emit'ит tokens.css + og-cover.png в dist (design-pack остаётся единственным источником, ничего не дублируется в репо); (в) ленивые чанки страниц (React.lazy + Suspense) — первый пейнт не тащит TripDetailPage/recharts/datepicker; (г) mock-задержка 200–400 → 100–180 мс (`VITE_MOCK_LATENCY_MS`, 0 = мгновенно); (д) загрузка — брендовый `PageLoader` (префлоадер design-pack: парус SMIL + «дышащая» подпись, role=status) вместо «Загрузка…» в 8 местах (страницы, SyncLogs-таблица, ProtectedRoute, Suspense-фолбэк) | ✅ |
+| п.5 | «Стили красоты простаивают» (design-pack) | префлоадер v5 (assets/preloader.svg) — теперь в `PageLoader`; OG-карточка (og/og-cover.png 1200×630) + meta description/og/twitter + theme-color #0B141B в index.html — ссылки на деплой预览сятся брендовой карточкой | ✅ |
+
+Тесты Fix-10: `PageLoader.test.tsx` (роль/aria-live/префлоадер/подпись),
+`checkInput.test.ts` (+enteredCheckTotal: пусто до ввода, сумма по «нужно», ноль валиден),
+`NumberField.test.tsx` (+nf-sm), `FreeAmountInput.test.tsx` (+обёртка overflow-hidden/радиус,
+инпут compact-input). Build-проверка: `npm run build` → dist содержит
+provisions/design-pack/tokens.css и og-cover.png; чанки страниц ленивые
+(TripDetailPage 104 КБ, DatePicker 203 КБ — вне первого пейнта). Backend не менялся.
 
 ### Fix-9 — интеграция Open Food Facts: 503 на поиск продуктов (27.10)
 

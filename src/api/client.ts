@@ -227,8 +227,14 @@ export class ApiClient {
     }
 
     if (this.mode === 'mock') {
-      // Имитация задержки 200-400 мс
-      await new Promise(resolve => setTimeout(resolve, 200 + Math.random() * 200));
+      // Fix-10 (п.4): имитация задержки — реалистичная, но не тянущая демо
+      // (раньше 200–400 мс на КАЖДЫЙ запрос; на деплое без бэкенда каждый экран
+      // делал серию запросов и «плыл»). Дефолт 100–180 мс; полный ноль —
+      // VITE_MOCK_LATENCY_MS=0 (мгновенный mock для тестов/разработки).
+      const envLat = (import.meta as any).env?.VITE_MOCK_LATENCY_MS;
+      const base = envLat != null && Number.isFinite(Number(envLat)) ? Number(envLat) : 100;
+      const jitter = base > 0 ? Math.random() * 80 : 0;
+      await new Promise(resolve => setTimeout(resolve, base + jitter));
       
       // Режим ошибок для тестирования
       if (options?.failMode && fullPath.includes(options.failMode)) {

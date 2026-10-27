@@ -82,8 +82,24 @@ docker compose up --build
 | `CORS_ALLOWED_ORIGINS` | `http://localhost:5173,http://localhost:3000` | Origins для прямых запросов к API (вне nginx-прокси) |
 | `OFF_USER_ID`, `OFF_PASSWORD` | пусто (анонимный режим) | Учётка world.openfoodfacts.org для обхода лимитов 429/503 |
 | `VITE_API_URL`, `VITE_API_MODE` | `/api/v1`, `real` в Docker-сборке | Подставляются **при сборке** фронта; режим: `auto` / `real` / `mock` |
+| `VITE_MOCK_LATENCY_MS` | `100` | Базовая имитация задержки mock-режима (мс, +до 80 мс джиттера); `0` — мгновенный mock. Подставляется при сборке фронта |
 
 В Docker-стеке фронт ходит в API через nginx-прокси (`/api/` → backend), CORS не нужен. Приоритет выбора режима фронта: переключатель в UI (localStorage) → `VITE_API_MODE` → авто-пинг `GET /api/v1/meta`.
+
+## Деплой фронтенда на Vercel (демо без бэкенда)
+
+Fix-10 (п.4): демо-деплой `https://meal-provisioning-ai.vercel.app/` работает в mock-режиме
+(бэкенда на Vercel нет; `VITE_API_MODE=auto` сам falls back на mock). Что важно:
+
+- **`vercel.json` (обязателен)** — SPA-rewrites всех маршрутов на `/index.html`: без него
+  прямые заходы/refresh и PDF-отчёт (`/trips/:id/print`, открывается новой вкладкой)
+  отдают 404 «нет такой страницы».
+- **`tokens.css` в сборке** — плагин `copy-design-pack-assets` (vite.config.js) копирует
+  `provisions/design-pack/tokens.css` и `og-cover.png` в `dist/`: index.html ссылается на
+  токены темы по абсолютному пути, и без копии прод-сборка теряла ВСЮ тему (цвета/отступы).
+- **Скорость** — страницы грузятся ленивыми чанками (React.lazy + Suspense с брендовым
+  `PageLoader`), mock-задержка уменьшена (100–180 мс вместо 200–400; `VITE_MOCK_LATENCY_MS=0`
+  для мгновенного демо).
 
 ## Технологический стек
 

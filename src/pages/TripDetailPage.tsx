@@ -29,6 +29,7 @@ import { tripReadiness } from '../utils/readiness'; // Fix-3 (п.2): сквоз�
 import { getServerExclusions, syncServerExclusions } from '../api/shoppingExclusions'; // Fix-3 / R2
 import { categoryName } from '../utils/format';
 
+import PageLoader from '../components/PageLoader';
 /** Фаза 13: черновик фактической цены (₽ за единицу измерения продукта).
  * Fix-7 (п.17): тип живёт в общем хранилище tripStaging (там же neededAt —
  * штамп потребности для сброса устаревших фактов). */
@@ -257,9 +258,7 @@ export default function TripDetailPage() {
 
   if (loading) {
     return (
-      <div className="text-center py-12">
-        <p style={{ color: 'var(--muted)' }}>Загрузка...</p>
-      </div>
+      <PageLoader />
     );
   }
 

@@ -6,6 +6,7 @@ import { RefreshCw, X, AlertCircle } from 'lucide-react';
 import { api, ApiClientError } from '../api/client';
 import { Button } from '../components/Button';
 
+import PageLoader from '../components/PageLoader';
 interface SyncLog {
   id: number;
   provider: string;
@@ -289,7 +290,7 @@ export default function SyncLogsPage() {
       {/* Table */}
       <div className="rounded-xl overflow-hidden" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
         {loading ? (
-          <div className="p-12 text-center" style={{ color: 'var(--muted)' }}>Загрузка...</div>
+          <PageLoader />
         ) : syncLogs.length === 0 ? (
           <div className="p-12 text-center">
             <p style={{ color: 'var(--muted)' }}>Ничего не найдено</p>
