@@ -314,10 +314,10 @@ export default function ProductsPage() {
             {products.length} продуктов · {categories.length} категорий
           </p>
         </div>
-        <Button variant="primary" size="sm" onClick={() => { resetForm(); setShowModal(true); }} aria-label="Добавить продукт">
-                  <Plus size={16} />
-                  Продукт
-                </Button>
+        {/* Fix-7 (п.5): кнопка создания — справа, иконочная (единый паттерн);
+            aria-label «Добавить продукт» сохранён (E2E-03/04/05) */}
+        <Button variant="primary" iconOnly onClick={() => { resetForm(); setShowModal(true); }}
+                aria-label="Добавить продукт" title="Добавить продукт" icon={<Plus size={18} />} />
       </div>
 
       {/* Toolbar */}
@@ -334,9 +334,13 @@ export default function ProductsPage() {
           />
         </div>
         
-        {/* Fix-5: нативные селекты фильтров — в единый CustomSelect */}
-        <div style={{ minWidth: 150 }}>
+        {/* Fix-5: нативные селекты фильтров — в единый CustomSelect.
+            Fix-7 (п.4): ФИКСИРОВАННАЯ ширина обёртки + w-full на селекте —
+            выбор короткого значения («кг», «все») больше не сужает контрол
+            и не «дёргает» верстку строки фильтров. */}
+        <div style={{ width: 150 }}>
           <CustomSelect
+            className="w-full"
             value={selectedUnit}
             onChange={setSelectedUnit}
             options={[
@@ -350,8 +354,9 @@ export default function ProductsPage() {
           />
         </div>
 
-        <div style={{ minWidth: 150 }}>
+        <div style={{ width: 150 }}>
           <CustomSelect
+            className="w-full"
             value={priceStatus}
             onChange={setPriceStatus}
             options={[
@@ -363,8 +368,9 @@ export default function ProductsPage() {
           />
         </div>
 
-        <div style={{ minWidth: 170 }}>
+        <div style={{ width: 180 }}>
           <CustomSelect
+            className="w-full"
             value={bindingStatus}
             onChange={setBindingStatus}
             options={[

@@ -87,3 +87,32 @@ export function isActualLessThanNeeded(
   if (base == null) return null;
   return base < neededBase - 1e-9;
 }
+
+/**
+ * Fix-7 (п.22): ожидаемое значение «Взяли» из расчётного количества —
+ * чеклист не пустой, а предзаполнен тем, что нужно купить (в человеческих
+ * единицах ввода). Для фасованных позиций передаётся buyAmount (целые
+ * упаковки вверх). Мелкие весовые (<1 кг/л) — в г/мл, иначе — кг/л;
+ * штучные — в шт/уп. Значение НЕ хранится: фактом становится только
+ * реальный ввод пользователя.
+ */
+export function neededAsActual(
+  neededBase: number | null | undefined,
+  baseUnit: string | null | undefined,
+): ActualAmount | null {
+  const n = Number(neededBase);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  const round3 = (x: number) => Math.round(x * 1000) / 1000;
+  switch (String(baseUnit ?? '').toUpperCase()) {
+    case 'KG':
+      return n < 1 ? { amount: round3(n * 1000), unit: 'г' } : { amount: round3(n), unit: 'кг' };
+    case 'L':
+      return n < 1 ? { amount: round3(n * 1000), unit: 'мл' } : { amount: round3(n), unit: 'л' };
+    case 'PACK':
+      return { amount: round3(n), unit: 'уп' };
+    case 'PCS':
+      return { amount: round3(n), unit: 'шт' };
+    default:
+      return { amount: round3(n), unit: defaultUnit(baseUnit) };
+  }
+}

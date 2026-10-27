@@ -152,6 +152,20 @@ export function calculateShoppingList(trip: Trip, recipes: Map<string, any>, pri
   const items: Map<string, ShoppingItem> = new Map();
   
   if (!trip.days) return [];
+
+  /**
+   * Fix-7 (п.19): id приводятся к СТРОКЕ и в ключе агрегата, и в сопоставлении
+   * с ценами. В real-режиме серверные правки состава (EXTRA/SUBST) приносят
+   * string-id ('512'), а снепшот-строки рецепта и trip-цены — number-id (512):
+   * строгое === не находило цену, и добавленный в походе продукт оставался
+   * «без цены» во всех отчётах (плюс возможны дубли строк одного продукта).
+   */
+  const pricesByIng = new Map<string, IngredientPrice[]>();
+  for (const p of prices) {
+    const k = String(p.ingredientId);
+    const list = pricesByIng.get(k);
+    if (list) list.push(p); else pricesByIng.set(k, [p]);
+  }
   
   for (const day of trip.days) {
     for (const meal of (day.meals || [])) {
@@ -162,26 +176,27 @@ export function calculateShoppingList(trip: Trip, recipes: Map<string, any>, pri
       for (const ri of recipe.ingredients) {
         // Release-1.0: выключенные продукты не попадают ни в меню, ни в закупку (паритет)
         if (isIngredientDisabled(ri)) continue;
+        const ingId = String(ri.ingredientId);
         // Fix-2 (п.5): по-дневное исключение снимает количество ЭТОГО дня, глобальное — всех
-        if (isRowExcluded(excluded, day.dayDate, ri.ingredientId)) continue;
+        if (isRowExcluded(excluded, day.dayDate, ingId)) continue;
         // Fix-6 (п.22): EXTRA-строки (absolute) не масштабируются людьми
         const amountPerMeal = ri.absolute ? Number(ri.amount) : calculateAmountPerPerson(ri.amount, recipe.baseServings, people);
-        const existing = items.get(ri.ingredientId);
+        const existing = items.get(ingId);
         
         if (existing) {
           existing.totalAmount += amountPerMeal;
           // Обновляем стоимость, если есть цена на эту дату
-          const price = findPriceForDate(prices.filter(p => p.ingredientId === ri.ingredientId), day.dayDate);
+          const price = findPriceForDate(pricesByIng.get(ingId) ?? [], day.dayDate);
           if (price) {
             // BUGFIX: единицы — г/мл против ₽/кг; см. costOf()
             existing.estimatedCost = (existing.estimatedCost || 0) + costOf(amountPerMeal, existing.unit, price.pricePerUnit);
             existing.hasPrice = true;
           }
         } else {
-          const price = findPriceForDate(prices.filter(p => p.ingredientId === ri.ingredientId), day.dayDate);
+          const price = findPriceForDate(pricesByIng.get(ingId) ?? [], day.dayDate);
           const unit = ingOf(ri).unit || 'PCS';
-          items.set(ri.ingredientId, {
-            ingredientId: ri.ingredientId,
+          items.set(ingId, {
+            ingredientId: ingId,
             ingredientName: ingOf(ri).name || 'Unknown',
             unit,
             totalAmount: amountPerMeal,
@@ -215,6 +230,14 @@ export function calculateDayShopping(
   excluded?: ReadonlySet<string>
 ): DayShopping[] {
   if (!trip.days) return [];
+
+  // Fix-7 (п.19): строковые id — см. комментарий в calculateShoppingList
+  const pricesByIng = new Map<string, IngredientPrice[]>();
+  for (const p of prices) {
+    const k = String(p.ingredientId);
+    const list = pricesByIng.get(k);
+    if (list) list.push(p); else pricesByIng.set(k, [p]);
+  }
   
   return trip.days.map(day => {
     const items: Map<string, ShoppingItem> = new Map();
@@ -227,19 +250,20 @@ export function calculateDayShopping(
       const people = getEffectivePeople(trip, day, meal);
       
       for (const ri of recipe.ingredients) {
+        const ingId = String(ri.ingredientId);
         // Release-1.0 + Fix-2 (п.5): soft-disable — глобальный ключ или ключ конкретного дня
-        if (isRowExcluded(excluded, day.dayDate, ri.ingredientId)) continue;
+        if (isRowExcluded(excluded, day.dayDate, ingId)) continue;
         // Release-1.0: выключенные продукты не попадают ни в меню, ни в закупку (паритет)
         if (isIngredientDisabled(ri)) continue;
         // Fix-6 (п.22): EXTRA-строки (absolute) не масштабируются людьми
         const amountPerMeal = ri.absolute ? Number(ri.amount) : calculateAmountPerPerson(ri.amount, recipe.baseServings, people);
-        const existing = items.get(ri.ingredientId);
+        const existing = items.get(ingId);
         
         if (existing) {
           existing.totalAmount += amountPerMeal;
         } else {
-          items.set(ri.ingredientId, {
-            ingredientId: ri.ingredientId,
+          items.set(ingId, {
+            ingredientId: ingId,
             ingredientName: ingOf(ri).name || 'Unknown',
             unit: ingOf(ri).unit || 'PCS',
             totalAmount: amountPerMeal,
@@ -250,7 +274,7 @@ export function calculateDayShopping(
     }
     
     for (const item of items.values()) {
-      const ingredientPrices = prices.filter(p => p.ingredientId === item.ingredientId);
+      const ingredientPrices = pricesByIng.get(String(item.ingredientId)) ?? [];
       const price = findPriceForDate(ingredientPrices, day.dayDate);
       if (price) {
         // BUGFIX: единицы — г/мл против ₽/кг; см. costOf()

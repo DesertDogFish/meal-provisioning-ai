@@ -62,7 +62,8 @@ export function FreeAmountInput({
       style={{
         border: '1px solid var(--border)',
         background: 'var(--elev)',
-        borderRadius: 'var(--r-input, 8px) 0 0 var(--r-input, 8px)',
+        /* Fix-7 (п.13): внешний контур скруглён целиком, стык ввода и единиц — плоский */
+        borderRadius: 'var(--r-input, 8px)',
         opacity: disabled ? 0.5 : 1,
       }}
       data-testid={testId ? `${testId}-wrap` : undefined}
@@ -86,7 +87,7 @@ export function FreeAmountInput({
           setText(raw);
           emit(raw, unit);
         }}
-        className="px-2 py-1.5 w-16 text-right text-sm outline-none bg-transparent"
+        className="compact-input px-2 py-1.5 w-16 text-right text-sm outline-none bg-transparent"
         style={{ color: 'var(--text)' }}
       />
       <span className="flex flex-col items-stretch" style={{ borderLeft: '1px solid var(--border)' }}>

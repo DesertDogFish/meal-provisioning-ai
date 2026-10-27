@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import ApiModeBadge from './ApiModeBadge';
 import BrandMark from './BrandMark';
 import ThemeToggle from './ThemeToggle';
+import ScrollTopButton from './ScrollTopButton';
 import { api } from '../api/client';
 import { useToast } from './ToastProvider';
 
@@ -211,8 +212,13 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         <ApiModeBadge />
         
         <main className="flex-1 p-4 md:p-6 lg:p-8 overflow-auto">
-          {children}
+          {/* Fix-7 (п.10): контент центрирован и оторван от краёв — max-width 1200px */}
+          <div className="app-shell">
+            {children}
+          </div>
         </main>
+        {/* Fix-7 (п.9): плавающая кнопка «наверх» (появляется, когда шапка скрыта) */}
+        <ScrollTopButton />
       </div>
     </div>
   );

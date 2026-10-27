@@ -1,7 +1,10 @@
 .btn {
   display: inline-flex;
   align-items: center;
-  gap: 0;
+  justify-content: center;
+  /* Fix-7 (п.23): иконка не липнет к тексту — единый зазор (на текстовых
+     кнопках без иконки не влияет: gap применяется между элементами) */
+  gap: 6px;
   padding: var(--sp-3) var(--sp-4);
   border-radius: var(--r-pill);
   font: 700 15px/1 var(--font-body);
@@ -27,6 +30,19 @@
 .danger:hover { background: color-mix(in srgb, var(--danger) 22%, transparent); }
 
 .sm { padding: var(--sp-2) var(--sp-3); font-size: 14px; }
+
+/* Fix-7 (п.2/5): иконочная кнопка — квадрат со стороной текущей высоты,
+   без текста (доступность — aria-label/title). «Создать …» — справа в шапках. */
+.iconOnly {
+  padding: 0;
+  width: var(--h-control, 36px);
+  height: var(--h-control, 36px);
+  flex: none;
+}
+.iconOnly.sm {
+  width: calc(var(--h-control, 36px) - 6px);
+  height: calc(var(--h-control, 36px) - 6px);
+}
 
 .spin {
   width: 14px;

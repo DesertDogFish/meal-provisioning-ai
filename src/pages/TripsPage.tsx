@@ -191,9 +191,9 @@ export default function TripsPage() {
           <h1 className="text-2xl md:text-3xl font-bold" style={{ color: 'var(--text)' }}>Походы</h1>
           <p className="mt-1" style={{ color: 'var(--muted)' }}>Управление вашими походами и запасами</p>
         </div>
-        <Button variant="primary" onClick={() => setShowCreate(true)} icon={<Plus size={18} />}>
-          <span className="hidden sm:inline">Новый поход</span>
-        </Button>
+        {/* Fix-7 (п.5): иконочная кнопка создания — единый паттерн всех шапок */}
+        <Button variant="primary" iconOnly onClick={() => setShowCreate(true)}
+                aria-label="Создать поход" title="Создать поход" icon={<Plus size={18} />} />
       </div>
 
       {/* Create modal */}

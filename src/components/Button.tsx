@@ -9,6 +9,8 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   /** Алиас пропса эталонного react/Button.tsx из design-pack. */
   loading?: boolean;
   icon?: ReactNode;
+  /** Fix-7 (п.2/5): квадратная иконочная кнопка (без текста; aria-label/title обязательны). */
+  iconOnly?: boolean;
 }
 
 const Button = forwardRef<HTMLButtonElement, ButtonProps>(({
@@ -17,6 +19,7 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(({
   isLoading,
   loading,
   icon,
+  iconOnly,
   children,
   className,
   disabled,
@@ -27,7 +30,7 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(({
   return (
     <button
       ref={ref}
-      className={[styles['btn'], styles[variant], size === 'sm' ? styles.sm : '', className].filter(Boolean).join(' ')}
+      className={[styles['btn'], styles[variant], size === 'sm' ? styles.sm : '', iconOnly ? styles.iconOnly : '', className].filter(Boolean).join(' ')}
       disabled={disabled || busy}
       aria-busy={busy || undefined}
       style={style}

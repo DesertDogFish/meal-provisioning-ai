@@ -22,7 +22,9 @@ export function formatRub(amount: number | string | null | undefined): string {
   if (Number.isNaN(val)) return '—';
   // Math.round(-0) даёт -0 → toLocaleString печатает «-0 ₽»; нормализуем.
   const rounded = Math.round(val) || 0;
-  return `${rounded.toLocaleString('ru-RU')} ₽`;
+  // Fix-7 (п.24): перед ₽ — неразрывный пробел: «10 851 ₽» не переносится
+  // на следующую строку в узких KPI-карточках шапки.
+  return `${rounded.toLocaleString('ru-RU')}\u00A0₽`;
 }
 
 /** Цена за единицу: ровно 2 знака, запятая, без валюты («887,65»). null/NaN → '—'. */

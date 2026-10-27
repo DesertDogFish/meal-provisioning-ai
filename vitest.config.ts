@@ -71,6 +71,9 @@ export default defineConfig({
         'src/utils/checkUnits.ts',
         'src/components/FreeAmountInput.tsx',
         'src/components/ConfirmDialog.tsx',
+        // Fix-7 (список 26.10, итерация 7): портал-позиция дропдаунов, кнопка «наверх»
+        'src/utils/dropdownPos.ts',
+        'src/components/ScrollTopButton.tsx',
       ],
     },
   },

@@ -133,7 +133,7 @@ describe('ManualItemsModal (Fix-6, п.13) — продукта нет в спи�
     (api.post as any).mockResolvedValue({ id: 'p77' });
   });
 
-  const typeFreeQuery = async (q: string) => {
+  const _typeFreeQuery = async (q: string) => {
     const search = screen.getByLabelText('Продукт ручной позиции');
     fireEvent.focus(search);
     fireEvent.change(search, { target: { value: q } });

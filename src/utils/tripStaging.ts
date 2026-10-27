@@ -19,6 +19,11 @@ export interface ActualPriceDraft {
   /** Fix-5 (п.12): сколько РЕАЛЬНО куплено (в единицах продукта) — для отчёта.
    * Не заполнено = куплено ровно по расчёту. */
   qty?: number | null;
+  /** Fix-7 (п.17): потребность позиции на момент ввода (neededStamp).
+   * Состав/количество в походе изменились → факт устарел и игнорируется
+   * («другое количество — другая итоговая цена, надо переввести»).
+   * null/undefined — legacy-записи до Fix-7 (считаются валидными). */
+  neededAt?: number | null;
 }
 
 /** Замещение продукта в блюде в рамках конкретного похода (trip-level). */
@@ -46,6 +51,33 @@ const ACTUAL_QTY_KEY = (tripId: string) => `trip-checklist-actualqty-${tripId}`;
 export interface ChecklistActual {
   amount: number;
   unit: string;
+  /** Fix-7 (п.17): потребность на момент ввода — см. ActualPriceDraft.neededAt */
+  neededAt?: number | null;
+}
+
+/**
+ * Fix-7 (п.17): штамп потребности — ключ «свежести» фактов (цены чека и
+ * «Взяли»). Тот же принцип, что у отметок «взято» чеклиста (Fix-5 п.8:
+ * '<id>@<нужно>'): количество позиции изменилось → введённые факты больше
+ * не действительны, позицию нужно переввести. Точность — 3 знака (граммы/шт).
+ */
+export function neededStamp(needed: number | null | undefined): number {
+  return Math.round((Number(needed) || 0) * 1000);
+}
+
+/**
+ * Факт (цена чека / «Взяли») актуален для текущей потребности?
+ * Записи без neededAt (введены до Fix-7) считаются актуальными — чтобы
+ * обновление не стирало уже введённые чеки существующих походов.
+ */
+export function factIsFresh(
+  fact: unknown,
+  needed: number | null | undefined,
+): boolean {
+  if (fact == null || typeof fact !== 'object') return false;
+  const stamp = (fact as { neededAt?: number | null }).neededAt;
+  if (stamp == null) return true;
+  return stamp === neededStamp(needed);
 }
 
 /** Собственное событие — синхронизация между вкладками компонента в одной странице. */

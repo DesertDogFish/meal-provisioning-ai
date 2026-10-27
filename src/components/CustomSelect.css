@@ -55,13 +55,12 @@
 }
 
 .cselect-list {
-  position: absolute;
-  z-index: var(--z-nav);
-  top: calc(100% + 6px);
-  left: 0;
-  right: 0;
-  max-height: 280px;
+  /* Fix-7 (п.12/14): позиция — из портала (position:fixed, top/left/minWidth/
+     maxWidth/maxHeight задаются инлайном от rect триггера). Ширина — по контенту,
+     но не уже триггера и не шире maxWidth: длинные категории не скроллятся вбок. */
+  width: max-content;
   overflow-y: auto;
+  overflow-x: hidden;
   overscroll-behavior: contain;
   margin: 0;
   padding: 6px;
@@ -117,5 +116,12 @@
 .cselect-check {
   flex-shrink: 0;
   color: var(--w1);
+}
+
+/* Fix-7 (п.12): метка опции не рвёт строку — при упоре в maxWidth мягкий эллипсис */
+.cselect-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 

@@ -4,7 +4,7 @@ import { calculateMenuByDays, calculateShoppingList, calculateDayShopping, calcu
 import InfoTip from '../components/InfoTip';     // Fix-5 (п.3–5): формулы в тултипах
 import TabHeader from '../components/TabHeader'; // Fix-5 (п.2): единые шапки вкладок
 import FreeAmountInput from '../components/FreeAmountInput'; // Fix-6 (п.8): свободные единицы факта
-import { isActualLessThanNeeded, type ActualAmount as ChecklistActual } from '../utils/checkUnits';
+import { isActualLessThanNeeded, neededAsActual, type ActualAmount } from '../utils/checkUnits';
 import { formatRub } from '../utils/formatRub'; // Фаза 13: итоги — целые рубли
 import { ArrowLeft, Plus, Trash2, Users, ShoppingCart, BookOpen, TrendingUp, Calendar, ChevronDown, ChevronRight, ListChecks, ClipboardCheck, PackagePlus, ArrowUpDown, X, FileDown } from 'lucide-react';
 import { MealType } from '../types';
@@ -17,7 +17,7 @@ import { api, getRecipes, getTripRecipes } from '../api/client';
 import { useToast } from '../components/ToastProvider';
 import { Button } from '../components/Button';
 // Патч «UX-список 26.10»:
-import { loadActualPrices, loadExcluded, setExcluded as persistExcluded, loadBought, setBought as persistBought, loadActualQty, setActualQty, onTripStageChange } from '../utils/tripStaging'; // U32 + Fix-2(п.6) + Fix-5(п.21)
+import { loadActualPrices, loadExcluded, setExcluded as persistExcluded, loadBought, setBought as persistBought, loadActualQty, setActualQty, onTripStageChange, factIsFresh, neededStamp, type ChecklistActual, type ActualPriceDraft } from '../utils/tripStaging'; // U32 + Fix-2(п.6) + Fix-5(п.21) + Fix-7(п.17)
 import { getTripEdits, type TripIngredientEdit } from '../api/tripEdits'; // U30
 import { getManualItems, deleteManualItem, type TripManualItem } from '../api/tripManualItems'; // U40
 import { mergeManualIntoShopping, manualForDay, manualForTrip } from '../utils/manualItems'; // U40
@@ -29,12 +29,10 @@ import { tripReadiness } from '../utils/readiness'; // Fix-3 (п.2): сквоз�
 import { getServerExclusions, syncServerExclusions } from '../api/shoppingExclusions'; // Fix-3 / R2
 import { categoryName } from '../utils/format';
 
-/** Фаза 13: черновик фактической цены (₽ за единицу измерения продукта). */
-export interface ActualPriceDraft {
-  price: number;
-  /** ₽ за всю позицию по чеку (для подписей в UI) */
-  total: number;
-}
+/** Фаза 13: черновик фактической цены (₽ за единицу измерения продукта).
+ * Fix-7 (п.17): тип живёт в общем хранилище tripStaging (там же neededAt —
+ * штамп потребности для сброса устаревших фактов). */
+export type { ActualPriceDraft } from '../utils/tripStaging';
 
 interface Trip {
   id: string;
@@ -366,12 +364,18 @@ export default function TripDetailPage() {
   const shoppingList = baseShoppingList.map((item, idx) => {
     void idx;
     const cost = item.estimatedCost ?? 0;
-    const actualUnit = draftOverrides[item.ingredientId]?.price;
+    // Fix-7 (п.17): факт чека действителен, только если потребность позиции
+    // не менялась (состав/количество правили → цену надо переввести)
+    const draft = draftOverrides[String(item.ingredientId)];
+    const actualUnit = factIsFresh(draft, item.totalAmount) ? draft!.price : undefined;
     return {
       ...item,
       excluded: false, // перекрывается ниже visibleShopping (shoppingExcluded)
       plannedUnitPrice: cost > 0 && item.totalAmount > 0 ? cost / item.totalAmount : undefined,
       actualUnitPrice: actualUnit,
+      // Fix-7 (п.28): введённая в чеке цена делает позицию «с ценой» — даже если
+      // в справочнике цены нет («нет цены» при уже введённом чеке больше не пишем)
+      hasPrice: item.hasPrice || actualUnit != null,
       effectiveCost: actualUnit != null ? actualUnit * item.totalAmount : cost,
     };
   });
@@ -445,7 +449,9 @@ export default function TripDetailPage() {
   const dayShopping = baseDayShopping.map(day => {
     const items = day.items.map(item => {
       const cost = item.estimatedCost ?? 0;
-      const actualUnit = draftOverrides[item.ingredientId]?.price;
+      // Fix-7 (п.17): устаревший факт (потребность менялась) не применяется
+      const draftDay = draftOverrides[String(item.ingredientId)];
+      const actualUnit = factIsFresh(draftDay, item.totalAmount) ? draftDay!.price : undefined;
       return {
         ...item,
         // Fix-2 (п.5): исключение дня — составной ключ, глобальное — по id
@@ -472,9 +478,14 @@ export default function TripDetailPage() {
   // (скрин: KPI «494,71 ₽» против «Итого 168 ₽»). Теперь всегда shoppingTotalFinal:
   // он уже включает фактические цены (draftOverrides) и исключения (shoppingExcluded).
   const totalCostFinal = shoppingTotalFinal;
+  // Fix-7 (п.28): «⚠ нет цен» — только про позиции БЕЗ плановой цены И без
+  // введённого чека (раньше список игнорировал факты и пугал «нет цены»)
+  const missingNow = includedShoppingFinal.filter(i => !i.hasPrice).map(i => i.ingredientName);
   const tripSummary = {
     ...tripSummaryBase,
     totalCost: totalCostFinal,
+    hasMissingPrices: missingNow.length > 0,
+    missingIngredients: missingNow,
     // U33: реальное число людей (без override'ов равно defaultPeople — совместимость)
     costPerDefaultPerson: totalCostFinal / Math.max(1, realPeople),
     costPerPersonMeal: totalCostFinal / Math.max(1, tripSummaryBase.totalPersonMeals || 1),
@@ -483,7 +494,8 @@ export default function TripDetailPage() {
   // без чеков — базовый расчёт утилиты.
   const personSummary = personSummaryBase.map(p => {
     const match = baseShoppingList.find(b => b.ingredientName === p.ingredientName);
-    const actualUnit = match ? draftOverrides[match.ingredientId]?.price : undefined;
+    const matchDraft = match ? draftOverrides[String(match.ingredientId)] : undefined;
+    const actualUnit = match && factIsFresh(matchDraft, match.totalAmount) ? matchDraft!.price : undefined;
     return {
       ...p,
       costPerDefaultPerson: actualUnit != null
@@ -558,7 +570,8 @@ export default function TripDetailPage() {
   // Fix-4 (п.11): «введено 57… а должно быть?» — знаменатель = число позиций
   // закупки, по которым нужно ввести факт; числитель — сколько из них уже с фактом.
   const factsTotal = includedShoppingFinal.length;
-  const factCount = includedShoppingFinal.filter(i => draftOverrides[String(i.ingredientId)] != null).length;
+  // Fix-7 (п.17): в счёт идут только СВЕЖИЕ факты (нужно-количество не менялось)
+  const factCount = includedShoppingFinal.filter(i => factIsFresh(draftOverrides[String(i.ingredientId)], i.totalAmount)).length;
   const readiness = tripReadiness({
     mealsCount: (trip.days ?? []).reduce((a, d) => a + (d.meals?.length ?? 0), 0),
     checklistTotal: checklistRowIds.length,
@@ -566,8 +579,10 @@ export default function TripDetailPage() {
     factCount,
     checksTotal: factsTotal,
   });
-  const commitActualQty = (ingredientId: string, value: ChecklistActual | null) => {
-    setActualQty(tripKey, ingredientId, value);
+  // Fix-7 (п.17): факт «Взяли» штампуется текущей потребностью — правка
+  // состава/количества в походе сбрасывает факт позиции (надо переввести).
+  const commitActualQty = (ingredientId: string, value: ActualAmount | null, needed?: number) => {
+    setActualQty(tripKey, ingredientId, value ? { ...value, neededAt: neededStamp(needed) } : null);
     setActualQtyState(loadActualQty(tripKey));
   };
   const setAllBought = (on: boolean) => {
@@ -606,11 +621,11 @@ export default function TripDetailPage() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2" style={{ maxWidth: '52rem' }}>
         <div className="stat px-3 py-2 flex items-baseline justify-between gap-2">
           <span className="text-xs" style={{ color: 'var(--muted)' }}>Дней</span>
-          <span className="stat-value text-lg font-bold">{trip.days?.length || 0}</span>
+          <span className="stat-value text-lg font-bold whitespace-nowrap">{trip.days?.length || 0}</span>
         </div>
         <div className="stat px-3 py-2 flex items-baseline justify-between gap-2">
           <span className="text-xs" style={{ color: 'var(--muted)' }}>Приёмов пищи</span>
-          <span className="stat-value text-lg font-bold">{trip.days?.reduce((a, d) => a + (d.meals?.length || 0), 0) || 0}</span>
+          <span className="stat-value text-lg font-bold whitespace-nowrap">{trip.days?.reduce((a, d) => a + (d.meals?.length || 0), 0) || 0}</span>
         </div>
         <div className="stat px-3 py-2 flex items-baseline justify-between gap-2">
           <span className="text-xs" style={{ color: 'var(--muted)' }}>
@@ -618,14 +633,14 @@ export default function TripDetailPage() {
             <InfoTip text="Сумма всей закупки: план по ценам справочника, а после ввода чека — фактические суммы. Без исключённых позиций." />
           </span>
           {/* Release-1.0: formatRub — целые рубли, неразрывный пробел; без «123,678 ₽» */}
-          <span className="stat-value text-lg font-bold">{formatRub(tripSummary.totalCost)}</span>
+          <span className="stat-value text-lg font-bold whitespace-nowrap">{formatRub(tripSummary.totalCost)}</span>
         </div>
         <div className="stat px-3 py-2 flex items-baseline justify-between gap-2">
           <span className="text-xs" style={{ color: 'var(--muted)' }}>
             На человека
             <InfoTip text={`Общая стоимость ÷ людей в походе (${Math.round(realPeople * 10) / 10} чел. — среднее по дням с учётом переопределений). Столько платит каждый при равном делении.`} />
           </span>
-          <span className="stat-value text-lg font-bold">{formatRub(tripSummary.costPerDefaultPerson)}</span>
+          <span className="stat-value text-lg font-bold whitespace-nowrap">{formatRub(tripSummary.costPerDefaultPerson)}</span>
         </div>
       </div>
 
@@ -636,13 +651,15 @@ export default function TripDetailPage() {
         {/* Fix-6 (п.10/17/п.28-диаграмма): тонкий степпер — шаги маршрута со стрелками:
             Меню → Закупка → Чек → Готов; подсказки про «отметьте покупки» убраны
             (шум), CTA без слова «черновик». */}
+        {/* Fix-7 (п.16): стрелка ПЕРЕД первым шагом («Меню собрано») убрана —
+            шевроны только между шагами маршрута */}
         {[
           { text: `Меню ${readiness.menu === 'done' ? 'собрано' : 'пустое'}`, ok: readiness.menu === 'done' },
           { text: `Закупка: взято ${boughtInList} из ${checklistRowIds.length}`, ok: readiness.shopping === 'done' },
           { text: `Чек: введено ${factCount} из ${factsTotal}`, ok: readiness.checks === 'done' },
-        ].map(st => (
+        ].map((st, i) => (
           <span key={st.text} className="inline-flex items-center gap-1.5">
-            <ChevronRight size={13} style={{ color: 'var(--line-strong)' }} aria-hidden />
+            {i > 0 && <ChevronRight size={13} style={{ color: 'var(--line-strong)' }} aria-hidden />}
             <span className="px-2 py-0.5 text-[11px] font-bold rounded-full whitespace-nowrap"
               style={st.ok
                 ? { background: 'color-mix(in srgb, var(--success) 16%, transparent)', color: 'var(--success)' }
@@ -936,7 +953,7 @@ export default function TripDetailPage() {
               </>
             }
           />
-          <div className="rounded-xl overflow-hidden" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+          <div className="rounded-xl overflow-hidden mob-scroll" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
           {/* Fix-6 (п.23): без внутреннего скролла — как в чеклисте, полная высота */}
             <table className="w-full text-sm">
               <thead style={{ background: 'var(--elev)' }}>
@@ -984,7 +1001,8 @@ export default function TripDetailPage() {
                         <span style={{ color: 'var(--text)' }}>
                           {formatRub(item.effectiveCost)}
                           {/* п.6: явно показываем, что применена фактическая цена из чека */}
-                          {draftOverrides[item.ingredientId] != null && (
+                          {/* Fix-7 (п.17/28): бейдж — по свежему факту чека (actualUnitPrice) */}
+                          {item.actualUnitPrice != null && (
                             <span className="text-xs ml-1" style={{ color: 'var(--w2)' }} title="По введённому чеку">✓ чек</span>
                           )}
                         </span>
@@ -1008,7 +1026,7 @@ export default function TripDetailPage() {
             subtitle={`Итого за поход: ${formatRub(dayShopping.reduce((a, d) => a + d.dayCost, 0))} · ${dayShopping.length} дн.`}
           />
           {dayShopping.map(day => (
-            <div key={day.dayDate} className="rounded-xl overflow-hidden" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+            <div key={day.dayDate} className="rounded-xl overflow-hidden mob-scroll" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
               <div className="p-4 flex items-center justify-between" style={{ borderBottom: '1px solid var(--border)' }}>
                 <div>
                   <p className="font-semibold" style={{ color: 'var(--text)' }}>
@@ -1044,7 +1062,7 @@ export default function TripDetailPage() {
           {/* Fix-6 (п.14): позиции «к походу» (аптечка, топливо…) не относятся ни к
               одному дню — отдельная карточка в конце, чтобы суммы дней и итог сходились */}
           {manualForTrip(manualItems).length > 0 && (
-            <div className="rounded-xl overflow-hidden" style={{ background: 'var(--surface)', border: '1px dashed var(--line-strong)' }}>
+            <div className="rounded-xl overflow-hidden mob-scroll" style={{ background: 'var(--surface)', border: '1px dashed var(--line-strong)' }}>
               <div className="p-4 flex items-center justify-between" style={{ borderBottom: '1px solid var(--border)' }}>
                 <div>
                   <p className="font-semibold" style={{ color: 'var(--text)' }}>На весь поход</p>
@@ -1094,9 +1112,13 @@ export default function TripDetailPage() {
               <div>
                 <p className="text-xs" style={{ color: 'var(--muted)' }}>
                   Приёмов пищи всего
-                  <InfoTip text="Сумма по всем дням: приёмы пищи × число людей. Например, ужин на 4 человек = 4 приёма. Делитель для «среднего за один приём»." />
+                  {/* Fix-7 (п.29): считаем ПРИЁМЫ (завтраки+обеды+ужины+перекусы),
+                      а не человеко-приёмы */}
+                  <InfoTip text="Число приёмов пищи во всём меню: завтраки + обеды + ужины + перекусы по всем дням." />
                 </p>
-                <p className="text-lg font-bold" style={{ color: 'var(--text)' }}>{tripSummary.totalPersonMeals}</p>
+                <p className="text-lg font-bold" style={{ color: 'var(--text)' }}>
+                  {(trip.days ?? []).reduce((a, d) => a + (d.meals?.length ?? 0), 0)}
+                </p>
               </div>
               <div>
                 <p className="text-xs" style={{ color: 'var(--muted)' }}>
@@ -1130,7 +1152,7 @@ export default function TripDetailPage() {
           </div>
 
           {/* Per person products */}
-          <div className="rounded-xl overflow-hidden" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+          <div className="rounded-xl overflow-hidden mob-scroll" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
             <div className="p-4" style={{ borderBottom: '1px solid var(--border)' }}>
               <h3 className="font-bold" style={{ color: 'var(--text)' }}>Продукты на человека</h3>
             </div>
@@ -1183,9 +1205,9 @@ export default function TripDetailPage() {
             title="Чеклист закупки"
             subtitle={
               <>
-                Что брать в магазине: целые упаковки (округление вверх — излишек на следующий поход).
+                {/* Fix-7 (п.21): «целые упаковки (округление вверх — излишек…)» — убрано */}
                 Взято {boughtInList} из {checklistRowIds.length}
-                <InfoTip text="Отметка «взято» привязана к количеству: измените потребность (добавите продукт) — отметка слетит, позицию нужно переподтвердить. В поле «факт» введите, сколько реально берёте — на развес, россыпью или упаковками другого объёма." />
+                <InfoTip text="Отметка «взято» привязана к количеству: измените потребность (добавите продукт) — отметка слетит, позицию нужно переподтвердить. В поле «беру» уже подставлено расчётное количество — поправьте, если берёте иначе (на развес, россыпью или упаковками другого объёма)." />
               </>
             }
             right={
@@ -1217,10 +1239,14 @@ export default function TripDetailPage() {
                 // изменилась (добавили ещё) ⇒ галочка слетает автоматически.
                 const boughtKey = `${row.ingredientId}@${Math.round(row.needed * 1000)}`;
                 const bought = checklistBought.has(boughtKey);
-                // Fix-5 (п.21): вместо «± упаковки» — свободный ввод «сколько реально
-                // берём» (на развес, россыпью, пачка другого объёма). По умолчанию —
-                // расчётное значение (целые упаковки вверх).
-                const actual = actualQty[row.ingredientId] ?? null;
+                // Fix-5 (п.21) + Fix-7 (п.17/22): свободный ввод «сколько реально
+                // берём». Сохранённый факт с устаревшей потребностью игнорируется;
+                // пока факта нет — поле ПРЕДЗАПОЛНЕНО расчётным количеством
+                // (целые упаковки вверх / потребность) — «ожидаемые значения
+                // автоматически», править нужно только отличия.
+                const storedActual = actualQty[row.ingredientId] ?? null;
+                const freshActual = factIsFresh(storedActual, row.needed) ? storedActual : null;
+                const actual = freshActual ?? neededAsActual(row.buyAmount, row.unit);
                 // Fix-6 (п.9): куплено МЕНЬШЕ нужного — подсветка предупреждением
                 const underfilled = bought && actual != null
                   ? isActualLessThanNeeded(actual, row.needed, row.unit, row.pieceWeightG)
@@ -1268,7 +1294,7 @@ export default function TripDetailPage() {
                         value={actual}
                         baseUnit={row.unit}
                         pieceWeightG={row.pieceWeightG}
-                        onChange={(v) => commitActualQty(row.ingredientId, v)}
+                        onChange={(v) => commitActualQty(row.ingredientId, v, row.needed)}
                         ariaLabel={`Сколько реально берёте: ${row.name}`}
                         testId={`actual-qty-${row.ingredientId}`}
                       />
@@ -1282,12 +1308,16 @@ export default function TripDetailPage() {
       )}
 
       {/* Модалка A — «Добавить приём пищи» (FORM-spec §2.1): одна commit-кнопка,
-          контекст дня, превью блюда; состав здесь НЕ редактируется */}
+          контекст дня, превью блюда; состав здесь НЕ редактируется.
+          Fix-7 (п.7): люди приёма = люди дня (override дня ?? defaultPeople) */}
       {addMealCtx && trip && (
         <AddMealModal
           tripId={trip.id}
           tripName={trip.name}
           defaultPeople={trip.defaultPeople}
+          dayPeople={
+            trip.days?.find(d => d.id === addMealCtx.dayId)?.peopleOverride ?? trip.defaultPeople
+          }
           day={{ dayId: addMealCtx.dayId, dayDate: addMealCtx.dayDate, dayIndex: addMealCtx.dayIndex }}
           initialMealType={addMealCtx.mealType ?? 'LUNCH'}
           onClose={() => setAddMealCtx(null)}

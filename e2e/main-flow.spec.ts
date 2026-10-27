@@ -52,7 +52,7 @@ test('E2E-03 продукт + предупреждение о дубле', async
 test('E2E-04 создание похода со спаренными датами (CR-3)', async ({ page }) => {
   await login(page);
   await page.goto('/trips');
-  await page.getByRole('button', { name: /Новый поход/ }).click();
+  await page.getByRole('button', { name: /Создать поход/ }).click();
   await page.getByLabel(/Название/).fill('Поход на Алтай');
   const start = page.locator('#start-date');
   const end = page.locator('#end-date');
@@ -72,7 +72,7 @@ test('E2E-05 сводка поездки: закупки/стоимость/ка
   await login(page);
   // детерминированный вход: создаём свой поход через UI и идём в него по testid
   await page.goto('/trips');
-  await page.getByRole('button', { name: /Новый поход/ }).click();
+  await page.getByRole('button', { name: /Создать поход/ }).click();
   await page.getByLabel(/Название/).fill('Тестовый маршрут');
   await page.locator('#start-date').fill('2026-08-01');
   await page.locator('#end-date').fill('2026-08-03');

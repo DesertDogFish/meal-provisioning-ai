@@ -131,9 +131,10 @@ export function AmountInput({
           Fix-4 (п.2): единый «квадратный» радиус всех полей ввода (--r-input). */}
       <span
         className="inline-flex items-stretch overflow-hidden"
-        /* Fix-6 (п.19): справа к полю вплотную прилегает блок единиц (г/кг, шт) —
-           он квадратный, значит и правый край поля не скругляем */
-        style={{ border: '1px solid var(--border)', background: 'var(--elev)', borderRadius: 'var(--r-input, 8px) 0 0 var(--r-input, 8px)' }}
+        /* Fix-7 (п.13): внешний контур поля+блока единиц скруглён ЦЕЛИКОМ
+           (слева у ввода и справа у выбора), внутренний стык — плоский.
+           overflow-hidden обрезает квадратные углы детей по общему радиусу. */
+        style={{ border: '1px solid var(--border)', background: 'var(--elev)', borderRadius: 'var(--r-input, 8px)' }}
       >
         <input
           type="text"
@@ -156,7 +157,7 @@ export function AmountInput({
             setText(raw);
             emit(raw, mode);
           }}
-          className={`${pad} w-20 text-right text-sm outline-none bg-transparent`}
+          className={`${pad} compact-input w-20 text-right text-sm outline-none bg-transparent`}
           style={{ color: 'var(--text)' }}
         />
         {weight ? (

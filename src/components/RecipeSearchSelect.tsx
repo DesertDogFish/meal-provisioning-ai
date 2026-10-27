@@ -176,11 +176,13 @@ export default function RecipeSearchSelect({
           role="listbox"
           aria-label={searchPlaceholder ?? 'Блюда'}
           /* Fix-5 (п.13): по умолчанию список — ОВЕРЛЕЙ (absolute): не раздвигает
-             вёрстку и не «стреляет» контентом вниз. inlineList=true — прежнее
-             поведение «в потоке» (Release-1.0) для модалок с жёстким overflow. */
+             вёрстку и не «стреляет» контентом вниз. inlineList=true — поведение
+             «в потоке» (Release-1.0) для модалок с жёстким overflow.
+             Fix-7 (п.8): inline-список — ФИКСИРОВАННАЯ высота (h-56): форма
+             «Добавить приём пищи» не прыгает при изменении числа результатов. */
           className={
             inlineList
-              ? 'rss-list mt-1 max-h-56 overflow-y-auto shadow-xl py-1'
+              ? 'rss-list mt-1 h-56 overflow-y-auto shadow-xl py-1'
               : 'rss-list absolute left-0 right-0 top-full mt-1 z-30 max-h-56 overflow-y-auto shadow-xl py-1'
           }
           style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}

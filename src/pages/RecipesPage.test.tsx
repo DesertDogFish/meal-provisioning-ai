@@ -50,7 +50,7 @@ beforeEach(() => {
 describe('RecipesPage — админ-режим каталога', () => {
   it('ADMIN видит кнопку создания и действия на карточке', async () => {
     renderPage();
-    expect(await screen.findByText('Создать блюдо')).toBeTruthy();
+    expect(await screen.findByRole('button', { name: 'Создать блюдо' })).toBeTruthy();
     await screen.findByText('Уха из рыбных консервов');
     expect(screen.getByLabelText('Редактировать Уха из рыбных консервов')).toBeTruthy();
     expect(screen.getByLabelText('Удалить Уха из рыбных консервов')).toBeTruthy();
@@ -63,13 +63,13 @@ describe('RecipesPage — админ-режим каталога', () => {
     });
     renderPage();
     await screen.findByText('Уха из рыбных консервов');
-    expect(screen.queryByText('Создать блюдо')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Создать блюдо' })).toBeNull();
     expect(screen.queryByLabelText('Редактировать Уха из рыбных консервов')).toBeNull();
   });
 
   it('кнопка создания открывает редактор', async () => {
     renderPage();
-    fireEvent.click(await screen.findByText('Создать блюдо'));
+    fireEvent.click(await screen.findByRole('button', { name: 'Создать блюдо' }));
     expect(await screen.findByLabelText('Название')).toBeTruthy();
   });
 

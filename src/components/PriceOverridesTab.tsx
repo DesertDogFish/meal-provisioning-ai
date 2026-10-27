@@ -24,10 +24,12 @@ import {
   loadBought,
   loadActualQty,
   setActualQty,
+  factIsFresh,
+  neededStamp,
   type ChecklistActual,
   onTripStageChange,
 } from '../utils/tripStaging';
-import type { ActualAmount } from '../utils/checkUnits';
+import { neededAsActual, type ActualAmount } from '../utils/checkUnits';
 
 /**
  * Вкладка «Закупка и чеки».
@@ -158,6 +160,8 @@ export default function PriceOverridesTab({ tripId }: Props) {
       saveActualPrice(tripId, item.ingredientId, {
         price: v,
         total: totalOverride != null ? totalOverride : v * item.totalAmount,
+        // Fix-7 (п.17): штамп потребности — правка состава/количества сбросит факт
+        neededAt: neededStamp(item.totalAmount),
       });
     }
     // Синхронизируем серверное хранилище оверрайдов (best effort: mock/офлайн не ломают UI)
@@ -180,9 +184,10 @@ export default function PriceOverridesTab({ tripId }: Props) {
     void commitActualPrice(item, unit, total);
   };
 
-  /** Fix-6 (п.11): «Взяли» — ОДНО хранилище с чеклистом (ввёл там — видно здесь). */
-  const commitTook = (ingredientId: string, value: ActualAmount | null) => {
-    setActualQty(tripId, ingredientId, value);
+  /** Fix-6 (п.11): «Взяли» — ОДНО хранилище с чеклистом (ввёл там — видно здесь).
+   * Fix-7 (п.17): факт штампуется потребностью позиции. */
+  const commitTook = (ingredientId: string, value: ActualAmount | null, needed?: number) => {
+    setActualQty(tripId, ingredientId, value ? { ...value, neededAt: neededStamp(needed) } : null);
     setActualMap(loadActualQty(tripId));
   };
 
@@ -294,7 +299,9 @@ export default function PriceOverridesTab({ tripId }: Props) {
       const plannedUnitPrice = plannedCost != null && it.totalAmount > 0
         ? plannedCost / it.totalAmount
         : undefined;
-      const ov = stage[String(it.ingredientId)];
+      // Fix-7 (п.17): устаревший факт (потребность менялась) игнорируется
+      const ovRaw = stage[String(it.ingredientId)];
+      const ov = factIsFresh(ovRaw, it.totalAmount) ? ovRaw : undefined;
       const actualUnitPrice = ov?.price ?? plannedUnitPrice;
       return {
         ingredientId: String(it.ingredientId),
@@ -321,7 +328,8 @@ export default function PriceOverridesTab({ tripId }: Props) {
       let actual = 0;
       for (const it of d.items) {
         const planned = it.estimatedCost ?? 0;
-        const ov = stage[String(it.ingredientId)]?.price;
+        const ovDraft = stage[String(it.ingredientId)];
+        const ov = factIsFresh(ovDraft, it.totalAmount) ? ovDraft!.price : undefined;
         actual += ov != null ? ov * it.totalAmount : planned;
       }
       return { dayDate: d.dayDate, plannedCost: d.dayCost, actualCost: actual };
@@ -450,8 +458,9 @@ export default function PriceOverridesTab({ tripId }: Props) {
         </div>
       )}
 
-      {/* Fix-6 (п.26): подтабы — тот же сегментированный контрол (.seg), что наверху страницы */}
-      <div className="seg w-full overflow-x-auto" style={{ maxWidth: '34rem' }}>
+      {/* Fix-6 (п.26) + Fix-7 (п.20): подтабы — компактная группа по контенту,
+          не растягивается во всю ширину */}
+      <div className="seg max-w-full overflow-x-auto">
         {segBtn('total', 'Закупка')}
         {segBtn('days', 'По дням')}
         {segBtn('person', 'На человека')}
@@ -459,8 +468,19 @@ export default function PriceOverridesTab({ tripId }: Props) {
 
       {/* Вкладка: Закупка (группы по категориям, как в чеклисте; без внутреннего скролла) */}
       {activeTab === 'total' && (
-        <div className="rounded-xl overflow-hidden max-w-5xl" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
-          <table className="w-full text-sm">
+        <div className="rounded-xl overflow-hidden max-w-5xl mob-scroll" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+          {/* Fix-7 (п.18): table-layout fixed + colgroup — заголовки колонок стоят
+              ровно над полями ввода (единые ширины строк и шапки) */}
+          <table className="w-full text-sm" style={{ tableLayout: 'fixed' }}>
+            <colgroup>
+              <col style={{ width: 32 }} />
+              <col />
+              <col style={{ width: 84 }} />
+              <col style={{ width: 120 }} />
+              <col style={{ width: 84 }} />
+              <col style={{ width: 150 }} />
+              <col style={{ width: 78 }} />
+            </colgroup>
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border)' }}>
                 <th className="px-2 py-3" title="Снять галочку, чтобы исключить продукт из расчёта (не удаляя его)"></th>
@@ -532,7 +552,7 @@ export default function PriceOverridesTab({ tripId }: Props) {
 
       {/* Вкладка: По дням */}
       {activeTab === 'days' && (
-        <div className="rounded-xl overflow-hidden max-w-3xl" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+        <div className="rounded-xl overflow-hidden max-w-3xl mob-scroll" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
           <table className="w-full text-sm">
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border)' }}>
@@ -636,7 +656,7 @@ interface GroupRowsProps {
   getDeltaChipClass: (delta: number) => string;
   toggleExcluded: (ingredientId: string) => void;
   commitActualTotal: (item: ShoppingItem, total: number | null) => void;
-  commitTook: (ingredientId: string, value: ActualAmount | null) => void;
+  commitTook: (ingredientId: string, value: ActualAmount | null, needed?: number) => void;
 }
 
 function GroupRows(props: GroupRowsProps) {
@@ -655,8 +675,15 @@ function GroupRows(props: GroupRowsProps) {
         </td>
       </tr>
       {items.map(item => {
-        const actualUnit = draftOverrides[item.ingredientId]?.price ?? item.actualUnitPrice ?? null;
+        // Fix-7 (п.17): устаревший факт цены игнорируется (потребность менялась)
+        const rowDraft = draftOverrides[String(item.ingredientId)];
+        const freshDraftPrice = factIsFresh(rowDraft, item.totalAmount) ? rowDraft!.price : undefined;
+        const actualUnit = freshDraftPrice ?? item.actualUnitPrice ?? null;
         const excluded = shoppingExcluded.has(item.ingredientId);
+        // Fix-7 (п.22): «Взяли» предзаполняется ожидаемым количеством (как в чеклисте)
+        const storedTook = actualMap[String(item.ingredientId)] ?? null;
+        const tookValue = (factIsFresh(storedTook, item.totalAmount) ? storedTook : null)
+          ?? neededAsActual(item.totalAmount, item.unit);
         const actualTotal = roundMoney(totalFromUnit(actualUnit, item.totalAmount));
         const actualCostView = actualTotal ?? item.actualCost;
         const delta = calculateDelta(item.plannedCost, actualCostView);
@@ -688,10 +715,10 @@ function GroupRows(props: GroupRowsProps) {
             </td>
             <td className="px-2 py-2.5 text-right">
               <FreeAmountInput
-                value={actualMap[String(item.ingredientId)] ?? null}
+                value={tookValue}
                 baseUnit={item.unit}
                 pieceWeightG={pieceWeightById.get(String(item.ingredientId)) ?? null}
-                onChange={v => commitTook(String(item.ingredientId), v)}
+                onChange={v => commitTook(String(item.ingredientId), v, item.totalAmount)}
                 ariaLabel={`Сколько реально куплено: ${item.ingredientName}`}
                 testId={`qty-input-${item.ingredientId}`}
               />

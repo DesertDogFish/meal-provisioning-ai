@@ -95,13 +95,17 @@ export default function LoginPage() {
     }}>
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          {/* DESIGN_MIGRATION 4.1/4.3: знак только из design-pack assets/ (BrandMark),
-              инлайн-перерисовка убрана; подложка — брендовый градиент пакета, без перекраски знака */}
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-[var(--r-lg)] mb-4" style={{
-            background: 'var(--grad-brand)',
+          {/* Fix-7 (п.11): «оранжевое лого на оранжевом фоне» — подложка знака стала
+              ТЁМНОЙ (ink) с обводкой; брендовый градиент остался свечением вокруг.
+              Сам знак крупнее (64px в плашке 88px) — заметная точка входа. */}
+          <div className="inline-flex items-center justify-center rounded-[var(--r-lg)] mb-4" style={{
+            width: 88,
+            height: 88,
+            background: 'var(--bg-1)',
+            border: '1px solid var(--line-strong)',
             boxShadow: 'var(--shadow-glow)'
           }}>
-            <BrandMark size={40} />
+            <BrandMark size={64} />
           </div>
           <h1 className="text-3xl font-bold mb-2" style={{ fontFamily: 'var(--font-display)', color: 'var(--text)' }}>Провиант</h1>
           <p style={{ color: 'var(--muted)' }}>Планировщик питания для походов и яхт</p>

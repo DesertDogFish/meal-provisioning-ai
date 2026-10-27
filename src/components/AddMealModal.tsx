@@ -27,6 +27,9 @@ interface Props {
   tripName: string;
   defaultPeople: number;
   day: AddMealDayContext;
+  /** Fix-7 (п.7): эффективные люди ДНЯ (peopleOverride дня ?? defaultPeople) —
+   * приём пищи наследует их; выбор людей на приём убран (контрол задизейблен). */
+  dayPeople?: number;
   /** Дефолт сегмента = тип кнопки, из которой открыта модалка */
   initialMealType?: MealType;
   onClose: () => void;
@@ -61,7 +64,7 @@ export function parseAmount(value: string): number | null {
 }
 
 export default function AddMealModal({
-  tripId, tripName, defaultPeople, day, initialMealType = 'LUNCH', onClose, onAdded,
+  tripId, tripName, defaultPeople, day, dayPeople, initialMealType = 'LUNCH', onClose, onAdded,
 }: Props) {
   const { showError } = useToast();
   const [mealType, setMealType] = useState<MealType>(initialMealType);
@@ -69,13 +72,13 @@ export default function AddMealModal({
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<Recipe[] | null>(null);
   const [searching, setSearching] = useState(false);
-  // null = «по умолчанию N» (trip.defaultPeople); число 1–20 — override приёма
-  const [people, setPeople] = useState<number | null>(null);
   const [openB, setOpenB] = useState(false);
   const [catalog, setCatalog] = useState<Recipe[]>([]);
   const [submitting, setSubmitting] = useState(false);
 
-  const effectivePeople = people ?? defaultPeople;
+  // Fix-7 (п.7): люди приёма = люди дня (override дня ?? defaultPeople похода).
+  // Отдельный выбор убран: контрол ниже показывает значение дня и задизейблен.
+  const effectivePeople = dayPeople ?? defaultPeople;
 
   // Каталог блюд для превью/подсказок (один запрос на открытие модалки)
   useEffect(() => {
@@ -110,10 +113,11 @@ export default function AddMealModal({
     if (!selected || submitting) return;
     setSubmitting(true);
     try {
+      // Fix-7 (п.7): peopleOverride приёма больше не отправляется — приём
+      // наследует людей дня (изменить число людей можно в настройках дня)
       const meal = await api.post<{ id: string }>(`/trips/${tripId}/days/${day.dayId}/meals`, {
         mealType,
         recipeId: selected.id,
-        peopleOverride: people ?? undefined,
       });
       onAdded(meal, { openComposition: openB });
     } catch (err: any) {
@@ -150,9 +154,10 @@ export default function AddMealModal({
           {formatDayDate(day.dayDate)} · «{tripName}»
         </p>
 
-        {/* Тип приёма: segmented вместо select */}
+        {/* Тип приёма: Fix-7 (п.3) — единый сегментированный контрол (.seg):
+            «или-или» визуально читается как одна группа выбора */}
         <label className="block text-sm font-medium mb-1" style={{ color: 'var(--muted)' }}>Тип приёма</label>
-        <div className="flex gap-1 rounded-lg p-1 mb-4" style={{ background: 'var(--elev)', border: '1px solid var(--border)' }} role="group" aria-label="Тип приёма">
+        <div className="seg mb-4" role="group" aria-label="Тип приёма">
           {MEAL_TYPES.map((t) => {
             const active = mealType === t.value;
             return (
@@ -161,10 +166,7 @@ export default function AddMealModal({
                 type="button"
                 aria-pressed={active}
                 onClick={() => setMealType(t.value)}
-                className="flex-1 px-2 py-1.5 rounded-md text-sm font-medium transition-colors"
-                style={active
-                  ? { background: 'var(--w1, var(--wave-400))', color: '#fff' }
-                  : { color: 'var(--muted)' }}
+                className={`seg-btn flex-1 ${active ? 'active' : ''}`}
               >
                 {t.label}
               </button>
@@ -235,18 +237,18 @@ export default function AddMealModal({
           </div>
         )}
 
-        {/* Люди: степпер 1–20, пусто = «по умолчанию N» */}
+        {/* Fix-7 (п.7): выбор людей для приёма УБРАН — контрол оставлен для
+            наглядности, но задизейблен и показывает значение ДНЯ (люди дня
+            меняются в настройках дня). Подпись — просто «Количество человек». */}
         <div className="mt-4 flex items-center justify-between gap-3">
           <label className="text-sm font-medium" style={{ color: 'var(--muted)' }}>
             Количество человек
-            {people == null && <span className="ml-1 text-xs">· по умолчанию {defaultPeople}</span>}
           </label>
-          <div className="flex items-center gap-2" data-testid="people-stepper">
+          <div className="flex items-center gap-2" data-testid="people-stepper" title="Приём пищи наследует количество людей дня — изменить можно в настройках дня">
             <Button
               variant="ghost" size="sm"
               aria-label="Меньше людей"
-              disabled={people == null ? defaultPeople <= PEOPLE_MIN : people <= PEOPLE_MIN}
-              onClick={() => setPeople(Math.max(PEOPLE_MIN, effectivePeople - 1))}
+              disabled
             >
               <Minus size={14} />
             </Button>
@@ -255,20 +257,16 @@ export default function AddMealModal({
               min={PEOPLE_MIN}
               max={PEOPLE_MAX}
               aria-label="Количество человек"
-              value={people ?? ''}
-              placeholder={String(defaultPeople)}
-              onChange={(e) => {
-                const v = e.target.value === '' ? null : Math.min(PEOPLE_MAX, Math.max(PEOPLE_MIN, parseInt(e.target.value || '0') || PEOPLE_MIN));
-                setPeople(v);
-              }}
+              value={effectivePeople}
+              disabled
+              readOnly
               className="w-16 px-2 py-1.5 rounded-lg text-center outline-none"
-              style={{ background: 'var(--elev)', border: '1px solid var(--border)', color: 'var(--text)' }}
+              style={{ background: 'var(--elev)', border: '1px solid var(--border)', color: 'var(--muted)', opacity: 0.7 }}
             />
             <Button
               variant="ghost" size="sm"
               aria-label="Больше людей"
-              disabled={effectivePeople >= PEOPLE_MAX}
-              onClick={() => setPeople(Math.min(PEOPLE_MAX, effectivePeople + 1))}
+              disabled
             >
               <Plus size={14} />
             </Button>

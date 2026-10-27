@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Plus, Trash2, X } from 'lucide-react';
 import { Button } from './Button';
 import Modal from './Modal';
+import { usePortalDropdown } from './CustomSelect';
 import { api } from '../api/client';
 import { useToast } from './ToastProvider';
 import { validateRecipe } from '../utils/validation';
@@ -171,6 +173,11 @@ export default function RecipeEditorModal({ recipe, categories, onClose, onSaved
       .slice(0, 8);
   }, [categories, category]);
 
+  // Fix-7 (п.14): подсказки категорий — ПОРТАЛ (position:fixed): список больше
+  // не растягивает контент модалки и не вызывает её скролл
+  const { anchorRef: catAnchorRef, pos: catPos } =
+    usePortalDropdown<HTMLDivElement>(catOpen && catSuggestions.length > 0);
+
   const updateRow = (key: number, patch: Partial<Row>) =>
     setRows(prev => prev.map(r => (r.key === key ? { ...r, ...patch } : r)));
 
@@ -263,7 +270,7 @@ export default function RecipeEditorModal({ recipe, categories, onClose, onSaved
           </Button>
         </div>
 
-        <div className="space-y-4">
+        <div className="space-y-3">
           <div>
             <label className="block text-sm mb-1" style={{ color: 'var(--muted)' }} htmlFor="recipe-name">
               Название
@@ -281,17 +288,19 @@ export default function RecipeEditorModal({ recipe, categories, onClose, onSaved
 
           <div>
             <span className="block text-sm mb-1" style={{ color: 'var(--muted)' }}>Тип приёма</span>
-            <div className="flex flex-wrap gap-2">
+            {/* Fix-7 (п.3): выбор «или-или» — сегментированный контрол (.seg),
+                а не четыре разрозненные кнопки: визуально единая группа */}
+            <div className="seg" role="group" aria-label="Тип приёма">
               {MEAL_TYPES.map(mt => (
-                <Button
+                <button
                   key={mt.value}
                   type="button"
-                  variant={mealType === mt.value ? 'primary' : 'ghost'}
-                  size="sm"
+                  className={`seg-btn ${mealType === mt.value ? 'active' : ''}`}
+                  aria-pressed={mealType === mt.value}
                   onClick={() => setMealType(mt.value)}
                 >
                   {mt.label}
-                </Button>
+                </button>
               ))}
             </div>
           </div>
@@ -301,7 +310,7 @@ export default function RecipeEditorModal({ recipe, categories, onClose, onSaved
               <label className="block text-sm mb-1" style={{ color: 'var(--muted)' }} htmlFor="recipe-category">
                 Категория
               </label>
-              <div className="relative">
+              <div className="relative" ref={catAnchorRef}>
                 <input
                   id="recipe-category"
                   type="text"
@@ -314,10 +323,25 @@ export default function RecipeEditorModal({ recipe, categories, onClose, onSaved
                   className="w-full px-3 py-2.5 rounded-lg outline-none"
                   style={inputStyle}
                 />
-                {catOpen && catSuggestions.length > 0 && (
+                {catOpen && catSuggestions.length > 0 && catPos && createPortal(
                   <ul
-                    className="absolute z-10 mt-1 w-full rounded-lg overflow-hidden text-sm"
-                    style={{ background: 'var(--elev)', border: '1px solid var(--border)' }}
+                    className="rounded-lg text-sm"
+                    style={{
+                      position: 'fixed',
+                      top: catPos.top,
+                      left: catPos.left,
+                      minWidth: catPos.minWidth,
+                      maxWidth: catPos.maxWidth,
+                      maxHeight: catPos.maxHeight,
+                      overflowY: 'auto',
+                      overflowX: 'hidden',
+                      zIndex: 110,
+                      background: 'var(--elev)',
+                      border: '1px solid var(--line-strong, var(--border))',
+                      boxShadow: 'var(--shadow-1, 0 12px 32px rgba(0,0,0,0.45))',
+                      borderRadius: 'var(--r-input, 8px)',
+                      padding: 4,
+                    }}
                     role="listbox"
                     aria-label="Существующие категории"
                   >
@@ -333,7 +357,8 @@ export default function RecipeEditorModal({ recipe, categories, onClose, onSaved
                         </button>
                       </li>
                     ))}
-                  </ul>
+                  </ul>,
+                  document.body,
                 )}
               </div>
               <p id="recipe-category-hint" className="text-xs mt-1" style={{ color: 'var(--muted)' }}>
@@ -375,9 +400,11 @@ export default function RecipeEditorModal({ recipe, categories, onClose, onSaved
               <span className="text-sm font-semibold" style={{ color: 'var(--text)' }}>
                 Состав (количество на {baseServings || 1} порц.)
               </span>
-              <Button type="button" variant="primary" size="sm" onClick={addRow}>
-                <Plus size={14} /> ингредиент
-              </Button>
+              {/* Fix-7 (п.2): «+ ингредиент» торчал текстовой pill-кнопкой —
+                  теперь компактная иконочная, вровень со строкой заголовка */}
+              <Button type="button" variant="primary" size="sm" iconOnly onClick={addRow}
+                      aria-label="Добавить ингредиент" title="Добавить ингредиент"
+                      icon={<Plus size={16} />} />
             </div>
 
             {productsLoading && (
@@ -404,8 +431,10 @@ export default function RecipeEditorModal({ recipe, categories, onClose, onSaved
                       />
                       {suggestions.length > 0 && (
                         <ul
-                          className="absolute z-10 mt-1 w-full overflow-hidden text-sm"
-                          style={{ background: 'var(--elev)', border: '1px solid var(--border)', borderRadius: 'var(--r-input, 8px)' }}
+                          /* Fix-7 (п.14): ограниченная высота + внутренний скролл —
+                             длинный список подсказок не растягивает модалку */
+                          className="absolute z-10 mt-1 w-full overflow-y-auto text-sm"
+                          style={{ background: 'var(--elev)', border: '1px solid var(--border)', borderRadius: 'var(--r-input, 8px)', maxHeight: 224 }}
                         >
                           {suggestions.map(p => (
                             <li key={p.id}>

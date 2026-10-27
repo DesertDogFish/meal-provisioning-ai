@@ -121,3 +121,74 @@ describe('расчёты с effective-рецептами (Fix-6): «Имбирь
     expect(ginger.amount).toBeCloseTo(0.015);
   });
 });
+
+describe('recipeEdits × calculations — REAL-режим (Fix-7 п.19): числовые id', () => {
+  it('EXTRA-строка (string-id из правки) находит trip-цену (number-id): позиция с ценой и без дублей', () => {
+    // real-режим: снепшот-рецепт и цены похода приходят с ЧИСЛОВЫМИ id,
+    // а mkRow из правок даёт СТРОКОВЫЙ id. До Fix-7 строгое === в поиске цены
+    // не срабатывало (512 !== '512') — добавленный продукт оставался «без цены».
+    const tripRecipe = {
+      id: 105, name: 'Каша', baseServings: 4, snapshotOf: 5,
+      ingredients: [
+        { ingredientId: 501, ingredientName: 'Гречка', unit: 'KG', amount: 0.4,
+          ingredient: { id: '501', name: 'Гречка', unit: 'KG', category: 'Крупы' } },
+      ],
+    };
+    const recipesMap = new Map<any, any>([[105, tripRecipe]]);
+    const edits = [{
+      id: 9, recipeId: 105, fromIngredientId: null, toIngredientId: 512,
+      toIngredientName: 'Имбирь сушёный', toUnit: 'KG', amountPerServing: 0.05,
+      ratio: 1, added: true, removed: false,
+    }];
+    const trip = {
+      id: '1', defaultPeople: 4, startDate: '2026-06-01', endDate: '2026-06-02',
+      days: [{ id: 'd1', dayDate: '2026-06-01', meals: [{ id: 'm1', recipeId: 105, mealType: 'BREAKFAST' }] }],
+    } as unknown as Trip;
+    const prices = [
+      { ingredientId: 501, pricePerUnit: 200, effectiveFrom: '2026-01-01', currency: 'RUB' },
+      { ingredientId: 512, pricePerUnit: 800, effectiveFrom: '2026-01-01', currency: 'RUB' },
+    ] as any;
+
+    const eff = buildEffectiveRecipesMap(recipesMap, edits as any, new Map([['105', '5']]));
+    const list = calculateShoppingList(trip, eff as any, prices);
+
+    expect(list).toHaveLength(2);
+    const ginger = list.find(i => i.ingredientId === '512');
+    expect(ginger).toBeTruthy();
+    expect(ginger!.ingredientName).toBe('Имбирь сушёный');
+    // главное: цена найдена несмотря на number-id в prices
+    expect(ginger!.hasPrice).toBe(true);
+    expect(ginger!.estimatedCost).toBeCloseTo(0.05 * 800);
+    // EXTRA — абсолют на приём: людьми не масштабируется
+    expect(ginger!.totalAmount).toBeCloseTo(0.05);
+    // базовая строка тоже на месте и с ценой
+    const buckwheat = list.find(i => i.ingredientId === '501')!;
+    expect(buckwheat.hasPrice).toBe(true);
+    expect(buckwheat.totalAmount).toBeCloseTo(0.4 / 4 * 4); // baseServings=4, people=4
+    // дублей одной позиции нет
+    expect(list.filter(i => i.ingredientName === 'Имбирь сушёный')).toHaveLength(1);
+  });
+
+  it('один продукт в двух приёмах (number-id) агрегируется в одну строку', () => {
+    const tripRecipe = {
+      id: 105, name: 'Каша', baseServings: 1,
+      ingredients: [
+        { ingredientId: 501, ingredientName: 'Гречка', unit: 'KG', amount: 0.2,
+          ingredient: { id: '501', name: 'Гречка', unit: 'KG', category: '' } },
+      ],
+    };
+    const recipesMap = new Map<any, any>([[105, tripRecipe]]);
+    const trip = {
+      id: '1', defaultPeople: 2, startDate: '2026-06-01', endDate: '2026-06-02',
+      days: [{ id: 'd1', dayDate: '2026-06-01', meals: [
+        { id: 'm1', recipeId: 105, mealType: 'BREAKFAST' },
+        { id: 'm2', recipeId: 105, mealType: 'DINNER' },
+      ] }],
+    } as unknown as Trip;
+    const prices = [{ ingredientId: 501, pricePerUnit: 100, effectiveFrom: '2026-01-01', currency: 'RUB' }] as any;
+    const list = calculateShoppingList(trip, recipesMap as any, prices);
+    expect(list).toHaveLength(1);
+    expect(list[0].totalAmount).toBeCloseTo(0.2 / 1 * 2 * 2); // 2 приёма × 2 человека
+    expect(list[0].estimatedCost).toBeCloseTo(0.8 * 100);
+  });
+});

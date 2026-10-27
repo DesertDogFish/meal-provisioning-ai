@@ -8,7 +8,7 @@ import {
   dayScopedExclusions, isRowExcluded, findPriceForDate,
 } from '../utils/calculations';
 import { formatRub } from '../utils/formatRub';
-import { loadActualPrices, loadExcluded, loadBought, loadActualQty, type ChecklistActual } from '../utils/tripStaging';
+import { loadActualPrices, loadExcluded, loadBought, loadActualQty, factIsFresh, type ChecklistActual } from '../utils/tripStaging';
 import { getTripEdits, type TripIngredientEdit } from '../api/tripEdits';
 import { getManualItems, type TripManualItem } from '../api/tripManualItems';
 import { mergeManualIntoShopping, manualForDay, manualForTrip } from '../utils/manualItems';
@@ -126,7 +126,10 @@ export default function TripPrintPage() {
         const shoppingRows = base.map(item => {
           const planned = item.estimatedCost ?? undefined;
           const plannedUnit = planned != null && item.totalAmount > 0 ? planned / item.totalAmount : undefined;
-          const actualUnit = overrides[String(item.ingredientId)]?.price ?? plannedUnit;
+          // Fix-7 (п.17): устаревшие факты (потребность менялась) в отчёт не попадают
+          const ovRaw = overrides[String(item.ingredientId)];
+          const ov = factIsFresh(ovRaw, item.totalAmount) ? ovRaw : undefined;
+          const actualUnit = ov?.price ?? plannedUnit;
           return {
             ingredientId: String(item.ingredientId),
             ingredientName: item.ingredientName,
@@ -136,7 +139,7 @@ export default function TripPrintPage() {
             actualCost: roundMoney(totalFromUnit(actualUnit, item.totalAmount)) ?? planned,
             excluded: excluded.has(String(item.ingredientId)),
             manual: (item as { manual?: boolean }).manual,
-            hasFact: overrides[String(item.ingredientId)]?.price != null,
+            hasFact: ov?.price != null,
           };
         });
 
@@ -174,7 +177,8 @@ export default function TripPrintPage() {
             for (const it of merged) {
               if (isRowExcluded(excluded, d.dayDate, it.ingredientId)) continue;
               const p = it.estimatedCost ?? 0;
-              const unit = overrides[String(it.ingredientId)]?.price;
+              const ovDay = overrides[String(it.ingredientId)];
+              const unit = factIsFresh(ovDay, it.totalAmount) ? ovDay!.price : undefined;
               planned += p;
               actual += unit != null ? unit * it.totalAmount : p;
             }
@@ -236,6 +240,17 @@ export default function TripPrintPage() {
   const anyFact = included.some(r => r.hasFact);
   const allFact = included.length > 0 && included.every(r => r.hasFact);
   const realPeopleLabel = Number.isInteger(kpi.realPeople) ? String(kpi.realPeople) : kpi.realPeople.toLocaleString('ru-RU', { maximumFractionDigits: 1 });
+  // Fix-7 (п.27): ОДИНАКОВЫЕ ширины колонок во всех категорийных таблицах
+  // закупки (Фрукты/Супы/… не «пляшут» друг относительно друга)
+  const printCols = (
+    <colgroup>
+      <col />
+      <col style={{ width: '15%' }} />
+      <col style={{ width: '15%' }} />
+      {!allFact && <col style={{ width: '16%' }} />}
+      {(anyFact || allFact) && <col style={{ width: '17%' }} />}
+    </colgroup>
+  );
 
   return (
     <div style={{ background: '#fff', minHeight: '100vh' }}>
@@ -334,7 +349,7 @@ export default function TripPrintPage() {
                 })}
               {dayManual.length > 0 && (
                 <div style={{ marginTop: 6, breakInside: 'avoid' }}>
-                  <p style={{ margin: '0 0 4px', fontSize: 13, fontWeight: 700, color: '#435663' }}>К дню (не блюда):</p>
+                  <p style={{ margin: '0 0 4px', fontSize: 13, fontWeight: 700, color: '#435663' }}>Дополнительно на день:</p>
                   <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12.5 }}>
                     {dayManual.map(mi => (
                       <li key={mi.id}>{mi.ingredientName} — {formatAmount(mi.amount, mi.unit)}{mi.note ? ` (${mi.note})` : ''}</li>
@@ -372,7 +387,8 @@ export default function TripPrintPage() {
               <h3 style={{ fontSize: 13, fontWeight: 800, margin: '0 0 4px', textTransform: 'uppercase', letterSpacing: '.04em', color: '#435663' }}>
                 {group.category}
               </h3>
-              <table>
+              <table style={{ tableLayout: 'fixed' }}>
+                {printCols}
                 <thead>
                   <tr>
                     <th>Продукт</th>
@@ -387,10 +403,16 @@ export default function TripPrintPage() {
                 <tbody>
                   {group.rows.map(row => {
                     const src = included.find(r => r.ingredientId === row.ingredientId);
-                    // факт-количество: свободный ввод чеклиста («300 г») → расчёт (упаковки/нужно)
-                    const act = actualQty[row.ingredientId];
+                    // факт-количество: свободный ввод чеклиста («300 г») → расчёт (упаковки/нужно).
+                    // Fix-7 (п.17): устаревший факт (потребность менялась) игнорируется.
+                    // Fix-7 (п.26): «Взяли» — ВСЕГДА с единицей («0,05 кг», а не «0,05»);
+                    // legacy-записи без единицы переводятся в единицы продукта.
+                    const actRaw = actualQty[row.ingredientId];
+                    const act = factIsFresh(actRaw, row.needed) ? actRaw : undefined;
                     const tookStr = act
-                      ? `${act.amount.toLocaleString('ru-RU')} ${act.unit}`
+                      ? (act.unit
+                        ? `${act.amount.toLocaleString('ru-RU')} ${act.unit}`
+                        : formatAmount(act.amount, row.unit))
                       : (row.packsToBuy != null && row.packSize
                         ? formatAmount(row.packsToBuy * row.packSize, row.unit)
                         : formatAmount(row.needed, row.unit));

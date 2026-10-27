@@ -208,17 +208,16 @@ export default function RecipesPage() {
 
   return (
     <div className="space-y-6">
-      <div>
+      {/* Fix-7 (п.5): кнопка создания — СПРАВА, иконочная (единый паттерн с
+          «Продукты»/«Походы»); счётчики типов переехали в слайдер-пресеты ниже */}
+      <div className="flex items-start justify-between gap-3">
         <h1 className="text-2xl md:text-3xl font-bold" style={{ color: 'var(--text)' }}>
           Блюда · {recipes.length}
         </h1>
-        <p className="mt-1" style={{ color: 'var(--muted)' }}>
-          Завтрак {counts.breakfast} · Обед {counts.lunch} · Ужин {counts.dinner} · Перекус {counts.snack} | без огня {counts.noFire}
-        </p>
         {isAdmin && (
-          <Button variant="primary" size="sm" onClick={openCreate} aria-label="Создать блюдо">
-                      <Plus size={16} /> Создать блюдо
-                    </Button>
+          <Button variant="primary" iconOnly onClick={openCreate}
+                  aria-label="Создать блюдо" title="Создать блюдо"
+                  icon={<Plus size={18} />} />
         )}
       </div>
 
@@ -226,7 +225,7 @@ export default function RecipesPage() {
       <div className="sticky top-0 z-10 py-3 space-y-3" style={{ 
         background: 'linear-gradient(var(--bg) 75%, transparent)' 
       }}>
-        {/* Первая строка: поиск и чипы типов */}
+        {/* Первая строка: поиск и пресеты типов */}
         <div className="flex flex-wrap gap-3 items-center">
           <div className="relative flex-1 min-w-[200px]">
             <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--muted)' }} />
@@ -240,35 +239,39 @@ export default function RecipesPage() {
             />
           </div>
           
-          {/* U2 (список багов 25.10): активный фильтр — primary («рыжий» полный),
-              неактивные — soft (приглушённые) + aria-pressed: сразу видно,
-              какой фильтр применён. */}
-          {([
-            { value: '' as MealType | '', label: 'Все', count: counts.all, aria: 'Показать все рецепты' },
-            { value: 'BREAKFAST' as MealType, label: 'Завтрак', count: counts.breakfast, aria: 'Фильтр: Завтрак' },
-            { value: 'LUNCH' as MealType, label: 'Обед', count: counts.lunch, aria: 'Фильтр: Обед' },
-            { value: 'DINNER' as MealType, label: 'Ужин', count: counts.dinner, aria: 'Фильтр: Ужин' },
-            { value: 'SNACK' as MealType, label: 'Перекус', count: counts.snack, aria: 'Фильтр: Перекус' },
-          ]).map(chip => (
-            <Button
-              key={chip.value || 'all'}
-              variant={filterMealType === chip.value ? 'primary' : 'soft'}
-              size="sm"
-              aria-pressed={filterMealType === chip.value}
-              onClick={() => setFilterMealType(chip.value)}
-              aria-label={chip.aria}
-            >
-              {chip.label} {chip.count}
-            </Button>
-          ))}
+          {/* Fix-7 (п.6): пресеты фильтров — тоже слайдер: «Все / Завтрак / Обед /
+              Ужин / Перекус» со счётчиками — единый сегментированный контрол (.seg),
+              визуально «или-или», а не пять разрозненных кнопок */}
+          <div className="seg max-w-full overflow-x-auto" role="group" aria-label="Фильтр по типу приёма">
+            {([
+              { value: '' as MealType | '', label: 'Все', count: counts.all, aria: 'Показать все рецепты' },
+              { value: 'BREAKFAST' as MealType, label: 'Завтрак', count: counts.breakfast, aria: 'Фильтр: Завтрак' },
+              { value: 'LUNCH' as MealType, label: 'Обед', count: counts.lunch, aria: 'Фильтр: Обед' },
+              { value: 'DINNER' as MealType, label: 'Ужин', count: counts.dinner, aria: 'Фильтр: Ужин' },
+              { value: 'SNACK' as MealType, label: 'Перекус', count: counts.snack, aria: 'Фильтр: Перекус' },
+            ]).map(chip => (
+              <button
+                key={chip.value || 'all'}
+                type="button"
+                className={`seg-btn whitespace-nowrap ${filterMealType === chip.value ? 'active' : ''}`}
+                aria-pressed={filterMealType === chip.value}
+                onClick={() => setFilterMealType(chip.value)}
+                aria-label={chip.aria}
+              >
+                {chip.label} <span style={{ opacity: 0.72, fontVariantNumeric: 'tabular-nums' }}>{chip.count}</span>
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Вторая строка: категория, без огня, сброс */}
         <div className="flex flex-wrap gap-3 items-center">
           {/* Fix-5 (п.19): нативный «Все категории» выглядел чужеродно —
-              единый CustomSelect как в формах продукта/приёма */}
-          <div style={{ minWidth: 200 }}>
+              единый CustomSelect как в формах продукта/приёма.
+              Fix-7 (п.4): фиксированная ширина — короткое значение не сужает вёрстку */}
+          <div style={{ width: 220 }}>
             <CustomSelect
+              className="w-full"
               value={filterCategory}
               onChange={setFilterCategory}
               options={[{ value: '', label: 'Все категории' }, ...categories.map(cat => ({ value: cat, label: humanizeCategory(cat) }))]}

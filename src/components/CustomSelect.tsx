@@ -1,5 +1,7 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { ChevronDown, Check } from 'lucide-react';
+import { computeDropdownPosition, type DropdownPosition } from '../utils/dropdownPos';
 import './CustomSelect.css';
 
 export interface SelectOption {
@@ -29,25 +31,70 @@ interface Props {
  *  - стрелки — навигация по опциям;
  *  - Tab — как у обычного контрола (роль listbox + option позволяет это).
  * Значение всегда строковое — совместимо со старыми `<select value={...}>`.
+ *
+ * Fix-7 (п.12/14): список — ПОРТАЛ в document.body с position:fixed.
+ *  - модалка с overflow больше не скроллится от открытого дропдауна;
+ *  - ширина списка — по контенту (min = ширина триггера, max = 360px):
+ *    длинные категории не уходят в горизонтальный скролл;
+ *  - при скролле/ресайзе позиция пересчитывается; триггер ушёл из вьюпорта —
+ *    список закрывается.
  */
+/**
+ * Fix-7 (п.12/14): общий хук дропдауна-в-портале. anchorRef — на контейнер
+ * триггера; пока open — считает fixed-позицию списка от rect триггера и
+ * пересчитывает её при любом скролле (capture — включая скролл модалок) и ресайзе.
+ * Используется CustomSelect и комбобоксами RecipeEditorModal («Категория»,
+ * «Продукт») — их списки больше не растягивают контент модалки.
+ */
+export function usePortalDropdown<T extends HTMLElement>(open: boolean) {
+  const anchorRef = useRef<T>(null);
+  const [pos, setPos] = useState<DropdownPosition | null>(null);
+
+  useLayoutEffect(() => {
+    if (!open) { setPos(null); return; }
+    const update = () => {
+      const el = anchorRef.current;
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      setPos(computeDropdownPosition(
+        { top: r.top, bottom: r.bottom, left: r.left, width: r.width },
+        { width: window.innerWidth, height: window.innerHeight },
+      ));
+    };
+    update();
+    window.addEventListener('scroll', update, true);
+    window.addEventListener('resize', update);
+    return () => {
+      window.removeEventListener('scroll', update, true);
+      window.removeEventListener('resize', update);
+    };
+  }, [open]);
+
+  return { anchorRef, pos };
+}
+
 export function CustomSelect({ value, onChange, options, placeholder, id, name, ariaLabel, disabled, className }: Props) {
   const [open, setOpen] = useState(false);
   const [activeIdx, setActiveIdx] = useState(0);
-  const rootRef = useRef<HTMLDivElement>(null);
+  const { anchorRef: rootRef, pos } = usePortalDropdown<HTMLDivElement>(open);
   const listRef = useRef<HTMLUListElement>(null);
 
   const selected = options.find(o => o.value === value);
   const label = selected ? selected.label : (placeholder ?? 'Выберите…');
 
-  // Клик вне компонента закрывает список
+  // Клик вне компонента закрывает список. Список живёт в портале — клик по нему
+  // «вне» rootRef, поэтому проверяем оба контейнера.
   useEffect(() => {
     if (!open) return;
     const onDocDown = (e: MouseEvent) => {
-      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false);
+      const t = e.target as Node;
+      if (rootRef.current?.contains(t)) return;
+      if (listRef.current?.contains(t)) return;
+      setOpen(false);
     };
     document.addEventListener('mousedown', onDocDown);
     return () => document.removeEventListener('mousedown', onDocDown);
-  }, [open]);
+  }, [open, rootRef]);
 
   // При открытии подсвечиваем текущее значение и скроллим к нему
   useEffect(() => {
@@ -120,8 +167,22 @@ export function CustomSelect({ value, onChange, options, placeholder, id, name, 
         <span className="cselect-value" data-value={value}>{label}</span>
         <ChevronDown size={15} className={`cselect-arrow ${open ? 'rotated' : ''}`} />
       </button>
-      {open && (
-        <ul ref={listRef} role="listbox" aria-label={ariaLabel} className="cselect-list">
+      {open && pos && createPortal(
+        <ul
+          ref={listRef}
+          role="listbox"
+          aria-label={ariaLabel}
+          className="cselect-list"
+          style={{
+            position: 'fixed',
+            top: pos.top,
+            left: pos.left,
+            minWidth: pos.minWidth,
+            maxWidth: pos.maxWidth,
+            maxHeight: pos.maxHeight,
+            zIndex: 110, // выше --z-modal (90): дропдаун в модалке не обрезается
+          }}
+        >
           {options.map((opt, idx) => (
             <li
               key={`${opt.value}:${idx}`}
@@ -140,7 +201,8 @@ export function CustomSelect({ value, onChange, options, placeholder, id, name, 
               {opt.value === value && <Check size={14} className="cselect-check" aria-hidden />}
             </li>
           ))}
-        </ul>
+        </ul>,
+        document.body,
       )}
     </div>
   );

@@ -11,6 +11,41 @@ import { createPortal } from 'react-dom';
  * визуально «внизу». Решение: портал в document.body + overflow-y:auto на
  * оверлее, чтобы высокая модалка скроллилась сама, а не уезжала за экран.
  */
+
+/**
+ * Fix-7 (п.1): пока открыта модалка, фон НЕ скроллится. Счётчик — на случай
+ * вложенных оверлеев (ConfirmDialog поверх модалки состава): body разблокируется,
+ * только когда закроется последний. paddingRight компенсирует исчезнувший
+ * скроллбар, чтобы контент не «прыгал» вбок.
+ */
+let lockCount = 0;
+let prevOverflow = '';
+let prevPaddingRight = '';
+
+export function lockBodyScroll(): void {
+  if (lockCount === 0) {
+    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
+    prevOverflow = document.body.style.overflow;
+    prevPaddingRight = document.body.style.paddingRight;
+    document.body.style.overflow = 'hidden';
+    if (scrollbarWidth > 0) document.body.style.paddingRight = `${scrollbarWidth}px`;
+  }
+  lockCount += 1;
+}
+
+export function unlockBodyScroll(): void {
+  lockCount = Math.max(0, lockCount - 1);
+  if (lockCount === 0) {
+    document.body.style.overflow = prevOverflow;
+    document.body.style.paddingRight = prevPaddingRight;
+  }
+}
+
+/** Количество активных блокировок — для тестов. */
+export function bodyScrollLockCount(): number {
+  return lockCount;
+}
+
 export default function Modal({
   children,
   onClose,
@@ -27,6 +62,12 @@ export default function Modal({
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
+
+  // Fix-7 (п.1): блокировка скролла фона на всё время жизни оверлея
+  useEffect(() => {
+    lockBodyScroll();
+    return unlockBodyScroll;
+  }, []);
 
   return createPortal(
     <div

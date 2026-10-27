@@ -13,19 +13,19 @@ import { formatRub, formatPrice, formatQty, unitShortLabel, categoryName } from 
 const NBSP = '\u00A0';
 
 describe('formatRub — итоги целыми рублями', () => {
-  it('округляет до целых и ставит неразрывный пробел', () => {
-    expect(formatRub(1234)).toBe(`1${NBSP}234 ₽`);
-    expect(formatRub(168)).toBe('168 ₽');
-    expect(formatRub(494.71)).toBe('495 ₽');
+  it('округляет до целых, неразрывные пробелы (Fix-7 п.24: ₽ не переносится)', () => {
+    expect(formatRub(1234)).toBe(`1${NBSP}234${NBSP}₽`);
+    expect(formatRub(168)).toBe(`168${NBSP}₽`);
+    expect(formatRub(494.71)).toBe(`495${NBSP}₽`);
   });
 
   it('скрин-баг «123,678 ₽»: три знака после запятой больше не протекают', () => {
-    expect(formatRub(123.678)).toBe('124 ₽');
-    expect(formatRub(123678.4)).toBe(`123${NBSP}678 ₽`);
+    expect(formatRub(123.678)).toBe(`124${NBSP}₽`);
+    expect(formatRub(123678.4)).toBe(`123${NBSP}678${NBSP}₽`);
   });
 
   it('принимает строки (цены с бэкенда приходят string)', () => {
-    expect(formatRub('887.65')).toBe('888 ₽');
+    expect(formatRub('887.65')).toBe(`888${NBSP}₽`);
   });
 
   it('null/undefined/NaN → «—»', () => {
@@ -36,7 +36,7 @@ describe('formatRub — итоги целыми рублями', () => {
   });
 
   it('-0 не печатается как «-0 ₽»', () => {
-    expect(formatRub(-0.4)).toBe('0 ₽');
+    expect(formatRub(-0.4)).toBe(`0${NBSP}₽`);
   });
 });
 

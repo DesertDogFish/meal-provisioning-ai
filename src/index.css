@@ -709,7 +709,7 @@ input:-webkit-autofill:active {
    ============================================================ */
 :root {
   --r-input: 8px;      /* «более квадратные» инпуты — запрос пользователя */
-  --h-control: 40px;   /* единая высота строки контролов в формах */
+  --h-control: 36px;   /* Fix-7 (п.15): единая высота контролов — компактнее (было 40px) */
 }
 
 input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="hidden"]),
@@ -827,4 +827,107 @@ ul[role="listbox"],
   top: 0;
   z-index: 2;
   background: var(--elev);
+}
+
+/* ============================================================
+   Fix-7 (список 26.10, итерация 7)
+   ============================================================ */
+
+/* п.15: все элементы ввода — компактнее по высоте (особенно в модалках).
+   Селекторы type-attr повыше утилит Tailwind (py-2.5 и т.п.) по специфичности,
+   поэтому действуют на ВСЕ страницы без точечных правок разметки. */
+input[type="text"]:not(.compact-input),
+input[type="number"]:not(.compact-input),
+input[type="email"]:not(.compact-input),
+input[type="password"]:not(.compact-input),
+input[type="search"]:not(.compact-input),
+input[type="date"]:not(.compact-input),
+input[type="datetime-local"]:not(.compact-input),
+select,
+.cselect-trigger {
+  min-height: var(--h-control, 36px);
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+
+/* составные поля количества (AmountInput/FreeAmountInput) — компактнее общих */
+input.compact-input {
+  min-height: 28px;
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
+
+/* в модалках — ещё компактнее */
+.modal-overlay input[type="text"]:not(.compact-input),
+.modal-overlay input[type="number"]:not(.compact-input),
+.modal-overlay input[type="email"]:not(.compact-input),
+.modal-overlay input[type="password"]:not(.compact-input),
+.modal-overlay input[type="search"]:not(.compact-input),
+.modal-overlay input[type="date"]:not(.compact-input),
+.modal-overlay select,
+.modal-overlay .cselect-trigger {
+  min-height: 32px;
+  padding-top: 5px;
+  padding-bottom: 5px;
+}
+
+/* поиск-комбобокс чуть ниже и вне модалок */
+.rss-input {
+  padding: 7px 0;
+}
+
+.modal-overlay .rss-input {
+  padding: 6px 0;
+  font-size: 13.5px;
+}
+
+/* п.10: контент оторван от краёв и центрирован — не тянемся на всю ширину */
+.app-shell {
+  width: 100%;
+  max-width: 1200px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* п.9: плавающая кнопка «наверх» — маленькая, полупрозрачная, появляется плавно */
+.scroll-top-btn {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1px solid var(--line-strong);
+  background: color-mix(in srgb, var(--bg-1) 82%, transparent);
+  color: var(--text-2);
+  cursor: pointer;
+  z-index: calc(var(--z-nav) - 5);
+  opacity: 0;
+  transform: translateY(8px) scale(0.9);
+  pointer-events: none;
+  transition: opacity 0.25s ease, transform 0.25s ease, color 0.15s ease, border-color 0.15s ease;
+  backdrop-filter: blur(6px);
+}
+.scroll-top-btn.visible {
+  opacity: 0.85;
+  transform: translateY(0) scale(1);
+  pointer-events: auto;
+}
+.scroll-top-btn:hover {
+  opacity: 1;
+  color: var(--text-1);
+  border-color: var(--w1);
+}
+
+/* п.10: гибкая вёрстка — смартфонная ширина: меньше отступы, широкие таблицы
+   скроллятся горизонтально внутри карточки (всё остаётся доступно) */
+@media (max-width: 767px) {
+  main { padding: 12px !important; }
+  .mob-scroll { overflow-x: auto !important; }
+  .mob-scroll > table { min-width: 560px; }
+  /* шапки KPI в одну колонку не ломаются: grid-cols-2 уже есть — уменьшаем зазоры */
+  .stat { padding-left: 10px; padding-right: 10px; }
 }
