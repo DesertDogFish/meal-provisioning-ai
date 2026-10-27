@@ -112,6 +112,10 @@
 .btn {
   display: inline-flex;
   align-items: center;
+  /* Fix-8 (п.2): текст кнопок — по центру (в т.ч. при растяжении кнопки,
+     например flex-1 в подвалах модалок); синхронно с Button.module.css */
+  justify-content: center;
+  text-align: center;
   gap: var(--sp-2);
   padding: var(--sp-3) var(--sp-5);
   border-radius: var(--r-pill);
@@ -887,6 +891,23 @@ input.compact-input {
   max-width: 1200px;
   margin-left: auto;
   margin-right: auto;
+}
+
+/* Fix-8 (п.3): «оторван от центра» ВЕСЬ макет — сайдбар + контент.
+   Оболочка центрирована и ограничена по ширине (сайдбар 256px + контент 1200px
+   + отступы); на экранах шире оболочки слева видна её граница (симметрично
+   правому краю сайдбара), сам сайдбар остаётся sticky внутри оболочки. */
+.app-frame {
+  max-width: 1560px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+@media (min-width: 1561px) {
+  .app-frame {
+    border-left: 1px solid var(--line);
+    background: color-mix(in srgb, var(--bg-1) 35%, transparent);
+  }
 }
 
 /* п.9: плавающая кнопка «наверх» — маленькая, полупрозрачная, появляется плавно */

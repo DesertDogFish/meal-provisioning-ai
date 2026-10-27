@@ -74,10 +74,13 @@ export class ErrorBoundary extends Component<Props, State> {
               </div>
             </details>
 
+            {/* Fix-8 (п.1): у кнопки потерялись фон/обводка (пустой style) —
+                возвращаем фирменный вид токенами, текст центрирован. */}
             <button
               onClick={this.reset}
               className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-full transition-colors"
-                          >
+              style={{ background: 'var(--grad-brand)', color: 'var(--on-fire)', border: '1px solid transparent', boxShadow: 'var(--shadow-glow)' }}
+            >
               <RefreshCw size={18} />
               Попробовать снова
             </button>

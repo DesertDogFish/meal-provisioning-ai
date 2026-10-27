@@ -256,3 +256,23 @@ describe('TripForm — edit-режим (U36)', () => {
     expect(data.endDate).toBe('2026-08-03');
   });
 });
+
+// Fix-8 (п.1/2): «почему кнопка создать без обводки и цвета» + «текст не по центру».
+// Кнопки подвала — компоненты Button дизайн-системы: «Создать» — primary
+// (фирменный градиент/обводка из Button.module.css), «Отмена» — ghost;
+// .btn центрирует содержимое (justify-content + text-align), в т.ч. при flex-1.
+describe('TripForm — кнопки подвала (Fix-8 п.1/2)', () => {
+  it('«Создать» — primary-кнопка дизайн-системы, «Отмена» — ghost (не «голые» <button> без стиля)', () => {
+    renderTripForm();
+    const submit = screen.getByRole('button', { name: 'Создать' });
+    const cancel = screen.getByRole('button', { name: 'Отмена' });
+    // классы CSS-модулей: базовый .btn + вариант
+    expect(submit.className).toContain('btn');
+    expect(submit.className).toContain('primary');
+    expect(cancel.className).toContain('btn');
+    expect(cancel.className).toContain('ghost');
+    // никаких пустых инлайн-стилей (старый баг: style={{ opacity … }} без фона/рамки)
+    expect(submit.style.background).toBe('');
+    expect(submit.getAttribute('style') ?? '').not.toContain('opacity');
+  });
+});

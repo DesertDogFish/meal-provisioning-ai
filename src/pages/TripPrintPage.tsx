@@ -8,7 +8,7 @@ import {
   dayScopedExclusions, isRowExcluded, findPriceForDate,
 } from '../utils/calculations';
 import { formatRub } from '../utils/formatRub';
-import { loadActualPrices, loadExcluded, loadBought, loadActualQty, factIsFresh, type ChecklistActual } from '../utils/tripStaging';
+import { loadActualPrices, loadExcluded, loadBought, loadActualQty, type ChecklistActual } from '../utils/tripStaging';
 import { getTripEdits, type TripIngredientEdit } from '../api/tripEdits';
 import { getManualItems, type TripManualItem } from '../api/tripManualItems';
 import { mergeManualIntoShopping, manualForDay, manualForTrip } from '../utils/manualItems';
@@ -126,9 +126,9 @@ export default function TripPrintPage() {
         const shoppingRows = base.map(item => {
           const planned = item.estimatedCost ?? undefined;
           const plannedUnit = planned != null && item.totalAmount > 0 ? planned / item.totalAmount : undefined;
-          // Fix-7 (п.17): устаревшие факты (потребность менялась) в отчёт не попадают
-          const ovRaw = overrides[String(item.ingredientId)];
-          const ov = factIsFresh(ovRaw, item.totalAmount) ? ovRaw : undefined;
+          // Fix-8 (п.6): факты чека попадают в отчёт при любой потребности —
+          // цена за единицу применяется к текущему количеству
+          const ov = overrides[String(item.ingredientId)];
           const actualUnit = ov?.price ?? plannedUnit;
           return {
             ingredientId: String(item.ingredientId),
@@ -177,8 +177,9 @@ export default function TripPrintPage() {
             for (const it of merged) {
               if (isRowExcluded(excluded, d.dayDate, it.ingredientId)) continue;
               const p = it.estimatedCost ?? 0;
+              // Fix-8 (п.6): факт-цена применяется к текущему количеству дня
               const ovDay = overrides[String(it.ingredientId)];
-              const unit = factIsFresh(ovDay, it.totalAmount) ? ovDay!.price : undefined;
+              const unit = ovDay?.price;
               planned += p;
               actual += unit != null ? unit * it.totalAmount : p;
             }
@@ -404,11 +405,10 @@ export default function TripPrintPage() {
                   {group.rows.map(row => {
                     const src = included.find(r => r.ingredientId === row.ingredientId);
                     // факт-количество: свободный ввод чеклиста («300 г») → расчёт (упаковки/нужно).
-                    // Fix-7 (п.17): устаревший факт (потребность менялась) игнорируется.
+                    // Fix-8 (п.6): сохранённый факт переживает изменение потребности.
                     // Fix-7 (п.26): «Взяли» — ВСЕГДА с единицей («0,05 кг», а не «0,05»);
                     // legacy-записи без единицы переводятся в единицы продукта.
-                    const actRaw = actualQty[row.ingredientId];
-                    const act = factIsFresh(actRaw, row.needed) ? actRaw : undefined;
+                    const act = actualQty[row.ingredientId];
                     const tookStr = act
                       ? (act.unit
                         ? `${act.amount.toLocaleString('ru-RU')} ${act.unit}`

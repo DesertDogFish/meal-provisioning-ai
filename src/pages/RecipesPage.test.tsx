@@ -117,3 +117,17 @@ describe('RecipesPage — ?edit= (U37, список 26.10)', () => {
     expect(screen.queryByLabelText('Название')).toBeNull();
   });
 });
+
+// Fix-8 (п.5): «кнопка "В меню" почему-то с переносом строки между В и меню» —
+// кнопка не должна переносить текст (whitespace-nowrap) и сжиматься соседями (shrink-0).
+describe('RecipesPage — кнопка «В меню» на карточке (Fix-8 п.5)', () => {
+  it('«В меню» — без переноса строки (whitespace-nowrap + shrink-0)', async () => {
+    renderPage();
+    await screen.findByText('Уха из рыбных консервов');
+    const btn = screen.getByRole('button', { name: 'В меню' });
+    expect(btn.className).toContain('whitespace-nowrap');
+    expect(btn.className).toContain('shrink-0');
+    // текст — единая строка без разрывов
+    expect(btn.textContent?.trim()).toBe('В меню');
+  });
+});

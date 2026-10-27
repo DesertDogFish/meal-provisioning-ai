@@ -24,8 +24,6 @@ import {
   loadBought,
   loadActualQty,
   setActualQty,
-  factIsFresh,
-  neededStamp,
   type ChecklistActual,
   onTripStageChange,
 } from '../utils/tripStaging';
@@ -152,7 +150,11 @@ export default function PriceOverridesTab({ tripId }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tripId]);
 
-  /** Сохранение фактической цены за единицу (сумма чека → цена). */
+  /** Сохранение фактической цены за единицу (сумма чека → цена).
+   * Fix-8 (п.6): факт БОЛЬШЕ НЕ сбрасывается при изменении потребности
+   * (люди/состав) — цена за единицу не зависит от количества, а сумма
+   * пересчитывается от текущего «нужно» во всех потребителях. neededAt
+   * не пишем (поле оставлено в типе только для legacy-записей). */
   const commitActualPrice = async (item: ShoppingItem, v: number | null, totalOverride?: number | null) => {
     if (v == null || Number.isNaN(v)) {
       saveActualPrice(tripId, item.ingredientId, null);
@@ -160,8 +162,6 @@ export default function PriceOverridesTab({ tripId }: Props) {
       saveActualPrice(tripId, item.ingredientId, {
         price: v,
         total: totalOverride != null ? totalOverride : v * item.totalAmount,
-        // Fix-7 (п.17): штамп потребности — правка состава/количества сбросит факт
-        neededAt: neededStamp(item.totalAmount),
       });
     }
     // Синхронизируем серверное хранилище оверрайдов (best effort: mock/офлайн не ломают UI)
@@ -185,9 +185,9 @@ export default function PriceOverridesTab({ tripId }: Props) {
   };
 
   /** Fix-6 (п.11): «Взяли» — ОДНО хранилище с чеклистом (ввёл там — видно здесь).
-   * Fix-7 (п.17): факт штампуется потребностью позиции. */
-  const commitTook = (ingredientId: string, value: ActualAmount | null, needed?: number) => {
-    setActualQty(tripId, ingredientId, value ? { ...value, neededAt: neededStamp(needed) } : null);
+   * Fix-8 (п.6): значение переживает изменение потребности — это факт покупки. */
+  const commitTook = (ingredientId: string, value: ActualAmount | null, _needed?: number) => {
+    setActualQty(tripId, ingredientId, value);
     setActualMap(loadActualQty(tripId));
   };
 
@@ -299,9 +299,9 @@ export default function PriceOverridesTab({ tripId }: Props) {
       const plannedUnitPrice = plannedCost != null && it.totalAmount > 0
         ? plannedCost / it.totalAmount
         : undefined;
-      // Fix-7 (п.17): устаревший факт (потребность менялась) игнорируется
-      const ovRaw = stage[String(it.ingredientId)];
-      const ov = factIsFresh(ovRaw, it.totalAmount) ? ovRaw : undefined;
+      // Fix-8 (п.6): факт чека живёт при любом «нужно» — цена за единицу
+      // применяется к текущему количеству (сумма пересчитывается автоматически)
+      const ov = stage[String(it.ingredientId)];
       const actualUnitPrice = ov?.price ?? plannedUnitPrice;
       return {
         ingredientId: String(it.ingredientId),
@@ -328,8 +328,9 @@ export default function PriceOverridesTab({ tripId }: Props) {
       let actual = 0;
       for (const it of d.items) {
         const planned = it.estimatedCost ?? 0;
+        // Fix-8 (п.6): факт-цена применяется к текущему количеству дня
         const ovDraft = stage[String(it.ingredientId)];
-        const ov = factIsFresh(ovDraft, it.totalAmount) ? ovDraft!.price : undefined;
+        const ov = ovDraft?.price;
         actual += ov != null ? ov * it.totalAmount : planned;
       }
       return { dayDate: d.dayDate, plannedCost: d.dayCost, actualCost: actual };
@@ -675,15 +676,16 @@ function GroupRows(props: GroupRowsProps) {
         </td>
       </tr>
       {items.map(item => {
-        // Fix-7 (п.17): устаревший факт цены игнорируется (потребность менялась)
+        // Fix-8 (п.6): введённый факт цены НЕ сбрасывается при изменении
+        // потребности (люди/состав) — он продолжает действовать для нового количества
         const rowDraft = draftOverrides[String(item.ingredientId)];
-        const freshDraftPrice = factIsFresh(rowDraft, item.totalAmount) ? rowDraft!.price : undefined;
+        const freshDraftPrice = rowDraft?.price;
         const actualUnit = freshDraftPrice ?? item.actualUnitPrice ?? null;
         const excluded = shoppingExcluded.has(item.ingredientId);
-        // Fix-7 (п.22): «Взяли» предзаполняется ожидаемым количеством (как в чеклисте)
+        // Fix-7 (п.22): «Взяли» предзаполняется ожидаемым количеством (как в чеклисте);
+        // Fix-8 (п.6): сохранённый ввод переживает смену потребности
         const storedTook = actualMap[String(item.ingredientId)] ?? null;
-        const tookValue = (factIsFresh(storedTook, item.totalAmount) ? storedTook : null)
-          ?? neededAsActual(item.totalAmount, item.unit);
+        const tookValue = storedTook ?? neededAsActual(item.totalAmount, item.unit);
         const actualTotal = roundMoney(totalFromUnit(actualUnit, item.totalAmount));
         const actualCostView = actualTotal ?? item.actualCost;
         const delta = calculateDelta(item.plannedCost, actualCostView);

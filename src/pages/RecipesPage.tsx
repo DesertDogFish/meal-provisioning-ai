@@ -383,8 +383,10 @@ export default function RecipesPage() {
                         </button>
                       </>
                     )}
+                    {/* Fix-8 (п.5): «В меню» без переноса строки — nowrap + shrink-0,
+                        кнопка не сжимается соседями и не рвёт надпись между «В» и «меню» */}
                     <button
-                      className="px-4 py-2 rounded-full text-xs font-bold"
+                      className="px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap shrink-0"
                       style={{ background: 'var(--grad-brand)', color: 'var(--on-fire)' }}
                     >
                       В меню

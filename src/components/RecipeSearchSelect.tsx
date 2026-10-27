@@ -170,7 +170,7 @@ export default function RecipeSearchSelect({
         </span>
       </div>
 
-      {open && (
+      {open ? (
         <ul
           ref={listRef}
           role="listbox"
@@ -182,7 +182,7 @@ export default function RecipeSearchSelect({
              «Добавить приём пищи» не прыгает при изменении числа результатов. */
           className={
             inlineList
-              ? 'rss-list mt-1 h-56 overflow-y-auto shadow-xl py-1'
+              ? 'rss-list mt-1 h-44 sm:h-56 overflow-y-auto shadow-xl py-1'
               : 'rss-list absolute left-0 right-0 top-full mt-1 z-30 max-h-56 overflow-y-auto shadow-xl py-1'
           }
           style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
@@ -210,7 +210,20 @@ export default function RecipeSearchSelect({
             </li>
           ))}
         </ul>
-      )}
+      ) : inlineList ? (
+        /* Fix-8 (п.4): в модалке «Добавить приём пищи» место под список
+           зарезервировано ВСЕГДА (та же фиксированная высота, что у открытого
+           списка) — клик по полю поиска больше не раздвигает модалку и экран
+           не «едет». Закрытое состояние показывает выбранное блюдо или
+           приглашение начать ввод. */
+        <div
+          aria-hidden
+          className="rss-list-reserved mt-1 h-44 sm:h-56 overflow-hidden flex items-center justify-center px-3 text-sm text-center"
+          style={{ background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--muted)' }}
+        >
+          {selected ? `Выбрано: ${selected.label}` : placeholder}
+        </div>
+      ) : null}
     </div>
   );
 }

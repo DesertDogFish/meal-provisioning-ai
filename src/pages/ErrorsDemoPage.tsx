@@ -171,10 +171,12 @@ export default function ErrorsDemoPage() {
               )}
             </div>
 
+            {/* Fix-8 (п.1): у кнопки потерялись фон/обводка — возвращаем токенами */}
             <button
               onClick={handleValidationTest}
               className="px-4 py-2 rounded-full transition-colors"
-                          >
+              style={{ background: 'var(--grad-brand)', color: 'var(--on-fire)', border: '1px solid transparent' }}
+            >
               Проверить валидацию
             </button>
           </div>

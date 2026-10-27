@@ -93,7 +93,12 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   ];
 
   return (
-    <div className="min-h-screen flex" style={{ background: 'var(--bg-0)' }}>
+    <div className="min-h-screen flex justify-center" style={{ background: 'var(--bg-0)' }}>
+      {/* Fix-8 (п.3): «оторвать от центра» — ВСЁ приложение (сайдбар + контент),
+          а не только контент: общая центрированная оболочка .app-frame с
+          ограниченной шириной; на широких экранах слева видна рамка оболочки
+          (симметрично правому краю). На мобильных сайдбар по-прежнему off-canvas. */}
+      <div className="app-frame min-h-screen w-full flex">
       {/* Sidebar. Список багов 25.10 (U18): на десктопе — sticky h-screen, навигация
           скроллится внутри, футер («Выйти», профиль, тогл темы) ПРИКОЛАН к низу
           вьюпорта и виден всегда — раньше absolute bottom-0 уезжал за экран вместе
@@ -220,6 +225,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         {/* Fix-7 (п.9): плавающая кнопка «наверх» (появляется, когда шапка скрыта) */}
         <ScrollTopButton />
       </div>
+      </div>{/* /.app-frame — Fix-8 (п.3) */}
     </div>
   );
 }

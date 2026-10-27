@@ -17,7 +17,7 @@ import { api, getRecipes, getTripRecipes } from '../api/client';
 import { useToast } from '../components/ToastProvider';
 import { Button } from '../components/Button';
 // Патч «UX-список 26.10»:
-import { loadActualPrices, loadExcluded, setExcluded as persistExcluded, loadBought, setBought as persistBought, loadActualQty, setActualQty, onTripStageChange, factIsFresh, neededStamp, type ChecklistActual, type ActualPriceDraft } from '../utils/tripStaging'; // U32 + Fix-2(п.6) + Fix-5(п.21) + Fix-7(п.17)
+import { loadActualPrices, loadExcluded, setExcluded as persistExcluded, loadBought, setBought as persistBought, loadActualQty, setActualQty, onTripStageChange, type ChecklistActual, type ActualPriceDraft } from '../utils/tripStaging'; // U32 + Fix-2(п.6) + Fix-5(п.21) + Fix-8(п.6)
 import { getTripEdits, type TripIngredientEdit } from '../api/tripEdits'; // U30
 import { getManualItems, deleteManualItem, type TripManualItem } from '../api/tripManualItems'; // U40
 import { mergeManualIntoShopping, manualForDay, manualForTrip } from '../utils/manualItems'; // U40
@@ -364,10 +364,10 @@ export default function TripDetailPage() {
   const shoppingList = baseShoppingList.map((item, idx) => {
     void idx;
     const cost = item.estimatedCost ?? 0;
-    // Fix-7 (п.17): факт чека действителен, только если потребность позиции
-    // не менялась (состав/количество правили → цену надо переввести)
+    // Fix-8 (п.6): факт чека не сбрасывается при изменении потребности —
+    // цена за единицу применяется к текущему количеству (сумма пересчитывается)
     const draft = draftOverrides[String(item.ingredientId)];
-    const actualUnit = factIsFresh(draft, item.totalAmount) ? draft!.price : undefined;
+    const actualUnit = draft?.price;
     return {
       ...item,
       excluded: false, // перекрывается ниже visibleShopping (shoppingExcluded)
@@ -449,9 +449,9 @@ export default function TripDetailPage() {
   const dayShopping = baseDayShopping.map(day => {
     const items = day.items.map(item => {
       const cost = item.estimatedCost ?? 0;
-      // Fix-7 (п.17): устаревший факт (потребность менялась) не применяется
+      // Fix-8 (п.6): факт-цена применяется к текущему количеству дня
       const draftDay = draftOverrides[String(item.ingredientId)];
-      const actualUnit = factIsFresh(draftDay, item.totalAmount) ? draftDay!.price : undefined;
+      const actualUnit = draftDay?.price;
       return {
         ...item,
         // Fix-2 (п.5): исключение дня — составной ключ, глобальное — по id
@@ -495,7 +495,8 @@ export default function TripDetailPage() {
   const personSummary = personSummaryBase.map(p => {
     const match = baseShoppingList.find(b => b.ingredientName === p.ingredientName);
     const matchDraft = match ? draftOverrides[String(match.ingredientId)] : undefined;
-    const actualUnit = match && factIsFresh(matchDraft, match.totalAmount) ? matchDraft!.price : undefined;
+    // Fix-8 (п.6): факт-цена живёт при любой потребности
+    const actualUnit = match ? matchDraft?.price : undefined;
     return {
       ...p,
       costPerDefaultPerson: actualUnit != null
@@ -570,8 +571,9 @@ export default function TripDetailPage() {
   // Fix-4 (п.11): «введено 57… а должно быть?» — знаменатель = число позиций
   // закупки, по которым нужно ввести факт; числитель — сколько из них уже с фактом.
   const factsTotal = includedShoppingFinal.length;
-  // Fix-7 (п.17): в счёт идут только СВЕЖИЕ факты (нужно-количество не менялось)
-  const factCount = includedShoppingFinal.filter(i => factIsFresh(draftOverrides[String(i.ingredientId)], i.totalAmount)).length;
+  // Fix-8 (п.6): в счёт идут все позиции с введённой факт-ценой (смена
+  // потребности факт больше не аннулирует)
+  const factCount = includedShoppingFinal.filter(i => draftOverrides[String(i.ingredientId)]?.price != null).length;
   const readiness = tripReadiness({
     mealsCount: (trip.days ?? []).reduce((a, d) => a + (d.meals?.length ?? 0), 0),
     checklistTotal: checklistRowIds.length,
@@ -579,10 +581,11 @@ export default function TripDetailPage() {
     factCount,
     checksTotal: factsTotal,
   });
-  // Fix-7 (п.17): факт «Взяли» штампуется текущей потребностью — правка
-  // состава/количества в походе сбрасывает факт позиции (надо переввести).
-  const commitActualQty = (ingredientId: string, value: ActualAmount | null, needed?: number) => {
-    setActualQty(tripKey, ingredientId, value ? { ...value, neededAt: neededStamp(needed) } : null);
+  // Fix-8 (п.6): факт «Взяли» НЕ штампуется потребностью — изменение числа
+  // людей/состава не стирает введённые значения закупки (цена за единицу и
+  // фактическое количество продолжают действовать для нового «нужно»).
+  const commitActualQty = (ingredientId: string, value: ActualAmount | null, _needed?: number) => {
+    setActualQty(tripKey, ingredientId, value);
     setActualQtyState(loadActualQty(tripKey));
   };
   const setAllBought = (on: boolean) => {
@@ -1239,14 +1242,14 @@ export default function TripDetailPage() {
                 // изменилась (добавили ещё) ⇒ галочка слетает автоматически.
                 const boughtKey = `${row.ingredientId}@${Math.round(row.needed * 1000)}`;
                 const bought = checklistBought.has(boughtKey);
-                // Fix-5 (п.21) + Fix-7 (п.17/22): свободный ввод «сколько реально
-                // берём». Сохранённый факт с устаревшей потребностью игнорируется;
+                // Fix-5 (п.21) + Fix-7 (п.22) + Fix-8 (п.6): свободный ввод
+                // «сколько реально берём». Сохранённый факт переживает изменение
+                // потребности (люди/состав) — пользовательский ввод не стирается;
                 // пока факта нет — поле ПРЕДЗАПОЛНЕНО расчётным количеством
                 // (целые упаковки вверх / потребность) — «ожидаемые значения
                 // автоматически», править нужно только отличия.
                 const storedActual = actualQty[row.ingredientId] ?? null;
-                const freshActual = factIsFresh(storedActual, row.needed) ? storedActual : null;
-                const actual = freshActual ?? neededAsActual(row.buyAmount, row.unit);
+                const actual = storedActual ?? neededAsActual(row.buyAmount, row.unit);
                 // Fix-6 (п.9): куплено МЕНЬШЕ нужного — подсветка предупреждением
                 const underfilled = bought && actual != null
                   ? isActualLessThanNeeded(actual, row.needed, row.unit, row.pieceWeightG)

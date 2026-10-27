@@ -3,6 +3,7 @@ import { X } from 'lucide-react';
 import { DateRange } from './DateRange';
 import { validateTrip } from '../utils/validation';
 import Modal from './Modal';
+import { Button } from './Button';
 import type { FieldError } from '../types/errors';
 
 export interface TripFormData {
@@ -162,25 +163,17 @@ export function TripForm({ onSubmit, onCancel, externalErrors = [], submitLabel 
           </div>
         </div>
 
+        {/* Fix-8 (п.1/2): кнопки подвала — компонент Button (дизайн-система):
+            «Создать» снова с фирменным фоном и обводкой (раньше style был пустым —
+            голая прозрачная кнопка), текст центрирован (justify-content у .btn),
+            иконка/спиннер — с единым зазором. */}
         <div className="flex gap-3 mt-6">
-          <button
-            onClick={onCancel}
-            className="flex-1 px-4 py-2.5 rounded-full transition-colors"
-            style={{ border: '1px solid var(--border)', color: 'var(--text)' }}
-          >
+          <Button variant="ghost" size="sm" className="flex-1" onClick={onCancel}>
             Отмена
-          </button>
-          <button
-            onClick={handleSubmit}
-            disabled={submitting}
-            className="flex-1 px-4 py-2.5 rounded-full transition-colors"
-            style={{
-              
-              opacity: submitting ? 0.6 : 1
-            }}
-          >
+          </Button>
+          <Button variant="primary" size="sm" className="flex-1" onClick={handleSubmit} loading={submitting}>
             {submitLabel}
-          </button>
+          </Button>
         </div>
       </div>
     </Modal>

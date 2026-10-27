@@ -196,11 +196,18 @@ export default function AddMealModal({
           onQueryChange={setQuery}
         />
 
-        {/* Превью-карточка выбранного блюда (проблема №7 макета) */}
-        {selected && (
+        {/* Превью-карточка выбранного блюда (проблема №7 макета).
+            Fix-8 (п.4): место под превью зарезервировано ВСЕГДА (фиксированная
+            высота, длинный состав скроллится внутри) — выбор блюда не меняет
+            размер модалки: экран не «едет» ни при клике по поиску, ни при выборе. */}
+        <div
+          className="mt-3 rounded-lg h-32 overflow-y-auto"
+          style={{ background: 'var(--elev)', border: '1px solid var(--border)' }}
+          data-testid="meal-preview-slot"
+        >
+          {selected ? (
           <div
-            className="mt-3 rounded-lg p-3"
-            style={{ background: 'var(--elev)', border: '1px solid var(--border)' }}
+            className="p-3"
             data-testid="meal-preview"
           >
             <div className="flex items-center justify-between gap-2">
@@ -235,7 +242,13 @@ export default function AddMealModal({
               </div>
             )}
           </div>
-        )}
+          ) : (
+            /* Fix-8 (п.4): пустое состояние слота превью — подсказка, высота та же */
+            <div className="p-3 h-full flex items-center justify-center text-xs text-center" style={{ color: 'var(--muted)' }}>
+              Выберите блюдо — покажем калорийность и состав
+            </div>
+          )}
+        </div>
 
         {/* Fix-7 (п.7): выбор людей для приёма УБРАН — контрол оставлен для
             наглядности, но задизейблен и показывает значение ДНЯ (люди дня
