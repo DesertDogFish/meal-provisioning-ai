@@ -347,3 +347,25 @@ describe('по-дневные исключения (Fix-2)', () => {
     expect(isRowExcluded(new Set(['2026-05-01::x']), '2026-05-02', 'x')).toBe(false);
   });
 });
+
+// ---------- Fix-5 (п.7): ручные позиции в «на человека» ----------
+
+describe('calculatePersonSummary с ручными позициями (Fix-5)', () => {
+  it('аптечка к походу входит в стоимость на человека', () => {
+    const manual = [{
+      id: 'mi1', tripId: 'trip-1', dayId: null,
+      ingredientId: 'ing-med', ingredientName: 'Аптечка', unit: 'PCS' as const, amount: 2,
+    }];
+    const priceOf = (id: string) => (id === 'ing-med' ? 300 : undefined);
+    const { summary, tripSummary } = calculatePersonSummary(
+      makeTrip([day1]), recipesMap, PRICES, 4, undefined, manual, priceOf,
+    );
+    const med = summary.find(p => p.ingredientName === 'Аптечка');
+    expect(med).toBeTruthy();
+    // 2 шт × 300 ₽ = 600 ₽; на человека (4) = 150
+    expect(med!.costPerDefaultPerson).toBeCloseTo(150);
+    // общая стоимость увеличилась на 600 (омлет на 4 чел.: 8 яиц×15=120 + 0.4кг×200=80 → 200)
+    expect(tripSummary.totalCost).toBeCloseTo(800);
+    expect(tripSummary.costPerDefaultPerson).toBeCloseTo(200);
+  });
+});

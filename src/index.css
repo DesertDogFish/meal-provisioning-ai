@@ -768,11 +768,58 @@ select {
   }
   .print-doc .print-muted { color: #5b6b76; }
   .print-doc table { width: 100%; border-collapse: collapse; }
+  /* Fix-5 (п.13): таблица С РАМКАМИ — нагромождение строк читается тяжело */
   .print-doc th, .print-doc td {
-    border-bottom: 1px solid #d8dee3;
+    border: 1px solid #c9d2d8;
     padding: 6px 8px;
     text-align: left;
     font-size: 13px;
   }
-  .print-doc th { color: #5b6b76; font-weight: 700; font-size: 11px; text-transform: uppercase; }
+  .print-doc th { background: #f2f5f7; color: #435663; font-weight: 700; font-size: 11px; text-transform: uppercase; }
+  .print-doc tbody tr:nth-child(even) { background: #fafbfc; }
+}
+
+
+/* ============================================================
+   Fix-5 (список 26.10, итерация 5)
+   ============================================================ */
+
+/* п.19: единые аккуратные скроллбары — тонкие, скруглённые, с отступом от краёв
+   контейнера (больше нет «палки, торчащей из-за скругления») */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) transparent;
+}
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--line-strong);
+  border-radius: 8px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--line-strong) 80%, var(--text-3));
+  background-clip: content-box;
+}
+
+/* п.15: выпадающие списки — тот же «квадратный» радиус, что у полей ввода */
+ul[role="listbox"],
+.rss-list,
+.cselect-list {
+  border-radius: var(--r-input) !important;
+}
+
+/* п.2/п.5: липкие заголовки длинных таблиц + ограничение высоты — не «мотать
+   три года вниз»: тело таблицы скроллится внутри экрана, заголовок остаётся на месте */
+.sticky-thead thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--elev);
 }

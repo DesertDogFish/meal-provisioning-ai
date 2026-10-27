@@ -1,6 +1,9 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { calculateMenuByDays, calculateShoppingList, calculateDayShopping, calculatePersonSummary, formatAmount, realTripPeople, isRowExcluded, dayScopedExclusions } from '../utils/calculations';
+import { calculateMenuByDays, calculateShoppingList, calculateDayShopping, calculatePersonSummary, formatAmount, realTripPeople, isRowExcluded, dayScopedExclusions, findPriceForDate } from '../utils/calculations';
+import InfoTip from '../components/InfoTip';     // Fix-5 (п.3–5): формулы в тултипах
+import TabHeader from '../components/TabHeader'; // Fix-5 (п.2): единые шапки вкладок
+import AmountInput from '../components/AmountInput'; // Fix-5 (п.21): факт-количество чеклиста
 import { formatRub } from '../utils/formatRub'; // Фаза 13: итоги — целые рубли
 import { ArrowLeft, Plus, Trash2, Users, ShoppingCart, BookOpen, TrendingUp, Calendar, ChevronDown, ChevronRight, ListChecks, ClipboardCheck, PackagePlus, ArrowUpDown, X, FileDown } from 'lucide-react';
 import { MealType } from '../types';
@@ -13,7 +16,7 @@ import { api, getRecipes, getTripRecipes } from '../api/client';
 import { useToast } from '../components/ToastProvider';
 import { Button } from '../components/Button';
 // Патч «UX-список 26.10»:
-import { loadActualPrices, loadExcluded, setExcluded as persistExcluded, loadBought, setBought as persistBought, loadPacks, setPackCount, onTripStageChange } from '../utils/tripStaging'; // U32 + Fix-2(п.6) + Fix-4(п.8)
+import { loadActualPrices, loadExcluded, setExcluded as persistExcluded, loadBought, setBought as persistBought, loadActualQty, setActualQty, onTripStageChange } from '../utils/tripStaging'; // U32 + Fix-2(п.6) + Fix-5(п.21)
 import { getTripEdits, type TripIngredientEdit } from '../api/tripEdits'; // U30
 import { getManualItems, deleteManualItem, type TripManualItem } from '../api/tripManualItems'; // U40
 import { mergeManualIntoShopping, manualForDay, manualForTrip } from '../utils/manualItems'; // U40
@@ -148,7 +151,7 @@ export default function TripDetailPage() {
       setDraftOverrides(loadActualPrices(tripKey));
       setShoppingExcluded(loadExcluded(tripKey));
       setChecklistBought(loadBought(tripKey));
-      setPackOverrides(loadPacks(tripKey));
+      setActualQtyState(loadActualQty(tripKey));
     };
     sync();
     return onTripStageChange(tripKey, sync);
@@ -182,8 +185,9 @@ export default function TripDetailPage() {
   // Fix-2 (п.6): отметки «взято» чеклиста ПЕРСИСТЕНТНЫ (общий стейдж похода) —
   // чеклист переживает перезагрузку и используется как рабочий лист в магазине.
   const [checklistBought, setChecklistBought] = useState<Set<string>>(new Set());
-  // Fix-4 (п.8): переопределённое число упаковок чеклиста («в магазине пачка другая»)
-  const [packOverrides, setPackOverrides] = useState<Record<string, number>>({});
+  // Fix-5 (п.21): сколько РЕАЛЬНО берём по позиции чеклиста (на развес/россыпь/
+  // другая упаковка) — свободный ввод вместо «± упаковки»
+  const [actualQty, setActualQtyState] = useState<Record<string, number>>({});
   const [manualCtx, setManualCtx] = useState<{ dayId: string | null; dayLabel?: string } | null>(null);
 
   useEffect(() => {
@@ -334,6 +338,12 @@ export default function TripDetailPage() {
       return { ...m, ingredients: overlayEditsOnIngredients(m.ingredients as any, mEdits as any, m.servings) as typeof m.ingredients };
     }),
   }));
+  // Fix-5 (п.11): плановая цена ручной позиции — из trip-срезов цен (снепшот
+  // продукта имеет замороженную цену; если цены нет — строка честно «без цены»).
+  const manualPriceOf = (ingId: string): number | undefined => {
+    const rows = prices.filter(pr => String(pr.ingredientId) === String(ingId));
+    return rows.length ? findPriceForDate(rows, trip.endDate)?.pricePerUnit : undefined;
+  };
   // U40: ручные позиции (к дню и к походу) вливаются в закупку на весь поход.
   // Fix-2 (п.5): по-дневные исключения УМЕНЬШАЮТ количество в агрегате закупки;
   // глобально исключённые строки остаются в списке (рисуются зачёркнутыми) и
@@ -341,6 +351,7 @@ export default function TripDetailPage() {
   const baseShoppingList = mergeManualIntoShopping(
     calculateShoppingList(trip as any, recipesMap, prices, dayScopedExclusions(shoppingExcluded)),
     manualItems,
+    manualPriceOf,
   );
 
   const shoppingList = baseShoppingList.map((item, idx) => {
@@ -435,7 +446,10 @@ export default function TripDetailPage() {
   // U33: «на человека» — по реальному количеству людей (среднее по дням с учётом
   // peopleOverride), а не по defaultPeople
   const realPeople = realTripPeople(trip as any);
-  const { summary: personSummaryBase, tripSummary: tripSummaryBase } = calculatePersonSummary(trip as any, recipesMap, prices, realPeople, shoppingExcluded);
+  // Fix-5 (п.7): ручные позиции входят в «на человека» — за аптечку платят все
+  const { summary: personSummaryBase, tripSummary: tripSummaryBase } = calculatePersonSummary(
+    trip as any, recipesMap, prices, realPeople, shoppingExcluded, manualItems, manualPriceOf,
+  );
   // Release-1.0 (UI-consistency): KPI шапки и «Итого» в закупке — ОДИН источник.
   // Раньше при отсутствии чеков/исключений KPI брал tripSummaryBase.totalCost, а с ними —
   // shoppingTotalFinal; суммы считались разными путями и спорили друг с другом
@@ -520,7 +534,10 @@ export default function TripDetailPage() {
 
   // Fix-3 (п.2): сквозной статус «меню → закупка → чеки» + отметки «взято» всего
   // чеклиста одной кнопкой (чтобы блокировка чека не была тупиковой).
-  const checklistRowIds = checklist.flatMap(g => g.rows.map(r => r.ingredientId));
+  // Fix-5 (п.9): отметка «взято» привязана к позиции И её количеству:
+  // добавил ещё 100 г к купленному продукту — галочка слетает, позицию надо
+  // переподтвердить (ключ '<id>@<нужно, граммы/шт с точностью 3 знака>').
+  const checklistRowIds = checklist.flatMap(g => g.rows.map(r => `${r.ingredientId}@${Math.round(r.needed * 1000)}`));
   const boughtInList = checklistRowIds.filter(k => checklistBought.has(k)).length;
   // Fix-4 (п.11): «введено 57… а должно быть?» — знаменатель = число позиций
   // закупки, по которым нужно ввести факт; числитель — сколько из них уже с фактом.
@@ -533,8 +550,10 @@ export default function TripDetailPage() {
     factCount,
     checksTotal: factsTotal,
   });
-  const changePacks = (ingredientId: string, current: number, delta: number) =>
-    setPackCount(tripKey, ingredientId, Math.max(1, current + delta));
+  const commitActualQty = (ingredientId: string, qty: number | null) => {
+    setActualQty(tripKey, ingredientId, qty);
+    setActualQtyState(loadActualQty(tripKey));
+  };
   const setAllBought = (on: boolean) => {
     const next = on ? new Set(checklistRowIds) : new Set<string>();
     persistBought(tripKey, next);
@@ -563,17 +582,8 @@ export default function TripDetailPage() {
             {new Date(trip.startDate).toLocaleDateString('ru-RU')} — {new Date(trip.endDate).toLocaleDateString('ru-RU')} • {trip.defaultPeople} чел.
           </p>
         </div>
-        {/* Fix-4 (п.6): экспорт — красивая печатная версия (сохраняется в PDF).
-            Продукты к походу переехали в карточку «На весь поход» внизу меню (п.3). */}
-        <Button
-          variant="ghost"
-          onClick={() => window.open(`/trips/${trip.id}/print`, '_blank')}
-          aria-label="Экспорт PDF"
-          title="Печатная версия похода: меню по дням, закупка, итоги — сохранить в PDF"
-          icon={<FileDown size={18} />}
-        >
-          PDF
-        </Button>
+        {/* Fix-5 (п.10): отчёт переехал в полосу «Готовность похода» — кнопка
+            «Сформировать отчёт» живёт там же, где статус; дубль из шапки убран */}
       </div>
 
       {/* Summary cards */}
@@ -587,12 +597,18 @@ export default function TripDetailPage() {
           <p className="stat-value text-xl font-bold">{trip.days?.reduce((a, d) => a + (d.meals?.length || 0), 0) || 0}</p>
         </div>
         <div className="stat">
-          <p className="text-xs mb-1" style={{ color: 'var(--muted)' }}>Стоимость</p>
+          <p className="text-xs mb-1" style={{ color: 'var(--muted)' }}>
+            Стоимость
+            <InfoTip text="Сумма всей закупки: план по ценам справочника, а после ввода чека — фактические суммы. Без исключённых позиций." />
+          </p>
           {/* Release-1.0: formatRub — целые рубли, неразрывный пробел; без «123,678 ₽» */}
           <p className="stat-value text-xl font-bold">{formatRub(tripSummary.totalCost)}</p>
         </div>
         <div className="stat">
-          <p className="text-xs mb-1" style={{ color: 'var(--muted)' }}>На человека</p>
+          <p className="text-xs mb-1" style={{ color: 'var(--muted)' }}>
+            На человека
+            <InfoTip text={`Общая стоимость ÷ людей в походе (${Math.round(realPeople * 10) / 10} чел. — среднее по дням с учётом переопределений). Столько платит каждый при равном делении.`} />
+          </p>
           <p className="stat-value text-xl font-bold">{formatRub(tripSummary.costPerDefaultPerson)}</p>
         </div>
       </div>
@@ -620,6 +636,20 @@ export default function TripDetailPage() {
               : 'Отметьте покупки в чеклисте — без этого чек не ввести.'}
           </span>
         )}
+        {/* Fix-5 (п.10): отчёт — кульминация полосы готовности: всё готово →
+            яркая «Сформировать отчёт», иначе — приглушённая «черновик» */}
+        <span className="ml-auto">
+          <Button
+            variant={readiness.ready ? 'primary' : 'ghost'}
+            size="sm"
+            onClick={() => window.open(`/trips/${trip.id}/print`, '_blank')}
+            aria-label="Сформировать отчёт"
+            title="Печатная версия: меню по дням, закупка, итоги — сохраняется в PDF"
+            icon={<FileDown size={15} />}
+          >
+            {readiness.ready ? 'Сформировать отчёт' : 'Отчёт (черновик)'}
+          </Button>
+        </span>
       </div>
 
       {/* Tabs — сегментированный контрол (.seg) из брендбука */}
@@ -859,17 +889,23 @@ export default function TripDetailPage() {
       )}
 
       {activeTab === 'shopping' && (
-        /* Fix-3 (п.4): компактнее — таблица не растягивает «Стоимость» на весь экран */
-        <div className="rounded-xl overflow-hidden max-w-4xl" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
-          <div className="p-4" style={{ borderBottom: '1px solid var(--border)' }}>
-            <h3 className="font-bold" style={{ color: 'var(--text)' }}>Список закупок на весь поход</h3>
-            {/* Фаза 13 (п.5): итог учитывает фактические цены (draftOverrides) и исключения (shoppingExcluded) */}
-            <p className="text-sm" style={{ color: 'var(--muted)' }}>Итого: {formatRub(shoppingTotalFinal)}{shoppingExcluded.size > 0 ? ` (без ${shoppingExcluded.size} искл.)` : ''}</p>
-            {tripSummary.hasMissingPrices && (
-              <p className="text-sm mt-1" style={{ color: 'var(--fire)' }}>⚠️ Нет цен для: {tripSummary.missingIngredients.join(', ')}</p>
-            )}
-          </div>
-          <div className="overflow-x-auto">
+        <div className="space-y-3 max-w-4xl">
+          {/* Fix-5 (п.2): единая шапка вкладки — тот же TabHeader, что на остальных */}
+          <TabHeader
+            title="Закупка на поход"
+            subtitle={
+              <>
+                Итого: {formatRub(shoppingTotalFinal)}{shoppingExcluded.size > 0 ? ` (без ${shoppingExcluded.size} искл.)` : ''}
+                {' · '}позиций: {visibleShopping.length}
+                {tripSummary.hasMissingPrices && (
+                  <span style={{ color: 'var(--fire)' }}> · ⚠️ нет цен: {tripSummary.missingIngredients.join(', ')}</span>
+                )}
+              </>
+            }
+          />
+          <div className="rounded-xl overflow-hidden" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+          {/* Fix-5: длинные таблицы скроллятся внутри экрана, заголовок липкий */}
+          <div className="overflow-auto sticky-thead" style={{ maxHeight: '62vh' }}>
             <table className="w-full text-sm">
               <thead style={{ background: 'var(--elev)' }}>
                 <tr>
@@ -929,11 +965,17 @@ export default function TripDetailPage() {
               </tbody>
             </table>
           </div>
+          </div>
         </div>
       )}
 
       {activeTab === 'dayShopping' && (
         <div className="space-y-3 max-w-3xl">
+          {/* Fix-5 (п.2): на «по дням» теперь тоже есть заголовок — вкладки выглядят одинаково */}
+          <TabHeader
+            title="Закупка по дням"
+            subtitle={`Итого за поход: ${formatRub(dayShopping.reduce((a, d) => a + d.dayCost, 0))} · ${dayShopping.length} дн.`}
+          />
           {dayShopping.map(day => (
             <div key={day.dayDate} className="rounded-xl overflow-hidden" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
               <div className="p-4 flex items-center justify-between" style={{ borderBottom: '1px solid var(--border)' }}>
@@ -971,48 +1013,76 @@ export default function TripDetailPage() {
       )}
 
       {activeTab === 'person' && (
-        <div className="space-y-4">
-          {/* Summary */}
+        <div className="space-y-4 max-w-4xl">
+          {/* Fix-5 (п.2/3/4/6): единая шапка + человеческие названия вместо
+              «человеко-приёмов» и «на чел./приём», у каждого числа — тултип с формулой */}
+          <TabHeader
+            title="На человека"
+            subtitle="Сколько продуктов и денег приходится на одного участника — за поход и за один приём пищи"
+          />
           <div className="rounded-xl p-5" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
             <h3 className="font-bold mb-3" style={{ color: 'var(--text)' }}>Сводка</h3>
             <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
               <div>
-                <p className="text-xs" style={{ color: 'var(--muted)' }}>Человеко-приёмов</p>
+                <p className="text-xs" style={{ color: 'var(--muted)' }}>
+                  Приёмов пищи всего
+                  <InfoTip text="Сумма по всем дням: приёмы пищи × число людей. Например, ужин на 4 человек = 4 приёма. Делитель для «среднего за один приём»." />
+                </p>
                 <p className="text-lg font-bold" style={{ color: 'var(--text)' }}>{tripSummary.totalPersonMeals}</p>
               </div>
               <div>
-                {/* U33: реальное число людей (среднее по дням с учётом override'ов) */}
-                <p className="text-xs" style={{ color: 'var(--muted)' }}>Людей в походе</p>
+                <p className="text-xs" style={{ color: 'var(--muted)' }}>
+                  Людей в походе
+                  <InfoTip text="Среднее число участников по дням (переопределения «людей на день» учитываются). На него делятся общие суммы." />
+                </p>
                 <p className="text-lg font-bold" style={{ color: 'var(--text)' }}>{Math.round(realPeople * 10) / 10}</p>
               </div>
               <div>
-                <p className="text-xs" style={{ color: 'var(--muted)' }}>На 1 чел. (общее)</p>
+                <p className="text-xs" style={{ color: 'var(--muted)' }}>
+                  На человека за поход
+                  <InfoTip text="Общая стоимость закупки ÷ людей в походе. Столько платит каждый участник при равном делении." />
+                </p>
                 <p className="text-lg font-bold" style={{ color: 'var(--text)' }}>{formatRub(tripSummary.costPerDefaultPerson)}</p>
               </div>
               <div>
-                <p className="text-xs" style={{ color: 'var(--muted)' }}>На 1 чел./приём</p>
+                <p className="text-xs" style={{ color: 'var(--muted)' }}>
+                  На человека за приём
+                  <InfoTip text="Общая стоимость ÷ число приёмов пищи (люди × приёмы). Средняя цена одного приёма на одного человека." />
+                </p>
                 <p className="text-lg font-bold" style={{ color: 'var(--text)' }}>{formatRub(tripSummary.costPerPersonMeal)}</p>
               </div>
               <div>
-                <p className="text-xs" style={{ color: 'var(--muted)' }}>Калории/приём</p>
+                <p className="text-xs" style={{ color: 'var(--muted)' }}>
+                  Калории за приём
+                  <InfoTip text="Средняя калорийность одного приёма пищи на человека — считается из продуктов блюд." />
+                </p>
                 <p className="text-lg font-bold" style={{ color: 'var(--text)' }}>{tripSummary.caloriesPerPersonMeal ? `${Math.round(tripSummary.caloriesPerPersonMeal)} ккал` : '—'}</p>
               </div>
             </div>
           </div>
 
           {/* Per person products */}
-          <div className="rounded-xl overflow-hidden max-w-4xl" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+          <div className="rounded-xl overflow-hidden" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
             <div className="p-4" style={{ borderBottom: '1px solid var(--border)' }}>
               <h3 className="font-bold" style={{ color: 'var(--text)' }}>Продукты на человека</h3>
             </div>
-            <div className="overflow-x-auto">
+            <div className="overflow-auto sticky-thead" style={{ maxHeight: '55vh' }}>
               <table className="w-full text-sm">
                 <thead style={{ background: 'var(--elev)' }}>
                   <tr>
                     <th className="text-left px-4 py-3 font-medium" style={{ color: 'var(--muted)' }}>Продукт</th>
-                    <th className="text-right px-4 py-3 font-medium" style={{ color: 'var(--muted)' }}>На чел. (общее)</th>
-                    <th className="text-right px-4 py-3 font-medium" style={{ color: 'var(--muted)' }}>На чел./приём</th>
-                    <th className="text-right px-4 py-3 font-medium" style={{ color: 'var(--muted)' }}>₽/чел.</th>
+                    <th className="text-right px-4 py-3 font-medium" style={{ color: 'var(--muted)' }}>
+                      На человека
+                      <InfoTip text="Количество продукта на одного участника за ВЕСЬ поход: общее количество ÷ людей в походе." />
+                    </th>
+                    <th className="text-right px-4 py-3 font-medium" style={{ color: 'var(--muted)' }}>
+                      На человека за приём
+                      <InfoTip text="Среднее количество на одного человека за один приём пищи: общее количество ÷ приёмов пищи всего." />
+                    </th>
+                    <th className="text-right px-4 py-3 font-medium" style={{ color: 'var(--muted)' }}>
+                      Стоимость на человека
+                      <InfoTip text="Стоимость этого продукта на одного участника за весь поход (с фактическими ценами, если чек введён)." />
+                    </th>
                   </tr>
                 </thead>
                 <tbody style={{ borderTop: '1px solid var(--border)' }}>
@@ -1042,26 +1112,29 @@ export default function TripDetailPage() {
           Отметки «взято» живут в рамках сессии — это рабочий лист магазина, не данные похода. */}
       {activeTab === 'checklist' && (
         <div className="space-y-3 max-w-3xl">
-          <div className="rounded-xl p-4 flex flex-wrap items-center justify-between gap-3" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
-            <div>
-              <h3 className="font-bold" style={{ color: 'var(--text)' }}>Чеклист закупки</h3>
-              <p className="text-sm mt-1" style={{ color: 'var(--muted)' }}>
-                Целые упаковки к покупке (округление вверх — излишек остаётся на следующий поход).
-                Взято {boughtInList} из {checklistRowIds.length}.
-              </p>
-            </div>
-            {/* Fix-3 (п.2): одной кнопкой — всё куплено / сброс (чтобы чек не блокировался намертво) */}
-            <div className="flex gap-2 shrink-0">
-              <Button variant="soft" size="sm" onClick={() => setAllBought(true)}
-                      aria-label="Отметить всё купленным" disabled={checklistRowIds.length === 0 || boughtInList === checklistRowIds.length}>
-                Отметить всё
-              </Button>
-              <Button variant="ghost" size="sm" onClick={() => setAllBought(false)}
-                      aria-label="Снять все отметки" disabled={boughtInList === 0}>
-                Снять всё
-              </Button>
-            </div>
-          </div>
+          <TabHeader
+            title="Чеклист закупки"
+            subtitle={
+              <>
+                Что брать в магазине: целые упаковки (округление вверх — излишек на следующий поход).
+                Взято {boughtInList} из {checklistRowIds.length}
+                <InfoTip text="Отметка «взято» привязана к количеству: измените потребность (добавите продукт) — отметка слетит, позицию нужно переподтвердить. В поле «факт» введите, сколько реально берёте — на развес, россыпью или упаковками другого объёма." />
+              </>
+            }
+            right={
+              /* Fix-3 (п.2): одной кнопкой — всё куплено / сброс (чтобы чек не блокировался намертво) */
+              <div className="flex gap-2 shrink-0">
+                <Button variant="soft" size="sm" onClick={() => setAllBought(true)}
+                        aria-label="Отметить всё купленным" disabled={checklistRowIds.length === 0 || boughtInList === checklistRowIds.length}>
+                  Отметить всё
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => setAllBought(false)}
+                        aria-label="Снять все отметки" disabled={boughtInList === 0}>
+                  Снять всё
+                </Button>
+              </div>
+            }
+          />
           {checklist.length === 0 && (
             <div className="rounded-xl p-8 text-center text-sm" style={{ background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--muted)' }}>
               В закупке нет позиций — добавьте приёмы пищи или продукты к дню/походу.
@@ -1073,69 +1146,56 @@ export default function TripDetailPage() {
                 <h4 className="text-sm font-bold" style={{ color: 'var(--text)' }}>{group.category}</h4>
               </div>
               {group.rows.map(row => {
-                const bought = checklistBought.has(row.ingredientId);
-                // Fix-4 (п.8): число упаковок можно поправить под реальный магазин
-                // («пачка аджики 30 г, а не 100») — [− N +], значение персистентно.
-                const packs = row.packsToBuy != null ? (packOverrides[row.ingredientId] ?? row.packsToBuy) : null;
-                const buyAmount = packs != null && row.packSize ? packs * row.packSize : row.needed;
-                const leftover = packs != null && row.packSize ? Math.max(0, buyAmount - row.needed) : 0;
+                // Fix-5 (п.9): ключ отметки включает количество — потребность
+                // изменилась (добавили ещё) ⇒ галочка слетает автоматически.
+                const boughtKey = `${row.ingredientId}@${Math.round(row.needed * 1000)}`;
+                const bought = checklistBought.has(boughtKey);
+                // Fix-5 (п.21): вместо «± упаковки» — свободный ввод «сколько реально
+                // берём» (на развес, россыпью, пачка другого объёма). По умолчанию —
+                // расчётное значение (целые упаковки вверх).
+                const suggested = row.packsToBuy != null && row.packSize
+                  ? row.packsToBuy * row.packSize
+                  : row.needed;
+                const actual = actualQty[row.ingredientId] ?? suggested;
+                const packHintStr = row.packsToBuy != null && row.packSize
+                  ? `нужно ${formatAmount(row.needed, row.unit)} ≈ ${row.packsToBuy} × ${formatAmount(row.packSize, row.unit)}`
+                  : `нужно ${formatAmount(row.needed, row.unit)} (без фасовки)`;
                 return (
                   <div
                     key={row.ingredientId}
                     className="checklist-row flex items-center gap-3 px-4 py-3 text-sm"
-                    style={{ borderTop: '1px solid var(--border)', opacity: bought ? 0.55 : 1 }}
-                    onClick={() => toggleBought(row.ingredientId)}
+                    style={{ borderTop: '1px solid var(--border)', opacity: bought ? 0.6 : 1 }}
+                    onClick={() => toggleBought(boughtKey)}
                     role="button"
                     tabIndex={0}
-                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleBought(row.ingredientId); } }}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleBought(boughtKey); } }}
                     aria-label={`${bought ? 'Взято' : 'Отметить взятым'}: ${row.name}`}
                   >
                     <input
                       type="checkbox"
                       checked={bought}
-                      onChange={() => toggleBought(row.ingredientId)}
+                      onChange={() => toggleBought(boughtKey)}
                       onClick={(e) => e.stopPropagation()}
                       aria-label={`Взято: ${row.name}`}
                       className="cursor-pointer shrink-0"
                       style={{ accentColor: 'var(--w2)' }}
                     />
-                    <span className="flex-1" style={{ color: 'var(--text)', textDecoration: bought ? 'line-through' : 'none' }}>
-                      {row.name}
-                    </span>
-                    {/* Fix-4 (п.8): ЕДИНЫЙ акцент — главное число (упаковки или
-                        количество) жирным текстовым цветом, пояснения приглушены;
-                        зелёным больше ничего не «выделено» */}
-                    {packs != null ? (
-                      <span className="flex items-center gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
-                        <button
-                          type="button"
-                          aria-label={`Меньше упаковок: ${row.name}`}
-                          onClick={() => changePacks(row.ingredientId, packs, -1)}
-                          className="w-8 h-8 rounded-[8px] text-base font-bold flex items-center justify-center"
-                          style={{ border: '1px solid var(--border)', color: 'var(--text-2)', background: 'var(--elev)' }}
-                        >
-                          −
-                        </button>
-                        <b className="text-center" style={{ color: 'var(--text)', minWidth: 88, fontVariantNumeric: 'tabular-nums' }}>
-                          {packs} × {formatAmount(row.packSize ?? 0, row.unit)}
-                        </b>
-                        <button
-                          type="button"
-                          aria-label={`Больше упаковок: ${row.name}`}
-                          onClick={() => changePacks(row.ingredientId, packs, 1)}
-                          className="w-8 h-8 rounded-[8px] text-base font-bold flex items-center justify-center"
-                          style={{ border: '1px solid var(--border)', color: 'var(--text-2)', background: 'var(--elev)' }}
-                        >
-                          +
-                        </button>
+                    <span className="flex-1 min-w-0">
+                      <span className="block" style={{ color: 'var(--text)', textDecoration: bought ? 'line-through' : 'none' }}>
+                        {row.name}
                       </span>
-                    ) : (
-                      <b style={{ color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>{formatAmount(row.needed, row.unit)}</b>
-                    )}
-                    <span className="text-xs text-right shrink-0" style={{ color: 'var(--muted)', minWidth: 130 }}>
-                      взять {formatAmount(buyAmount, row.unit)}
-                      {leftover > 1e-9 ? ` · излишек ${formatAmount(leftover, row.unit)}` : ''}
-                      <span className="block">нужно {formatAmount(row.needed, row.unit)}</span>
+                      <span className="block text-xs" style={{ color: 'var(--muted)' }}>{packHintStr}</span>
+                    </span>
+                    <span className="shrink-0 flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                      <span className="text-xs" style={{ color: 'var(--muted)' }}>беру</span>
+                      <AmountInput
+                        size="sm"
+                        value={actual}
+                        unit={row.unit}
+                        onChange={(v) => commitActualQty(row.ingredientId, v)}
+                        ariaLabel={`Сколько реально берёте: ${row.name}`}
+                        testId={`actual-qty-${row.ingredientId}`}
+                      />
                     </span>
                   </div>
                 );

@@ -1,5 +1,5 @@
 import { NavLink, useNavigate } from 'react-router-dom';
-import { ChevronUp, LogOut, Menu, Mountain, Ship } from 'lucide-react';
+import { ChevronUp, History, LogOut, Menu, Mountain, Package, RefreshCw, UtensilsCrossed } from 'lucide-react';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import ApiModeBadge from './ApiModeBadge';
 import BrandMark from './BrandMark';
@@ -77,16 +77,17 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     }
   };
 
+  // Fix-5 (п.1): согласованный нейминг разделов — короткие существительные во
+  // множественном числе («Походы / Блюда / Продукты»), у каждого своя осмысленная
+  // иконка (раньше: «Каталог блюд» с корабликом и три раздела с гамбургером).
   const navItems = [
-    // Список багов 25.10 (U1): дашборд «Мои походы» со статистикой временно скрыт —
-    // единственный раздел походов ведёт на /dashboard, где рендерится TripsPage.
     { to: '/dashboard', label: 'Походы', icon: <Mountain size={20} /> },
-    { to: '/recipes', label: 'Каталог блюд', icon: <Ship size={20} /> },
+    { to: '/recipes', label: 'Блюда', icon: <UtensilsCrossed size={20} /> },
     // U35 (список 26.10): «Ошибки (демо)» скрыты из навигации (роут редиректит)
     ...(isAdmin ? [
-      { to: '/products', label: 'Продукты', icon: <Menu size={20} /> },
-      { to: '/integrations', label: 'Интеграции', icon: <Menu size={20} /> },
-      { to: '/sync-logs', label: 'Журнал синков', icon: <Menu size={20} /> }
+      { to: '/products', label: 'Продукты', icon: <Package size={20} /> },
+      { to: '/integrations', label: 'Интеграции', icon: <RefreshCw size={20} /> },
+      { to: '/sync-logs', label: 'Журнал синков', icon: <History size={20} /> }
     ] : []),
   ];
 

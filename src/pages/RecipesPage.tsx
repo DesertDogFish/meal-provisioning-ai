@@ -4,6 +4,7 @@ import { Pencil, Plus, Search, Trash2, Utensils, X } from 'lucide-react';
 import { MealType } from '../types';
 import { formatAmount } from '../utils/calculations';
 import { humanizeCategory, servingsWord, ingredientsWord } from '../utils/text';
+import CustomSelect from '../components/CustomSelect'; // Fix-5 (п.19): «Все категории» — как везде
 import { api, getRecipes } from '../api/client';
 import { useToast } from '../components/ToastProvider';
 import Modal from '../components/Modal';
@@ -197,7 +198,7 @@ export default function RecipesPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl md:text-3xl font-bold" style={{ color: 'var(--text)' }}>
-          Каталог блюд · {recipes.length} позиций
+          Блюда · {recipes.length}
         </h1>
         <p className="mt-1" style={{ color: 'var(--muted)' }}>
           Завтрак {counts.breakfast} · Обед {counts.lunch} · Ужин {counts.dinner} · Перекус {counts.snack} | без огня {counts.noFire}
@@ -252,17 +253,16 @@ export default function RecipesPage() {
 
         {/* Вторая строка: категория, без огня, сброс */}
         <div className="flex flex-wrap gap-3 items-center">
-          <select
-            value={filterCategory}
-            onChange={e => setFilterCategory(e.target.value)}
-            className="px-4 py-2.5 rounded-lg outline-none"
-            style={{ background: 'var(--elev)', border: '1px solid var(--border)', color: 'var(--text)' }}
-          >
-            <option value="">Все категории</option>
-            {categories.map(cat => (
-              <option key={cat} value={cat}>{cat}</option>
-            ))}
-          </select>
+          {/* Fix-5 (п.19): нативный «Все категории» выглядел чужеродно —
+              единый CustomSelect как в формах продукта/приёма */}
+          <div style={{ minWidth: 200 }}>
+            <CustomSelect
+              value={filterCategory}
+              onChange={setFilterCategory}
+              options={[{ value: '', label: 'Все категории' }, ...categories.map(cat => ({ value: cat, label: humanizeCategory(cat) }))]}
+              ariaLabel="Категория блюда"
+            />
+          </div>
           
           <button
             onClick={() => setNoFireOnly(!noFireOnly)}
@@ -329,11 +329,14 @@ export default function RecipesPage() {
                     const names = (recipe.ingredients ?? [])
                       .map((ri: any) => ri.ingredient?.name ?? ri.ingredientName)
                       .filter((n: unknown): n is string => Boolean(n));
-                    const shown = names.slice(0, 2).join(', ');
-                    const rest = Math.max(0, names.length - 2);
+                    // Fix-5 (п.20): составов до 10 — показываем ВСЕ сразу,
+                    // больше — первые два и «+N» (полный список в title)
+                    const showAll = names.length < 10;
+                    const shown = showAll ? names.join(', ') : names.slice(0, 2).join(', ');
+                    const rest = showAll ? 0 : Math.max(0, names.length - 2);
                     return (
                       <span
-                        className="text-xs truncate"
+                        className={`text-xs ${showAll ? '' : 'truncate'}`}
                         style={{ color: 'var(--muted)', maxWidth: '62%' }}
                         title={`${recipe.ingredients.length} ${ingredientsWord(recipe.ingredients.length)}: ${names.join(', ')}`}
                       >

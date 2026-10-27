@@ -27,11 +27,28 @@ public class TripIngredientEditService {
         return substitutionRepository.findAllEditsForTrip(tripId);
     }
 
-    /** Мягкие исключения продуктов из расчёта закупки похода. */
+    /**
+     * Мягкие исключения продуктов из расчёта закупки похода.
+     * Fix-5 / R2 (шаг 2): строки с dayDate != null — ПО-ДНЕВНЫЕ, в глобальный набор
+     * не входят (иначе исключение одного дня вычёркивало бы продукт на весь поход).
+     */
     public Set<Long> getExcludedIngredientIds(Long tripId) {
         Set<Long> out = new HashSet<>();
         for (TripShoppingExclusion e : exclusionRepository.findByTripId(tripId)) {
-            out.add(e.getIngredient().getId());
+            if (e.getDayDate() == null) {
+                out.add(e.getIngredient().getId());
+            }
+        }
+        return out;
+    }
+
+    /** По-дневные исключения: dayDate → ingredientId (Fix-5 / R2 шаг 2). */
+    public Map<java.time.LocalDate, Set<Long>> getExcludedByDay(Long tripId) {
+        Map<java.time.LocalDate, Set<Long>> out = new HashMap<>();
+        for (TripShoppingExclusion e : exclusionRepository.findByTripId(tripId)) {
+            if (e.getDayDate() != null) {
+                out.computeIfAbsent(e.getDayDate(), k -> new HashSet<>()).add(e.getIngredient().getId());
+            }
         }
         return out;
     }

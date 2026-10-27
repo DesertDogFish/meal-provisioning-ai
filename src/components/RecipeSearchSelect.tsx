@@ -20,6 +20,12 @@ interface Props {
   autoFocus?: boolean;
   /** FORM-meal-composition-spec §2.1: проброс текущего запроса наружу (для серверного поиска с debounce) */
   onQueryChange?: (query: string) => void;
+  /**
+   * Fix-5 (п.13): список-оверлей (absolute) больше не «выстреливает» ввёрх/вниз,
+   * раздвигая вёрстку. inlineList=true — прежнее поведение «в потоке» для
+   * модалок с жёстким overflow (AddMealModal).
+   */
+  inlineList?: boolean;
 }
 
 /**
@@ -40,6 +46,7 @@ export default function RecipeSearchSelect({
   ariaLabel,
   autoFocus,
   onQueryChange,
+  inlineList = false,
 }: Props) {
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
@@ -168,10 +175,14 @@ export default function RecipeSearchSelect({
           ref={listRef}
           role="listbox"
           aria-label={searchPlaceholder ?? 'Блюда'}
-          /* Release-1.0 (UI-consistency): список В ПОТОКЕ, а не absolute — внутри модалки
-             с overflow он вываливался за границы листа (скрин «Добавить приём пищи»).
-             Теперь он раздвигает форму и всегда остаётся внутри контейнера. */
-          className="mt-1 max-h-56 overflow-y-auto rounded-lg shadow-xl py-1"
+          /* Fix-5 (п.13): по умолчанию список — ОВЕРЛЕЙ (absolute): не раздвигает
+             вёрстку и не «стреляет» контентом вниз. inlineList=true — прежнее
+             поведение «в потоке» (Release-1.0) для модалок с жёстким overflow. */
+          className={
+            inlineList
+              ? 'rss-list mt-1 max-h-56 overflow-y-auto shadow-xl py-1'
+              : 'rss-list absolute left-0 right-0 top-full mt-1 z-30 max-h-56 overflow-y-auto shadow-xl py-1'
+          }
           style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
         >
           {filtered.length === 0 && (

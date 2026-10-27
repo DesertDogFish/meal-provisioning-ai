@@ -326,40 +326,47 @@ export default function ProductsPage() {
           />
         </div>
         
-        <select
-          value={selectedUnit}
-          onChange={e => setSelectedUnit(e.target.value)}
-          className="px-4 py-2.5 rounded-lg outline-none"
-          style={{ background: 'var(--elev)', border: '1px solid var(--border)', color: 'var(--text)' }}
-        >
-          <option value="">Единица: все</option>
-          <option value="KG">кг</option>
-          <option value="L">л</option>
-          <option value="PCS">шт</option>
-          <option value="PACK">уп</option>
-        </select>
+        {/* Fix-5: нативные селекты фильтров — в единый CustomSelect */}
+        <div style={{ minWidth: 150 }}>
+          <CustomSelect
+            value={selectedUnit}
+            onChange={setSelectedUnit}
+            options={[
+              { value: '', label: 'Единица: все' },
+              { value: 'KG', label: 'кг' },
+              { value: 'L', label: 'л' },
+              { value: 'PCS', label: 'шт' },
+              { value: 'PACK', label: 'уп' },
+            ]}
+            ariaLabel="Фильтр по единице измерения"
+          />
+        </div>
 
-        <select
-          value={priceStatus}
-          onChange={e => setPriceStatus(e.target.value)}
-          className="px-4 py-2.5 rounded-lg outline-none"
-          style={{ background: 'var(--elev)', border: '1px solid var(--border)', color: 'var(--text)' }}
-        >
-          <option value="">Цена: любая</option>
-          <option value="HAS_PRICE">есть цена</option>
-          <option value="NO_PRICE">нет цены</option>
-        </select>
+        <div style={{ minWidth: 150 }}>
+          <CustomSelect
+            value={priceStatus}
+            onChange={setPriceStatus}
+            options={[
+              { value: '', label: 'Цена: любая' },
+              { value: 'HAS_PRICE', label: 'есть цена' },
+              { value: 'NO_PRICE', label: 'нет цены' },
+            ]}
+            ariaLabel="Фильтр по наличию цены"
+          />
+        </div>
 
-        <select
-          value={bindingStatus}
-          onChange={e => setBindingStatus(e.target.value)}
-          className="px-4 py-2.5 rounded-lg outline-none"
-          style={{ background: 'var(--elev)', border: '1px solid var(--border)', color: 'var(--text)' }}
-        >
-          <option value="">Интеграция: все</option>
-          <option value="BOUND">привязаны к OFF</option>
-          <option value="UNBOUND">не привязаны</option>
-        </select>
+        <div style={{ minWidth: 170 }}>
+          <CustomSelect
+            value={bindingStatus}
+            onChange={setBindingStatus}
+            options={[
+              { value: '', label: 'Интеграция: все' },
+              { value: 'BOUND', label: 'привязаны к OFF' },
+              { value: 'UNBOUND', label: 'не привязаны' },
+            ]}
+            ariaLabel="Фильтр по привязке к интеграции"
+          />
+        </div>
 
         {(query || selectedUnit || priceStatus || bindingStatus) && (
           <Button variant="ghost" onClick={resetFilters} aria-label="Сбросить фильтры">
@@ -444,7 +451,8 @@ export default function ProductsPage() {
                 <label className="block text-sm font-medium mb-1" style={{ color: 'var(--muted)' }}>
                   Единица измерения *
                 </label>
-                <div className="flex gap-2">
+                {/* Fix-5 (п.16): компактные чипы-единицы вместо кнопок «на пол-лица» */}
+                <div className="flex gap-1.5" role="group" aria-label="Единица измерения">
                   {(['KG', 'L', 'PCS', 'PACK'] as const).map(u => (
                     <button
                       key={u}
@@ -453,11 +461,13 @@ export default function ProductsPage() {
                         // U23: отменяем незавершённый debounce-чек со старой единицей
                         scheduleDuplicateCheck(formName, u);
                       }}
-                      className="flex-1 px-4 py-2.5 rounded-lg font-bold transition-all"
+                      aria-pressed={formUnit === u}
+                      className="px-3.5 py-1.5 text-sm font-semibold transition-all"
                       style={{
+                        borderRadius: 'var(--r-input, 8px)',
                         background: formUnit === u ? 'var(--grad-brand)' : 'transparent',
                         border: formUnit === u ? '1px solid transparent' : '1px solid var(--border)',
-                        color: formUnit === u ? 'var(--on-fire)' : 'var(--text)'
+                        color: formUnit === u ? 'var(--on-fire)' : 'var(--text-2)'
                       }}
                     >
                       {u === 'KG' ? 'кг' : u === 'L' ? 'л' : u === 'PCS' ? 'шт' : 'уп'}
@@ -468,32 +478,45 @@ export default function ProductsPage() {
 
               <div>
                 <label className="block text-sm font-medium mb-1" style={{ color: 'var(--muted)' }}>
-                  Калорийность на 100 г / 100 мл * (как на упаковке)
+                  {/* Fix-5 (п.18): калорийность — НЕ обязательна («могу не знать»);
+                      длинная подсказка переехала из плейсхолдера (не влезал) в подпись */}
+                  Калорийность на 100 г / 100 мл (опционально)
                 </label>
                 <NumberField
                   value={formCalories}
                   stepRef={formCalories ?? 100}
                   maxDecimals={0}
                   onCommit={v => setFormCalories(v)}
-                  placeholder="как на упаковке"
+                  placeholder="ккал"
+                  ariaLabel="Калорийность на 100 г или 100 мл"
                 />
+                <p className="text-xs mt-1" style={{ color: 'var(--muted)' }}>Как на упаковке. Можно оставить пустым.</p>
               </div>
 
-              {(formUnit === 'PCS' || formUnit === 'PACK') && formCalories && (
+              {/* Fix-5 (п.18): вес штуки/упаковки показываем ВСЕГДА для шт/уп —
+                  он не зависит от того, знаете ли вы калорийность */}
+              {(formUnit === 'PCS' || formUnit === 'PACK') && (
                 <div>
                   <label className="block text-sm font-medium mb-1" style={{ color: 'var(--muted)' }}>
-                    Вес 1 {formUnit === 'PCS' ? 'шт' : 'уп'}, г * (обязательно для шт и уп)
+                    Вес 1 {formUnit === 'PCS' ? 'шт' : 'уп'}, г{formCalories ? ' *' : ''}
                   </label>
                   <NumberField
                     value={formPieceWeightG}
                     stepRef={formPieceWeightG ?? 100}
                     maxDecimals={0}
                     onCommit={v => setFormPieceWeightG(v)}
-                    placeholder={formUnit === 'PCS' ? "например, 325 для тушёнки" : "например, 600 для блока лапши"}
+                    placeholder={formUnit === 'PCS' ? "325" : "600"}
+                    ariaLabel={`Вес одной штуки или упаковки в граммах`}
                   />
-                  <p className="text-xs mt-1" style={{ color: 'var(--fire)' }}>
-                    ⚠ Обязательно для шт/уп с калорийностью
-                  </p>
+                  {formCalories ? (
+                    <p className="text-xs mt-1" style={{ color: 'var(--fire)' }}>
+                      ⚠ Обязательно: без веса ккал для шт/уп не рассчитать
+                    </p>
+                  ) : (
+                    <p className="text-xs mt-1" style={{ color: 'var(--muted)' }}>
+                      Например: 325 для банки тушёнки, 600 для блока лапши
+                    </p>
+                  )}
                 </div>
               )}
 

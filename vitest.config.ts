@@ -61,6 +61,10 @@ export default defineConfig({
         'src/utils/readiness.ts',
         'src/utils/checkInput.ts',
         'src/utils/checkExport.ts',
+        // Fix-5: тултипы-формулы, единая шапка вкладок, серверные исключения (R2-2)
+        'src/components/InfoTip.tsx',
+        'src/components/TabHeader.tsx',
+        'src/api/shoppingExclusions.ts',
       ],
     },
   },

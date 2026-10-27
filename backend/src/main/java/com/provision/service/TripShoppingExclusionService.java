@@ -7,9 +7,14 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.provision.dto.trip.ShoppingExclusionDtos;
+
+import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 
-/** Фаза 14: мягкие исключения продуктов из расчёта закупки похода (persist-слой). */
+/** Фаза 14: мягкие исключения продуктов из расчёта закупки похода (persist-слой).
+ * Fix-5 / R2 (шаг 2): поддержка по-дневных исключений (dayDate != null). */
 @Service
 @RequiredArgsConstructor
 public class TripShoppingExclusionService {
@@ -28,35 +33,59 @@ public class TripShoppingExclusionService {
     }
 
     @Transactional(readOnly = true)
-    public List<Long> list(Long tripId, Long userId) {
+    public List<ShoppingExclusionDtos.ExclusionItem> list(Long tripId, Long userId) {
         getOwnedTrip(tripId, userId);
         return exclusionRepository.findByTripId(tripId).stream()
-                .map(e -> e.getIngredient().getId())
+                .map(e -> new ShoppingExclusionDtos.ExclusionItem(
+                        e.getIngredient().getId(), e.getDayDate()))
                 .toList();
     }
 
-    /** Полная замена набора исключений (идемпотентный PUT из UI-стейджа). */
+    /**
+     * Полная замена набора исключений (идемпотентный PUT из UI-стейджа).
+     * Принимает и legacy-список id (все глобальные), и канонические items с dayDate.
+     */
     @Transactional
-    public List<Long> replaceAll(Long tripId, List<Long> ingredientIds, Long userId) {
+    public List<ShoppingExclusionDtos.ExclusionItem> replaceAll(
+            Long tripId, ShoppingExclusionDtos.ExclusionsBody body, Long userId) {
         Trip trip = getOwnedTrip(tripId, userId);
-        exclusionRepository.deleteAllByTripId(tripId);
-        for (Long ingId : ingredientIds) {
-            Ingredient ing = ingredientRepository.findById(ingId)
-                    .orElseThrow(() -> new NotFoundException("Ingredient not found: " + ingId));
-            exclusionRepository.save(TripShoppingExclusion.builder()
-                    .trip(trip).ingredient(ing).build());
+
+        List<ShoppingExclusionDtos.ExclusionItem> desired = new ArrayList<>();
+        if (body != null) {
+            if (body.ingredientIds() != null) {
+                for (Long id : body.ingredientIds()) {
+                    desired.add(new ShoppingExclusionDtos.ExclusionItem(id, null));
+                }
+            }
+            if (body.items() != null) {
+                for (ShoppingExclusionDtos.ExclusionItem it : body.items()) {
+                    if (it != null && it.ingredientId() != null) {
+                        desired.add(new ShoppingExclusionDtos.ExclusionItem(it.ingredientId(), it.dayDate()));
+                    }
+                }
+            }
         }
-        return ingredientIds;
+
+        exclusionRepository.deleteAllByTripId(tripId);
+        for (ShoppingExclusionDtos.ExclusionItem it : desired) {
+            Ingredient ing = ingredientRepository.findById(it.ingredientId())
+                    .orElseThrow(() -> new NotFoundException("Ingredient not found: " + it.ingredientId()));
+            exclusionRepository.save(TripShoppingExclusion.builder()
+                    .trip(trip).ingredient(ing).dayDate(it.dayDate()).build());
+        }
+        return desired;
     }
 
     @Transactional
     public void add(Long tripId, Long ingredientId, Long userId) {
         Trip trip = getOwnedTrip(tripId, userId);
-        if (exclusionRepository.findByTripIdAndIngredientId(tripId, ingredientId).isPresent()) return;
+        if (exclusionRepository.findByTripIdAndIngredientIdAndDayDateIsNull(tripId, ingredientId).isPresent()) {
+            return;
+        }
         Ingredient ing = ingredientRepository.findById(ingredientId)
                 .orElseThrow(() -> new NotFoundException("Ingredient not found: " + ingredientId));
         exclusionRepository.save(TripShoppingExclusion.builder()
-                .trip(trip).ingredient(ing).build());
+                .trip(trip).ingredient(ing).dayDate((LocalDate) null).build());
     }
 
     @Transactional

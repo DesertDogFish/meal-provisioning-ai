@@ -175,6 +175,7 @@ export default function AddMealModal({
         {/* Блюдо: комбобокс с поиском */}
         <label className="block text-sm font-medium mb-1" style={{ color: 'var(--muted)' }}>Блюдо</label>
         <RecipeSearchSelect
+              inlineList
           value={recipeId}
           onChange={(v) => setRecipeId(v)}
           options={pool.map((r) => {

@@ -1967,26 +1967,49 @@ export const mockServer = {
       return allTripEdits(tripId).length === before ? null : { status: 'deleted' };
     }
 
-    // PUT /trips/:id/shopping-exclusions — список ingredientId, исключаемых из расчёта
+    // PUT /trips/:id/shopping-exclusions — идемпотентная замена набора.
+    // Fix-5 / R2 (шаг 2): принимаем и legacy {ingredientIds: []} (глобальные),
+    // и канон {items: [{ingredientId, dayDate|null}]} — по-дневные исключения.
+    // Храним клиентскими ключами: '<id>' или '<dayDate>::<id>'.
     if (parts.length === 3 && parts[2] === 'shopping-exclusions' && method === 'PUT') {
       const tripId = parts[1];
       if (!trips.find(t => t.id === tripId)) {
         throw { status: 404, message: 'Not found', detail: `Trip ${tripId} not found` };
       }
-      if (!Array.isArray(body?.ingredientIds)) {
-        throw { status: 400, message: 'Bad request', detail: 'Expected { ingredientIds: string[] }' };
+      const legacy = Array.isArray(body?.ingredientIds);
+      const canon = Array.isArray(body?.items);
+      if (!legacy && !canon) {
+        throw { status: 400, message: 'Bad request', detail: 'Expected { ingredientIds: [] } or { items: [{ingredientId, dayDate?}] }' };
       }
-      shoppingExcluded[tripId] = body.ingredientIds.map(String);
-      return shoppingExcluded[tripId];
+      const keys: string[] = [];
+      if (legacy) for (const x of body.ingredientIds) keys.push(String(x));
+      if (canon) {
+        for (const it of body.items) {
+          if (it?.ingredientId == null) continue;
+          keys.push(it.dayDate ? `${String(it.dayDate)}::${String(it.ingredientId)}` : String(it.ingredientId));
+        }
+      }
+      shoppingExcluded[tripId] = keys;
+      return keys.map(k => {
+        const i = k.indexOf('::');
+        return i < 0
+          ? { ingredientId: k, dayDate: null }
+          : { ingredientId: k.slice(i + 2), dayDate: k.slice(0, i) };
+      });
     }
 
-    // GET /trips/:id/shopping-exclusions
+    // GET /trips/:id/shopping-exclusions — Fix-5 / R2 (шаг 2): объекты {ingredientId, dayDate|null}
     if (parts.length === 3 && parts[2] === 'shopping-exclusions' && method === 'GET') {
       const tripId = parts[1];
       if (!trips.find(t => t.id === tripId)) {
         throw { status: 404, message: 'Not found', detail: `Trip ${tripId} not found` };
       }
-      return shoppingExcluded[tripId] || [];
+      return (shoppingExcluded[tripId] || []).map(k => {
+        const i = k.indexOf('::');
+        return i < 0
+          ? { ingredientId: k, dayDate: null }
+          : { ingredientId: k.slice(i + 2), dayDate: k.slice(0, i) };
+      });
     }
 
     // DELETE /trips/:id/shopping-exclusions/:ingredientId
@@ -1995,7 +2018,11 @@ export const mockServer = {
       if (!trips.find(t => t.id === tripId)) {
         throw { status: 404, message: 'Not found', detail: `Trip ${tripId} not found` };
       }
-      shoppingExcluded[tripId] = (shoppingExcluded[tripId] || []).filter(x => x !== String(parts[3]));
+      // Fix-5: DELETE по ingredientId снимает ВСЕ его исключения (глобальное и дневные)
+      const target = String(parts[3]);
+      shoppingExcluded[tripId] = (shoppingExcluded[tripId] || []).filter(
+        x => x !== target && !x.endsWith(`::${target}`)
+      );
       return null;
     }
 

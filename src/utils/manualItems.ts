@@ -21,13 +21,18 @@ export interface ShoppingRowLike {
 /**
  * Влить ручные позиции в строки закупки.
  * Совпадение продукта — по базовому id (stripSnapshotSuffix): та же строка,
- * количество суммируется. Иначе — новая строка (manual=true, без цены:
- * у ручной позиции плановая цена появляется только после ввода чека).
+ * количество суммируется. Иначе — новая строка (manual=true).
+ *
+ * Fix-5 (п.11): priceOf — необязательный lookup плановой цены за единицу
+ * (trip-срез цены продукта). С ним ручная позиция сразу получает плановую
+ * стоимость и участвует в итогах/«на человека» («кто за них платит» — все,
+ * как и за остальные продукты); без цены — строка честна помечена hasPrice=false.
  * Входной массив не мутируется.
  */
 export function mergeManualIntoShopping<T extends ShoppingRowLike>(
   rows: readonly T[],
   manual: readonly TripManualItem[],
+  priceOf?: (ingredientId: string) => number | undefined,
 ): Array<T & { manual?: boolean }> {
   const out: Array<T & { manual?: boolean }> = rows.map(r => ({ ...r }));
   const idxByBase = new Map<string, number>();
@@ -36,17 +41,24 @@ export function mergeManualIntoShopping<T extends ShoppingRowLike>(
   for (const m of manual) {
     if (!(Number(m.amount) > 0)) continue;
     const base = stripSnapshotSuffix(m.ingredientId);
+    const unitPrice = priceOf ? priceOf(String(m.ingredientId)) ?? priceOf(base) : undefined;
     const hit = idxByBase.get(base);
     if (hit != null) {
-      out[hit] = { ...out[hit], totalAmount: out[hit].totalAmount + Number(m.amount) };
-      idxByBase.set(base, hit);
+      const row = out[hit];
+      const merged: T & { manual?: boolean } = { ...row, totalAmount: row.totalAmount + Number(m.amount) };
+      if (unitPrice != null) {
+        merged.estimatedCost = (row.estimatedCost ?? 0) + unitPrice * Number(m.amount);
+        merged.hasPrice = true;
+      }
+      out[hit] = merged;
     } else {
       out.push({
         ingredientId: String(m.ingredientId),
         ingredientName: m.ingredientName || base,
         unit: m.unit,
         totalAmount: Number(m.amount),
-        hasPrice: false,
+        estimatedCost: unitPrice != null ? unitPrice * Number(m.amount) : undefined,
+        hasPrice: unitPrice != null,
         manual: true,
       } as T & { manual?: boolean });
       idxByBase.set(base, out.length - 1);

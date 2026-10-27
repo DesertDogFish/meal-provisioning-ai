@@ -8,7 +8,7 @@ import {
   dayScopedExclusions, isRowExcluded,
 } from '../utils/calculations';
 import { formatRub } from '../utils/formatRub';
-import { loadActualPrices, loadExcluded, loadBought } from '../utils/tripStaging';
+import { loadActualPrices, loadExcluded, loadBought, loadActualQty } from '../utils/tripStaging';
 import { getTripEdits, type TripIngredientEdit } from '../api/tripEdits';
 import { getManualItems, type TripManualItem } from '../api/tripManualItems';
 import { mergeManualIntoShopping, manualForDay, manualForTrip } from '../utils/manualItems';
@@ -67,6 +67,9 @@ export default function TripPrintPage() {
     personMeals: 0, realPeople: 1,
   });
   const [boughtCount, setBoughtCount] = useState(0);
+  const [boughtKeys, setBoughtKeys] = useState<Set<string>>(new Set());
+  const [actualQty, setActualQty] = useState<Record<string, number>>({});
+  const [draftQty, setDraftQty] = useState<Record<string, number>>({});
   const [manualByDay, setManualByDay] = useState<Record<string, TripManualItem[]>>({});
   const [tripManual, setTripManual] = useState<TripManualItem[]>([]);
 
@@ -89,6 +92,11 @@ export default function TripPrintPage() {
         const excluded = loadExcluded(tripKey);
         const overrides = loadActualPrices(tripKey);
         const bought = loadBought(tripKey);
+        const actualQtyData = loadActualQty(tripKey);
+        const draftQtyData: Record<string, number> = {};
+        for (const [k, v] of Object.entries(overrides)) {
+          if (v?.qty != null) draftQtyData[k] = v.qty;
+        }
 
         // --- Меню с overlay серверных правок состава (Fix-2 п.3/U30) ---
         const snapshotOfMap = new Map<string, string>();
@@ -192,6 +200,9 @@ export default function TripPrintPage() {
           realPeople,
         });
         setBoughtCount([...bought].length);
+        setBoughtKeys(bought);
+        setActualQty(actualQtyData);
+        setDraftQty(draftQtyData);
         setManualByDay(byDay);
         setTripManual(manualForTrip(manualData));
       } catch (err) {
@@ -204,12 +215,8 @@ export default function TripPrintPage() {
     return () => { cancelled = true; };
   }, [id]);
 
-  // Авто-диалог печати: вкладка открыта ради PDF — сразу предлагаем сохранить
-  useEffect(() => {
-    if (loading || error) return;
-    const t = setTimeout(() => window.print(), 700);
-    return () => clearTimeout(t);
-  }, [loading, error]);
+  // Fix-5 (п.13): НЕ открываем диалог печати автоматически — только по кнопке.
+  // «Не надо автоматом открывать мне печать, пока я не хочу печатать».
 
   if (loading) {
     return <div className="p-8 text-center" style={{ color: 'var(--text-2)' }}>Готовим документ…</div>;
@@ -273,6 +280,8 @@ export default function TripPrintPage() {
                 {day.effectivePeople} чел. · {day.meals.length} приёмов
                 {dayRow ? ` · план ${formatRub(dayRow.planned)}${dayRow.actual !== dayRow.planned ? `, факт ${formatRub(dayRow.actual)}` : ''}` : ''}
               </p>
+              {/* Fix-5 (п.14): приёмы дня в ДВЕ колонки — не «портянка» */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 24px' }}>
               {day.meals.map((meal, mi) => (
                 <div key={mi} style={{ marginBottom: 14, breakInside: 'avoid' }}>
                   <p style={{ margin: '0 0 4px', fontSize: 14, fontWeight: 700 }}>
@@ -299,8 +308,9 @@ export default function TripPrintPage() {
                   </ul>
                 </div>
               ))}
+              </div>
               {dayManual.length > 0 && (
-                <div style={{ marginTop: 6 }}>
+                <div style={{ marginTop: 6, breakInside: 'avoid' }}>
                   <p style={{ margin: '0 0 4px', fontSize: 13, fontWeight: 700, color: '#435663' }}>К дню (не блюда):</p>
                   <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12.5 }}>
                     {dayManual.map(mi => (
@@ -344,7 +354,8 @@ export default function TripPrintPage() {
                   <tr>
                     <th>Продукт</th>
                     <th style={{ textAlign: 'right' }}>Нужно</th>
-                    <th style={{ textAlign: 'right' }}>Брать</th>
+                    {/* Fix-5 (п.12/21): сколько реально взяли — из чеклиста/чека */}
+                    <th style={{ textAlign: 'right' }}>Взяли</th>
                     <th style={{ textAlign: 'right' }}>План ₽</th>
                     <th style={{ textAlign: 'right' }}>Факт ₽</th>
                   </tr>
@@ -352,15 +363,15 @@ export default function TripPrintPage() {
                 <tbody>
                   {group.rows.map(row => {
                     const src = included.find(r => r.ingredientId === row.ingredientId);
+                    // факт-количество: чеклист-ввод → «взяли» из чека → расчёт (упаковки)
+                    const tookQty = actualQty[row.ingredientId] ?? draftQty[row.ingredientId]
+                      ?? (row.packsToBuy != null && row.packSize ? row.packsToBuy * row.packSize : row.needed);
+                    const isBought = boughtKeys.has(`${row.ingredientId}@${Math.round(row.needed * 1000)}`);
                     return (
                       <tr key={row.ingredientId}>
-                        <td>{row.name}</td>
+                        <td>{isBought ? '✓ ' : ''}{row.name}</td>
                         <td style={{ textAlign: 'right' }}>{formatAmount(row.needed, row.unit)}</td>
-                        <td style={{ textAlign: 'right', fontWeight: 700 }}>
-                          {row.packsToBuy != null
-                            ? `${row.packsToBuy} × ${formatAmount(row.packSize ?? 0, row.unit)}`
-                            : formatAmount(row.needed, row.unit)}
-                        </td>
+                        <td style={{ textAlign: 'right', fontWeight: 700 }}>{formatAmount(tookQty, row.unit)}</td>
                         <td style={{ textAlign: 'right' }}>{src?.plannedCost != null ? formatRub(src.plannedCost) : '—'}</td>
                         <td style={{ textAlign: 'right' }}>{src?.actualCost != null ? formatRub(src.actualCost) : '—'}</td>
                       </tr>

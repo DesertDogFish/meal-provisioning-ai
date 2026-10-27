@@ -1,11 +1,14 @@
 import { Button } from './Button';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useToast } from './ToastProvider';
-import { Download, Printer, X } from 'lucide-react';
+import { X } from 'lucide-react';
 import { unitFromTotal, totalFromUnit, roundMoney } from '../utils/checkInput'; // Fix-3 (п.5) + Fix-4 (п.10): ввод чека СУММОЙ, без float-хвостов
-import { buildShoppingCsv, downloadTextFile } from '../utils/checkExport'; // Fix-3 / R4-lite: CSV + печать
 import { syncServerExclusions } from '../api/shoppingExclusions';      // Fix-3 / R2
-import { formatAmount, calculateShoppingList, calculateDayShopping, realTripPeople, dayScopedExclusions } from '../utils/calculations';
+import { formatAmount, calculateShoppingList, calculateDayShopping, realTripPeople, dayScopedExclusions, findPriceForDate } from '../utils/calculations';
+import { getManualItems, type TripManualItem } from '../api/tripManualItems'; // Fix-5 (п.11): ручные позиции в чеке
+import { mergeManualIntoShopping } from '../utils/manualItems';
+import AmountInput from './AmountInput'; // Fix-5 (п.12): «сколько реально взяли»
+import InfoTip from '../components/InfoTip';
 import { formatRub, categoryName } from '../utils/format'; // Release-1.0: единый формат чисел/единиц
 import { compareRu } from '../utils/rowSort'; // U41: алфавитная сортировка
 import { mealsWord } from '../utils/text';
@@ -115,6 +118,8 @@ export default function PriceOverridesTab({ tripId }: Props) {
   const [shoppingExcluded, setShoppingExcluded] = useState<Set<string>>(new Set());
   // Fix-3 (п.2): отметки «взято» из чеклиста — гейт ввода чека
   const [boughtSet, setBoughtSet] = useState<Set<string>>(new Set());
+  // Fix-5 (п.11): ручные позиции (аптечка и т.п.) — тоже часть чека
+  const [manualItems, setManualItems] = useState<TripManualItem[]>([]);
 
   // Серверные оверрайды (GET /trips/:id/price-overrides) — как фолбэк, если
   // локальный стейдж пуст (например, чек ввели в другой сессии на сервере).
@@ -142,6 +147,8 @@ export default function PriceOverridesTab({ tripId }: Props) {
       saveActualPrice(tripId, item.ingredientId, {
         price: v,
         total: totalOverride != null ? totalOverride : v * item.totalAmount,
+        // Fix-5 (п.12): уже введённое «сколько взяли» не теряем при правке суммы
+        qty: draftOverrides[item.ingredientId]?.qty ?? null,
       });
     }
     // Синхронизируем серверное хранилище оверрайдов (best effort: mock/офлайн не ломают UI)
@@ -160,6 +167,22 @@ export default function PriceOverridesTab({ tripId }: Props) {
    * количество («Факт ₽»), а не ₽/ед. Хранилище и сводки остаются в ценах за
    * единицу — сумма делится на количество позиции и распределяется автоматически.
    */
+  /** Fix-5 (п.12): сколько РЕАЛЬНО куплено (шт/кг) — в черновик позиции и в отчёт.
+   * Если факт-сумма ещё не введена, а плановая цена есть — цена берётся из плана. */
+  const commitQty = (item: ShoppingItem, qty: number | null) => {
+    const cur = effectiveOverrides()[item.ingredientId];
+    const price = cur?.price ?? item.plannedUnitPrice ?? null;
+    if (price == null) {
+      showError('У позиции нет цены — сначала введите сумму из чека');
+      return;
+    }
+    saveActualPrice(tripId, item.ingredientId, {
+      price,
+      total: cur?.total ?? roundMoney(price * item.totalAmount),
+      qty: qty ?? null,
+    });
+  };
+
   const commitActualTotal = (item: ShoppingItem, total: number | null) => {
     if (total == null || Number.isNaN(total)) {
       void commitActualPrice(item, null);
@@ -206,17 +229,20 @@ export default function PriceOverridesTab({ tripId }: Props) {
         (serverOvs || []).map(o => [String(o.ingredientId), { price: o.actualPrice, total: 0 } as ActualPriceDraft])
       );
 
-      const [tripData, recipesData, pricesData, tripRecipesData] = await Promise.all([
+      const [tripData, recipesData, pricesData, tripRecipesData, manualData] = await Promise.all([
         api.get<Trip>(`/trips/${tripId}`),
         getRecipes(),
         // V20: цены похода — trip-scoped копии (план заморожен на момент планирования)
         api.get<Price[]>(`/trips/${tripId}/prices`),
         // V20 + Release-1.0: копии блюд похода через getTripRecipes — с нормализацией
         // плоских DTO снапшотов (без неё строки «Unknown» и единица «шт» вместо «кг»).
-        getTripRecipes(tripId).catch(() => [] as Recipe[])
+        getTripRecipes(tripId).catch(() => [] as Recipe[]),
+        // Fix-5 (п.11): ручные позиции видны в чеке наравне с блюдами
+        getManualItems(tripId).catch(() => [] as TripManualItem[]),
       ]);
 
       setTrip(tripData);
+      setManualItems(manualData);
       // V20: расчёт по объединённому набору: справочник (пикер) + копии блюд похода
       setAllRecipes([...recipesData, ...tripRecipesData]);
       setPrices(pricesData);
@@ -244,7 +270,16 @@ export default function PriceOverridesTab({ tripId }: Props) {
     const stage = { ...(serverOverridesRef.current || {}), ...draftOverrides };
     // Fix-2 (п.5): по-дневные исключения уменьшают количества агрегата;
     // глобально исключённые строки отфильтровываются из итогов ниже.
-    return calculateShoppingList(trip as any, recipesMap as any, prices as any, dayScopedExclusions(shoppingExcluded)).map(it => {
+    // Fix-5 (п.11): ручные позиции вливаются с плановой ценой из trip-срезов.
+    const manualPriceOf = (ingId: string): number | undefined => {
+      const rows = (prices as Price[]).filter(pr => String(pr.ingredientId) === String(ingId));
+      return rows.length ? findPriceForDate(rows as any, trip.endDate)?.pricePerUnit : undefined;
+    };
+    return mergeManualIntoShopping(
+      calculateShoppingList(trip as any, recipesMap as any, prices as any, dayScopedExclusions(shoppingExcluded)),
+      manualItems,
+      manualPriceOf,
+    ).map(it => {
       // Плановая ₽/ед — из плановой стоимости позиции (та же цена по дням, что в «План ₽»),
       // чтобы строка таблицы была самосогласована: plannedCost = plannedUnitPrice × totalAmount.
       const plannedCost = it.estimatedCost;
@@ -268,7 +303,7 @@ export default function PriceOverridesTab({ tripId }: Props) {
     })
     // U41: чек и закупка — по алфавиту (иначе длинный список невозможно вводить)
     .sort((a, b) => compareRu(a.ingredientName, b.ingredientName));
-  }, [trip, recipesMap, prices, draftOverrides, shoppingExcluded]);
+  }, [trip, recipesMap, prices, draftOverrides, shoppingExcluded, manualItems]);
 
   // ===== U41: категории продуктов для группировки чека =====
   // Best effort: справочник продуктов (mock/admin) + вложенные ingredient-объекты
@@ -382,24 +417,8 @@ export default function PriceOverridesTab({ tripId }: Props) {
   // Не блокер: в чеклисте есть «Отметить всё» одной кнопкой.
   const canEnterCheck = boughtSet.size > 0;
 
-  // Fix-3 / R4-lite: экспорт чека-закупки — CSV (Excel: BOM + ';') и печать
-  const exportCsv = () => {
-    const rows = shoppingItems
-      .filter(i => !shoppingExcluded.has(i.ingredientId))
-      .map(i => {
-        const unit = effectiveOverrides()[i.ingredientId]?.price ?? i.actualUnitPrice ?? null;
-        const fact = unit != null ? unit * i.totalAmount : (i.actualCost ?? null);
-        return {
-          name: i.ingredientName,
-          amount: formatAmount(i.totalAmount, i.unit),
-          plannedCost: formatRub(i.plannedCost),
-          actualCost: formatRub(fact),
-          delta: formatDelta(calculateDelta(i.plannedCost, fact)),
-        };
-      });
-    const safeName = String(trip?.name ?? tripId).replace(/[\\/:*?"<>|]/g, '_');
-    downloadTextFile(`zakupka-${safeName}.csv`, buildShoppingCsv(rows, String(trip?.name ?? '')));
-  };
+  // Fix-5 (п.10): CSV/«Печать» отсюда убраны — отчёт формируется из полосы
+  // «Готовность похода» (кнопка «Сформировать отчёт» → /trips/:id/print).
 
   if (loading) {
     return (
@@ -455,17 +474,7 @@ export default function PriceOverridesTab({ tripId }: Props) {
         >
           Ввести чек
         </Button>
-        {/* Fix-3 / R4-lite: рабочая замена мёртвого «Экспорт PDF» — CSV и печать */}
-        <Button variant="ghost" icon={<Download size={16} />} onClick={exportCsv} aria-label="Экспорт CSV">
-          Экспорт CSV
-        </Button>
-        {/* Fix-4 (п.6): «Печать» открывает полную печатную версию похода
-            (меню по дням + сводка + итоги) — её же сохраняют в PDF */}
-        <Button variant="ghost" icon={<Printer size={16} />}
-                onClick={() => window.open(`/trips/${tripId}/print`, '_blank')}
-                aria-label="Печать" title="Печатная версия похода (можно сохранить в PDF)">
-          Печать
-        </Button>
+        {/* Fix-5 (п.10): отчёт — в полосе «Готовность похода» (сквозная, видна везде) */}
         <label className="flex items-center gap-2 cursor-pointer" style={{ color: 'var(--muted)', fontSize: '12px' }}>
           <input 
             type="checkbox" 
@@ -530,17 +539,35 @@ export default function PriceOverridesTab({ tripId }: Props) {
 
       {/* Вкладка: Закупка */}
       {activeTab === 'total' && (
-        <div className="rounded-xl overflow-hidden max-w-4xl" style={{ background: 'var(--surface)', border: '1px solid var(--border)', padding: 'var(--sp-1) var(--sp-3) var(--sp-4)' }}>
+        <div className="rounded-xl overflow-hidden max-w-5xl" style={{ background: 'var(--surface)', border: '1px solid var(--border)', padding: 'var(--sp-1) var(--sp-3) var(--sp-4)' }}>
+          {/* Fix-5: длинная таблица скроллится внутри экрана, заголовок липкий */}
+          <div className="overflow-auto sticky-thead" style={{ maxHeight: '58vh' }}>
           <table className="w-full text-sm">
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border)' }}>
                 <th className="px-2 py-3" title="Снять галочку, чтобы исключить продукт из расчёта (не удаляя его)"></th>
                 <th className="text-left px-2 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: '11px' }}>Продукт</th>
-                {/* Fix-3 (п.5): никаких «₽/ед» — сколько надо купить, план суммой и факт суммой из чека */}
-                <th className="text-right px-2 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: '11px' }} title="Сколько надо было купить по расчёту">Надо купить</th>
-                <th className="text-right px-2 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: '11px' }} title="Плановая стоимость позиции">План ₽</th>
-                <th className="text-right px-2 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: '11px' }} title="Сколько вы заплатили по чеку за купленное количество">Факт ₽</th>
-                <th className="text-right px-2 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: '11px' }}>Δ</th>
+                {/* Fix-3 (п.5) + Fix-5 (п.3/12): никаких «₽/ед», у каждого числа тултип */}
+                <th className="text-right px-2 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: '11px' }}>
+                  Надо купить
+                  <InfoTip text="Сколько нужно по расчёту меню (с учётом исключений и продуктов, добавленных к дню/походу)." />
+                </th>
+                <th className="text-right px-2 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: '11px' }}>
+                  Взяли
+                  <InfoTip text="Сколько реально куплено (в штуках или весе) — попадёт в отчёт. Обычно чуть больше расчётного." />
+                </th>
+                <th className="text-right px-2 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: '11px' }}>
+                  План ₽
+                  <InfoTip text="Плановая стоимость позиции: нужное количество × цена справочника на дату." />
+                </th>
+                <th className="text-right px-2 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: '11px' }}>
+                  Факт ₽
+                  <InfoTip text="Сумма из чека за эту позицию — сколько вы реально заплатили за купленное количество. Цена за единицу и распределение на всех посчитаются автоматически." />
+                </th>
+                <th className="text-right px-2 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: '11px' }}>
+                  Δ
+                  <InfoTip text="Отклонение факта от плана: (факт − план) ÷ план × 100%." />
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -577,6 +604,19 @@ export default function PriceOverridesTab({ tripId }: Props) {
                     <td className="px-2 py-3 text-right" style={{ color: 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}>
                       {formatAmount(item.totalAmount, item.unit)}
                     </td>
+                    <td className="px-2 py-3 text-right">
+                      {/* Fix-5 (п.12): сколько реально взяли — свободный ввод в единицах продукта */}
+                      <AmountInput
+                        size="sm"
+                        value={draftOverrides[item.ingredientId]?.qty ?? null}
+                        unit={item.unit}
+                        disabled={!canEnterCheck}
+                        onChange={v => commitQty(item, v)}
+                        placeholder="—"
+                        ariaLabel={`Сколько реально куплено: ${item.ingredientName}`}
+                        testId={`qty-input-${item.ingredientId}`}
+                      />
+                    </td>
                     <td className="px-2 py-3 text-right" style={{ color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>
                       {excluded ? '—' : formatRub(item.plannedCost)}
                     </td>
@@ -601,6 +641,7 @@ export default function PriceOverridesTab({ tripId }: Props) {
               })}
             </tbody>
           </table>
+          </div>
 
           {/* Sticky итог */}
           <div className="sticky-totals">
@@ -734,9 +775,11 @@ export default function PriceOverridesTab({ tripId }: Props) {
             <div className="flex flex-col gap-4">
               {checkGroups.map(group => (
                 <div key={group.category}>
-                  <p className="text-xs font-bold mb-2 px-1 uppercase tracking-wide" style={{ color: 'var(--w1)' }}>
+                  {/* Fix-5 (п.24): группа — заметная плашка, а не сливающийся текст */}
+                  <div className="px-3 py-1.5 mb-2 text-xs font-extrabold uppercase tracking-wide"
+                       style={{ background: 'var(--elev)', border: '1px solid var(--border)', borderRadius: 'var(--r-input, 8px)', color: 'var(--text)' }}>
                     {group.category}
-                  </p>
+                  </div>
                   <div className="flex flex-col gap-3">
                     {group.items.map(item => (
                       <div key={item.ingredientId} className="flex gap-3 items-center">
@@ -747,6 +790,16 @@ export default function PriceOverridesTab({ tripId }: Props) {
                         <span style={{ color: 'var(--muted)', fontSize: '12px', fontVariantNumeric: 'tabular-nums' }}>
                           план {formatRub(item.plannedCost)}
                         </span>
+                        {/* Fix-5 (п.12): сколько реально взяли */}
+                        <AmountInput
+                          size="sm"
+                          value={draftOverrides[item.ingredientId]?.qty ?? null}
+                          unit={item.unit}
+                          onChange={v => commitQty(item, v)}
+                          placeholder="взяли"
+                          ariaLabel={`Сколько реально куплено: ${item.ingredientName}`}
+                          testId={`modal-qty-${item.ingredientId}`}
+                        />
                         <NumberField
                           size="sm"
                           value={roundMoney(totalFromUnit(

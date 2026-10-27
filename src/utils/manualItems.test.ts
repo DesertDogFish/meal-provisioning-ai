@@ -78,3 +78,39 @@ describe('manualItems (U40) — продукты к дню/походу в за�
     expect(manualForTrip(items).map(i => i.id)).toEqual(['c']);
   });
 });
+
+describe('mergeManualIntoShopping c плановой ценой (Fix-5, п.11)', () => {
+  const prices = new Map<string, number>([['ing40', 200]]);
+  const priceOf = (id: string) => prices.get(id);
+
+  it('новая ручная позиция получает плановую стоимость', () => {
+    const out = mergeManualIntoShopping(
+      [] as ReturnType<typeof row>[],
+      [item({ ingredientId: 'ing40', amount: 2 })],
+      priceOf,
+    );
+    expect(out[0].hasPrice).toBe(true);
+    expect(out[0].estimatedCost).toBeCloseTo(400);
+  });
+
+  it('цена без справочника — hasPrice=false (честная строка «нет цены»)', () => {
+    const out = mergeManualIntoShopping(
+      [] as ReturnType<typeof row>[],
+      [item({ ingredientId: 'ing99', amount: 1 })],
+      priceOf,
+    );
+    expect(out[0].hasPrice).toBe(false);
+    expect(out[0].estimatedCost).toBeUndefined();
+  });
+
+  it('при слиянии в существующую строку стоимость доначисляется', () => {
+    const out = mergeManualIntoShopping(
+      [row({ ingredientId: 'ing40', ingredientName: 'Продукт', unit: 'KG', totalAmount: 1, hasPrice: true, estimatedCost: 200 })],
+      [item({ ingredientId: 'ing40', amount: 0.5 })],
+      priceOf,
+    );
+    expect(out).toHaveLength(1);
+    expect(out[0].totalAmount).toBeCloseTo(1.5);
+    expect(out[0].estimatedCost).toBeCloseTo(300);
+  });
+});

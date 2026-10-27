@@ -404,8 +404,8 @@ export default function RecipeEditorModal({ recipe, categories, onClose, onSaved
                       />
                       {suggestions.length > 0 && (
                         <ul
-                          className="absolute z-10 mt-1 w-full rounded-lg overflow-hidden text-sm"
-                          style={{ background: 'var(--elev)', border: '1px solid var(--border)' }}
+                          className="absolute z-10 mt-1 w-full overflow-hidden text-sm"
+                          style={{ background: 'var(--elev)', border: '1px solid var(--border)', borderRadius: 'var(--r-input, 8px)' }}
                         >
                           {suggestions.map(p => (
                             <li key={p.id}>
@@ -437,17 +437,19 @@ export default function RecipeEditorModal({ recipe, categories, onClose, onSaved
                       onChange={v => updateRow(row.key, { amount: String(v) })}
                       ariaLabel="Количество"
                     />
-                    <Button
+                    {/* Fix-5 (п.14): иконка-действие без обводки — не «кнопка-кирпич» */}
+                    <button
                       type="button"
-                      variant="ghost"
-                      size="sm"
                       aria-label="Удалить строку"
+                      title="Удалить строку"
                       onClick={() => removeRow(row.key)}
-                      className="px-2 py-2 rounded-lg flex items-center justify-center"
-                      style={{ color: 'var(--muted)' }}
+                      className="p-2 flex items-center justify-center transition-colors"
+                      style={{ color: 'var(--muted)', borderRadius: 'var(--r-input, 8px)' }}
+                      onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--danger)'; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--muted)'; }}
                     >
                       <Trash2 size={15} />
-                    </Button>
+                    </button>
                   </div>
                 );
               })}

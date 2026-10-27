@@ -16,6 +16,9 @@ export interface ActualPriceDraft {
   price: number;
   /** ₽ за всю позицию по чеку (для подписей в UI) */
   total: number;
+  /** Fix-5 (п.12): сколько РЕАЛЬНО куплено (в единицах продукта) — для отчёта.
+   * Не заполнено = куплено ровно по расчёту. */
+  qty?: number | null;
 }
 
 /** Замещение продукта в блюде в рамках конкретного похода (trip-level). */
@@ -35,14 +38,15 @@ const SUBST_KEY = (tripId: string) => `trip-substitutions-${tripId}`;
  * Осознанное отклонение от AGENTS §9 (серверное хранение появится вместе с R2/R4);
  * до этого — общий стейдж похода, как у исключений. */
 const BOUGHT_KEY = (tripId: string) => `trip-checklist-bought-${tripId}`;
-/** Fix-4 (п.8): переопределение числа упаковок в чеклисте («в магазине пачка
- * другая / нет поштучно») — ingredientId → число упаковок к покупке. */
-const PACKS_KEY = (tripId: string) => `trip-checklist-packs-${tripId}`;
+/** Fix-5 (п.21): сколько РЕАЛЬНО берём/взяли по позиции чеклиста (в базовых
+ * единицах — кг/л/шт/уп). Заменяет «± упаковки» из Fix-4: товар может быть
+ * на развес, в россыпь или в упаковке другого объёма — вводим факт руками. */
+const ACTUAL_QTY_KEY = (tripId: string) => `trip-checklist-actualqty-${tripId}`;
 
 /** Собственное событие — синхронизация между вкладками компонента в одной странице. */
 const STAGE_EVENT = 'provision-trip-stage-changed';
 
-type StageKind = 'prices' | 'excluded' | 'subs' | 'bought' | 'packs';
+type StageKind = 'prices' | 'excluded' | 'subs' | 'bought' | 'qty';
 
 function readJson<T>(key: string, fallback: T): T {
   try {
@@ -122,20 +126,20 @@ export function setBought(tripId: string, next: Set<string>) {
   notify(tripId, 'bought');
 }
 
-// ===================== Чеклист: число упаковок к покупке =====================
+// ===================== Чеклист: фактические количества =====================
 
-export function loadPacks(tripId: string): Record<string, number> {
-  const raw = readJson<Record<string, number>>(PACKS_KEY(tripId), {});
+export function loadActualQty(tripId: string): Record<string, number> {
+  const raw = readJson<Record<string, number>>(ACTUAL_QTY_KEY(tripId), {});
   return typeof raw === 'object' && raw !== null ? raw : {};
 }
 
-/** count=null → вернуть к расчётному packsToBuy. */
-export function setPackCount(tripId: string, ingredientId: string, count: number | null) {
-  const cur = loadPacks(tripId);
-  if (count == null || !(count > 0)) delete cur[ingredientId];
-  else cur[ingredientId] = Math.round(count);
-  writeJson(PACKS_KEY(tripId), cur);
-  notify(tripId, 'packs');
+/** qty=null → вернуть к расчётному значению (нужно по плану). */
+export function setActualQty(tripId: string, ingredientId: string, qty: number | null) {
+  const cur = loadActualQty(tripId);
+  if (qty == null || !(qty > 0)) delete cur[ingredientId];
+  else cur[ingredientId] = qty;
+  writeJson(ACTUAL_QTY_KEY(tripId), cur);
+  notify(tripId, 'qty');
 }
 
 // ===================== Подписка на изменения =====================
@@ -150,7 +154,7 @@ export function onTripStageChange(tripId: string, handler: () => void): () => vo
     if (detail?.tripId === tripId) handler();
   };
   const storage = (e: StorageEvent) => {
-    const keys = [PRICES_KEY(tripId), EXCLUDED_KEY(tripId), SUBST_KEY(tripId), BOUGHT_KEY(tripId), PACKS_KEY(tripId)];
+    const keys = [PRICES_KEY(tripId), EXCLUDED_KEY(tripId), SUBST_KEY(tripId), BOUGHT_KEY(tripId), ACTUAL_QTY_KEY(tripId)];
     if (e.key && keys.includes(e.key)) handler();
   };
   window.addEventListener(STAGE_EVENT, local);

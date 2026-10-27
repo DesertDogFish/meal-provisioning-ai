@@ -1,6 +1,8 @@
 import { Trip, TripDay, TripMeal, IngredientPrice, ShoppingItem, DayShopping, MenuDay, PersonSummary, TripSummary, UnitOfMeasure } from '../types';
 import { calculateKcal } from './calc';
 import { formatQty } from './format';
+import { mergeManualIntoShopping } from './manualItems';
+import type { TripManualItem } from '../api/tripManualItems';
 
 /**
  * Release-1.0 (UI-consistency): бэкенд в DTO рецепта отдаёт плоские поля
@@ -263,9 +265,23 @@ export function calculateDayShopping(
   });
 }
 
-export function calculatePersonSummary(trip: Trip, recipes: Map<string, any>, prices: IngredientPrice[], realPeople?: number, excluded?: ReadonlySet<string>): { summary: PersonSummary[]; tripSummary: TripSummary } {
-  // Fix-2 (п.5): person-сводка считает закупку с теми же исключениями (инвариант сумм)
-  const shopping = calculateShoppingList(trip, recipes, prices, excluded);
+export function calculatePersonSummary(
+  trip: Trip,
+  recipes: Map<string, any>,
+  prices: IngredientPrice[],
+  realPeople?: number,
+  excluded?: ReadonlySet<string>,
+  manualItems?: readonly TripManualItem[],
+  priceManual?: (ingredientId: string) => number | undefined,
+): { summary: PersonSummary[]; tripSummary: TripSummary } {
+  // Fix-2 (п.5): person-сводка считает закупку с теми же исключениями (инвариант сумм).
+  // Fix-5 (п.7): ручные позиции (аптечка и т.п.) входят в стоимость «на человека» —
+  // за них платят все участники, как и за остальные продукты.
+  const shopping = mergeManualIntoShopping(
+    calculateShoppingList(trip, recipes, prices, excluded),
+    manualItems ?? [],
+    priceManual,
+  );
   
   let totalPersonMeals = 0;
   let totalCalories = 0;

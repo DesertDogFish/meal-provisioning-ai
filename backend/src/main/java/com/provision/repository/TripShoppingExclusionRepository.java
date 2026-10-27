@@ -16,7 +16,14 @@ public interface TripShoppingExclusionRepository extends JpaRepository<TripShopp
     @Query("SELECT e FROM TripShoppingExclusion e JOIN FETCH e.ingredient WHERE e.trip.id = :tripId")
     List<TripShoppingExclusion> findByTripId(@Param("tripId") Long tripId);
 
-    Optional<TripShoppingExclusion> findByTripIdAndIngredientId(Long tripId, Long ingredientId);
+    /**
+     * Fix-5 / R2 (шаг 2): с по-дневной областью у пары (trip, ingredient) может быть
+     * НЕСКОЛЬКО строк (глобальная + дневные) — поэтому List, а не Optional
+     * (иначе IncorrectResultSizeDataAccessException).
+     */
+    List<TripShoppingExclusion> findByTripIdAndIngredientId(Long tripId, Long ingredientId);
+
+    Optional<TripShoppingExclusion> findByTripIdAndIngredientIdAndDayDateIsNull(Long tripId, Long ingredientId);
 
     void deleteByTripIdAndIngredientId(Long tripId, Long ingredientId);
 
