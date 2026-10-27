@@ -183,11 +183,14 @@ v2-поиск при этом жёстко rate-limit'ится по IP (сери
 | 2 | Учётка OFF не поддерживалась кодом, хотя README/.env.example её документировали (рассинхрон доков); user_id/password в query (как в нерабочем curl пользователя) v2-API не аутентифицирует | ОПЦИОНАЛЬНАЯ учётка `integration.off.user-id/password` (env `OFF_USER_ID`/`OFF_PASSWORD`) → заголовок HTTP Basic Auth через interceptor RestClient (НИКОГДА не query); без учётки — анонимный режим + WARN при старте; UA-контакт = email учётки, если задана | ✅ |
 | 3 | docker-compose не пробрасывал OFF_USER_ID/OFF_PASSWORD в backend (env из .env не доходили) | проброс env в сервисе backend + комментарий; `.env.example` и README уже документировали переменные — теперь код соответствует докам | ✅ |
 | 4 | Периодические анонимные 503 (rate-limit по IP) | сохранены throttling 6.5 c + retry/backoff на 429/5xx + graceful degradation; с учёткой — приоритетный доступ без лимитов | ✅ |
+| 5 | «Подключить» показывал дамп всей 25-КБ HTML-заглушки OFF в тосте | `friendlyOffError`: по коду (401/403/429/503) — короткая суть + подсказка (учётка/лимит/повторить), неизвестные коды — excerpt ≤200 симв. без тегов; HTML в сообщениях ошибок и в `integrations.error_message` больше не появляется | ✅ |
 
 Тесты Fix-9 (`OpenFoodFactsProviderTest`): v2-URI поиска без auth-параметров, страж
 «нет /cgi/search.pl и query-авторизации в исходнике», `buildUserAgent` (дефолт/email
-учётки), `basicAuthHeader` (null без учётки, корректный base64 с учёткой), учётка
-опциональна и не течёт в toString. Прежние тесты-запреты «никаких креденшелов»
+учётки), `basicAuthHeader` (null без учётки, корректный base64 с учёткой),
+`friendlyOffError` (503/429/401 — подсказки без HTML-дампа, неизвестные коды —
+обрезанный excerpt), учётка опциональна и не течёт в toString. Прежние тесты-запреты
+«никаких креденшелов»
 (`providerClassSourceHasNoCredentialPlumbing`, `testConnectionDoesNotRequireCredentialsAnymore`)
 сознательно заменены — политика OFF изменилась (анонимный поиск блокируется).
 Доки: ARCHITECTURE §«Внешние цены и карточки продуктов» (контракт v2 + авторизация);

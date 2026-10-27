@@ -73,6 +73,37 @@ class OpenFoodFactsProviderTest {
     }
 
     @Test
+    void friendlyOffErrorReplacesHtmlDumpWithHint() {
+        // Fix-9 (п.5): OFF на 503 отдаёт 25 КБ HTML — в ошибке должна быть
+        // суть + подсказка про учётку, никакого HTML-дампа.
+        String html = "<!DOCTYPE html><html lang=\"en\"><head><title>Page temporarily "
+                + "unavailable - Open Food Facts</title><style>*{margin:0}</style></head>"
+                + "<body><h1>Page temporarily unavailable</h1></body></html>";
+        String msg = OpenFoodFactsProvider.friendlyOffError(503, html);
+        assertTrue(msg.contains("503"), "Код статуса должен быть виден: " + msg);
+        assertTrue(msg.contains("OFF_USER_ID"), "Подсказка про учётку OFF: " + msg);
+        assertFalse(msg.contains("<!DOCTYPE"), "HTML-дамп запрещён в сообщении");
+        assertFalse(msg.contains("<html"), "HTML-теги запрещены в сообщении");
+        assertTrue(msg.length() < 400, "Сообщение должно быть коротким");
+    }
+
+    @Test
+    void friendlyOffErrorCoversTypicalCodesAndTruncatesUnknown() {
+        assertTrue(OpenFoodFactsProvider.friendlyOffError(429, "").contains("лимит"));
+        assertTrue(OpenFoodFactsProvider.friendlyOffError(401, null).contains("OFF_USER_ID"));
+        assertTrue(OpenFoodFactsProvider.friendlyOffError(403, null).contains("OFF_USER_ID"));
+        // неизвестный код: короткий excerpt без тегов, длинное тело режется
+        String longBody = "x".repeat(5000);
+        String msg = OpenFoodFactsProvider.friendlyOffError(500, "<b>oops</b> " + longBody);
+        assertTrue(msg.startsWith("Open Food Facts: HTTP 500"));
+        assertFalse(msg.contains("<b>"));
+        assertTrue(msg.length() <= 260, "Excerpt должен быть обрезан: " + msg.length());
+        // null-тело не роняет
+        assertEquals("Open Food Facts: HTTP 502",
+                OpenFoodFactsProvider.friendlyOffError(502, null));
+    }
+
+    @Test
     void searchRequestUriIsApiV2WithoutAuthParams() throws Exception {
         // Fix-9: проверяем формируемый URI поиска: API v2, только поисковые
         // параметры; user_id/password в строке запроса ЗАПРЕЩЕНЫ (v2 их не

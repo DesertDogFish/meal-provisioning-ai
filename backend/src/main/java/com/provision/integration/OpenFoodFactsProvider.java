@@ -201,10 +201,41 @@ public class OpenFoodFactsProvider implements PriceProvider, ProductInfoProvider
                     .retrieve()
                     .toBodilessEntity();
             return ConnectionStatus.success();
+        } catch (HttpStatusCodeException e) {
+            // Fix-9 (п.5): человекочитаемая ошибка — OFF на 503 отдаёт 25 КБ
+            // HTML-заглушки, в тосте/БД это бесполезный дамп. Только суть + подсказка.
+            String message = friendlyOffError(e.getStatusCode().value(), e.getResponseBodyAsString());
+            log.error("Failed to connect to Open Food Facts: {}", message);
+            return ConnectionStatus.error(message);
         } catch (Exception e) {
             log.error("Failed to connect to Open Food Facts: {}", e.getMessage());
             return ConnectionStatus.error(e.getMessage());
         }
+    }
+
+    /**
+     * Fix-9 (п.5): короткое сообщение об ошибке OFF вместо дампа тела ответа.
+     * Типовые коды получают готовую подсказку (что делать); неизвестные —
+     * короткий текстовый excerpt (HTML-теги вычищены, максимум 200 символов).
+     * Чистая функция — покрыта юнит-тестом.
+     */
+    static String friendlyOffError(int status, String body) {
+        String hint = switch (status) {
+            case 401, 403 -> "доступ запрещён — проверьте учётку OFF (env OFF_USER_ID/OFF_PASSWORD).";
+            case 429 -> "превышен лимит запросов — повторите позже; для частых синхронизаций настройте учётку OFF.";
+            case 503 -> "сервис временно недоступен (перегрузка или лимит анонимных запросов по IP). "
+                    + "Настройте учётку OFF (env OFF_USER_ID/OFF_PASSWORD), пересоберите backend и повторите.";
+            default -> null;
+        };
+        if (hint != null) {
+            return "Open Food Facts: HTTP " + status + " — " + hint;
+        }
+        String excerpt = body == null ? "" : body.replaceAll("<[^>]*>", " ")
+                .replaceAll("\\s+", " ").trim();
+        if (excerpt.length() > 200) {
+            excerpt = excerpt.substring(0, 200) + "…";
+        }
+        return "Open Food Facts: HTTP " + status + (excerpt.isEmpty() ? "" : " — " + excerpt);
     }
 
     @Override
