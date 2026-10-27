@@ -8,6 +8,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.HttpStatusCodeException;
+import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
 
 import java.math.BigDecimal;
@@ -27,30 +28,35 @@ import java.util.regex.Pattern;
 /**
  * Провайдер Open Food Facts.
  *
- * Fix-9 (интеграция, 27.10): приложение стабильно получало 503 «Page
- * temporarily unavailable» — поиск ходил в УСТАРЕВШИЙ эндпоинт
- * {@code /cgi/search.pl}, который OFF закрыл (503 даже с корректным
- * User-Agent). Переведён на {@code GET /api/v2/search} (тот же формат
- * ответа: {products: [...], count, page, ...}).
+ * Fix-11 (27.10, по официальной доке https://openfoodfacts.github.io/openfoodfacts-server/api/):
+ * - полнотекстовый поиск переведён на Search-a-licious (search.openfoodfacts.org,
+ *   {@code GET /search?q=...} → {hits:[...]}): {@code /api/v2/search} параметр
+ *   search_terms ИГНОРИРУЕТ («Full-text search is not available in the v2
+ *   server-side API» — выдача = вся база без фильтрации), а {@code /cgi/search.pl}
+ *   закрыт (Fix-9: стабильный 503 даже с корректным User-Agent);
+ * - user_id учётки OFF — это USERNAME, «You must not use your email address»
+ *   (сноска user_id_not_email официальной доки); email-контакт для User-Agent —
+ *   отдельная опция integration.off.contact-email;
+ * - rate-limits доки: 10 req/min/IP на поиск, 15 req/min/IP на карточки продуктов;
+ *   превышение — вплоть до IP-бана; плюс глобальные лимиты (503 независимо от IP).
  *
  * Реализация приведена в соответствие с официальной документацией OFF
- * (https://openfoodfacts.github.io/openfoodfacts-server/api/) и фактической
- * политикой сервиса (2026):
+ * и фактической политикой сервиса (2026):
  *
- * 1. Поиск — API v2 ({@code /api/v2/search}); карточка продукта — v2
- *    ({@code /api/v2/product/{code}}).
+ * 1. Поиск — Search-a-licious ({@code GET /search?q=}); карточка продукта —
+ *    v2 ({@code /api/v2/product/{code}}); цены — Open Prices.
  *
  * 2. Обязательный User-Agent в формате "AppName/Version (ContactEmail)" —
- *    без него OFF блокирует запросы как ботовые (503). Если настроена учётная
- *    запись OFF, контактом в UA указывается её email (рекомендация OFF).
+ *    без него OFF блокирует запросы как ботовые (503). Контакт — EMAIL
+ *    (integration.off.contact-email; legacy: user-id, если он похож на email;
+ *    иначе дефолтный адрес).
  *
- * 3. ОПЦИОНАЛЬНАЯ авторизация учёткой OFF (integration.off.user-id/password,
- *    env OFF_USER_ID/OFF_PASSWORD) — HTTP Basic Auth ЗАГОЛОВКОМ (никогда не
- *    query-параметрами: user_id/password в строке запроса v2-API не
- *    аутентифицируют и провоцируют 503). Зарегистрированные пользователи
- *    «не подвержены лимитам запросов и получают приоритетный доступ»
- *    (сообщение самой OFF на странице 503); анонимный поиск жёстко
- *    rate-limit'ится по IP. Без учётки провайдер работает анонимно.
+ * 3. ОПЦИОНАЛЬНАЯ авторизация учёткой OFF (integration.off.user-id = USERNAME
+ *    + password, env OFF_USER_ID/OFF_PASSWORD) — HTTP Basic Auth ЗАГОЛОВКОМ.
+ *    По доке READ-операции авторизации не требуют (только кастомный UA), а
+ *    query-параметры user_id/password разрешены только на POST/PUT/DELETE;
+ *    учётка даёт приоритетный доступ при глобальных лимитах («Registered users
+ *    are not subject to request limits» — сообщение OFF на странице 503).
  *
  * 4. Клиентский rate limiting: поиск ограничен 10 запросами в минуту на IP,
  *    поэтому вызовы сериализуются семафором + паузой ~6.5 c между запросами.
@@ -90,6 +96,9 @@ public class OpenFoodFactsProvider implements PriceProvider, ProductInfoProvider
     /** Максимум повторных попыток при 429/5xx. */
     private static final int MAX_RETRIES = 3;
 
+    /** Fix-11 (п.6): максимум дополнительных попыток testConnection при транзиентных I/O-сбоях. */
+    private static final int IO_RETRIES = 2;
+
     /** Сколько последних цен на продукт тянуть из Open Prices (история по датам). */
     static final int PRICES_PAGE_SIZE = 10;
 
@@ -112,11 +121,23 @@ public class OpenFoodFactsProvider implements PriceProvider, ProductInfoProvider
     private String pricesUrl;
 
     /**
+     * Fix-11: полнотекстовый поиск — сервис Search-a-licious
+     * (https://search.openfoodfacts.org, GET /search?q=...). Официальная дока
+     * OFF: «Full-text search is NOT available in the v2 server-side API» —
+     * /api/v2/search молча ИГНОРИРУЕТ search_terms и возвращает всю базу
+     * (count ≈ 4.8 млн, в «результатах» — случайные продукты).
+     */
+    @Value("${integration.off.search-url:https://search.openfoodfacts.org}")
+    private String searchUrl;
+
+    /**
      * Fix-9: ОПЦИОНАЛЬНАЯ учётная запись OFF (env OFF_USER_ID/OFF_PASSWORD).
-     * Анонимный поиск OFF жёстко лимитирует (503 «Page temporarily
-     * unavailable»); зарегистрированные пользователи получают приоритетный
-     * доступ без лимитов. Учётка передаётся ТОЛЬКО заголовком Basic Auth —
-     * query-параметры user_id/password в API v2 не работают.
+     * Fix-11 (по доке OFF): user_id — это USERNAME аккаунта, «You must not use
+     * your email address». READ-операции по доке авторизации не требуют вовсе
+     * (только кастомный User-Agent), но учётка даёт приоритетный доступ при
+     * глобальных лимитах (сообщение OFF на странице 503). Передаётся ТОЛЬКО
+     * заголовком Basic Auth — query-параметры user_id/password докой запрещены
+     * на GET-запросах.
      */
     @Value("${integration.off.user-id:}")
     private String offUserId;
@@ -124,14 +145,46 @@ public class OpenFoodFactsProvider implements PriceProvider, ProductInfoProvider
     @Value("${integration.off.password:}")
     private String offPassword;
 
+    /**
+     * Fix-11: контакт для User-Agent (дока OFF: «AppName/Version (ContactEmail)»
+     * — именно EMAIL). Username учётки email'ом не является, поэтому контакт —
+     * отдельная опция (env OFF_CONTACT_EMAIL); если не задан, а user-id похож
+     * на email (legacy-конфиг) — используется он, иначе дефолтный адрес.
+     */
+    @Value("${integration.off.contact-email:}")
+    private String offContactEmail;
+
+    /**
+     * Fix-11 (п.7): ОПЦИОНАЛЬНЫЙ прокси для всех запросов OFF
+     * (env OFF_PROXY_URL, примеры: http://127.0.0.1:8888, socks5://host:1080).
+     * Нужен там, где провайдер/файрвол режет TLS до хостов OFF
+     * (search.openfoodfacts.org на OVH — подтверждённый кейс: «Remote host
+     * terminated the handshake» / curl (35) с хост-машины).
+     */
+    @Value("${integration.off.proxy-url:}")
+    private String offProxyUrl;
+
+    /**
+     * Фабрика запросов держится отдельной ссылкой: Fix-11 (п.7) может
+     * выставить на ней прокси в @PostConstruct (после инъекции @Value),
+     * не пересоздавая RestClient. Таймауты обязательны: без них зависший
+     * запрос к OFF блокировал бы поток синхронизации навсегда.
+     */
+    private final org.springframework.http.client.SimpleClientHttpRequestFactory requestFactory;
+
     public OpenFoodFactsProvider(ExchangeRateService exchangeRateService) {
         this.exchangeRateService = exchangeRateService;
+        this.requestFactory = new org.springframework.http.client.SimpleClientHttpRequestFactory();
+        this.requestFactory.setConnectTimeout((int) TimeUnit.SECONDS.toMillis(10));
+        this.requestFactory.setReadTimeout((int) TimeUnit.SECONDS.toMillis(30));
         // Fix-9: заголовки проставляются интерсептором на каждый запрос —
         // учётка может быть внедрена @Value после конструктора, а UA зависит
-        // от неё (контакт = email учётки, иначе дефолтный).
+        // от неё (Fix-11: контакт — EMAIL из contact-email, не username).
         this.restClient = RestClient.builder()
+                .requestFactory(this.requestFactory)
                 .requestInterceptor((request, body, execution) -> {
-                    request.getHeaders().set(HttpHeaders.USER_AGENT, buildUserAgent(offUserId));
+                    request.getHeaders().set(HttpHeaders.USER_AGENT,
+                            buildUserAgent(offContactEmail, offUserId));
                     String auth = basicAuthHeader(offUserId, offPassword);
                     if (auth != null) {
                         request.getHeaders().set(HttpHeaders.AUTHORIZATION, auth);
@@ -142,13 +195,17 @@ public class OpenFoodFactsProvider implements PriceProvider, ProductInfoProvider
     }
 
     /**
-     * User-Agent по формату OFF "AppName/Version (ContactEmail)":
-     * контакт — email учётки OFF (если настроена), иначе дефолтный.
+     * User-Agent по формату OFF "AppName/Version (ContactEmail)" (дока:
+     * «always use a custom User-Agent … in the form of AppName/Version
+     * (ContactEmail)»). Приоритет контакта: явный contact-email → user-id,
+     * если он похож на email (legacy-конфиги) → дефолтный адрес.
      * Чистая функция — покрыта юнит-тестом.
      */
-    static String buildUserAgent(String contactEmail) {
-        String contact = (contactEmail == null || contactEmail.isBlank())
-                ? DEFAULT_CONTACT : contactEmail.trim();
+    static String buildUserAgent(String contactEmail, String userId) {
+        String contact = contactEmail != null && !contactEmail.isBlank()
+                ? contactEmail.trim()
+                : (userId != null && userId.contains("@") && !userId.isBlank()
+                        ? userId.trim() : DEFAULT_CONTACT);
         return "ProvisionApp/1.0.0 (" + contact + ")";
     }
 
@@ -170,14 +227,63 @@ public class OpenFoodFactsProvider implements PriceProvider, ProductInfoProvider
     void logConfig() {
         boolean authed = basicAuthHeader(offUserId, offPassword) != null;
         log.info("Open Food Facts provider initialized with User-Agent: {} (auth: {})",
-                buildUserAgent(offUserId), authed ? "OFF account (Basic Auth header)" : "anonymous");
+                buildUserAgent(offContactEmail, offUserId),
+                authed ? "OFF account (Basic Auth header)" : "anonymous");
         if (!authed) {
             log.warn("OFF credentials not set (integration.off.user-id/password or env "
                     + "OFF_USER_ID/OFF_PASSWORD) — anonymous mode: OFF search is heavily "
                     + "rate-limited and may return 503; set an account for priority access");
+        } else if (offUserId != null && offUserId.contains("@")) {
+            // Fix-11 (дока OFF, сноска user_id_not_email): «user_id is the username
+            // of your account. You must not use your email address.»
+            log.warn("OFF_USER_ID '{}' looks like an EMAIL — OFF docs require the account "
+                    + "USERNAME (not email); Basic Auth may be rejected. Check your profile "
+                    + "on world.openfoodfacts.org and set OFF_USER_ID to the username.", offUserId);
         }
-        log.info("OFF: product cards/search via {} (API v2); prices via Open Prices {} "
-                + "(converted to RUB using CBR rates)", productsUrl, pricesUrl);
+        // Fix-11 (п.7): прокси применяется к общей фабрике запросов — действует
+        // на ВСЕ хосты OFF (search/products/prices). UserInfo в лог не выводим.
+        java.net.Proxy proxy = parseProxyUrl(offProxyUrl);
+        if (proxy != null) {
+            requestFactory.setProxy(proxy);
+            log.info("OFF requests routed via proxy: {}",
+                    offProxyUrl.trim().replaceAll("://[^@/]+@", "://***@"));
+        } else if (offProxyUrl != null && !offProxyUrl.isBlank()) {
+            log.warn("integration.off.proxy-url '{}' не распознан (ждём http://host:port "
+                    + "или socks5://host:port) — работаем напрямую", offProxyUrl);
+        }
+        log.info("OFF: full-text search via {} (Search-a-licious); product cards via {} "
+                + "(API v2); prices via Open Prices {} (converted to RUB using CBR rates)",
+                searchUrl, productsUrl, pricesUrl);
+    }
+
+    /**
+     * Fix-11 (п.7): парсер proxy-url → java.net.Proxy; null — прокси не задан.
+     * Поддержка: http(s)://host:port (HTTP-прокси; для HTTPS-целей — CONNECT-туннель)
+     * и socks5://host:port. Дефолтные порты: http→3128, socks→1080.
+     * Чистая функция — покрыта юнит-тестом.
+     */
+    static java.net.Proxy parseProxyUrl(String url) {
+        if (url == null || url.isBlank()) {
+            return null;
+        }
+        try {
+            java.net.URI u = java.net.URI.create(url.trim());
+            String scheme = u.getScheme() == null ? "" : u.getScheme().toLowerCase();
+            String host = u.getHost();
+            if (host == null || host.isBlank()) {
+                return null;
+            }
+            boolean socks = scheme.equals("socks5") || scheme.equals("socks");
+            boolean http = scheme.equals("http") || scheme.equals("https");
+            if (!socks && !http) {
+                return null;
+            }
+            int port = u.getPort() > 0 ? u.getPort() : (socks ? 1080 : 3128);
+            return new java.net.Proxy(socks ? java.net.Proxy.Type.SOCKS : java.net.Proxy.Type.HTTP,
+                    new java.net.InetSocketAddress(host, port));
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     @Override
@@ -187,33 +293,120 @@ public class OpenFoodFactsProvider implements PriceProvider, ProductInfoProvider
 
     @Override
     public ConnectionStatus testConnection() {
-        // Fix-9: проверка доступности — минимальный READ-запрос к API v2
-        // (старый /cgi/search.pl закрыт OFF — стабильный 503).
-        String uri = UriStringBuilder.from(productsUrl)
-                .path("/api/v2/search")
-                .queryParam("search_terms", "milk")
+        // Fix-11: проверка доступности — минимальный запрос к ПОИСКОВОМУ сервису
+        // (Search-a-licious): именно он используется потоком импорта продуктов.
+        // История: /cgi/search.pl закрыт OFF (503); /api/v2/search игнорирует
+        // search_terms (full-text не поддержан в v2 — официальная дока).
+        String uri = UriStringBuilder.from(searchUrl)
+                .path("/search")
+                .queryParam("q", "milk")
                 .queryParam("fields", "code")
                 .queryParam("page_size", 1)
                 .build();
-        try {
-            restClient.get()
-                    .uri(uri)
-                    .retrieve()
-                    .toBodilessEntity();
-            return ConnectionStatus.success();
-        } catch (HttpStatusCodeException e) {
-            // Fix-9 (п.5): человекочитаемая ошибка — OFF на 503 отдаёт 25 КБ
-            // HTML-заглушки, в тосте/БД это бесполезный дамп. Только суть + подсказка.
-            // Fix-9 (п.6): подсказка зависит от режима — с настроенной учёткой 503
-            // означает временный IP-блок (ждать), без учётки — настроить креды.
-            String message = friendlyOffError(e.getStatusCode().value(), e.getResponseBodyAsString(),
-                    basicAuthHeader(offUserId, offPassword) != null);
-            log.error("Failed to connect to Open Food Facts: {}", message);
-            return ConnectionStatus.error(message);
-        } catch (Exception e) {
-            log.error("Failed to connect to Open Food Facts: {}", e.getMessage());
-            return ConnectionStatus.error(e.getMessage());
+        boolean authed = basicAuthHeader(offUserId, offPassword) != null;
+        // Fix-11 (п.6): транзиентные сетевые/TLS-сбои («Remote host terminated
+        // the handshake», таймауты) ретраятся — единичный обрыв рукопожатия не
+        // должен ронять «Подключить»; HTTP-ошибки не ретраятся (503 объясняет
+        // friendlyOffError). Connection refused — тоже без ретраев (нечего слушать).
+        String lastIoMessage = null;
+        for (int attempt = 0; attempt <= IO_RETRIES; attempt++) {
+            try {
+                restClient.get()
+                        .uri(uri)
+                        .retrieve()
+                        .toBodilessEntity();
+                return ConnectionStatus.success();
+            } catch (HttpStatusCodeException e) {
+                // Fix-9 (п.5): человекочитаемая ошибка — OFF на 503 отдаёт 25 КБ
+                // HTML-заглушки, в тосте/БД это бесполезный дамп. Только суть + подсказка.
+                // Fix-9 (п.6): подсказка зависит от режима — с настроенной учёткой 503
+                // означает временный IP-блок (ждать), без учётки — настроить креды.
+                String message = friendlyOffError(e.getStatusCode().value(), e.getResponseBodyAsString(), authed);
+                log.error("Failed to connect to Open Food Facts: {}", message);
+                return ConnectionStatus.error(message);
+            } catch (ResourceAccessException e) {
+                String root = rootCauseMessage(e);
+                lastIoMessage = friendlyIoError(root, searchUrl);
+                log.warn("OFF connection attempt {}/{} failed (I/O): {}", attempt + 1, IO_RETRIES + 1, root);
+                if (isTransientIoFailure(e) && attempt < IO_RETRIES) {
+                    sleep(1000L << attempt); // 1s, 2s
+                    continue;
+                }
+                break;
+            } catch (Exception e) {
+                log.error("Failed to connect to Open Food Facts: {}", e.getMessage());
+                return ConnectionStatus.error(e.getMessage());
+            }
         }
+        log.error("Failed to connect to Open Food Facts: {}", lastIoMessage);
+        return ConnectionStatus.error(lastIoMessage);
+    }
+
+    /**
+     * Fix-11 (п.6): человекочитаемая сетевая ошибка вместо сырого
+     * «I/O error on GET request … Remote host terminated the handshake».
+     * Чистая функция (принимает текст root-причины) — покрыта юнит-тестом.
+     */
+    static String friendlyIoError(String rootCauseMessage, String endpointUrl) {
+        String msg = rootCauseMessage == null ? "" : rootCauseMessage.toLowerCase();
+        String host = "сервис OFF";
+        try {
+            host = java.net.URI.create(endpointUrl == null ? "" : endpointUrl).getHost();
+        } catch (Exception ignored) { /* остаёмся на общей формулировке */ }
+        if (msg.contains("handshake") || msg.contains("ssl") || msg.contains("tls")) {
+            return "Не удалось установить TLS-соединение с " + host + " (рукопожатие оборвано). "
+                    + "Вероятные причины: хост заблокирован/фильтруется вашим провайдером "
+                    + "(search.openfoodfacts.org размещён на OVH, доступность зависит от сети) "
+                    + "или сбой на стороне сервиса. Проверьте с хост-машины: "
+                    + "curl -v \"https://" + host + "/search?q=milk&page_size=1\". "
+                    + "Если провайдер блокирует — запустите backend через VPN/прокси или повторите позже.";
+        }
+        if (msg.contains("timed out") || msg.contains("timeout")) {
+            return host + " не ответил вовремя — сервис перегружен или сеть нестабильна; повторите через несколько минут.";
+        }
+        if (msg.contains("unknown host") || msg.contains("unresolved") || msg.contains("name or service not known")) {
+            return "Не удалось разрешить имя " + host + " (DNS). Проверьте DNS контейнера: "
+                    + "docker compose exec backend nslookup " + host;
+        }
+        if (msg.contains("connection refused")) {
+            return host + " отказал в соединении — сервис недоступен; повторите позже.";
+        }
+        String shortMsg = rootCauseMessage == null ? "неизвестная сетевая ошибка"
+                : (rootCauseMessage.length() > 200 ? rootCauseMessage.substring(0, 200) + "…" : rootCauseMessage);
+        return "Сетевая ошибка доступа к " + host + ": " + shortMsg;
+    }
+
+    /**
+     * Fix-11 (п.6): транзиентный ли сетевой сбой (стоит ли ретраить)?
+     * TLS-рукопожатие/обрывы/таймауты — да; connection refused — нет (быстрый провал).
+     */
+    static boolean isTransientIoFailure(Throwable t) {
+        for (Throwable c = t; c != null; c = c.getCause()) {
+            if (c instanceof java.net.ConnectException) {
+                return false; // никто не слушает — ретрай бессмыслен
+            }
+            if (c instanceof javax.net.ssl.SSLException
+                    || c instanceof java.net.SocketTimeoutException
+                    || c instanceof java.io.EOFException) {
+                return true;
+            }
+            if (c instanceof java.net.SocketException) {
+                String m = String.valueOf(c.getMessage()).toLowerCase();
+                if (m.contains("reset") || m.contains("broken pipe")) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /** Сообщение самой глубокой причины — в нём суть (handshake/timeout/…). */
+    static String rootCauseMessage(Throwable t) {
+        Throwable root = t;
+        while (root.getCause() != null && root.getCause() != root) {
+            root = root.getCause();
+        }
+        return root.getMessage() != null ? root.getMessage() : root.getClass().getSimpleName();
     }
 
     /**
@@ -252,12 +445,15 @@ public class OpenFoodFactsProvider implements PriceProvider, ProductInfoProvider
 
     @Override
     public List<ExternalProductDto> searchProducts(String query, int limit) {
-        // Fix-9: поиск через API v2 (https://world.openfoodfacts.org/api/v2/search).
+        // Fix-11: полнотекстовый поиск — Search-a-licious (search.openfoodfacts.org,
+        // GET /search?q=...): /api/v2/search параметр search_terms ИГНОРИРУЕТ
+        // («Full-text search is not available in the v2 server-side API» — official
+        // docs; выдача = вся база без фильтрации), а /cgi/search.pl закрыт (503).
         // Учётка OFF (если настроена) уходит заголовком Basic Auth в интерсепторе;
-        // в query-параметрах авторизации НЕТ — v2 их не принимает.
-        String uri = UriStringBuilder.from(productsUrl)
-                .path("/api/v2/search")
-                .queryParam("search_terms", query)
+        // в query-параметрах авторизации НЕТ (дока: на GET — никогда).
+        String uri = UriStringBuilder.from(searchUrl)
+                .path("/search")
+                .queryParam("q", query)
                 .queryParam("fields", "code,product_name,brands,quantity,image_url")
                 .queryParam("page_size", limit)
                 .build();
@@ -267,16 +463,54 @@ public class OpenFoodFactsProvider implements PriceProvider, ProductInfoProvider
             // Graceful degradation: после исчерпания ретраев — пустой результат.
             return Collections.emptyList();
         }
+        return parseSearchHits(response);
+    }
 
+    /**
+     * Fix-11: парсер ответа Search-a-licious — {hits: [{code, product_name,
+     * brands: [..], quantity, image_url}], count, page, ...}. Отличия от v2:
+     * массив называется hits, brands — МАССИВ строк (join через ", ").
+     * Позиции без code/name пропускаются. Чистая функция — покрыта юнит-тестом.
+     */
+    static List<ExternalProductDto> parseSearchHits(JsonNode response) {
         List<ExternalProductDto> results = new ArrayList<>();
-        if (response.has("products")) {
-            for (JsonNode product : response.get("products")) {
-                // Общий билдер карточки (fix U11): code и name обязательны,
-                // brand/фасовка/фото — best-effort.
-                buildProductDto(null, product).ifPresent(results::add);
+        if (response == null || !response.has("hits") || !response.get("hits").isArray()) {
+            return results;
+        }
+        for (JsonNode hit : response.get("hits")) {
+            String code = textOrNull(hit, "code");
+            String name = textOrNull(hit, "product_name");
+            if (code == null || name == null) {
+                continue; // без кода/названия карточка бесполезна
             }
+            String brand = null;
+            JsonNode brands = hit.path("brands");
+            if (brands.isArray()) {
+                StringBuilder sb = new StringBuilder();
+                for (JsonNode b : brands) {
+                    String t = b.asText(null);
+                    if (t != null && !t.isBlank()) {
+                        if (sb.length() > 0) sb.append(", ");
+                        sb.append(t.trim());
+                    }
+                }
+                brand = sb.length() > 0 ? sb.toString() : null;
+            } else if (brands.isTextual() && !brands.asText().isBlank()) {
+                brand = brands.asText(); // совместимость с v2-формой (строка)
+            }
+            PackInfo packInfo = parseQuantity(textOrNull(hit, "quantity"));
+            results.add(new ExternalProductDto(code, name, brand,
+                    packInfo.amount(), packInfo.unit(), textOrNull(hit, "image_url")));
         }
         return results;
+    }
+
+    /** Текстовое поле узла или null (missing/null/пусто). */
+    private static String textOrNull(JsonNode node, String field) {
+        JsonNode v = node.path(field);
+        if (v.isMissingNode() || v.isNull()) return null;
+        String t = v.asText();
+        return t == null || t.isBlank() ? null : t;
     }
 
     /**
@@ -451,6 +685,20 @@ public class OpenFoodFactsProvider implements PriceProvider, ProductInfoProvider
                 log.warn("Open Food Facts {} failed with HTTP {}: {}",
                         description, e.getStatusCode().value(), e.getStatusText());
                 return null;
+            } catch (ResourceAccessException e) {
+                // Fix-11 (п.6): транзиентные сетевые/TLS-сбои (обрыв рукопожатия,
+                // таймаут, reset) ретраятся как 429/5xx; connection refused —
+                // быстрый провал без ретраев (нечего слушать).
+                if (isTransientIoFailure(e) && attempt < MAX_RETRIES) {
+                    long backoffMs = 1000L << attempt; // 1s, 2s, 4s
+                    log.warn("Open Food Facts {} network failure ({}), retrying in {} ms (attempt {}/{})",
+                            description, rootCauseMessage(e), backoffMs, attempt + 1, MAX_RETRIES + 1);
+                    sleep(backoffMs);
+                    continue;
+                }
+                log.warn("Open Food Facts {} network failure (not retried): {}",
+                        description, rootCauseMessage(e));
+                return null;
             } catch (Exception e) {
                 log.warn("Open Food Facts {} failed: {}", description, e.getMessage());
                 return null;
@@ -572,7 +820,7 @@ public class OpenFoodFactsProvider implements PriceProvider, ProductInfoProvider
         }
     }
 
-    private PackInfo parseQuantity(String quantity) {
+    private static PackInfo parseQuantity(String quantity) {
         if (quantity == null || quantity.isEmpty()) {
             return new PackInfo(null, null);
         }
@@ -613,7 +861,7 @@ public class OpenFoodFactsProvider implements PriceProvider, ProductInfoProvider
         return new PackInfo(null, null);
     }
 
-    private String normalizeUnit(String unit, BigDecimal amount) {
+    private static String normalizeUnit(String unit, BigDecimal amount) {
         if (unit.equals("g") || unit.equals("gr") || unit.equals("gram") || unit.equals("grams")) {
             return "g";
         } else if (unit.equals("kg") || unit.equals("kilo") || unit.equals("kilos")) {

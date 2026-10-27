@@ -80,11 +80,19 @@ docker compose up --build
 | `SPRING_PROFILES_ACTIVE` | `dev` | Профиль бэкенда |
 | `SEED_DEMO_USERS` | `false` (в compose) / `true` (в `.env.example`) | Демо-пользователи и демо-походы (только `dev`) |
 | `CORS_ALLOWED_ORIGINS` | `http://localhost:5173,http://localhost:3000` | Origins для прямых запросов к API (вне nginx-прокси) |
-| `OFF_USER_ID`, `OFF_PASSWORD` | пусто (анонимный режим) | Учётка world.openfoodfacts.org для обхода лимитов 429/503 |
+| `OFF_USER_ID`, `OFF_PASSWORD` | пусто (анонимный режим) | Учётка world.openfoodfacts.org для обхода лимитов 429/503. **`OFF_USER_ID` — USERNAME аккаунта, не email** (дока OFF: «You must not use your email address») |
+| `OFF_CONTACT_EMAIL` | пусто (дефолт `support@provision.app`) | Email-контакт для User-Agent (формат OFF `AppName/Version (ContactEmail)`) |
+| `OFF_PROXY_URL` | пусто (напрямую) | Прокси для всех запросов OFF: `http://host:port` или `socks5://host:port`. Спасает, когда провайдер режет TLS до `search.openfoodfacts.org` (curl (35) / «Remote host terminated the handshake»). Прокси на хост-машине из контейнера: `http://host.docker.internal:PORT` |
 | `VITE_API_URL`, `VITE_API_MODE` | `/api/v1`, `real` в Docker-сборке | Подставляются **при сборке** фронта; режим: `auto` / `real` / `mock` |
 | `VITE_MOCK_LATENCY_MS` | `100` | Базовая имитация задержки mock-режима (мс, +до 80 мс джиттера); `0` — мгновенный mock. Подставляется при сборке фронта |
 
 В Docker-стеке фронт ходит в API через nginx-прокси (`/api/` → backend), CORS не нужен. Приоритет выбора режима фронта: переключатель в UI (localStorage) → `VITE_API_MODE` → авто-пинг `GET /api/v1/meta`.
+
+> OFF (Fix-11): поиск продуктов идёт через Search-a-licious (`search.openfoodfacts.org`),
+> full-text в `/api/v2/search` официально отсутствует. Лимиты доки: 10 req/min/IP на поиск,
+> 15 req/min/IP на карточки — провайдер тротлит сам (6.5 c между запросами). Рекомендуется
+> заполнить [API usage form](https://docs.google.com/forms/d/e/1FAIpQLSdIE3D8qvjC_zRJw1W8OmuHhsWJ_NSckiiniAHlfaVwUZCziQ/viewform)
+> (из доки OFF) — это снижает риск IP-банов.
 
 ## Деплой фронтенда на Vercel (демо без бэкенда)
 
@@ -94,12 +102,19 @@ Fix-10 (п.4): демо-деплой `https://meal-provisioning-ai.vercel.app/` 
 - **`vercel.json` (обязателен)** — SPA-rewrites всех маршрутов на `/index.html`: без него
   прямые заходы/refresh и PDF-отчёт (`/trips/:id/print`, открывается новой вкладкой)
   отдают 404 «нет такой страницы».
-- **`tokens.css` в сборке** — плагин `copy-design-pack-assets` (vite.config.js) копирует
-  `provisions/design-pack/tokens.css` и `og-cover.png` в `dist/`: index.html ссылается на
-  токены темы по абсолютному пути, и без копии прод-сборка теряла ВСЮ тему (цвета/отступы).
+- **`tokens.css`/ассеты design-pack в сборке** — плагин `copy-design-pack-assets` (vite.config.js)
+  копирует `provisions/design-pack/tokens.css`, `assets/preloader.svg` и `og-cover.png` в `dist/`:
+  `<link>` на tokens.css и boot-лоадер в index.html ссылаются на них абсолютными путями
+  (без копии — 404; сама тема дублируется JS-импортом tokens.css в main.tsx, поэтому
+  визуально прод не ломался — 404 был косметическим, но boot-лоадеру SVG нужен файлом).
 - **Скорость** — страницы грузятся ленивыми чанками (React.lazy + Suspense с брендовым
   `PageLoader`), mock-задержка уменьшена (100–180 мс вместо 200–400; `VITE_MOCK_LATENCY_MS=0`
-  для мгновенного демо).
+  для мгновенного демо), Google Fonts грузится асинхронно (render-blocking запрос шрифтов
+  на нестабильных сетях давал до ~30 c белого экрана), в `#root` встроен мгновенный
+  boot-лоадер (SVG-парус design-pack — виден до загрузки JS).
+- **Режим API** — `vercel.json` исключает `/api/` из SPA-rewrite, а `resolveMode` требует
+  `content-type: json` для 'real': иначе SPA-фолбэк (200 + index.html) переключал бы
+  приложение в 'real' и все запросы получали HTML.
 
 ## Технологический стек
 

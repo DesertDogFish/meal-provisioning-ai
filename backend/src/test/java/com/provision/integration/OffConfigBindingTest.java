@@ -34,6 +34,12 @@ class OffConfigBindingTest {
         String userId;
         @Value("${integration.off.password:}")
         String password;
+        @Value("${integration.off.search-url:}")
+        String searchUrl;
+        @Value("${integration.off.contact-email:}")
+        String contactEmail;
+        @Value("${integration.off.proxy-url:}")
+        String proxyUrl;
     }
 
     private AnnotationConfigApplicationContext contextWith(Map<String, Object> envLike) throws Exception {
@@ -64,6 +70,13 @@ class OffConfigBindingTest {
                     "integration.off.user-id обязан резолвиться из OFF_USER_ID через yml-плейсхолдер");
             assertEquals(".UtF#W@Ag8Ab4vs", probe.password,
                     "Пароль с # и @ должен проходить без искажений");
+            // Fix-11: новые ключи yml на месте (опечатка в 'off'/search-url роняет тест)
+            assertEquals("https://search.openfoodfacts.org", probe.searchUrl,
+                    "integration.off.search-url должен грузиться из application.yml");
+            assertEquals("", probe.contactEmail,
+                    "contact-email без env — пустой дефолт (UA возьмёт fallback)");
+            assertEquals("", probe.proxyUrl,
+                    "proxy-url без env — пустой дефолт (запросы напрямую)");
         }
     }
 

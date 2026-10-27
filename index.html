@@ -21,10 +21,19 @@
          источник правды), до инлайн-стилов и до src/index.css -->
     <link rel="stylesheet" href="/provisions/design-pack/tokens.css">
 
-    <!-- Шрифты дизайн-системы «Провиант» -->
+    <!-- Шрифты дизайн-системы «Провиант».
+         Fix-11 (Vercel/медленный старт): грузим АСИНХРОННО (media="print" +
+         onload-переключение) — render-blocking запрос к fonts.googleapis.com
+         на медленных/нестабильных сетях держал первый пейнт до ~30 c.
+         До загрузки шрифтов текст рисуется системным стеком (tokens.css:
+         Manrope → system-ui/Segoe UI), display=swap подменяет без сдвигов. -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700&family=Manrope:wght@400;500;600;700;800&display=swap"
+          rel="stylesheet" media="print" onload="this.media='all'">
+    <noscript>
+      <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    </noscript>
 
     <style>
       /* Инлайн-стили только structural (без цветов вне токенов): фон/текст — из tokens.css */
@@ -36,6 +45,39 @@
         height: 100%;
         background-color: var(--bg-0);
         color: var(--text-1);
+      }
+
+      /* Fix-11: мгновенный boot-лоадер — брендовый парус design-pack виден СРАЗУ
+         (статичный HTML+SVG, не ждёт JS/CSS-бандл); React затрёт #root при
+         монтаже и передаст эстафету PageLoader/контенту. Цвета — токены темы
+         с hex-фолбэками (tokens.css может ещё не доехать). */
+      .boot-loader {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 18px;
+        background: var(--bg-0, #0B141B);
+      }
+      [data-theme="light"] .boot-loader { background: var(--bg-0, #F5F2EB); }
+      .boot-loader img {
+        width: 96px;
+        height: 96px;
+        filter: drop-shadow(0 0 18px rgba(240, 138, 46, 0.35));
+      }
+      .boot-loader span {
+        font: 600 12px/1 system-ui, "Segoe UI", sans-serif;
+        letter-spacing: .12em;
+        text-transform: uppercase;
+        color: var(--text-3, rgba(245, 242, 234, 0.55));
+        animation: boot-breathe 1.8s ease-in-out infinite;
+      }
+      [data-theme="light"] .boot-loader span { color: var(--text-3, rgba(11, 20, 27, 0.5)); }
+      @keyframes boot-breathe {
+        0%, 100% { opacity: .45; }
+        50%      { opacity: 1; }
       }
     </style>
     <script>
@@ -52,7 +94,14 @@
     </script>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <!-- Fix-11: статичный boot-лоадер (парус design-pack) — виден до загрузки
+           JS-бандла; React очистит #root при первом рендере. -->
+      <div class="boot-loader" role="status" aria-label="Приложение загружается">
+        <img src="/provisions/design-pack/assets/preloader.svg" alt="" onerror="this.style.display='none'">
+        <span>Провиант</span>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

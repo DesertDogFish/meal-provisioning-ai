@@ -24,6 +24,10 @@ function installFetchMock() {
     return {
       ok: true,
       status: 200,
+      // Fix-11: resolveMode требует content-type json для 'real' (защита от
+      // SPA-фолбэка 200+HTML на статических хостингах) — мок моделирует
+      // поведение настоящего API, который всегда отдаёт JSON.
+      headers: { get: (h: string) => (h.toLowerCase() === 'content-type' ? 'application/json' : null) },
       json: async () => ({ version: 'test', db: 'postgres' }),
     };
   }));

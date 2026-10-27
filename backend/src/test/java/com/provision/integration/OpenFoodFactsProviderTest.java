@@ -45,14 +45,18 @@ class OpenFoodFactsProviderTest {
     }
 
     @Test
-    void userAgentUsesOffAccountEmailWhenConfigured() {
-        // Fix-9: контакт в UA — email учётки (рекомендация OFF), иначе дефолт
-        assertEquals("ProvisionApp/1.0.0 (user@mail.com)",
-                OpenFoodFactsProvider.buildUserAgent("user@mail.com"));
+    void userAgentContactFollowsOffDocs() {
+        // Fix-11 (дока OFF): UA = "AppName/Version (ContactEmail)" — контакт EMAIL.
+        // Приоритет: явный contact-email → user-id, если он похож на email (legacy)
+        // → дефолт. USERNAME (не email) в UA-контакт не подставляется.
+        assertEquals("ProvisionApp/1.0.0 (app@mail.com)",
+                OpenFoodFactsProvider.buildUserAgent("app@mail.com", "oleg_user"));
+        assertEquals("ProvisionApp/1.0.0 (legacy@mail.com)",
+                OpenFoodFactsProvider.buildUserAgent(null, "legacy@mail.com"));
         assertEquals("ProvisionApp/1.0.0 (support@provision.app)",
-                OpenFoodFactsProvider.buildUserAgent(null));
+                OpenFoodFactsProvider.buildUserAgent("  ", "oleg_user"));
         assertEquals("ProvisionApp/1.0.0 (support@provision.app)",
-                OpenFoodFactsProvider.buildUserAgent("  "));
+                OpenFoodFactsProvider.buildUserAgent(null, null));
     }
 
     @Test
@@ -120,10 +124,91 @@ class OpenFoodFactsProviderTest {
     }
 
     @Test
-    void searchRequestUriIsApiV2WithoutAuthParams() throws Exception {
-        // Fix-9: проверяем формируемый URI поиска: API v2, только поисковые
-        // параметры; user_id/password в строке запроса ЗАПРЕЩЕНЫ (v2 их не
-        // принимает; авторизация — заголовком, см. basicAuthHeaderIsBuilt…).
+    void friendlyIoErrorExplainsTlsHandshakeTermination() {
+        // Fix-11 (п.6): реальный кейс пользователя — «Remote host terminated the
+        // handshake» на search.openfoodfacts.org: сообщение должно объяснять
+        // probable-причину (провайдер/OVH) и давать команду проверки с хоста.
+        String msg = OpenFoodFactsProvider.friendlyIoError(
+                "Remote host terminated the handshake", "https://search.openfoodfacts.org");
+        assertTrue(msg.contains("TLS"), "Суть — TLS-рукопожатие: " + msg);
+        assertTrue(msg.contains("search.openfoodfacts.org"), "Хост в сообщении: " + msg);
+        assertTrue(msg.contains("curl"), "Подсказка как проверить с хоста: " + msg);
+        assertFalse(msg.contains("I/O error on GET request"), "Сырой текст Spring запрещён");
+    }
+
+    @Test
+    void friendlyIoErrorCoversTimeoutDnsRefusedAndUnknown() {
+        assertTrue(OpenFoodFactsProvider.friendlyIoError(
+                "Connect to x timed out", "https://search.openfoodfacts.org").contains("не ответил вовремя"));
+        assertTrue(OpenFoodFactsProvider.friendlyIoError(
+                "search.openfoodfacts.org: Name or service not known", "https://search.openfoodfacts.org")
+                .contains("DNS"));
+        assertTrue(OpenFoodFactsProvider.friendlyIoError(
+                "Connection refused", "https://world.openfoodfacts.org").contains("отказал в соединении"));
+        String unknown = OpenFoodFactsProvider.friendlyIoError("weird socket thing", "https://world.openfoodfacts.org");
+        assertTrue(unknown.contains("Сетевая ошибка"));
+        assertTrue(unknown.contains("weird socket thing"));
+        // null не роняет
+        assertTrue(OpenFoodFactsProvider.friendlyIoError(null, null).contains("Сетевая ошибка"));
+    }
+
+    @Test
+    void isTransientIoFailureRetriesTlsButNotRefused() {
+        // TLS-обрыв/таймаут/reset — транзиентные (ретраим); refused — быстрый провал
+        assertTrue(OpenFoodFactsProvider.isTransientIoFailure(
+                new org.springframework.web.client.ResourceAccessException("io",
+                        new javax.net.ssl.SSLException("Remote host terminated the handshake"))));
+        assertTrue(OpenFoodFactsProvider.isTransientIoFailure(
+                new org.springframework.web.client.ResourceAccessException("io",
+                        new java.net.SocketTimeoutException("read timed out"))));
+        assertTrue(OpenFoodFactsProvider.isTransientIoFailure(
+                new org.springframework.web.client.ResourceAccessException("io",
+                        new java.net.SocketException("Connection reset"))));
+        assertFalse(OpenFoodFactsProvider.isTransientIoFailure(
+                new org.springframework.web.client.ResourceAccessException("io",
+                        new java.net.ConnectException("Connection refused"))));
+    }
+
+    @Test
+    void parseProxyUrlSupportsHttpAndSocksAndRejectsGarbage() {
+        // Fix-11 (п.7): провайдер блокирует TLS до хостов OFF у некоторых
+        // провайдеров — OFF_PROXY_URL даёт обходной маршрут.
+        assertNull(OpenFoodFactsProvider.parseProxyUrl(null));
+        assertNull(OpenFoodFactsProvider.parseProxyUrl("   "));
+
+        java.net.Proxy http = OpenFoodFactsProvider.parseProxyUrl("http://127.0.0.1:8888");
+        assertNotNull(http);
+        assertEquals(java.net.Proxy.Type.HTTP, http.type());
+        assertEquals(new java.net.InetSocketAddress("127.0.0.1", 8888), http.address());
+
+        java.net.Proxy socks = OpenFoodFactsProvider.parseProxyUrl("socks5://localhost:1080");
+        assertNotNull(socks);
+        assertEquals(java.net.Proxy.Type.SOCKS, socks.type());
+
+        // дефолтный порт http-прокси
+        assertEquals(new java.net.InetSocketAddress("localhost", 3128),
+                OpenFoodFactsProvider.parseProxyUrl("http://localhost").address());
+
+        // мусор — null (работаем напрямую, WARN в логах)
+        assertNull(OpenFoodFactsProvider.parseProxyUrl("ftp://host:21"));
+        assertNull(OpenFoodFactsProvider.parseProxyUrl("not a url at all"));
+    }
+
+    @Test
+    void rootCauseMessageDigsToDeepestCause() {
+        Exception wrapped = new RuntimeException("outer",
+                new IllegalStateException("middle", new javax.net.ssl.SSLException("handshake terminated")));
+        assertEquals("handshake terminated", OpenFoodFactsProvider.rootCauseMessage(wrapped));
+        // без cause — собственное сообщение
+        assertEquals("plain", OpenFoodFactsProvider.rootCauseMessage(new RuntimeException("plain")));
+    }
+
+    @Test
+    void searchRequestUriIsSearchALiciousWithoutAuthParams() throws Exception {
+        // Fix-11: URI поиска — Search-a-licious (GET /search?q=...): /api/v2/search
+        // игнорирует search_terms (full-text в v2 нет — official docs), /cgi/search.pl
+        // закрыт. user_id/password в строке запроса ЗАПРЕЩЕНЫ (дока: на GET — никогда;
+        // авторизация — заголовком, см. basicAuthHeaderIsBuilt…).
         Class<?> builderClass = Class.forName(
                 "com.provision.integration.OpenFoodFactsProvider$UriStringBuilder");
         Method from = builderClass.getDeclaredMethod("from", String.class);
@@ -132,26 +217,27 @@ class OpenFoodFactsProviderTest {
         Method build = builderClass.getDeclaredMethod("build");
         from.setAccessible(true); path.setAccessible(true); qp.setAccessible(true); build.setAccessible(true);
 
-        Object b = from.invoke(null, "https://world.openfoodfacts.org");
-        b = path.invoke(b, "/api/v2/search");
-        b = qp.invoke(b, "search_terms", "milk");
+        Object b = from.invoke(null, "https://search.openfoodfacts.org");
+        b = path.invoke(b, "/search");
+        b = qp.invoke(b, "q", "milk");
         b = qp.invoke(b, "fields", "code,product_name,brands,quantity,image_url");
         b = qp.invoke(b, "page_size", 5);
         String uri = (String) build.invoke(b);
 
-        assertTrue(uri.contains("/api/v2/search"), "Поиск должен идти через API v2");
+        assertTrue(uri.startsWith("https://search.openfoodfacts.org/search?"),
+                "Поиск должен идти через Search-a-licious: " + uri);
         assertFalse(uri.contains("search.pl"), "Старый /cgi/search.pl закрыт OFF (503) — использовать запрещено");
+        assertFalse(uri.contains("search_terms"), "search_terms в v2 игнорируется — параметр запрещён");
         assertFalse(uri.contains("user_id"), "GET-запрос поиска не должен содержать user_id");
         assertFalse(uri.contains("password"), "GET-запрос поиска не должен содержать password");
-        assertTrue(uri.contains("search_terms=milk"));
+        assertTrue(uri.contains("q=milk"));
         assertTrue(uri.contains("page_size=5"));
     }
 
     @Test
-    void providerSourceUsesV2SearchAndHeaderAuthOnly() {
-        // Fix-9 (страховка от регрессии): в исходнике провайдера нет старого
-        // эндпоинта и нет авторизации query-параметрами; учётка — только
-        // через заголовок (interceptor + basicAuthHeader).
+    void providerSourceUsesSearchServiceAndHeaderAuthOnly() {
+        // Fix-11 (страховка от регрессии): поиск — Search-a-licious; старые
+        // эндпоинты и query-авторизация запрещены; учётка — только заголовком.
         try {
             java.nio.file.Path src = java.nio.file.Path.of(
                     "src/main/java/com/provision/integration/OpenFoodFactsProvider.java");
@@ -160,19 +246,70 @@ class OpenFoodFactsProviderTest {
                         "backend/src/main/java/com/provision/integration/OpenFoodFactsProvider.java");
             }
             String code = java.nio.file.Files.readString(src);
-            // проверяем именно СТРОКОВЫЙ ЛИТЕРАЛ эндпоинта (упоминания в
-            // javadoc/комментариях допустимы — они документируют запрет)
+            // проверяем именно СТРОКОВЫЕ ЛИТЕРАЛЫ (упоминания в javadoc/комментариях
+            // допустимы — они документируют запрет)
             assertFalse(code.contains("\"/cgi/search.pl\""),
                     "Старый эндпоинт /cgi/search.pl закрыт OFF — в коде его быть не должно");
+            assertFalse(code.contains("\"/api/v2/search\""),
+                    "/api/v2/search игнорирует search_terms (full-text в v2 нет) — для поиска запрещён");
             assertFalse(code.contains("queryParam(\"user_id\""),
-                    "Авторизация query-параметром user_id запрещена (v2 её не принимает)");
+                    "Авторизация query-параметром user_id запрещена (дока OFF: только POST/PUT/DELETE)");
             assertFalse(code.contains("queryParam(\"password\""),
                     "Авторизация query-параметром password запрещена");
-            assertTrue(code.contains("\"/api/v2/search\""), "Поиск — через API v2");
+            assertTrue(code.contains("\"/search\""), "Поиск — через GET /search (Search-a-licious)");
+            assertTrue(code.contains("search.openfoodfacts.org"),
+                    "Дефолтный поисковый хост — search.openfoodfacts.org");
             assertTrue(code.contains("basicAuthHeader"), "Учётка OFF — заголовком Basic Auth");
         } catch (java.io.IOException e) {
             fail("Не удалось прочитать исходник провайдера: " + e.getMessage());
         }
+    }
+
+    @Test
+    void parseSearchHitsHandlesRealSearchALiciousShape() throws Exception {
+        // Fix-11: реальный формат Search-a-licious (проверено живым запросом 27.10):
+        // {hits:[{code, product_name, brands:[...], quantity, image_url}], count, ...}
+        com.fasterxml.jackson.databind.ObjectMapper om = new com.fasterxml.jackson.databind.ObjectMapper();
+        com.fasterxml.jackson.databind.JsonNode response = om.readTree("""
+                {
+                  "hits": [
+                    {"code": "5000316000256",
+                     "product_name": "Moo Milk chocolate flavoured",
+                     "brands": ["Moo Milk", "SODIPOL"],
+                     "quantity": "1l",
+                     "image_url": "https://images.openfoodfacts.org/img/front_en.jpg"},
+                    {"code": "1", "product_name": "Без бренда", "brands": []},
+                    {"product_name": "Без кода — пропускается"},
+                    {"code": "2"}
+                  ],
+                  "count": 2, "page": 1, "page_size": 4
+                }
+                """);
+        List<ExternalProductDto> parsed = OpenFoodFactsProvider.parseSearchHits(response);
+        assertEquals(2, parsed.size(), "Позиции без code/name пропускаются");
+
+        ExternalProductDto milk = parsed.get(0);
+        assertEquals("5000316000256", milk.code());
+        assertEquals("Moo Milk chocolate flavoured", milk.name());
+        assertEquals("Moo Milk, SODIPOL", milk.brand(), "brands[] — join через ', '");
+        assertEquals("https://images.openfoodfacts.org/img/front_en.jpg", milk.imageUrl());
+        // quantity "1l" → 1 L (базовая единица)
+        assertThat(milk.packAmount()).isEqualByComparingTo("1");
+        assertEquals("L", milk.packUnit());
+
+        ExternalProductDto noBrand = parsed.get(1);
+        assertNull(noBrand.brand(), "Пустой brands[] → null");
+        assertNull(noBrand.imageUrl());
+    }
+
+    @Test
+    void parseSearchHitsIsGracefulOnGarbage() throws Exception {
+        assertTrue(OpenFoodFactsProvider.parseSearchHits(null).isEmpty());
+        com.fasterxml.jackson.databind.ObjectMapper om = new com.fasterxml.jackson.databind.ObjectMapper();
+        // v2-ответ (products, не hits) больше не парсим — поиск ходит в Search-a-licious
+        assertTrue(OpenFoodFactsProvider.parseSearchHits(
+                om.readTree("{\"products\":[{\"code\":\"1\",\"product_name\":\"x\"}]}")).isEmpty());
+        assertTrue(OpenFoodFactsProvider.parseSearchHits(om.readTree("{}")).isEmpty());
     }
 
     @Test

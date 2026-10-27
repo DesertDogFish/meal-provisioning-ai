@@ -33,6 +33,12 @@ function copyDesignPackAssets() {
         fileName: "og-cover.png",
         source: read("./provisions/design-pack/og/og-cover.png"),
       });
+      // Fix-11: boot-лоадер index.html ссылается на парус design-pack напрямую
+      this.emitFile({
+        type: "asset",
+        fileName: "provisions/design-pack/assets/preloader.svg",
+        source: read("./provisions/design-pack/assets/preloader.svg"),
+      });
     },
   };
 }

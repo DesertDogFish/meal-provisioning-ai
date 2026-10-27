@@ -36,11 +36,18 @@
       SPRING_FLYWAY_ENABLED: "true"
       JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env}
       # Fix-9 (интеграция): учётка Open Food Facts — ОПЦИОНАЛЬНА, но рекомендована:
-      # анонимный поиск OFF лимитирует по IP (503), зарегистрированные пользователи
-      # получают приоритетный доступ. Бэкенд передаёт её заголовком Basic Auth
-      # (не query-параметрами). Пусто = анонимный режим.
+      # анонимные запросы OFF лимитирует по IP (503/бан), зарегистрированные
+      # пользователи получают приоритетный доступ. Бэкенд передаёт её заголовком
+      # Basic Auth (не query-параметрами). Пусто = анонимный режим.
+      # Fix-11 (дока OFF): OFF_USER_ID — это USERNAME аккаунта, НЕ email!
       OFF_USER_ID: ${OFF_USER_ID:-}
       OFF_PASSWORD: ${OFF_PASSWORD:-}
+      OFF_CONTACT_EMAIL: ${OFF_CONTACT_EMAIL:-}
+      # Fix-11 (п.7): опциональный прокси для запросов OFF (http://host:port или
+      # socks5://host:port) — если провайдер режет TLS до search.openfoodfacts.org.
+      # Для доступа к прокси на хост-машине из контейнера используйте
+      # http://host.docker.internal:PORT (Docker Desktop) вместо 127.0.0.1.
+      OFF_PROXY_URL: ${OFF_PROXY_URL:-}
     ports:
       - "8080:8080"
     healthcheck:

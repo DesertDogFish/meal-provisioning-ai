@@ -65,14 +65,29 @@ integration:
     # Тот же провайдер обогащает карточки продуктов (название, бренд, фасовка,
     # фото) через OFF Product API v2 при синхронизации цен.
     prices-url: https://prices.openfoodfacts.org
+    # Fix-11: полнотекстовый поиск продуктов — сервис Search-a-licious
+    # (официальная дока OFF: full-text НЕ доступен в /api/v2/search —
+    # search_terms там молча игнорируется; /cgi/search.pl закрыт).
+    search-url: https://search.openfoodfacts.org
     # Fix-9 (интеграция): учётная запись world.openfoodfacts.org — ОПЦИОНАЛЬНА.
-    # Анонимный поиск OFF жёстко лимитирует по IP (503 «Page temporarily
-    # unavailable»); зарегистрированные пользователи получают приоритетный
-    # доступ без лимитов. Передаётся заголовком HTTP Basic Auth (никогда не
+    # Fix-11 (дока OFF): user-id — это USERNAME аккаунта, НЕ email
+    # («You must not use your email address»); email-контакт для User-Agent —
+    # отдельный contact-email. Анонимные запросы OFF жёстко лимитирует по IP
+    # (503/IP-бан); зарегистрированные пользователи получают приоритетный
+    # доступ. Учётка передаётся заголовком HTTP Basic Auth (никогда не
     # query-параметрами). Без учётки провайдер работает в анонимном режиме
     # (WARN в логах при старте). Значения — только из окружения, не коммитить.
     user-id: ${OFF_USER_ID:}
     password: ${OFF_PASSWORD:}
+    # Fix-11: контакт для User-Agent (формат OFF: "AppName/Version (ContactEmail)").
+    # Не задан → user-id, если он похож на email (legacy) → support@provision.app.
+    contact-email: ${OFF_CONTACT_EMAIL:}
+    # Fix-11 (п.7): ОПЦИОНАЛЬНЫЙ прокси для всех запросов OFF — спасение там,
+    # где провайдер/файрвол режет TLS до хостов OFF (кейс: search.openfoodfacts.org
+    # на OVH — «Remote host terminated the handshake»). Форматы:
+    # http://host:port (для HTTPS-целей — CONNECT-туннель) или socks5://host:port.
+    # Пример с локальным proxychains/outline: http://172.17.0.1:1080
+    proxy-url: ${OFF_PROXY_URL:}
   # Ежедневные курсы валют ЦБ РФ (fix U11): daily_json.js, rate = Value/Nominal,
   # для RUB курс всегда 1. Ответ кэшируется на календарные сутки; при недоступности
   # ЦБ используется предыдущий кэш, цены в неизвестных валютах пропускаются.

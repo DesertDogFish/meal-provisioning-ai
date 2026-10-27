@@ -109,8 +109,15 @@ export class ApiClient {
         });
         clearTimeout(timeout);
         
-        if (response.ok) {
+        // Fix-11 (Vercel): «real» ТОЛЬКО если это действительно JSON-API.
+        // На статическом хостинге с SPA-rewrite /api/v1/meta может вернуть
+        // 200 + index.html — без проверки content-type режим ошибочно
+        // становился 'real' и всё приложение ломалось (каждый запрос — HTML).
+        const contentType = response.headers.get('content-type') ?? '';
+        if (response.ok && contentType.includes('json')) {
           this.mode = 'real';
+        } else {
+          this.mode = 'mock';
         }
       } catch {
         this.mode = 'mock';

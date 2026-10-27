@@ -168,6 +168,40 @@ primary/ghost дизайн-системы), `RecipesPage.test.tsx` (+«В мен
 Backend не менялся (все пункты клиентские). Fix-7 п.17 в ARCHITECTURE §«Свежесть фактов»
 помечен как superseded (Fix-8 п.6).
 
+### Fix-11 — OFF по официальной доке (Search-a-licious, username) + быстрый старт на Vercel (27.10)
+
+Пункт 1 — пользователь прочитал официальную доку OFF (openfoodfacts.github.io/openfoodfacts-server/api/)
+и указал: user_id — это USERNAME, не email. Чтение доки вскрыло БОЛЬШЕЕ: full-text
+поиска в /api/v2/search НЕТ («Full-text search is not available in the v2 server-side
+API») — search_terms молча игнорируется, выдача = вся база (count 4.8 млн, «результаты
+по milk» — случайные продукты; это подтвердил и «рабочий» curl из тикета). Full-text
+живёт в отдельном сервисе Search-a-licious (search.openfoodfacts.org). Проверено живыми
+запросами: GET /search?q=milk&page_size=3 → 200, релевантная выдача, формат {hits:[...]}.
+
+| # | Проблема | Решение | Статус |
+|---|---|---|---|
+| 1 | Поиск по /api/v2/search не фильтровал выдачу (search_terms игнорируется — дока OFF) | `searchProducts`/`testConnection` → Search-a-licious `GET {search-url}/search?q=…&fields=code,product_name,brands,quantity,image_url&page_size=…`; новый конфиг `integration.off.search-url`; чистый парсер `parseSearchHits` (hits[], brands — МАССИВ → join ", "); v2 остаётся только для карточек продукта | ✅ |
+| 2 | OFF_USER_ID=email — «You must not use your email address» (сноска user_id_not_email доки) | семантика username в комментариях/доках/.env.example/README; targeted-WARN при старте, если user-id похож на email; контакт UA (по доке — ContactEmail) вынесен в `integration.off.contact-email` (env OFF_CONTACT_EMAIL), fallback: email-подобный user-id → дефолт | ✅ |
+| 3 | Rate-limits доки: 10 req/min/IP поиск, 15 req/min/IP карточки; превышение → IP-бан; глобальные лимиты → 503 независимо от IP | существующий throttling 6.5 c (≈9.2 req/min) укладывается в лимит поиска; retry/backoff и graceful degradation сохранены; рекомендация заполнить API usage form (docs.google form из доки) — в README | ✅ |
+| 4 | Vercel: SPA-rewrite ломал авто-детект режима — /api/v1/meta возвращал 200+HTML → mode='real' → все запросы получали HTML | vercel.json: rewrite исключает /api/ (`/((?!api/).*)`); `resolveMode`: 'real' только при 200 И content-type json, иначе mock (тест resolveMode.test.ts: HTML-200/404/сеть → mock, JSON → real) | ✅ |
+| 5 | «Полминуты на экран загрузки» | (а) Google Fonts — АСИНХРОННО (media=print+onload, noscript-фолбэк): render-blocking запрос к fonts.googleapis.com на нестабильных сетях держал первый пейнт до таймаута; (б) мгновенный boot-лоадер в #root (статичный HTML+SVG-парус design-pack, виден до загрузки JS; React затрёт при монтаже); (в) preloader.svg копируется в dist плагином vite; (г) lazy-чанки и mock-латентность 100–180 мс — уже в Fix-10 | ✅ |
+| 6 | «Подключить» → сырое «I/O error … Remote host terminated the handshake» (search.openfoodfacts.org, OVH 46.105.72.120 — с нейтральных сетей TLS 1.3 работает; обрыв на пути сети пользователя) | ретраи транзиентных I/O-сбоев (TLS-handshake/таймаут/reset: 1–4 s backoff; connection refused — быстрый провал, тесты не замедляет) в executeWithThrottlingAndRetry и testConnection (до 3 попыток); `friendlyIoError` — человеческая диагностика по типу причины (TLS → «провайдер может блокировать OVH-хост, проверьте curl с хоста, вариант — VPN/прокси»; timeout/DNS/refused — свои подсказки); `isTransientIoFailure`/`rootCauseMessage` — чистые функции | ✅ |
+| 7 | ПОДТВЕРЖДЕНО на хост-машине пользователя: `curl (35) Recv failure: Connection was reset` на search.openfoodfacts.org — провайдер режет TLS до OVH-хоста; кодом не лечится, нужен обходной маршрут | `integration.off.proxy-url` (env `OFF_PROXY_URL`): HTTP/HTTPS-прокси (CONNECT-туннель для HTTPS-целей) или SOCKS5 — применяется к общей фабрике запросов (все хосты OFF); `parseProxyUrl` — чистая функция (+тесты); userInfo в логи не попадает; таймауты фабрики 10/30 c (зависший запрос больше не блокирует синк навсегда); compose-подсказка: прокси на хосте = `http://host.docker.internal:PORT`. Альтернативы для пользователя: VPN на хосте (контейнер наследует маршрут) или backend на зарубежном VPS | ✅ |
+
+Поправка честности к Fix-10 п.4(б): «тема падала в дефолты» — НЕВЕРНО. main.tsx
+импортирует tokens.css в JS-бандл (тема работала); 404 на <link> в index.html был
+косметическим. Плагин copy-design-pack-assets оставлен — устраняет 404 и нужен
+для boot-лоадера/OG.
+
+Тесты Fix-11: backend — OpenFoodFactsProviderTest (+parseSearchHits на реальном
+формате, URI Search-a-licious без search_terms/auth-параметров, страж «нет
+/api/v2/search для поиска», buildUserAgent: contact-email → email-подобный user-id →
+дефолт; п.6: friendlyIoError — TLS/timeout/DNS/refused/unknown, isTransientIoFailure —
+TLS ретраим / refused нет, rootCauseMessage), OffConfigBindingTest (+search-url/
+contact-email); сьют интеграции зелёный. Frontend — resolveMode.test.ts (4 кейса),
+полный сьют зелёный.
+Рекомендация пользователю: заполнить API usage form из доки OFF (снижает риск банов).
+
 ### Fix-10 — чек/инпуты + деплой на Vercel (27.10, девятая итерация)
 
 | # | Замечание | Решение | Статус |
