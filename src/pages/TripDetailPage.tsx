@@ -3,7 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { calculateMenuByDays, calculateShoppingList, calculateDayShopping, calculatePersonSummary, formatAmount, realTripPeople, isRowExcluded, dayScopedExclusions, findPriceForDate } from '../utils/calculations';
 import InfoTip from '../components/InfoTip';     // Fix-5 (п.3–5): формулы в тултипах
 import TabHeader from '../components/TabHeader'; // Fix-5 (п.2): единые шапки вкладок
-import AmountInput from '../components/AmountInput'; // Fix-5 (п.21): факт-количество чеклиста
+import FreeAmountInput from '../components/FreeAmountInput'; // Fix-6 (п.8): свободные единицы факта
+import { isActualLessThanNeeded, type ActualAmount as ChecklistActual } from '../utils/checkUnits';
 import { formatRub } from '../utils/formatRub'; // Фаза 13: итоги — целые рубли
 import { ArrowLeft, Plus, Trash2, Users, ShoppingCart, BookOpen, TrendingUp, Calendar, ChevronDown, ChevronRight, ListChecks, ClipboardCheck, PackagePlus, ArrowUpDown, X, FileDown } from 'lucide-react';
 import { MealType } from '../types';
@@ -20,7 +21,8 @@ import { loadActualPrices, loadExcluded, setExcluded as persistExcluded, loadBou
 import { getTripEdits, type TripIngredientEdit } from '../api/tripEdits'; // U30
 import { getManualItems, deleteManualItem, type TripManualItem } from '../api/tripManualItems'; // U40
 import { mergeManualIntoShopping, manualForDay, manualForTrip } from '../utils/manualItems'; // U40
-import { overlayEditsOnIngredients, editMatchesRecipe } from '../utils/menuOverlay'; // U30
+import { buildEffectiveRecipesMap } from '../utils/recipeEdits'; // Fix-6 (п.22/25): правки состава в расчётах
+import { useConfirm } from '../components/ConfirmDialog'; // Fix-6 (п.7)
 import { buildChecklist, type ChecklistProductInfo } from '../utils/checklist'; // U38
 import { sortRows, nextDir, compareRu, type SortDir } from '../utils/rowSort'; // U26–U28
 import { tripReadiness } from '../utils/readiness'; // Fix-3 (п.2): сквозной статус
@@ -105,6 +107,7 @@ type ShoppingSortField = 'ingredientName' | 'totalAmount' | 'effectiveCost';
 
 export default function TripDetailPage() {
   const { showError } = useToast();
+  const { confirm, dialog: confirmDialog } = useConfirm(); // Fix-6 (п.7)
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<TabType>('menu');
@@ -185,9 +188,9 @@ export default function TripDetailPage() {
   // Fix-2 (п.6): отметки «взято» чеклиста ПЕРСИСТЕНТНЫ (общий стейдж похода) —
   // чеклист переживает перезагрузку и используется как рабочий лист в магазине.
   const [checklistBought, setChecklistBought] = useState<Set<string>>(new Set());
-  // Fix-5 (п.21): сколько РЕАЛЬНО берём по позиции чеклиста (на развес/россыпь/
-  // другая упаковка) — свободный ввод вместо «± упаковки»
-  const [actualQty, setActualQtyState] = useState<Record<string, number>>({});
+  // Fix-6 (п.8): сколько РЕАЛЬНО берём — {amount, unit} свободно (г/кг/мл/л/шт/уп),
+  // общий стейдж с чеком («Взяли» в чеке берётся ОТСЮДА, повторного ввода нет)
+  const [actualQty, setActualQtyState] = useState<Record<string, ChecklistActual>>({});
   const [manualCtx, setManualCtx] = useState<{ dayId: string | null; dayLabel?: string } | null>(null);
 
   useEffect(() => {
@@ -292,7 +295,19 @@ export default function TripDetailPage() {
     })();
   };
 
-  const handleDeleteMeal = async (dayId: string, mealId: string) => {
+  const handleDeleteMeal = async (dayId: string, mealId: string, mealName: string, dayDate: string) => {
+    // Fix-6 (п.7): приём пищи — ядро плана; удаление пересчитывает всё
+    const ok = await confirm({
+      title: `Удалить «${mealName}»?`,
+      confirmLabel: 'Удалить приём',
+      message: (
+        <>
+          {new Date(dayDate).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}:
+          приём пищи уйдёт из меню, его продукты — из закупки и чеклиста, суммы пересчитаются.
+        </>
+      ),
+    });
+    if (!ok) return;
     try {
       await api.del(`/trips/${trip.id}/days/${dayId}/meals/${mealId}`);
       await loadData();
@@ -321,23 +336,17 @@ export default function TripDetailPage() {
   // Calculations
   // Фаза 13 (п.6): фактические цены и исключения применяются поверх базового
   // расчёта — все вкладки и KPI-карточки считают из одного источника.
-  // U30: карта «trip-scoped копия блюда → базовый рецепт» (real-снепшоты; mock
-  // использует суффикс '::t', который снимает stripSnapshotSuffix внутри overlay).
+  // U30 + Fix-6 (п.22/25): ЕДИНЫЙ источник — серверные правки состава применяются
+  // к рецептам ДО всех расчётов (меню, закупка, дни, «на человека», чек). Раньше
+  // меню рисовало overlay, а закупка считала по сырому снепшоту — добавленные
+  // продукты («Имбирь») не попадали в чек, а статус «введено X из Y» расходился.
   const snapshotOfMap = new Map<string, string>();
   for (const r of tripRecipes) {
     const so = (r as any).snapshotOf;
     if (so != null) snapshotOfMap.set(String(r.id), String(so));
   }
-  const menuByDays = calculateMenuByDays(trip as any, recipesMap).map(day => ({
-    ...day,
-    meals: day.meals.map(m => {
-      const rid = String((m as any).recipeId ?? '');
-      const mEdits = tripEdits.filter(e => editMatchesRecipe(e, rid, snapshotOfMap));
-      if (!mEdits.length) return m;
-      // добавленные/исключённые/замещённые/масштабированные позиции — как на сервере
-      return { ...m, ingredients: overlayEditsOnIngredients(m.ingredients as any, mEdits as any, m.servings) as typeof m.ingredients };
-    }),
-  }));
+  const effectiveRecipesMap = buildEffectiveRecipesMap(recipesMap, tripEdits as any, snapshotOfMap);
+  const menuByDays = calculateMenuByDays(trip as any, effectiveRecipesMap);
   // Fix-5 (п.11): плановая цена ручной позиции — из trip-срезов цен (снепшот
   // продукта имеет замороженную цену; если цены нет — строка честно «без цены»).
   const manualPriceOf = (ingId: string): number | undefined => {
@@ -349,7 +358,7 @@ export default function TripDetailPage() {
   // глобально исключённые строки остаются в списке (рисуются зачёркнутыми) и
   // вычитаются из итогов ниже (includedShoppingFinal).
   const baseShoppingList = mergeManualIntoShopping(
-    calculateShoppingList(trip as any, recipesMap, prices, dayScopedExclusions(shoppingExcluded)),
+    calculateShoppingList(trip as any, effectiveRecipesMap, prices, dayScopedExclusions(shoppingExcluded)),
     manualItems,
     manualPriceOf,
   );
@@ -388,7 +397,14 @@ export default function TripDetailPage() {
     try { setManualItems(await getManualItems(String(id))); } catch { /* список останется прежним */ }
   };
 
-  const handleDeleteManual = async (itemId: string) => {
+  const handleDeleteManual = async (itemId: string, itemName: string) => {
+    // Fix-6 (п.7): удаление позиции меняет закупку/чек — предупреждаем
+    const ok = await confirm({
+      title: `Удалить позицию «${itemName}»?`,
+      confirmLabel: 'Удалить',
+      message: <>Позиция уйдёт из закупки и чека, суммы пересчитаются. Отменить удаление будет нельзя.</>,
+    });
+    if (!ok) return;
     try {
       await deleteManualItem(String(id), itemId);
       await refreshManual();
@@ -422,7 +438,7 @@ export default function TripDetailPage() {
 
   // U40: позиции дня (dayId) добавляются к закупке этого дня; U27: алфавитная сортировка
   const dayIdByDate = new Map((trip.days ?? []).map(d => [d.dayDate, d.id]));
-  const baseDayShopping = calculateDayShopping(trip as any, recipesMap, prices).map(day => ({
+  const baseDayShopping = calculateDayShopping(trip as any, effectiveRecipesMap, prices).map(day => ({
     ...day,
     items: mergeManualIntoShopping(day.items, manualForDay(manualItems, dayIdByDate.get(day.dayDate) ?? '')),
   }));
@@ -448,7 +464,7 @@ export default function TripDetailPage() {
   const realPeople = realTripPeople(trip as any);
   // Fix-5 (п.7): ручные позиции входят в «на человека» — за аптечку платят все
   const { summary: personSummaryBase, tripSummary: tripSummaryBase } = calculatePersonSummary(
-    trip as any, recipesMap, prices, realPeople, shoppingExcluded, manualItems, manualPriceOf,
+    trip as any, effectiveRecipesMap, prices, realPeople, shoppingExcluded, manualItems, manualPriceOf,
   );
   // Release-1.0 (UI-consistency): KPI шапки и «Итого» в закупке — ОДИН источник.
   // Раньше при отсутствии чеков/исключений KPI брал tripSummaryBase.totalCost, а с ними —
@@ -490,12 +506,12 @@ export default function TripDetailPage() {
     for (const ri of ((r as any).ingredients || [])) {
       const ing = ri?.ingredient ?? ri;
       if (ing?.id != null && !productInfo.has(String(ing.id))) {
-        productInfo.set(String(ing.id), { packSize: ing.packSize, roundToPacks: ing.roundToPacks, category: categoryName(ing) });
+        productInfo.set(String(ing.id), { packSize: ing.packSize, roundToPacks: ing.roundToPacks, category: categoryName(ing), pieceWeightG: ing.pieceWeightG });
       }
     }
   }
   for (const p of products) {
-    productInfo.set(String(p.id), { packSize: p.packSize, roundToPacks: p.roundToPacks, category: categoryName(p) });
+    productInfo.set(String(p.id), { packSize: p.packSize, roundToPacks: p.roundToPacks, category: categoryName(p), pieceWeightG: p.pieceWeightG });
   }
   // U40: опции продуктов для модалки ручных позиций. Если /admin/products недоступен
   // (real-режим, не-админ) — фолбэк из ингредиентов блюд похода (ограниченный набор).
@@ -550,8 +566,8 @@ export default function TripDetailPage() {
     factCount,
     checksTotal: factsTotal,
   });
-  const commitActualQty = (ingredientId: string, qty: number | null) => {
-    setActualQty(tripKey, ingredientId, qty);
+  const commitActualQty = (ingredientId: string, value: ChecklistActual | null) => {
+    setActualQty(tripKey, ingredientId, value);
     setActualQtyState(loadActualQty(tripKey));
   };
   const setAllBought = (on: boolean) => {
@@ -586,68 +602,74 @@ export default function TripDetailPage() {
             «Сформировать отчёт» живёт там же, где статус; дубль из шапки убран */}
       </div>
 
-      {/* Summary cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <div className="stat">
-          <p className="text-xs mb-1" style={{ color: 'var(--muted)' }}>Дней</p>
-          <p className="stat-value text-xl font-bold">{trip.days?.length || 0}</p>
+      {/* Summary cards — Fix-6 (п.16): тонкие строки вместо крупных плиток */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2" style={{ maxWidth: '52rem' }}>
+        <div className="stat px-3 py-2 flex items-baseline justify-between gap-2">
+          <span className="text-xs" style={{ color: 'var(--muted)' }}>Дней</span>
+          <span className="stat-value text-lg font-bold">{trip.days?.length || 0}</span>
         </div>
-        <div className="stat">
-          <p className="text-xs mb-1" style={{ color: 'var(--muted)' }}>Приёмов пищи</p>
-          <p className="stat-value text-xl font-bold">{trip.days?.reduce((a, d) => a + (d.meals?.length || 0), 0) || 0}</p>
+        <div className="stat px-3 py-2 flex items-baseline justify-between gap-2">
+          <span className="text-xs" style={{ color: 'var(--muted)' }}>Приёмов пищи</span>
+          <span className="stat-value text-lg font-bold">{trip.days?.reduce((a, d) => a + (d.meals?.length || 0), 0) || 0}</span>
         </div>
-        <div className="stat">
-          <p className="text-xs mb-1" style={{ color: 'var(--muted)' }}>
+        <div className="stat px-3 py-2 flex items-baseline justify-between gap-2">
+          <span className="text-xs" style={{ color: 'var(--muted)' }}>
             Стоимость
             <InfoTip text="Сумма всей закупки: план по ценам справочника, а после ввода чека — фактические суммы. Без исключённых позиций." />
-          </p>
+          </span>
           {/* Release-1.0: formatRub — целые рубли, неразрывный пробел; без «123,678 ₽» */}
-          <p className="stat-value text-xl font-bold">{formatRub(tripSummary.totalCost)}</p>
+          <span className="stat-value text-lg font-bold">{formatRub(tripSummary.totalCost)}</span>
         </div>
-        <div className="stat">
-          <p className="text-xs mb-1" style={{ color: 'var(--muted)' }}>
+        <div className="stat px-3 py-2 flex items-baseline justify-between gap-2">
+          <span className="text-xs" style={{ color: 'var(--muted)' }}>
             На человека
             <InfoTip text={`Общая стоимость ÷ людей в походе (${Math.round(realPeople * 10) / 10} чел. — среднее по дням с учётом переопределений). Столько платит каждый при равном делении.`} />
-          </p>
-          <p className="stat-value text-xl font-bold">{formatRub(tripSummary.costPerDefaultPerson)}</p>
+          </span>
+          <span className="stat-value text-lg font-bold">{formatRub(tripSummary.costPerDefaultPerson)}</span>
         </div>
       </div>
 
       {/* Fix-3 (п.2) + Fix-4 (п.9): готовность похода — СКВОЗНАЯ, видна на каждой
           вкладке, а не только в меню: цепочка «меню → закупка → чеки» */}
-      <div className="rounded-xl px-4 py-3 flex flex-wrap items-center gap-2 text-sm"
+      <div className="rounded-xl px-3 py-2 flex flex-wrap items-center gap-x-1.5 gap-y-1.5"
            style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
-        <span className="font-semibold" style={{ color: 'var(--text)' }}>Готовность похода:</span>
-        <span className={`px-2 py-0.5 text-xs rounded-full ${readiness.menu === 'done' ? 'badge-success' : 'badge-neutral'}`}>
-          Меню {readiness.menu === 'done' ? 'собрано' : 'пустое'}
-        </span>
-        <span className={`px-2 py-0.5 text-xs rounded-full ${readiness.shopping === 'done' ? 'badge-success' : readiness.shopping === 'partial' ? 'badge-warning' : 'badge-neutral'}`}>
-          Закупка: взято {boughtInList} из {checklistRowIds.length}
-        </span>
-        <span className={`px-2 py-0.5 text-xs rounded-full ${readiness.checks === 'done' ? 'badge-success' : readiness.checks === 'partial' ? 'badge-warning' : 'badge-neutral'}`}>
-          Чек: введено {factCount} из {factsTotal}
-        </span>
-        {readiness.ready ? (
-          <span className="text-xs" style={{ color: 'var(--wave-300)' }}>Поход готов ✓</span>
-        ) : (
-          <span className="text-xs" style={{ color: 'var(--muted)' }}>
-            {readiness.canEnterCheck
-              ? 'Подтвердите закупку целиком и введите чек по всем позициям — тогда поход будет готов.'
-              : 'Отметьте покупки в чеклисте — без этого чек не ввести.'}
+        {/* Fix-6 (п.10/17/п.28-диаграмма): тонкий степпер — шаги маршрута со стрелками:
+            Меню → Закупка → Чек → Готов; подсказки про «отметьте покупки» убраны
+            (шум), CTA без слова «черновик». */}
+        {[
+          { text: `Меню ${readiness.menu === 'done' ? 'собрано' : 'пустое'}`, ok: readiness.menu === 'done' },
+          { text: `Закупка: взято ${boughtInList} из ${checklistRowIds.length}`, ok: readiness.shopping === 'done' },
+          { text: `Чек: введено ${factCount} из ${factsTotal}`, ok: readiness.checks === 'done' },
+        ].map(st => (
+          <span key={st.text} className="inline-flex items-center gap-1.5">
+            <ChevronRight size={13} style={{ color: 'var(--line-strong)' }} aria-hidden />
+            <span className="px-2 py-0.5 text-[11px] font-bold rounded-full whitespace-nowrap"
+              style={st.ok
+                ? { background: 'color-mix(in srgb, var(--success) 16%, transparent)', color: 'var(--success)' }
+                : { background: 'var(--elev)', color: 'var(--muted)' }}
+            >
+              {st.ok ? '✓ ' : '○ '}{st.text}
+            </span>
           </span>
-        )}
-        {/* Fix-5 (п.10): отчёт — кульминация полосы готовности: всё готово →
-            яркая «Сформировать отчёт», иначе — приглушённая «черновик» */}
+        ))}
+        <ChevronRight size={13} style={{ color: 'var(--line-strong)' }} aria-hidden />
+        <span className="px-2 py-0.5 text-[11px] font-extrabold rounded-full whitespace-nowrap"
+          style={readiness.ready
+            ? { background: 'var(--success)', color: '#fff' }
+            : { background: 'var(--elev)', color: 'var(--muted)' }}
+        >
+          {readiness.ready ? 'Поход готов ✓' : 'В процессе'}
+        </span>
         <span className="ml-auto">
           <Button
             variant={readiness.ready ? 'primary' : 'ghost'}
             size="sm"
             onClick={() => window.open(`/trips/${trip.id}/print`, '_blank')}
-            aria-label="Сформировать отчёт"
+            aria-label={readiness.ready ? 'Сформировать отчёт' : 'Посмотреть отчёт'}
             title="Печатная версия: меню по дням, закупка, итоги — сохраняется в PDF"
             icon={<FileDown size={15} />}
           >
-            {readiness.ready ? 'Сформировать отчёт' : 'Отчёт (черновик)'}
+            {readiness.ready ? 'Сформировать отчёт' : 'Посмотреть отчёт'}
           </Button>
         </span>
       </div>
@@ -779,11 +801,13 @@ export default function TripDetailPage() {
                               <ListChecks size={14} />
                             </button>
                             <button
-                              onClick={() => tripMeal && handleDeleteMeal(tripDay.id, tripMeal.id)}
+                              onClick={() => tripMeal && void handleDeleteMeal(tripDay.id, tripMeal.id, meal.recipeName ?? 'приём', tripDay.dayDate)}
                               className="p-1 rounded transition-colors"
                               style={{ color: 'var(--muted)' }}
                               onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--danger)'; }}
                               onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--muted)'; }}
+                              title={`Удалить приём: ${meal.recipeName ?? ''}`}
+                              aria-label={`Удалить приём пищи: ${meal.recipeName ?? ''}`}
                             >
                               <Trash2 size={14} />
                             </button>
@@ -827,7 +851,7 @@ export default function TripDetailPage() {
                             {mi.ingredientName}: {formatAmount(mi.amount, mi.unit)}
                             {mi.note ? ` · ${mi.note}` : ''}
                             <button
-                              onClick={() => void handleDeleteManual(mi.id)}
+                              onClick={() => void handleDeleteManual(mi.id, mi.ingredientName)}
                               aria-label={`Удалить позицию: ${mi.ingredientName}`}
                               className="p-0.5 rounded"
                               style={{ color: 'var(--muted)' }}
@@ -860,9 +884,18 @@ export default function TripDetailPage() {
                   </p>
                 </div>
               </div>
-              <Button variant="soft" size="sm" onClick={() => setManualCtx({ dayId: null })} aria-label="Добавить продукт к походу">
-                <Plus size={14} /> Добавить продукт
-              </Button>
+              {/* Fix-6 (п.2): та же иконка-кнопка, что у дня («добавить продукт»), — единообразно */}
+              <button
+                onClick={() => setManualCtx({ dayId: null })}
+                className="p-1.5 rounded transition-colors"
+                style={{ color: 'var(--muted)' }}
+                onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--w1)'; e.currentTarget.style.background = 'color-mix(in srgb, var(--wave-400) 10%, transparent)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--muted)'; e.currentTarget.style.background = 'transparent'; }}
+                title="Добавить продукт к походу (не блюдо)"
+                aria-label="Добавить продукт к походу"
+              >
+                <PackagePlus size={16} />
+              </button>
             </div>
             {manualForTrip(manualItems).length > 0 && (
               <div className="px-4 pb-3 flex flex-wrap gap-2">
@@ -873,7 +906,7 @@ export default function TripDetailPage() {
                     {mi.ingredientName}: {formatAmount(mi.amount, mi.unit)}
                     {mi.note ? ` · ${mi.note}` : ''}
                     <button
-                      onClick={() => void handleDeleteManual(mi.id)}
+                      onClick={() => void handleDeleteManual(mi.id, mi.ingredientName)}
                       aria-label={`Удалить позицию: ${mi.ingredientName}`}
                       className="p-0.5 rounded"
                       style={{ color: 'var(--muted)' }}
@@ -904,8 +937,7 @@ export default function TripDetailPage() {
             }
           />
           <div className="rounded-xl overflow-hidden" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
-          {/* Fix-5: длинные таблицы скроллятся внутри экрана, заголовок липкий */}
-          <div className="overflow-auto sticky-thead" style={{ maxHeight: '62vh' }}>
+          {/* Fix-6 (п.23): без внутреннего скролла — как в чеклисте, полная высота */}
             <table className="w-full text-sm">
               <thead style={{ background: 'var(--elev)' }}>
                 <tr>
@@ -965,7 +997,6 @@ export default function TripDetailPage() {
               </tbody>
             </table>
           </div>
-          </div>
         </div>
       )}
 
@@ -1009,6 +1040,43 @@ export default function TripDetailPage() {
               </div>
             </div>
           ))}
+
+          {/* Fix-6 (п.14): позиции «к походу» (аптечка, топливо…) не относятся ни к
+              одному дню — отдельная карточка в конце, чтобы суммы дней и итог сходились */}
+          {manualForTrip(manualItems).length > 0 && (
+            <div className="rounded-xl overflow-hidden" style={{ background: 'var(--surface)', border: '1px dashed var(--line-strong)' }}>
+              <div className="p-4 flex items-center justify-between" style={{ borderBottom: '1px solid var(--border)' }}>
+                <div>
+                  <p className="font-semibold" style={{ color: 'var(--text)' }}>На весь поход</p>
+                  <p className="text-xs" style={{ color: 'var(--muted)' }}>
+                    Не привязаны к дням · учтены в итоговой сумме похода
+                  </p>
+                </div>
+                <p className="font-bold" style={{ color: 'var(--text)' }}>
+                  {formatRub(manualForTrip(manualItems).reduce((a, mi) => {
+                    const price = manualPriceOf(mi.ingredientId);
+                    return a + (price != null ? price * mi.amount : 0);
+                  }, 0))}
+                </p>
+              </div>
+              <div className="px-4 py-2">
+                {manualForTrip(manualItems).map(mi => {
+                  const price = manualPriceOf(mi.ingredientId);
+                  return (
+                    <div key={mi.id} className="flex items-center justify-between py-1.5 text-sm">
+                      <span style={{ color: 'var(--text)' }}>{mi.ingredientName}{mi.note ? ` · ${mi.note}` : ''}</span>
+                      <div className="flex items-center gap-4">
+                        <span style={{ color: 'var(--muted)' }}>{formatAmount(mi.amount, mi.unit)}</span>
+                        <span className="w-20 text-right" style={{ color: 'var(--text)' }}>
+                          {price != null ? formatRub(price * mi.amount) : <span className="text-xs" style={{ color: 'var(--fire)' }}>—</span>}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -1066,7 +1134,7 @@ export default function TripDetailPage() {
             <div className="p-4" style={{ borderBottom: '1px solid var(--border)' }}>
               <h3 className="font-bold" style={{ color: 'var(--text)' }}>Продукты на человека</h3>
             </div>
-            <div className="overflow-auto sticky-thead" style={{ maxHeight: '55vh' }}>
+            {/* Fix-6 (п.23): без внутреннего скролла */}
               <table className="w-full text-sm">
                 <thead style={{ background: 'var(--elev)' }}>
                   <tr>
@@ -1098,7 +1166,6 @@ export default function TripDetailPage() {
                   ))}
                 </tbody>
               </table>
-            </div>
           </div>
         </div>
       )}
@@ -1153,10 +1220,11 @@ export default function TripDetailPage() {
                 // Fix-5 (п.21): вместо «± упаковки» — свободный ввод «сколько реально
                 // берём» (на развес, россыпью, пачка другого объёма). По умолчанию —
                 // расчётное значение (целые упаковки вверх).
-                const suggested = row.packsToBuy != null && row.packSize
-                  ? row.packsToBuy * row.packSize
-                  : row.needed;
-                const actual = actualQty[row.ingredientId] ?? suggested;
+                const actual = actualQty[row.ingredientId] ?? null;
+                // Fix-6 (п.9): куплено МЕНЬШЕ нужного — подсветка предупреждением
+                const underfilled = bought && actual != null
+                  ? isActualLessThanNeeded(actual, row.needed, row.unit, row.pieceWeightG)
+                  : null;
                 const packHintStr = row.packsToBuy != null && row.packSize
                   ? `нужно ${formatAmount(row.needed, row.unit)} ≈ ${row.packsToBuy} × ${formatAmount(row.packSize, row.unit)}`
                   : `нужно ${formatAmount(row.needed, row.unit)} (без фасовки)`;
@@ -1164,7 +1232,12 @@ export default function TripDetailPage() {
                   <div
                     key={row.ingredientId}
                     className="checklist-row flex items-center gap-3 px-4 py-3 text-sm"
-                    style={{ borderTop: '1px solid var(--border)', opacity: bought ? 0.6 : 1 }}
+                    style={{
+                      borderTop: '1px solid var(--border)',
+                      opacity: bought && !underfilled ? 0.6 : 1,
+                      // Fix-6 (п.9): янтарная подсветка — отмечено «взято», но количество меньше нужного
+                      background: underfilled ? 'color-mix(in srgb, var(--amber-500) 10%, transparent)' : undefined,
+                    }}
                     onClick={() => toggleBought(boughtKey)}
                     role="button"
                     tabIndex={0}
@@ -1184,14 +1257,17 @@ export default function TripDetailPage() {
                       <span className="block" style={{ color: 'var(--text)', textDecoration: bought ? 'line-through' : 'none' }}>
                         {row.name}
                       </span>
-                      <span className="block text-xs" style={{ color: 'var(--muted)' }}>{packHintStr}</span>
+                      <span className="block text-xs" style={{ color: underfilled ? 'var(--amber-300)' : 'var(--muted)' }}>
+                        {underfilled ? `⚠ взяли меньше, чем нужно · ${packHintStr}` : packHintStr}
+                      </span>
                     </span>
+                    {/* Fix-6 (п.8): свободные единицы — «беру 300 г» даже если учтён в штуках */}
                     <span className="shrink-0 flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
                       <span className="text-xs" style={{ color: 'var(--muted)' }}>беру</span>
-                      <AmountInput
-                        size="sm"
+                      <FreeAmountInput
                         value={actual}
-                        unit={row.unit}
+                        baseUnit={row.unit}
+                        pieceWeightG={row.pieceWeightG}
                         onChange={(v) => commitActualQty(row.ingredientId, v)}
                         ariaLabel={`Сколько реально берёте: ${row.name}`}
                         testId={`actual-qty-${row.ingredientId}`}
@@ -1241,12 +1317,16 @@ export default function TripDetailPage() {
         />
       )}
 
+      {/* Fix-6 (п.7): брендовый диалог подтверждений */}
+      {confirmDialog}
+
       {/* Модалка ручных позиций (U40): продукты к дню (dayId) или ко всему походу (null) */}
       {manualCtx && trip && (
         <ManualItemsModal
           tripId={trip.id}
           dayId={manualCtx.dayId}
           dayLabel={manualCtx.dayLabel}
+          isAdmin={isEditorAdmin === true}
           items={manualCtx.dayId == null
             ? manualForTrip(manualItems)
             : manualForDay(manualItems, manualCtx.dayId)}

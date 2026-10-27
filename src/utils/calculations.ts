@@ -134,10 +134,14 @@ export function calculateMenuByDays(trip: Trip, recipes: Map<string, any>): Menu
           .filter((ri: any) => !isIngredientDisabled(ri))
           .map((ri: any) => ({
             name: ingOf(ri).name || 'Unknown',
-            amount: calculateAmountPerPerson(ri.amount, recipe.baseServings, people),
+            // Fix-6 (п.22): EXTRA-строки (absolute) — абсолют на приём, людьми НЕ масштабируются
+            amount: ri.absolute ? Number(ri.amount) : calculateAmountPerPerson(ri.amount, recipe.baseServings, people),
             unit: ingOf(ri).unit || 'PCS',
             // U30: id ингредиента — для overlay серверных правок (EXTRA/SUBST/EXCLUDE)
             ingredientId: String(ri.ingredientId ?? ri?.ingredient?.id ?? ''),
+            // Fix-6: флаги правок состава — для бейджей меню («+ добавлено», «замена ← X»)
+            added: ri.added === true ? true : undefined,
+            substitutedFrom: ri.substitutedFrom ?? undefined,
           }))
       };
     })
@@ -160,7 +164,8 @@ export function calculateShoppingList(trip: Trip, recipes: Map<string, any>, pri
         if (isIngredientDisabled(ri)) continue;
         // Fix-2 (п.5): по-дневное исключение снимает количество ЭТОГО дня, глобальное — всех
         if (isRowExcluded(excluded, day.dayDate, ri.ingredientId)) continue;
-        const amountPerMeal = calculateAmountPerPerson(ri.amount, recipe.baseServings, people);
+        // Fix-6 (п.22): EXTRA-строки (absolute) не масштабируются людьми
+        const amountPerMeal = ri.absolute ? Number(ri.amount) : calculateAmountPerPerson(ri.amount, recipe.baseServings, people);
         const existing = items.get(ri.ingredientId);
         
         if (existing) {
@@ -226,7 +231,8 @@ export function calculateDayShopping(
         if (isRowExcluded(excluded, day.dayDate, ri.ingredientId)) continue;
         // Release-1.0: выключенные продукты не попадают ни в меню, ни в закупку (паритет)
         if (isIngredientDisabled(ri)) continue;
-        const amountPerMeal = calculateAmountPerPerson(ri.amount, recipe.baseServings, people);
+        // Fix-6 (п.22): EXTRA-строки (absolute) не масштабируются людьми
+        const amountPerMeal = ri.absolute ? Number(ri.amount) : calculateAmountPerPerson(ri.amount, recipe.baseServings, people);
         const existing = items.get(ri.ingredientId);
         
         if (existing) {
@@ -304,7 +310,8 @@ export function calculatePersonSummary(
             const ing = ri.ingredient;
             if (!ing) continue;
             
-            const amountPerMeal = calculateAmountPerPerson(ri.amount, recipe.baseServings, people);
+            // Fix-6 (п.22): EXTRA-абсолют не масштабируем
+            const amountPerMeal = ri.absolute ? Number(ri.amount) : calculateAmountPerPerson(ri.amount, recipe.baseServings, people);
             const kcal = calculateKcal(
               amountPerMeal,
               ing.unit as UnitOfMeasure,

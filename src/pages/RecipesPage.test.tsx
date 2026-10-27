@@ -73,23 +73,26 @@ describe('RecipesPage — админ-режим каталога', () => {
     expect(await screen.findByLabelText('Название')).toBeTruthy();
   });
 
-  it('удаление: только confirm + DELETE (клиентской проверки использования больше нет)', async () => {
-    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+  it('удаление: брендовый диалог подтверждения + DELETE (Fix-6 п.7; клиентской проверки использования нет)', async () => {
     renderPage();
     await screen.findByText('Уха из рыбных консервов');
     fireEvent.click(screen.getByLabelText('Удалить Уха из рыбных консервов'));
+    // Fix-6 (п.7): window.confirm заменён брендовым alertdialog с последствиями
+    const dialog = await screen.findByRole('alertdialog');
+    expect(dialog.textContent).toContain('Удалить блюдо «Уха из рыбных консервов»?');
+    fireEvent.click(screen.getByRole('button', { name: 'Удалить блюдо' }));
     await waitFor(() => expect(api.del).toHaveBeenCalledWith('/admin/recipes/r1'));
-    expect(confirmSpy).toHaveBeenCalled();
     // U16: список походов клиентом больше не запрашивается — изоляцию гарантирует сервер
     expect(api.get).not.toHaveBeenCalledWith('/trips');
-    confirmSpy.mockRestore();
   });
 
   it('U16: рецепт, используемый в походах, всё равно удаляется — походы живут на снапшотах', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
     renderPage();
     await screen.findByText('Уха из рыбных консервов');
     fireEvent.click(screen.getByLabelText('Удалить Уха из рыбных консервов'));
+    // Fix-6 (п.7): подтверждение — в брендовом диалоге
+    await screen.findByRole('alertdialog');
+    fireEvent.click(screen.getByRole('button', { name: 'Удалить блюдо' }));
     await waitFor(() => expect(api.del).toHaveBeenCalledWith('/admin/recipes/r1'));
     expect(screen.queryByText(/используется в походах/)).toBeNull();
   });

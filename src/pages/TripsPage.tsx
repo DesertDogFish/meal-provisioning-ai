@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Plus, Mountain, Calendar, Users, Trash2, Edit2 } from 'lucide-react';
 import { useToast } from '../components/ToastProvider';
 import { TripForm, type TripFormData } from '../components/TripForm';
+import { useConfirm } from '../components/ConfirmDialog'; // Fix-6 (п.7): красивые подтверждения
 import { api } from '../api/client';
 import { getTripCover } from '../utils/getTripCover';
 import { Button } from '../components/Button';
@@ -29,6 +30,7 @@ interface User {
 export default function TripsPage() {
   const navigate = useNavigate();
   const { showError, showSuccess } = useToast();
+  const { confirm, dialog: confirmDialog } = useConfirm();
   const [showCreate, setShowCreate] = useState(false);
   // U36 (список 26.10): карандаш открывает редактирование похода (имя/описание/даты/люди)
   const [editingTrip, setEditingTrip] = useState<Trip | null>(null);
@@ -96,18 +98,25 @@ export default function TripsPage() {
     const datesChanged =
       formData.startDate !== trip.startDate || formData.endDate !== trip.endDate;
     if (datesChanged) {
-      // Fix-2 (п.1): стираются данные ТОЛЬКО дней, уходящих за новые границы;
-      // пересекающиеся дни сохраняют меню, правки и позиции.
+      // Fix-2 (п.1) + Fix-6 (п.7): стираются данные ТОЛЬКО дней, уходящих за новые
+      // границы; предупреждение — брендовым диалогом с перечнем потерь.
       const lostDays = (trip.days ?? []).filter(
         (d: any) => d.dayDate < formData.startDate || d.dayDate > formData.endDate);
       const lostMeals = lostDays.reduce((acc: number, d: any) => acc + (d.meals?.length ?? 0), 0);
       if (lostDays.length > 0) {
-        const ok = window.confirm(
-          `Из похода уйдут ${lostDays.length} дн. (${lostDays.map((d: any) =>
-            new Date(d.dayDate).toLocaleDateString('ru-RU')).join(', ')})` +
-          (lostMeals > 0 ? ` — вместе с ними удалятся ${lostMeals} приёмов пищи и их позиции` : '') +
-          `. Остальные дни сохранятся. Продолжить?`
-        );
+        const ok = await confirm({
+          title: 'Даты меняются — часть плана будет стёрта',
+          tone: 'warning',
+          confirmLabel: 'Да, изменить даты',
+          message: (
+            <>
+              Из похода уйдут {lostDays.length} дн. ({lostDays.map((d: any) =>
+                new Date(d.dayDate).toLocaleDateString('ru-RU')).join(', ')}).
+              {lostMeals > 0 && <> Вместе с ними удалятся <b>{lostMeals} приёмов пищи</b>, их правки состава и позиции этих дней.</>}
+              <br />Остальные дни сохранятся без изменений.
+            </>
+          ),
+        });
         if (!ok) return;
       }
     }
@@ -127,11 +136,24 @@ export default function TripsPage() {
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Удалить поход?')) return;
-    
+  const handleDelete = async (trip: Trip) => {
+    // Fix-6 (п.7): важное удаление — красивое предупреждение с последствиями
+    const daysCount = trip.days?.length ?? 0;
+    const mealsCount = (trip.days ?? []).reduce((acc: number, d: any) => acc + (d.meals?.length ?? 0), 0);
+    const ok = await confirm({
+      title: `Удалить поход «${trip.name}»?`,
+      confirmLabel: 'Удалить поход',
+      message: (
+        <>
+          Поход будет удалён безвозвратно вместе со всем содержимым:
+          {daysCount > 0 && <> {daysCount} дн., <b>{mealsCount} приёмов пищи</b>,</>} правки состава,
+          чеки, ручные позиции и отметки чеклиста.
+        </>
+      ),
+    });
+    if (!ok) return;
     try {
-      await api.del(`/trips/${id}`);
+      await api.del(`/trips/${trip.id}`);
       showSuccess('Поход удалён');
       await loadData();
     } catch (err: any) {
@@ -215,7 +237,11 @@ export default function TripsPage() {
               key={trip.id}
               className="glass lift p-5 relative overflow-hidden"
               style={{
-                backgroundImage: `linear-gradient(color-mix(in srgb, var(--bg-0) 82%, transparent), color-mix(in srgb, var(--bg-0) 88%, transparent)), url(${getTripCover(trip.name)})`,
+                /* Fix-6 (п.6): «на походах должна быть красивая графика, а её нет» —
+                   обложки были, но задавлены градиентом 82–88%. Осветляем подложку
+                   (35%→70%): рисунок (море/горы/лес/кемпинг) теперь виден фоном,
+                   текст остаётся читаемым. */
+                backgroundImage: `linear-gradient(105deg, color-mix(in srgb, var(--bg-0) 70%, transparent) 0%, color-mix(in srgb, var(--bg-0) 35%, transparent) 55%, color-mix(in srgb, var(--bg-0) 55%, transparent) 100%), url(${getTripCover(trip.name)})`,
                 backgroundSize: 'cover',
                 backgroundPosition: 'center'
               }}
@@ -258,7 +284,7 @@ export default function TripsPage() {
                     <Edit2 size={18} />
                   </button>
                   <button
-                    onClick={() => handleDelete(trip.id)}
+                    onClick={() => handleDelete(trip)}
                     className="p-2 rounded-lg transition-colors"
                     style={{ color: 'var(--muted)' }}
                     onMouseEnter={(e) => {
@@ -278,6 +304,9 @@ export default function TripsPage() {
           ))}
         </div>
       )}
+
+      {/* Fix-6 (п.7): брендовый диалог подтверждений */}
+      {confirmDialog}
     </div>
   );
 }

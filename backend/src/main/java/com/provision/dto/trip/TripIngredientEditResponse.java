@@ -16,5 +16,10 @@ public record TripIngredientEditResponse(
     boolean added,              // true = добавлена руками (не из рецепта)
     boolean removed,            // true = мягко удалена из расчёта
     String comment,
-    LocalDateTime createdAt
+    LocalDateTime createdAt,
+    // Fix-6 (п.22/25): единицы измерения from/to — фронту они нужны, чтобы
+    // включать EXTRA/SUBST-позиции в клиентский расчёт закупки/чека
+    // (форматирование количества и сопоставление с ценами за базовую единицу).
+    String fromUnit,
+    String toUnit
 ) {}

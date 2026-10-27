@@ -65,6 +65,12 @@ export default defineConfig({
         'src/components/InfoTip.tsx',
         'src/components/TabHeader.tsx',
         'src/api/shoppingExclusions.ts',
+        // Fix-6 (список 26.10, итерация 6): правки состава в расчётах, свободные
+        // единицы факта, подтверждения удалений
+        'src/utils/recipeEdits.ts',
+        'src/utils/checkUnits.ts',
+        'src/components/FreeAmountInput.tsx',
+        'src/components/ConfirmDialog.tsx',
       ],
     },
   },

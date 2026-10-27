@@ -5,14 +5,14 @@ import { api, getRecipes, getTripRecipes } from '../api/client';
 import {
   calculateMenuByDays, calculateShoppingList, calculateDayShopping,
   calculatePersonSummary, formatAmount, realTripPeople, getEffectivePeople,
-  dayScopedExclusions, isRowExcluded,
+  dayScopedExclusions, isRowExcluded, findPriceForDate,
 } from '../utils/calculations';
 import { formatRub } from '../utils/formatRub';
-import { loadActualPrices, loadExcluded, loadBought, loadActualQty } from '../utils/tripStaging';
+import { loadActualPrices, loadExcluded, loadBought, loadActualQty, type ChecklistActual } from '../utils/tripStaging';
 import { getTripEdits, type TripIngredientEdit } from '../api/tripEdits';
 import { getManualItems, type TripManualItem } from '../api/tripManualItems';
 import { mergeManualIntoShopping, manualForDay, manualForTrip } from '../utils/manualItems';
-import { overlayEditsOnIngredients, editMatchesRecipe } from '../utils/menuOverlay';
+import { buildEffectiveRecipesMap } from '../utils/recipeEdits'; // Fix-6 (п.22/25)
 import { buildChecklist, type ChecklistProductInfo } from '../utils/checklist';
 import { categoryName } from '../utils/format';
 import { totalFromUnit, roundMoney } from '../utils/checkInput';
@@ -33,6 +33,14 @@ import type { IngredientPrice, MealType } from '../types';
  * цифр): trip + snowshot-рецепты + цены + серверные правки состава + ручные
  * позиции + стейдж фактов/исключений/отметок чеклиста.
  */
+
+// Fix-6 (п.3): цвета групп приёмов — те же оттенки, что у бейджей в приложении
+const MEAL_PRINT_STYLE: Record<MealType, { bg: string; border: string; color: string }> = {
+  BREAKFAST: { bg: '#FDF3D9', border: '#E7D3A0', color: '#8A6100' },
+  LUNCH:     { bg: '#DDF2EE', border: '#A8DAD1', color: '#0F7A6E' },
+  DINNER:    { bg: '#E4E9F7', border: '#B9C4E4', color: '#3B4E8C' },
+  SNACK:     { bg: '#FBE7DD', border: '#EFC3AC', color: '#B14A17' },
+};
 
 const MEAL_LABELS: Record<MealType, string> = {
   BREAKFAST: 'Завтрак', LUNCH: 'Обед', DINNER: 'Ужин', SNACK: 'Перекус',
@@ -57,6 +65,8 @@ export default function TripPrintPage() {
   const [shopping, setShopping] = useState<Array<{
     ingredientId: string; ingredientName: string; unit: string;
     totalAmount: number; plannedCost?: number; actualCost?: number; excluded: boolean; manual?: boolean;
+    /** Fix-6 (п.5): чек по позиции ВВЕДЁН — план в отчёте больше не нужен */
+    hasFact?: boolean;
   }>>([]);
   const [checklist, setChecklist] = useState<ReturnType<typeof buildChecklist>>([]);
   const [days, setDays] = useState<Array<{
@@ -68,8 +78,7 @@ export default function TripPrintPage() {
   });
   const [boughtCount, setBoughtCount] = useState(0);
   const [boughtKeys, setBoughtKeys] = useState<Set<string>>(new Set());
-  const [actualQty, setActualQty] = useState<Record<string, number>>({});
-  const [draftQty, setDraftQty] = useState<Record<string, number>>({});
+  const [actualQty, setActualQty] = useState<Record<string, ChecklistActual>>({});
   const [manualByDay, setManualByDay] = useState<Record<string, TripManualItem[]>>({});
   const [tripManual, setTripManual] = useState<TripManualItem[]>([]);
 
@@ -93,10 +102,6 @@ export default function TripPrintPage() {
         const overrides = loadActualPrices(tripKey);
         const bought = loadBought(tripKey);
         const actualQtyData = loadActualQty(tripKey);
-        const draftQtyData: Record<string, number> = {};
-        for (const [k, v] of Object.entries(overrides)) {
-          if (v?.qty != null) draftQtyData[k] = v.qty;
-        }
 
         // --- Меню с overlay серверных правок состава (Fix-2 п.3/U30) ---
         const snapshotOfMap = new Map<string, string>();
@@ -104,19 +109,19 @@ export default function TripPrintPage() {
           const so = (r as { snapshotOf?: string | number | null }).snapshotOf;
           if (so != null) snapshotOfMap.set(String(r.id), String(so));
         }
-        const menuDays = calculateMenuByDays(tripData as never, recipesMap).map(day => ({
-          ...day,
-          meals: day.meals.map(m => {
-            const mEdits = editsData.filter(e => editMatchesRecipe(e, String((m as { recipeId?: string }).recipeId ?? ''), snapshotOfMap));
-            if (!mEdits.length) return m;
-            return { ...m, ingredients: overlayEditsOnIngredients(m.ingredients, mEdits, m.servings) as typeof m.ingredients };
-          }),
-        }));
+        // Fix-6 (п.22/25): правки состава — в самом источнике расчётов (меню и закупка)
+        const effectiveRecipesMap = buildEffectiveRecipesMap(recipesMap, editsData as never, snapshotOfMap);
+        const menuDays = calculateMenuByDays(tripData as never, effectiveRecipesMap);
 
         // --- Закупка: блюда + ручные позиции, факт из стейджа ---
+        const manualPriceOf = (ingId: string): number | undefined => {
+          const rows = pricesData.filter(pr => String(pr.ingredientId) === String(ingId));
+          return rows.length ? findPriceForDate(rows as never, tripData.endDate)?.pricePerUnit : undefined;
+        };
         const base = mergeManualIntoShopping(
-          calculateShoppingList(tripData as never, recipesMap, pricesData, dayScopedExclusions(excluded)),
+          calculateShoppingList(tripData as never, effectiveRecipesMap, pricesData, dayScopedExclusions(excluded)),
           manualData,
+          manualPriceOf,
         );
         const shoppingRows = base.map(item => {
           const planned = item.estimatedCost ?? undefined;
@@ -131,6 +136,7 @@ export default function TripPrintPage() {
             actualCost: roundMoney(totalFromUnit(actualUnit, item.totalAmount)) ?? planned,
             excluded: excluded.has(String(item.ingredientId)),
             manual: (item as { manual?: boolean }).manual,
+            hasFact: overrides[String(item.ingredientId)]?.price != null,
           };
         });
 
@@ -158,7 +164,7 @@ export default function TripPrintPage() {
         );
 
         // --- По дням: план/факт и люди (для «кто сколько должен») ---
-        const dayRows = calculateDayShopping(tripData as never, recipesMap, pricesData)
+        const dayRows = calculateDayShopping(tripData as never, effectiveRecipesMap, pricesData)
           .map(d => {
             const merged = mergeManualIntoShopping(
               d.items,
@@ -181,7 +187,7 @@ export default function TripPrintPage() {
         const totalPlanned = included.reduce((a, r) => a + (r.plannedCost ?? 0), 0);
         const totalActual = included.reduce((a, r) => a + (r.actualCost ?? 0), 0);
         const realPeople = realTripPeople(tripData as never);
-        const { tripSummary } = calculatePersonSummary(tripData as never, recipesMap, pricesData, realPeople, excluded);
+        const { tripSummary } = calculatePersonSummary(tripData as never, effectiveRecipesMap, pricesData, realPeople, excluded, manualData, manualPriceOf);
 
         // ручные позиции для меню-страниц
         const byDay: Record<string, TripManualItem[]> = {};
@@ -202,7 +208,6 @@ export default function TripPrintPage() {
         setBoughtCount([...bought].length);
         setBoughtKeys(bought);
         setActualQty(actualQtyData);
-        setDraftQty(draftQtyData);
         setManualByDay(byDay);
         setTripManual(manualForTrip(manualData));
       } catch (err) {
@@ -226,6 +231,10 @@ export default function TripPrintPage() {
   }
 
   const included = shopping.filter(r => !r.excluded);
+  // Fix-6 (п.5): «если чек утверждён — план просто засоряет вывод».
+  // allFact — все позиции с чеком: плановые колонки не показываем вовсе.
+  const anyFact = included.some(r => r.hasFact);
+  const allFact = included.length > 0 && included.every(r => r.hasFact);
   const realPeopleLabel = Number.isInteger(kpi.realPeople) ? String(kpi.realPeople) : kpi.realPeople.toLocaleString('ru-RU', { maximumFractionDigits: 1 });
 
   return (
@@ -261,7 +270,7 @@ export default function TripPrintPage() {
             {fmtDate(trip.startDate)} — {fmtDate(trip.endDate, { day: 'numeric', month: 'long', year: 'numeric' })}
             {' · '}людей: {realPeopleLabel}
             {' · '}дней: {trip.days?.length ?? 0}
-            {' · '}человеко-приёмов: {kpi.personMeals}
+            {' · '}приёмов пищи (с людьми): {kpi.personMeals}
           </p>
           {trip.notes && <p className="print-muted" style={{ margin: '4px 0 0', fontSize: 12 }}>{trip.notes}</p>}
         </header>
@@ -280,35 +289,49 @@ export default function TripPrintPage() {
                 {day.effectivePeople} чел. · {day.meals.length} приёмов
                 {dayRow ? ` · план ${formatRub(dayRow.planned)}${dayRow.actual !== dayRow.planned ? `, факт ${formatRub(dayRow.actual)}` : ''}` : ''}
               </p>
-              {/* Fix-5 (п.14): приёмы дня в ДВЕ колонки — не «портянка» */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 24px' }}>
-              {day.meals.map((meal, mi) => (
-                <div key={mi} style={{ marginBottom: 14, breakInside: 'avoid' }}>
-                  <p style={{ margin: '0 0 4px', fontSize: 14, fontWeight: 700 }}>
-                    <span style={{
-                      display: 'inline-block', fontSize: 11, fontWeight: 700, padding: '2px 8px',
-                      borderRadius: 999, marginRight: 8, verticalAlign: 'middle',
-                      background: '#f0ede4', border: '1px solid #d8dee3', color: '#435663',
-                    }}>
-                      {MEAL_LABELS[meal.mealType]}
-                    </span>
-                    {meal.recipeName}
-                    <span className="print-muted" style={{ fontWeight: 400, fontSize: 12 }}> · {meal.servings} порц.</span>
-                  </p>
-                  <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12.5, color: '#28384a' }}>
-                    {meal.ingredients.map((ing, ii) => (
-                      <li key={ii}>
-                        {ing.name} — {formatAmount(ing.amount, ing.unit)}
-                        {(ing as { added?: boolean }).added && <span style={{ color: '#0F7A6E', fontWeight: 700 }}> (+добавлено)</span>}
-                        {(ing as { substitutedFrom?: string }).substitutedFrom && (
-                          <span className="print-muted"> (замена: {(ing as { substitutedFrom?: string }).substitutedFrom})</span>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ))}
-              </div>
+              {/* Fix-6 (п.3): меню СГРУППИРОВАНО по приёмам — «Завтрак», «Обед»,
+                  «Ужин», «Перекус» с цветными заголовками (как бейджи в приложении);
+                  внутри группы — приёмы в две колонки */}
+              {(['BREAKFAST', 'LUNCH', 'DINNER', 'SNACK'] as const)
+                .filter(mt => day.meals.some(m => m.mealType === mt))
+                .map(mt => {
+                  const style = MEAL_PRINT_STYLE[mt];
+                  return (
+                    <div key={mt} style={{ breakInside: 'avoid', marginBottom: 10 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '4px 0 6px' }}>
+                        <span style={{
+                          fontSize: 11, fontWeight: 800, padding: '3px 12px', borderRadius: 999,
+                          background: style.bg, border: `1px solid ${style.border}`, color: style.color,
+                          textTransform: 'uppercase', letterSpacing: '.06em',
+                        }}>
+                          {MEAL_LABELS[mt]}
+                        </span>
+                        <span style={{ flex: 1, height: 1, background: '#dfe5e9' }} />
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2px 24px' }}>
+                        {day.meals.filter(m => m.mealType === mt).map((meal, mi) => (
+                          <div key={mi} style={{ marginBottom: 10 }}>
+                            <p style={{ margin: '0 0 3px', fontSize: 14, fontWeight: 700 }}>
+                              {meal.recipeName}
+                              <span className="print-muted" style={{ fontWeight: 400, fontSize: 12 }}> · {meal.servings} порц.</span>
+                            </p>
+                            <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12.5, color: '#28384a' }}>
+                              {meal.ingredients.map((ing, ii) => (
+                                <li key={ii}>
+                                  {ing.name} — {formatAmount(ing.amount, ing.unit)}
+                                  {(ing as { added?: boolean }).added && <span style={{ color: '#0F7A6E', fontWeight: 700 }}> (+добавлено)</span>}
+                                  {(ing as { substitutedFrom?: string }).substitutedFrom && (
+                                    <span className="print-muted"> (замена: {(ing as { substitutedFrom?: string }).substitutedFrom})</span>
+                                  )}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
               {dayManual.length > 0 && (
                 <div style={{ marginTop: 6, breakInside: 'avoid' }}>
                   <p style={{ margin: '0 0 4px', fontSize: 13, fontWeight: 700, color: '#435663' }}>К дню (не блюда):</p>
@@ -356,24 +379,39 @@ export default function TripPrintPage() {
                     <th style={{ textAlign: 'right' }}>Нужно</th>
                     {/* Fix-5 (п.12/21): сколько реально взяли — из чеклиста/чека */}
                     <th style={{ textAlign: 'right' }}>Взяли</th>
-                    <th style={{ textAlign: 'right' }}>План ₽</th>
-                    <th style={{ textAlign: 'right' }}>Факт ₽</th>
+                    {/* Fix-6 (п.5/21): план — только пока чеки не закрыты; народный нейминг */}
+                    {!allFact && <th style={{ textAlign: 'right' }}>Думали ₽</th>}
+                    {(anyFact || allFact) && <th style={{ textAlign: 'right' }}>Заплатили ₽</th>}
                   </tr>
                 </thead>
                 <tbody>
                   {group.rows.map(row => {
                     const src = included.find(r => r.ingredientId === row.ingredientId);
-                    // факт-количество: чеклист-ввод → «взяли» из чека → расчёт (упаковки)
-                    const tookQty = actualQty[row.ingredientId] ?? draftQty[row.ingredientId]
-                      ?? (row.packsToBuy != null && row.packSize ? row.packsToBuy * row.packSize : row.needed);
+                    // факт-количество: свободный ввод чеклиста («300 г») → расчёт (упаковки/нужно)
+                    const act = actualQty[row.ingredientId];
+                    const tookStr = act
+                      ? `${act.amount.toLocaleString('ru-RU')} ${act.unit}`
+                      : (row.packsToBuy != null && row.packSize
+                        ? formatAmount(row.packsToBuy * row.packSize, row.unit)
+                        : formatAmount(row.needed, row.unit));
                     const isBought = boughtKeys.has(`${row.ingredientId}@${Math.round(row.needed * 1000)}`);
                     return (
                       <tr key={row.ingredientId}>
                         <td>{isBought ? '✓ ' : ''}{row.name}</td>
                         <td style={{ textAlign: 'right' }}>{formatAmount(row.needed, row.unit)}</td>
-                        <td style={{ textAlign: 'right', fontWeight: 700 }}>{formatAmount(tookQty, row.unit)}</td>
-                        <td style={{ textAlign: 'right' }}>{src?.plannedCost != null ? formatRub(src.plannedCost) : '—'}</td>
-                        <td style={{ textAlign: 'right' }}>{src?.actualCost != null ? formatRub(src.actualCost) : '—'}</td>
+                        <td style={{ textAlign: 'right', fontWeight: 700 }}>{tookStr}</td>
+                        {!allFact && (
+                          <td style={{ textAlign: 'right' }}>
+                            {src?.plannedCost != null ? formatRub(src.plannedCost) : '—'}
+                          </td>
+                        )}
+                        {(anyFact || allFact) && (
+                          <td style={{ textAlign: 'right', fontWeight: src?.hasFact ? 700 : 400 }}>
+                            {src?.hasFact && src?.actualCost != null
+                              ? formatRub(src.actualCost)
+                              : <span className="print-muted">—</span>}
+                          </td>
+                        )}
                       </tr>
                     );
                   })}
@@ -393,16 +431,32 @@ export default function TripPrintPage() {
           <h2 style={{ fontSize: 18, fontWeight: 800, margin: '0 0 10px', color: '#0F7A6E' }}>Деньги: итоги и кто сколько должен</h2>
           <table style={{ marginBottom: 14 }}>
             <tbody>
-              <tr><td>План на поход</td><td style={{ textAlign: 'right', fontWeight: 700 }}>{formatRub(kpi.totalPlanned)}</td></tr>
-              <tr><td>Факт (по введённым чекам)</td><td style={{ textAlign: 'right', fontWeight: 700 }}>{formatRub(kpi.totalActual)}</td></tr>
-              <tr>
-                <td>Расхождение</td>
-                <td style={{ textAlign: 'right', fontWeight: 700, color: kpi.totalActual > kpi.totalPlanned ? '#C24E12' : '#0F7A6E' }}>
-                  {kpi.totalPlanned > 0 ? `${kpi.totalActual > kpi.totalPlanned ? '+' : ''}${Math.round(kpi.totalActual - kpi.totalPlanned).toLocaleString('ru-RU')} ₽` : '—'}
-                </td>
-              </tr>
+              {/* Fix-6 (п.5): чеки закрыты полностью — план не выводим: «Заплатили» и всё */}
+              {!allFact && (
+                <tr>
+                  <td>Думали (план на поход)</td>
+                  <td style={{ textAlign: 'right', fontWeight: 700 }}>{formatRub(kpi.totalPlanned)}</td>
+                </tr>
+              )}
+              {anyFact && (
+                <tr>
+                  <td>Заплатили (по введённым чекам)</td>
+                  <td style={{ textAlign: 'right', fontWeight: 700 }}>{formatRub(kpi.totalActual)}</td>
+                </tr>
+              )}
+              {anyFact && !allFact && (
+                <tr>
+                  <td>Расхождение</td>
+                  <td style={{ textAlign: 'right', fontWeight: 700, color: kpi.totalActual > kpi.totalPlanned ? '#C24E12' : '#0F7A6E' }}>
+                    {kpi.totalPlanned > 0 ? `${kpi.totalActual > kpi.totalPlanned ? '+' : ''}${Math.round(kpi.totalActual - kpi.totalPlanned).toLocaleString('ru-RU')} ₽` : '—'}
+                  </td>
+                </tr>
+              )}
+              {!anyFact && !allFact && (
+                <tr><td>Итого (план)</td><td style={{ textAlign: 'right', fontWeight: 700 }}>{formatRub(kpi.totalPlanned)}</td></tr>
+              )}
               <tr><td>На одного человека ({realPeopleLabel} чел.)</td><td style={{ textAlign: 'right', fontWeight: 800 }}>{formatRub(kpi.perPerson)}</td></tr>
-              <tr><td>На один человеко-приём ({kpi.personMeals})</td><td style={{ textAlign: 'right', fontWeight: 700 }}>{formatRub(kpi.perPersonMeal)}</td></tr>
+              <tr><td>На один приём пищи ({kpi.personMeals} приёмов с людьми)</td><td style={{ textAlign: 'right', fontWeight: 700 }}>{formatRub(kpi.perPersonMeal)}</td></tr>
             </tbody>
           </table>
 
@@ -412,8 +466,8 @@ export default function TripPrintPage() {
               <tr>
                 <th>День</th>
                 <th style={{ textAlign: 'right' }}>Людей</th>
-                <th style={{ textAlign: 'right' }}>План ₽</th>
-                <th style={{ textAlign: 'right' }}>Факт ₽</th>
+                {!allFact && <th style={{ textAlign: 'right' }}>Думали ₽</th>}
+                {anyFact && <th style={{ textAlign: 'right' }}>Заплатили ₽</th>}
                 <th style={{ textAlign: 'right' }}>На человека в день</th>
               </tr>
             </thead>
@@ -422,16 +476,16 @@ export default function TripPrintPage() {
                 <tr key={d.dayDate}>
                   <td>{fmtDate(d.dayDate, { weekday: 'short', day: 'numeric', month: 'short' })}</td>
                   <td style={{ textAlign: 'right' }}>{d.people}</td>
-                  <td style={{ textAlign: 'right' }}>{formatRub(d.planned)}</td>
-                  <td style={{ textAlign: 'right' }}>{formatRub(d.actual)}</td>
-                  <td style={{ textAlign: 'right', fontWeight: 700 }}>{formatRub(d.actual / Math.max(1, d.people))}</td>
+                  {!allFact && <td style={{ textAlign: 'right' }}>{formatRub(d.planned)}</td>}
+                  {anyFact && <td style={{ textAlign: 'right' }}>{formatRub(d.actual)}</td>}
+                  <td style={{ textAlign: 'right', fontWeight: 700 }}>{formatRub((anyFact ? d.actual : d.planned) / Math.max(1, d.people))}</td>
                 </tr>
               ))}
               <tr style={{ borderTop: '2px solid #d8dee3' }}>
                 <td style={{ fontWeight: 800 }}>Итого</td>
                 <td />
-                <td style={{ textAlign: 'right', fontWeight: 800 }}>{formatRub(kpi.totalPlanned)}</td>
-                <td style={{ textAlign: 'right', fontWeight: 800 }}>{formatRub(kpi.totalActual)}</td>
+                {!allFact && <td style={{ textAlign: 'right', fontWeight: 800 }}>{formatRub(kpi.totalPlanned)}</td>}
+                {anyFact && <td style={{ textAlign: 'right', fontWeight: 800 }}>{formatRub(kpi.totalActual)}</td>}
                 <td style={{ textAlign: 'right', fontWeight: 800 }}>{formatRub(kpi.perPerson)}</td>
               </tr>
             </tbody>

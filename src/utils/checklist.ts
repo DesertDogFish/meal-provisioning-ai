@@ -24,6 +24,8 @@ export interface ChecklistProductInfo {
   packSize?: number | null;
   roundToPacks?: boolean | null;
   category?: string | null;
+  /** Fix-6 (п.8): вес штуки/упаковки — открывает ввод факта в г/кг для штучных товаров */
+  pieceWeightG?: number | null;
 }
 
 export interface ChecklistRow {
@@ -40,6 +42,8 @@ export interface ChecklistRow {
   /** излишек после округления */
   leftover: number;
   category: string;
+  /** Fix-6 (п.8): вес штуки/упаковки (г) — для свободного ввода факта */
+  pieceWeightG: number | null;
 }
 
 export interface ChecklistGroup {
@@ -58,6 +62,7 @@ export function toChecklistRow(
   const round = !!info?.roundToPacks && packSize != null;
   const packsToBuy = round ? Math.ceil(row.totalAmount / (packSize as number)) : null;
   const buyAmount = round ? (packsToBuy as number) * (packSize as number) : row.totalAmount;
+  const pw = info?.pieceWeightG != null && Number(info.pieceWeightG) > 0 ? Number(info.pieceWeightG) : null;
   return {
     ingredientId: String(row.ingredientId),
     name: row.ingredientName,
@@ -68,6 +73,7 @@ export function toChecklistRow(
     buyAmount,
     leftover: round ? buyAmount - row.totalAmount : 0,
     category: (info?.category || '').trim() || OTHER_CATEGORY,
+    pieceWeightG: pw,
   };
 }
 

@@ -14,8 +14,14 @@ vi.mock('../api/tripManualItems', () => ({
   deleteManualItem: vi.fn(),
 }));
 
+// Fix-6 (п.13): свободный ввод использует api-клиент (check-name / создание продукта / категории)
+vi.mock('../api/client', () => ({
+  api: { get: vi.fn(), post: vi.fn() },
+}));
+
 import { addManualItem, deleteManualItem } from '../api/tripManualItems';
 import type { TripManualItem } from '../api/tripManualItems';
+import { api } from '../api/client';
 
 const products = [
   { id: 'p1', name: 'Антисептик для рук', unit: 'PCS' as const, category: 'Хозтовары' },
@@ -92,6 +98,9 @@ describe('ManualItemsModal (U40)', () => {
     const onChanged = vi.fn();
     renderModal({ onChanged });
     fireEvent.click(screen.getByLabelText('Удалить позицию: Аптечка набор'));
+    // Fix-6 (п.7): удаление подтверждается брендовым диалогом
+    await waitFor(() => expect(screen.getByRole('alertdialog')).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: 'Удалить' }));
     await waitFor(() => expect(deleteManualItem).toHaveBeenCalledWith('t1', 'mi1'));
     await waitFor(() => expect(onChanged).toHaveBeenCalled());
   });
@@ -106,5 +115,87 @@ describe('ManualItemsModal (U40)', () => {
     fireEvent.click(screen.getByLabelText('Добавить позицию'));
     await waitFor(() => expect(addManualItem).toHaveBeenCalledTimes(1));
     expect((addManualItem as any).mock.calls[0][1].amount).toBeCloseTo(0.5);
+  });
+});
+
+
+describe('ManualItemsModal (Fix-6, п.13) — продукта нет в списке', () => {
+  beforeEach(() => {
+    (api.get as any).mockImplementation((url: string) => {
+      if (String(url).startsWith('/product-categories')) {
+        return Promise.resolve([{ id: '7', name: 'Разное' }]);
+      }
+      if (String(url).startsWith('/admin/products/check-name')) {
+        return Promise.resolve({ duplicate: false });
+      }
+      return Promise.resolve(null);
+    });
+    (api.post as any).mockResolvedValue({ id: 'p77' });
+  });
+
+  const typeFreeQuery = async (q: string) => {
+    const search = screen.getByLabelText('Продукт ручной позиции');
+    fireEvent.focus(search);
+    fireEvent.change(search, { target: { value: q } });
+    await waitFor(() => expect(screen.getByTestId('manual-create-product')).toBeTruthy());
+  };
+
+  it('админ: свободный запрос → предложение добавить; дубликат — выбирается существующий id', async () => {
+    (api.get as any).mockImplementation((url: string) => {
+      if (String(url).startsWith('/product-categories')) return Promise.resolve([{ id: '7', name: 'Разное' }]);
+      if (String(url).startsWith('/admin/products/check-name')) return Promise.resolve({ duplicate: true, existingId: 'p55' });
+      return Promise.resolve(null);
+    });
+    const onChanged = vi.fn();
+    renderModal({ isAdmin: true, items: [], onChanged });
+    await waitFor(() => expect(api.get).toHaveBeenCalled()); // категории подгружены
+
+    const search = screen.getByLabelText('Продукт ручной позиции');
+    fireEvent.focus(search);
+    fireEvent.change(search, { target: { value: 'Динамометр' } });
+    fireEvent.click(await screen.findByTestId('manual-create-product'));
+
+    // форма создания: единица + категория
+    fireEvent.click(screen.getByRole('button', { name: 'Добавить' }));
+    await waitFor(() => expect(api.get).toHaveBeenCalledWith(expect.stringContaining('check-name')));
+    // дубликат — продукт НЕ создаётся, выбирается существующий
+    expect(api.post).not.toHaveBeenCalled();
+
+    // выбранная позиция пригодна для добавления: количество → POST с existingId
+    fireEvent.change(screen.getByTestId('manual-amount'), { target: { value: '2' } });
+    fireEvent.click(screen.getByLabelText('Добавить позицию'));
+    await waitFor(() => expect(addManualItem).toHaveBeenCalledWith('t1', {
+      dayId: null, ingredientId: 'p55', amount: 2, note: undefined,
+    }));
+  });
+
+  it('админ: новый продукт создаётся (POST /admin/products) и сразу выбирается', async () => {
+    renderModal({ isAdmin: true, items: [] });
+    await waitFor(() => expect(api.get).toHaveBeenCalled());
+
+    const search = screen.getByLabelText('Продукт ручной позиции');
+    fireEvent.focus(search);
+    fireEvent.change(search, { target: { value: 'Термос' } });
+    fireEvent.click(await screen.findByTestId('manual-create-product'));
+    fireEvent.click(screen.getByRole('button', { name: 'Добавить' }));
+
+    await waitFor(() => expect(api.post).toHaveBeenCalledWith('/admin/products', {
+      name: 'Термос', unit: 'PCS', categoryId: 7,
+    }));
+    // созданная позиция доступна для добавления
+    fireEvent.change(screen.getByTestId('manual-amount'), { target: { value: '1' } });
+    fireEvent.click(screen.getByLabelText('Добавить позицию'));
+    await waitFor(() => expect(addManualItem).toHaveBeenCalledWith('t1', {
+      dayId: null, ingredientId: 'p77', amount: 1, note: undefined,
+    }));
+  });
+
+  it('не-админ: подсказка вместо кнопки создания', async () => {
+    renderModal({ items: [] });
+    const search = screen.getByLabelText('Продукт ручной позиции');
+    fireEvent.focus(search);
+    fireEvent.change(search, { target: { value: 'Динамометр' } });
+    expect(await screen.findByText(/Новые продукты добавляет администратор/)).toBeTruthy();
+    expect(screen.queryByTestId('manual-create-product')).toBeNull();
   });
 });

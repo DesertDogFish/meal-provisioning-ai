@@ -38,10 +38,15 @@ const SUBST_KEY = (tripId: string) => `trip-substitutions-${tripId}`;
  * Осознанное отклонение от AGENTS §9 (серверное хранение появится вместе с R2/R4);
  * до этого — общий стейдж похода, как у исключений. */
 const BOUGHT_KEY = (tripId: string) => `trip-checklist-bought-${tripId}`;
-/** Fix-5 (п.21): сколько РЕАЛЬНО берём/взяли по позиции чеклиста (в базовых
- * единицах — кг/л/шт/уп). Заменяет «± упаковки» из Fix-4: товар может быть
- * на развес, в россыпь или в упаковке другого объёма — вводим факт руками. */
+/** Fix-6 (п.8): сколько РЕАЛЬНО берём/взяли — свободно: {amount, unit}
+ * («300 г» для майонеза в штуках, «2 кг» для картошки в штуках…). unit —
+ * человеческая единица ввода ('г'|'кг'|'мл'|'л'|'шт'|'уп'). */
 const ACTUAL_QTY_KEY = (tripId: string) => `trip-checklist-actualqty-${tripId}`;
+
+export interface ChecklistActual {
+  amount: number;
+  unit: string;
+}
 
 /** Собственное событие — синхронизация между вкладками компонента в одной странице. */
 const STAGE_EVENT = 'provision-trip-stage-changed';
@@ -128,16 +133,23 @@ export function setBought(tripId: string, next: Set<string>) {
 
 // ===================== Чеклист: фактические количества =====================
 
-export function loadActualQty(tripId: string): Record<string, number> {
-  const raw = readJson<Record<string, number>>(ACTUAL_QTY_KEY(tripId), {});
-  return typeof raw === 'object' && raw !== null ? raw : {};
+export function loadActualQty(tripId: string): Record<string, ChecklistActual> {
+  const raw = readJson<Record<string, ChecklistActual | number>>(ACTUAL_QTY_KEY(tripId), {});
+  if (typeof raw !== 'object' || raw === null) return {};
+  // совместимость с Fix-5 (число в базовых единицах) → unit '' = базовая единица
+  const out: Record<string, ChecklistActual> = {};
+  for (const [k, v] of Object.entries(raw)) {
+    if (typeof v === 'number') out[k] = { amount: v, unit: '' };
+    else if (v && typeof v.amount === 'number') out[k] = v;
+  }
+  return out;
 }
 
-/** qty=null → вернуть к расчётному значению (нужно по плану). */
-export function setActualQty(tripId: string, ingredientId: string, qty: number | null) {
+/** value=null → вернуть к расчётному значению (стереть ручной ввод). */
+export function setActualQty(tripId: string, ingredientId: string, value: ChecklistActual | null) {
   const cur = loadActualQty(tripId);
-  if (qty == null || !(qty > 0)) delete cur[ingredientId];
-  else cur[ingredientId] = qty;
+  if (value == null || !(value.amount > 0) || !value.unit) delete cur[ingredientId];
+  else cur[ingredientId] = value;
   writeJson(ACTUAL_QTY_KEY(tripId), cur);
   notify(tripId, 'qty');
 }

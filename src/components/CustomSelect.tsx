@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, Check } from 'lucide-react';
 import './CustomSelect.css';
 
 export interface SelectOption {
@@ -135,7 +135,9 @@ export function CustomSelect({ value, onChange, options, placeholder, id, name, 
               onMouseEnter={() => setActiveIdx(idx)}
               onClick={() => commit(idx)}
             >
-              {opt.label}
+              <span className="cselect-label">{opt.label}</span>
+              {/* Fix-6 (п.1): выбранная опция помечена галочкой — видно с ходу */}
+              {opt.value === value && <Check size={14} className="cselect-check" aria-hidden />}
             </li>
           ))}
         </ul>

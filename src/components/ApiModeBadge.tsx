@@ -5,9 +5,11 @@ import { X, AlertCircle, Wifi, WifiOff } from 'lucide-react';
 import { Button } from './Button';
 import Modal from './Modal';
 import { useToast } from './ToastProvider';
+import { useConfirm } from './ConfirmDialog'; // Fix-6 (п.7)
 
 export default function ApiModeBadge() {
   const { showSuccess, showError } = useToast();
+  const { confirm, dialog: confirmDialog } = useConfirm(); // Fix-6 (п.7)
   const [mode, setMode] = useState<'real' | 'mock'>(api.getMode());
   const [showModal, setShowModal] = useState(false);
   const [apiAvailable, setApiAvailable] = useState(false);
@@ -62,8 +64,14 @@ export default function ApiModeBadge() {
     }
   };
 
-  const handleResetData = () => {
-    if (confirm('Сбросить все демо-данные?')) {
+  const handleResetData = async () => {
+    // Fix-6 (п.7): сброс стирает ВСЕ демо-данные — брендовое предупреждение
+    const ok = await confirm({
+      title: 'Сбросить все демо-данные?',
+      confirmLabel: 'Сбросить данные',
+      message: <>Походы, блюда, продукты и чеки демо-режима вернутся к исходному состоянию. Текущие изменения будут потеряны.</>,
+    });
+    if (ok) {
       api.resetSeedData();
       showSuccess('Демо-данные сброшены');
       window.location.reload();
@@ -222,7 +230,7 @@ export default function ApiModeBadge() {
                 <Button
                   variant="danger"
                   size="sm"
-                  onClick={handleResetData}
+                  onClick={() => void handleResetData()}
                 >
                   <AlertCircle size={16} />
                   Сбросить демо-данные
@@ -232,6 +240,9 @@ export default function ApiModeBadge() {
           </div>
         </Modal>
       )}
+
+      {/* Fix-6 (п.7): брендовый диалог подтверждений */}
+      {confirmDialog}
     </>
   );
 }

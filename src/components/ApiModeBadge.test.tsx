@@ -183,7 +183,6 @@ describe('ApiModeBadge — очистка кеша (reset seed)', () => {
   });
 
   it('подтверждение сброса вызывает api.resetSeedData() и перезагрузку страницы', async () => {
-    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
     // happy-dom: location.reload может не существовать — подменяем
     const reloadMock = vi.fn();
     Object.defineProperty(window, 'location', {
@@ -195,19 +194,23 @@ describe('ApiModeBadge — очистка кеша (reset seed)', () => {
     fireEvent.click(screen.getByTitle('Клик для настройки режима'));
     fireEvent.click(screen.getByText('Сбросить демо-данные'));
 
-    expect(confirmSpy).toHaveBeenCalled();
-    expect(apiMock.resetSeedData).toHaveBeenCalledTimes(1);
+    // Fix-6 (п.7): подтверждение — брендовый диалог вместо window.confirm
+    await screen.findByRole('alertdialog');
+    fireEvent.click(screen.getByRole('button', { name: 'Сбросить данные' }));
+    await waitFor(() => expect(apiMock.resetSeedData).toHaveBeenCalledTimes(1));
     expect(toastMock.showSuccess).toHaveBeenCalledWith('Демо-данные сброшены');
     await waitFor(() => expect(reloadMock).toHaveBeenCalled());
-    confirmSpy.mockRestore();
   });
 
-  it('отказ от подтверждения НЕ сбрасывает кеш', () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(false);
+  it('отказ от подтверждения НЕ сбрасывает кеш', async () => {
     renderBadge();
     fireEvent.click(screen.getByTitle('Клик для настройки режима'));
     fireEvent.click(screen.getByText('Сбросить демо-данные'));
 
+    // Fix-6 (п.7): «Отмена» в брендовом диалоге — данные не трогаем
+    await screen.findByRole('alertdialog');
+    fireEvent.click(screen.getByRole('button', { name: 'Отмена' }));
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
     expect(apiMock.resetSeedData).not.toHaveBeenCalled();
   });
 });

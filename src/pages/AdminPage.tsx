@@ -4,6 +4,7 @@ import { UnitOfMeasure, MealType } from '../types';
 import { ValidationError } from '../utils/errors';
 import { validateRecipe } from '../utils/validation';
 import { DatePicker } from '../components/DatePicker';
+import CustomSelect from '../components/CustomSelect'; // Fix-6 (п.1)
 import { useToast } from '../components/ToastProvider';
 import { servingsWord, ingredientsWord } from '../utils/text';
 import { api, getRecipes } from '../api/client';
@@ -269,21 +270,23 @@ export default function AdminPage() {
           {showPriceForm && (
             <div className="rounded-xl p-4 space-y-3" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
               <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
-                <select value={priceForm.ingredientId} onChange={e => setPriceForm({ ...priceForm, ingredientId: e.target.value })}
-                  className="px-3 py-2 rounded-lg text-sm outline-none" style={{ background: 'var(--elev)', border: '1px solid var(--border)', color: 'var(--text)' }}>
-                  <option value="">Компонент...</option>
-                  {ingredients.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
-                </select>
+                {/* Fix-6 (п.1): единый стиль выпадающих списков */}
+                <CustomSelect
+                  value={String(priceForm.ingredientId ?? '')}
+                  onChange={v => setPriceForm({ ...priceForm, ingredientId: v })}
+                  options={[{ value: '', label: 'Компонент…' }, ...ingredients.map(i => ({ value: String(i.id), label: i.name }))]}
+                  ariaLabel="Компонент для цены"
+                />
                 <input type="number" placeholder="Цена" value={priceForm.pricePerUnit} onChange={e => setPriceForm({ ...priceForm, pricePerUnit: e.target.value })}
                   className="px-3 py-2 rounded-lg text-sm outline-none" style={{ background: 'var(--elev)', border: '1px solid var(--border)', color: 'var(--text)' }} />
                 <DatePicker value={priceForm.effectiveFrom || null} onChange={(v) => setPriceForm({ ...priceForm, effectiveFrom: v })} placeholder="Дата" />
 '
-                <select value={priceForm.currency} onChange={e => setPriceForm({ ...priceForm, currency: e.target.value })}
-                  className="px-3 py-2 rounded-lg text-sm outline-none" style={{ background: 'var(--elev)', border: '1px solid var(--border)', color: 'var(--text)' }}>
-                  <option value="RUB">₽ RUB</option>
-                  <option value="USD">$ USD</option>
-                  <option value="EUR">€ EUR</option>
-                </select>
+                <CustomSelect
+                  value={priceForm.currency}
+                  onChange={v => setPriceForm({ ...priceForm, currency: v })}
+                  options={[{ value: 'RUB', label: '₽ RUB' }, { value: 'USD', label: '$ USD' }, { value: 'EUR', label: '€ EUR' }]}
+                  ariaLabel="Валюта цены"
+                />
               </div>
               <div className="flex gap-2">
                 <Button variant="primary" size="sm" onClick={handleSavePrice}>Сохранить</Button>
@@ -335,13 +338,15 @@ export default function AdminPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <input type="text" placeholder="Название" value={recForm.name} onChange={e => setRecForm({ ...recForm, name: e.target.value })}
                   className="px-3 py-2 rounded-lg text-sm outline-none" style={{ background: 'var(--elev)', border: '1px solid var(--border)', color: 'var(--text)' }} />
-                <select value={recForm.mealType} onChange={e => setRecForm({ ...recForm, mealType: e.target.value as MealType })}
-                  className="px-3 py-2 rounded-lg text-sm outline-none" style={{ background: 'var(--elev)', border: '1px solid var(--border)', color: 'var(--text)' }}>
-                  <option value="BREAKFAST">Завтрак</option>
-                  <option value="LUNCH">Обед</option>
-                  <option value="DINNER">Ужин</option>
-                  <option value="SNACK">Перекус</option>
-                </select>
+                <CustomSelect
+                  value={recForm.mealType}
+                  onChange={v => setRecForm({ ...recForm, mealType: v as MealType })}
+                  options={[
+                    { value: 'BREAKFAST', label: 'Завтрак' }, { value: 'LUNCH', label: 'Обед' },
+                    { value: 'DINNER', label: 'Ужин' }, { value: 'SNACK', label: 'Перекус' },
+                  ]}
+                  ariaLabel="Тип приёма пищи"
+                />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <input type="number" placeholder="Порций" value={recForm.baseServings} onChange={e => setRecForm({ ...recForm, baseServings: parseInt(e.target.value) || 1 })}

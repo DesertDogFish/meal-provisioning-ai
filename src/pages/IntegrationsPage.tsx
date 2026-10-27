@@ -3,6 +3,7 @@ import { Wifi, WifiOff, RefreshCw, Search, Link, Unlink, CheckCircle, XCircle, A
 import { useToast } from '../components/ToastProvider';
 import { api } from '../api/client';
 import { Button } from '../components/Button';
+import CustomSelect from '../components/CustomSelect'; // Fix-6 (п.1)
 
 interface Integration {
   id: number;
@@ -357,17 +358,13 @@ export default function IntegrationsPage() {
               <label className="block text-sm font-medium mb-2" style={{ color: 'var(--muted)' }}>
                 Выберите ингредиент
               </label>
-              <select
-                value={selectedIngredient || ''}
-                onChange={e => setSelectedIngredient(e.target.value || null)}
-                className="w-full px-3 py-2 rounded-lg outline-none"
-                style={{ background: 'var(--elev)', border: '1px solid var(--border)', color: 'var(--text)' }}
-              >
-                <option value="">Выберите ингредиент...</option>
-                {ingredients.map(ing => (
-                  <option key={ing.id} value={ing.id}>{ing.name}</option>
-                ))}
-              </select>
+              {/* Fix-6 (п.1): единый стиль выпадающих списков */}
+              <CustomSelect
+                value={String(selectedIngredient ?? '')}
+                onChange={v => setSelectedIngredient(v || null)}
+                options={[{ value: '', label: 'Выберите ингредиент…' }, ...ingredients.map(ing => ({ value: String(ing.id), label: ing.name }))]}
+                ariaLabel="Ингредиент для привязки"
+              />
             </div>
 
             {selectedIngredient && (

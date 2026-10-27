@@ -3,6 +3,8 @@ import { Info, Plus, Undo2, X } from 'lucide-react';
 import Modal from './Modal';
 import { Button } from './Button';
 import RecipeSearchSelect from './RecipeSearchSelect';
+import CustomSelect from './CustomSelect'; // Fix-6 (п.1)
+import { useConfirm } from './ConfirmDialog'; // Fix-6 (п.7)
 import { ProblemDetailAlert } from './ProblemDetailAlert';
 import { useToast } from './ToastProvider';
 import type { ProblemDetail } from '../types/errors';
@@ -75,6 +77,7 @@ export default function MealCompositionModal({
   tripId, mealId, isAdmin = false, onClose, onSaved, onEditCatalogRecipe,
 }: Props) {
   const { showError } = useToast();
+  const { confirm, dialog: confirmDialog } = useConfirm(); // Fix-6 (п.7)
 
   const [server, setServer] = useState<CompositionResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -213,9 +216,18 @@ export default function MealCompositionModal({
     setSubstOpenFor(null);
   };
 
-  const requestClose = () => {
-    // закрытие с правками — confirm (§2.2 dirty guards)
-    if (isDirty && !window.confirm('Есть несохранённые изменения состава. Закрыть и потерять их?')) return;
+  const requestClose = async () => {
+    // закрытие с правками — подтверждение (§2.2 dirty guards);
+    // Fix-6 (п.7): брендовый диалог вместо window.confirm
+    if (isDirty) {
+      const ok = await confirm({
+        title: 'Закрыть и потерять изменения?',
+        tone: 'warning',
+        confirmLabel: 'Потерять изменения',
+        message: <>В составе приёма есть несохранённые правки — они будут потеряны безвозвратно.</>,
+      });
+      if (!ok) return;
+    }
     onClose();
   };
 
@@ -511,7 +523,7 @@ export default function MealCompositionModal({
   const hasExtras = rows.some((r) => (r.draft?.state ?? r.state) === 'EXTRA');
 
   return (
-    <Modal onClose={requestClose}>
+    <Modal onClose={() => void requestClose()}>
       <div
         className="rounded-2xl shadow-xl w-full max-w-3xl p-6 my-8"
         style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
@@ -533,7 +545,7 @@ export default function MealCompositionModal({
             )}
           </div>
           {/* U21: крестик — иконка приложения, а не текстовый глиф «✕» */}
-          <Button variant="ghost" size="sm" onClick={requestClose} aria-label="Закрыть"><X size={18} /></Button>
+          <Button variant="ghost" size="sm" onClick={() => void requestClose()} aria-label="Закрыть"><X size={18} /></Button>
         </div>
 
         <p className="text-xs mt-2 mb-3 flex items-start gap-1.5" style={{ color: 'var(--muted)' }}>
@@ -735,17 +747,15 @@ export default function MealCompositionModal({
                 {isAdmin ? (
                   <label className="flex items-center gap-1.5" style={{ color: 'var(--muted)' }}>
                     Категория:
-                    <select
-                      data-testid="add-new-category"
-                      className="input py-1 text-sm"
-                      style={{ width: 'auto' }}
-                      value={addAskCategory || categories[0]?.id || ''}
-                      onChange={(ev) => setAddAskCategory(ev.target.value)}
-                    >
-                      {categories.map((c) => (
-                        <option key={c.id} value={c.id}>{c.name}</option>
-                      ))}
-                    </select>
+                    {/* Fix-6 (п.1): нативный select — чужеродно; единый CustomSelect */}
+                    <span style={{ minWidth: 160 }}>
+                      <CustomSelect
+                        value={addAskCategory || categories[0]?.id || ''}
+                        onChange={(v) => setAddAskCategory(v)}
+                        options={categories.map((c) => ({ value: c.id, label: c.name }))}
+                        ariaLabel="Категория нового продукта"
+                      />
+                    </span>
                   </label>
                 ) : (
                   <span style={{ color: 'var(--muted)' }}>
@@ -796,6 +806,8 @@ export default function MealCompositionModal({
             </div>
           </>
         )}
+        {/* Fix-6 (п.7): брендовый диалог подтверждений */}
+        {confirmDialog}
       </div>
     </Modal>
   );

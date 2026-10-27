@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useToast } from '../components/ToastProvider';
+import { useConfirm } from '../components/ConfirmDialog'; // Fix-6 (п.7)
 import { Plus, Search, X } from 'lucide-react';
 import { NumberField } from '../components/NumberField';
 import { ProductTable, type ProductRow } from '../components/ProductTable';
@@ -15,6 +16,7 @@ type Product = ProductRow;
 
 export default function ProductsPage() {
   const { showError, showSuccess } = useToast();
+  const { confirm, dialog: confirmDialog } = useConfirm(); // Fix-6 (п.7)
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<ProductCategory[]>([]);
   const [loading, setLoading] = useState(true);
@@ -223,7 +225,13 @@ export default function ProductsPage() {
       return;
     }
 
-    if (!confirm(`Удалить продукт "${product.name}"?`)) return;
+    // Fix-6 (п.7): продукт участвует в ценах/чеках походов — брендовое предупреждение
+    const ok = await confirm({
+      title: `Удалить продукт «${product.name}»?`,
+      confirmLabel: 'Удалить продукт',
+      message: <>Продукт уйдёт из справочника вместе с ценами. В уже спланированных походах останутся его копии (снепшоты).</>,
+    });
+    if (!ok) return;
 
     try {
       await api.del(`/admin/products/${product.id}`);
@@ -565,6 +573,9 @@ export default function ProductsPage() {
           </div>
         </Modal>
       )}
+
+      {/* Fix-6 (п.7): брендовый диалог подтверждений */}
+      {confirmDialog}
     </div>
   );
 }

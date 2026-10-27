@@ -1,20 +1,20 @@
 import { Button } from './Button';
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { useToast } from './ToastProvider';
-import { X } from 'lucide-react';
 import { unitFromTotal, totalFromUnit, roundMoney } from '../utils/checkInput'; // Fix-3 (п.5) + Fix-4 (п.10): ввод чека СУММОЙ, без float-хвостов
 import { syncServerExclusions } from '../api/shoppingExclusions';      // Fix-3 / R2
 import { formatAmount, calculateShoppingList, calculateDayShopping, realTripPeople, dayScopedExclusions, findPriceForDate } from '../utils/calculations';
-import { getManualItems, type TripManualItem } from '../api/tripManualItems'; // Fix-5 (п.11): ручные позиции в чеке
-import { mergeManualIntoShopping } from '../utils/manualItems';
-import AmountInput from './AmountInput'; // Fix-5 (п.12): «сколько реально взяли»
-import InfoTip from '../components/InfoTip';
 import { formatRub, categoryName } from '../utils/format'; // Release-1.0: единый формат чисел/единиц
 import { compareRu } from '../utils/rowSort'; // U41: алфавитная сортировка
 import { mealsWord } from '../utils/text';
 import { NumberField } from './NumberField';
-import Modal from './Modal';
+import { useToast } from './ToastProvider';
+import InfoTip from '../components/InfoTip';
+import FreeAmountInput from '../components/FreeAmountInput';
 import { api, getRecipes, getTripRecipes } from '../api/client';
+import { getManualItems, type TripManualItem } from '../api/tripManualItems'; // Fix-5 (п.11): ручные позиции в чеке
+import { getTripEdits, type TripIngredientEdit } from '../api/tripEdits';   // Fix-6 (п.22): правки состава в чеке
+import { buildEffectiveRecipesMap } from '../utils/recipeEdits';
+import { mergeManualIntoShopping } from '../utils/manualItems';
 import {
   ActualPriceDraft,
   loadActualPrices,
@@ -22,8 +22,22 @@ import {
   loadExcluded,
   setExcluded as persistExcluded,
   loadBought,
+  loadActualQty,
+  setActualQty,
+  type ChecklistActual,
   onTripStageChange,
 } from '../utils/tripStaging';
+import type { ActualAmount } from '../utils/checkUnits';
+
+/**
+ * Вкладка «Закупка и чеки».
+ *
+ * Fix-6 (список 26.10): убрана дублирующая модалка «Ввести чек» — суммы
+ * вводятся инлайн в той же таблице, сгруппированной по категориям (как чеклист),
+ * без внутреннего скролла. Народный нейминг колонок: «Думали ₽» (план) и
+ * «Заплатили ₽» (факт из чека), «Отклонение» вместо Δ. «Взяли» — из ОБЩЕГО
+ * хранилища с чеклистом (ввёл один раз — видно везде). Подтабы — сегменты (.seg).
+ */
 
 interface ShoppingItem {
   ingredientId: string;
@@ -36,6 +50,7 @@ interface ShoppingItem {
   actualCost?: number;
   overridden: boolean;
   hasPlannedPrice: boolean;
+  manual?: boolean;
 }
 
 interface DayShopping {
@@ -97,29 +112,26 @@ interface Price {
 }
 
 export default function PriceOverridesTab({ tripId }: Props) {
-  const { showError, showSuccess } = useToast();
+  const { showError } = useToast();
   // Release-1.0 (UI-consistency): сырые данные — в state, таблицы «Закупка» и «По дням»
   // ВЫВОДЯТСЯ из общих утилит (useMemo ниже). Чеки и исключения мгновенно отражаются
   // во всех суммах без ручного пересчёта и без расхождений между вкладками.
   const [allRecipes, setAllRecipes] = useState<Recipe[]>([]);
   const [prices, setPrices] = useState<Price[]>([]);
   const [activeTab, setActiveTab] = useState<TabType>('total');
-  const [showModal, setShowModal] = useState(false);
-  const [onlyDiff, setOnlyDiff] = useState(false);
   const [trip, setTrip] = useState<Trip | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Фаза 13 (п.4/5): ОДИН общий источник фактических цен и исключений для всех
-  // вкладок страницы (tripStaging / localStorage). Черновики больше не живут в
-  // локальном state — при размонтировании вкладки они НЕ сбрасываются, а ввод
-  // фактической цены здесь сразу влияет на «По дням» и «На человека».
+  // Фаза 13 (п.4/5/6) + Fix-3/5/6: ОДИН общий стейдж для всех вкладок страницы —
+  // фактические цены, исключения, отметки «взято» и фактические количества чеклиста.
   const [draftOverrides, setDraftOverrides] = useState<Record<string, ActualPriceDraft>>({});
   const [shoppingExcluded, setShoppingExcluded] = useState<Set<string>>(new Set());
-  // Fix-3 (п.2): отметки «взято» из чеклиста — гейт ввода чека
   const [boughtSet, setBoughtSet] = useState<Set<string>>(new Set());
-  // Fix-5 (п.11): ручные позиции (аптечка и т.п.) — тоже часть чека
+  const [actualMap, setActualMap] = useState<Record<string, ChecklistActual>>({});
+  // Fix-5 (п.11) / Fix-6 (п.22): ручные позиции и правки состава — часть чека
   const [manualItems, setManualItems] = useState<TripManualItem[]>([]);
+  const [tripEdits, setTripEdits] = useState<TripIngredientEdit[]>([]);
 
   // Серверные оверрайды (GET /trips/:id/price-overrides) — как фолбэк, если
   // локальный стейдж пуст (например, чек ввели в другой сессии на сервере).
@@ -129,6 +141,7 @@ export default function PriceOverridesTab({ tripId }: Props) {
     setDraftOverrides(loadActualPrices(tripId));
     setShoppingExcluded(loadExcluded(tripId));
     setBoughtSet(loadBought(tripId));
+    setActualMap(loadActualQty(tripId));
   };
 
   useEffect(() => {
@@ -137,9 +150,7 @@ export default function PriceOverridesTab({ tripId }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tripId]);
 
-  /** Фаза 13 (п.6): «Закупка и чеки» тоже пишет оверрайды на сервер —
-   * после коммита локальную строку пересчитываем из ОБОЩЁННОГО стейджа
-   * (localStorage + серверные price-overrides), а не дельтой от старого факта. */
+  /** Сохранение фактической цены за единицу (сумма чека → цена). */
   const commitActualPrice = async (item: ShoppingItem, v: number | null, totalOverride?: number | null) => {
     if (v == null || Number.isNaN(v)) {
       saveActualPrice(tripId, item.ingredientId, null);
@@ -147,8 +158,6 @@ export default function PriceOverridesTab({ tripId }: Props) {
       saveActualPrice(tripId, item.ingredientId, {
         price: v,
         total: totalOverride != null ? totalOverride : v * item.totalAmount,
-        // Fix-5 (п.12): уже введённое «сколько взяли» не теряем при правке суммы
-        qty: draftOverrides[item.ingredientId]?.qty ?? null,
       });
     }
     // Синхронизируем серверное хранилище оверрайдов (best effort: mock/офлайн не ломают UI)
@@ -158,31 +167,9 @@ export default function PriceOverridesTab({ tripId }: Props) {
         comment: v == null ? undefined : 'чек',
       });
     } catch { /* нет роута/прав — локальный стейдж уже сохранён */ }
-    // Release-1.0: ручной пересчёт строк не нужен — saveActualPrice рассылает событие
-    // стейджа, syncStage обновляет draftOverrides, таблицы пересобираются в useMemo.
   };
 
-  /**
-   * Fix-3 (п.5): пользователь вводит СУММУ, которую заплатил по чеку за купленное
-   * количество («Факт ₽»), а не ₽/ед. Хранилище и сводки остаются в ценах за
-   * единицу — сумма делится на количество позиции и распределяется автоматически.
-   */
-  /** Fix-5 (п.12): сколько РЕАЛЬНО куплено (шт/кг) — в черновик позиции и в отчёт.
-   * Если факт-сумма ещё не введена, а плановая цена есть — цена берётся из плана. */
-  const commitQty = (item: ShoppingItem, qty: number | null) => {
-    const cur = effectiveOverrides()[item.ingredientId];
-    const price = cur?.price ?? item.plannedUnitPrice ?? null;
-    if (price == null) {
-      showError('У позиции нет цены — сначала введите сумму из чека');
-      return;
-    }
-    saveActualPrice(tripId, item.ingredientId, {
-      price,
-      total: cur?.total ?? roundMoney(price * item.totalAmount),
-      qty: qty ?? null,
-    });
-  };
-
+  /** Fix-3 (п.5): пользователь вводит СУММУ из чека («Заплатили ₽»). */
   const commitActualTotal = (item: ShoppingItem, total: number | null) => {
     if (total == null || Number.isNaN(total)) {
       void commitActualPrice(item, null);
@@ -193,20 +180,25 @@ export default function PriceOverridesTab({ tripId }: Props) {
     void commitActualPrice(item, unit, total);
   };
 
-  /** Фактические цены: общий стейдж (инлайн-поле + модалка) поверх серверных оверрайдов. */
+  /** Fix-6 (п.11): «Взяли» — ОДНО хранилище с чеклистом (ввёл там — видно здесь). */
+  const commitTook = (ingredientId: string, value: ActualAmount | null) => {
+    setActualQty(tripId, ingredientId, value);
+    setActualMap(loadActualQty(tripId));
+  };
+
+  /** Фактические цены: общий стейдж (инлайн-поле) поверх серверных оверрайдов. */
   const effectiveOverrides = (): Record<string, ActualPriceDraft> => ({
     ...(serverOverridesRef.current || {}),
     ...draftOverrides,
   });
 
-  /** Фаза 13 (п.5): soft-disable позиции из расчёта прямо во вкладке «Закупка». */
+  /** Фаза 13 (п.5) + Fix-3/R2: soft-disable позиции (глобальный ключ) + серверная синхронизация. */
   const toggleExcluded = (ingredientId: string) => {
     const next = new Set(shoppingExcluded);
     if (next.has(ingredientId)) next.delete(ingredientId);
     else next.add(ingredientId);
     persistExcluded(tripId, next);
     setShoppingExcluded(next);
-    // Fix-3 / R2: глобальные исключения дублируются на сервер (best effort)
     void syncServerExclusions(tripId, next);
   };
 
@@ -229,23 +221,25 @@ export default function PriceOverridesTab({ tripId }: Props) {
         (serverOvs || []).map(o => [String(o.ingredientId), { price: o.actualPrice, total: 0 } as ActualPriceDraft])
       );
 
-      const [tripData, recipesData, pricesData, tripRecipesData, manualData] = await Promise.all([
+      const [tripData, recipesData, pricesData, tripRecipesData, manualData, editsData] = await Promise.all([
         api.get<Trip>(`/trips/${tripId}`),
         getRecipes(),
         // V20: цены похода — trip-scoped копии (план заморожен на момент планирования)
         api.get<Price[]>(`/trips/${tripId}/prices`),
         // V20 + Release-1.0: копии блюд похода через getTripRecipes — с нормализацией
-        // плоских DTO снапшотов (без неё строки «Unknown» и единица «шт» вместо «кг»).
         getTripRecipes(tripId).catch(() => [] as Recipe[]),
         // Fix-5 (п.11): ручные позиции видны в чеке наравне с блюдами
         getManualItems(tripId).catch(() => [] as TripManualItem[]),
+        // Fix-6 (п.22/25): правки состава (EXTRA/SUBST/EXCLUDE/SCALE)
+        getTripEdits(tripId).catch(() => [] as TripIngredientEdit[]),
       ]);
 
       setTrip(tripData);
-      setManualItems(manualData);
       // V20: расчёт по объединённому набору: справочник (пикер) + копии блюд похода
       setAllRecipes([...recipesData, ...tripRecipesData]);
       setPrices(pricesData);
+      setManualItems(manualData);
+      setTripEdits(editsData);
     } catch (err) {
       console.error('Failed to load ', err);
       setError('Не удалось загрузить данные');
@@ -256,32 +250,46 @@ export default function PriceOverridesTab({ tripId }: Props) {
   };
 
   // ===== Release-1.0 (UI-consistency): производные таблицы из ОБЩИХ утилит =====
-  // Раньше здесь жила локальная копия расчёта («простой расчёт без calculateShoppingList»):
-  // она читала только вложенный ri.ingredient и брала ПЕРВУЮ цену без учёта даты.
-  // Теперь те же calculateShoppingList/calculateDayShopping, что и на вкладке «Закупка на
-  // поход» — одна математика, одни имена, одни единицы на всех поверхностях.
   const recipesMap = useMemo(
     () => new Map(allRecipes.map(r => [String(r.id), r])),
     [allRecipes]
   );
 
+  // Fix-6 (п.22/25): рецепты с применёнными правками состава — единый источник
+  const effectiveRecipesMap = useMemo(() => {
+    const snapshotOfMap = new Map<string, string>();
+    for (const r of allRecipes) {
+      const so = (r as any).snapshotOf;
+      if (so != null) snapshotOfMap.set(String(r.id), String(so));
+    }
+    return buildEffectiveRecipesMap(recipesMap, tripEdits as any, snapshotOfMap);
+  }, [recipesMap, tripEdits, allRecipes]);
+
+  // Fix-6 (п.8): информация о продуктах (вес штуки) для свободных единиц «Взяли»
+  const pieceWeightById = useMemo(() => {
+    const m = new Map<string, number | null>();
+    for (const r of allRecipes) {
+      for (const ri of ((r as any).ingredients || [])) {
+        const ing = ri?.ingredient ?? ri;
+        const id = String(ri?.ingredientId ?? ing?.id ?? '');
+        if (id && !m.has(id)) m.set(id, ing?.pieceWeightG ?? null);
+      }
+    }
+    return m;
+  }, [allRecipes]);
+
   const shoppingItems = useMemo<ShoppingItem[]>(() => {
     if (!trip) return [];
     const stage = { ...(serverOverridesRef.current || {}), ...draftOverrides };
-    // Fix-2 (п.5): по-дневные исключения уменьшают количества агрегата;
-    // глобально исключённые строки отфильтровываются из итогов ниже.
-    // Fix-5 (п.11): ручные позиции вливаются с плановой ценой из trip-срезов.
     const manualPriceOf = (ingId: string): number | undefined => {
       const rows = (prices as Price[]).filter(pr => String(pr.ingredientId) === String(ingId));
       return rows.length ? findPriceForDate(rows as any, trip.endDate)?.pricePerUnit : undefined;
     };
     return mergeManualIntoShopping(
-      calculateShoppingList(trip as any, recipesMap as any, prices as any, dayScopedExclusions(shoppingExcluded)),
+      calculateShoppingList(trip as any, effectiveRecipesMap as any, prices as any, dayScopedExclusions(shoppingExcluded)),
       manualItems,
       manualPriceOf,
     ).map(it => {
-      // Плановая ₽/ед — из плановой стоимости позиции (та же цена по дням, что в «План ₽»),
-      // чтобы строка таблицы была самосогласована: plannedCost = plannedUnitPrice × totalAmount.
       const plannedCost = it.estimatedCost;
       const plannedUnitPrice = plannedCost != null && it.totalAmount > 0
         ? plannedCost / it.totalAmount
@@ -299,15 +307,56 @@ export default function PriceOverridesTab({ tripId }: Props) {
         actualCost: actualUnitPrice != null ? actualUnitPrice * it.totalAmount : plannedCost,
         overridden: ov != null,
         hasPlannedPrice: it.hasPrice,
+        manual: (it as { manual?: boolean }).manual,
       };
     })
-    // U41: чек и закупка — по алфавиту (иначе длинный список невозможно вводить)
+    // U41: чек и закупка — по алфавиту
     .sort((a, b) => compareRu(a.ingredientName, b.ingredientName));
-  }, [trip, recipesMap, prices, draftOverrides, shoppingExcluded, manualItems]);
+  }, [trip, effectiveRecipesMap, prices, draftOverrides, shoppingExcluded, manualItems]);
 
-  // ===== U41: категории продуктов для группировки чека =====
-  // Best effort: справочник продуктов (mock/admin) + вложенные ingredient-объекты
-  // trip-рецептов; фолбэк — «Прочее».
+  const dayShopping = useMemo<DayShopping[]>(() => {
+    if (!trip) return [];
+    const stage = { ...(serverOverridesRef.current || {}), ...draftOverrides };
+    return calculateDayShopping(trip as any, effectiveRecipesMap as any, prices as any, shoppingExcluded).map(d => {
+      let actual = 0;
+      for (const it of d.items) {
+        const planned = it.estimatedCost ?? 0;
+        const ov = stage[String(it.ingredientId)]?.price;
+        actual += ov != null ? ov * it.totalAmount : planned;
+      }
+      return { dayDate: d.dayDate, plannedCost: d.dayCost, actualCost: actual };
+    });
+  }, [trip, effectiveRecipesMap, prices, shoppingExcluded, draftOverrides]);
+
+  const calculateDelta = (planned?: number | null, actual?: number | null): number => {
+    if (!planned || !actual || planned === 0) return 0;
+    return ((actual - planned) / planned) * 100;
+  };
+
+  const formatDelta = (delta: number): string => {
+    if (delta === 0) return '0%';
+    return `${delta > 0 ? '+' : ''}${delta.toLocaleString('ru-RU', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
+  };
+
+  const getDeltaChipClass = (delta: number): string => {
+    if (Math.abs(delta) < 0.001) return 'dim';
+    return delta > 0 ? 'fire' : 'ok';
+  };
+
+  const totalPlanned = shoppingItems
+    .filter(item => !shoppingExcluded.has(item.ingredientId))
+    .reduce((sum, item) => sum + (item.plannedCost || 0), 0);
+  const actualUnitOf = (item: ShoppingItem): number | undefined =>
+    effectiveOverrides()[item.ingredientId]?.price ?? item.actualUnitPrice;
+  const totalActual = shoppingItems
+    .filter(item => !shoppingExcluded.has(item.ingredientId))
+    .reduce((sum, item) => {
+      const u = actualUnitOf(item);
+      return sum + (u != null ? item.totalAmount * u : (item.actualCost || 0));
+    }, 0);
+  const totalDelta = calculateDelta(totalPlanned, totalActual);
+
+  // ===== U41 + Fix-6: группы по категориям (как в чеклисте) =====
   const [productCats, setProductCats] = useState<Record<string, string>>({});
   useEffect(() => {
     let cancelled = false;
@@ -336,7 +385,6 @@ export default function PriceOverridesTab({ tripId }: Props) {
     return { ...m, ...productCats };
   }, [allRecipes, productCats]);
 
-  /** U41: группы чека — категории по алфавиту («Прочее» в конце), внутри алфавит. */
   const checkGroups = useMemo(() => {
     const groups = new Map<string, ShoppingItem[]>();
     for (const it of shoppingItems) {
@@ -353,72 +401,15 @@ export default function PriceOverridesTab({ tripId }: Props) {
     return cats.map(c => ({ category: c, items: groups.get(c)! }));
   }, [shoppingItems, categoryOf]);
 
-  const dayShopping = useMemo<DayShopping[]>(() => {
-    if (!trip) return [];
-    const stage = { ...(serverOverridesRef.current || {}), ...draftOverrides };
-    // Факт дня считаем по количествам ЭТОГО дня (раньше к каждому дню прибавлялась
-    // общая дельта всего похода — «По дням» не сходилась с «Закупкой»).
-    return calculateDayShopping(trip as any, recipesMap as any, prices as any, shoppingExcluded).map(d => {
-      let actual = 0;
-      for (const it of d.items) {
-        const planned = it.estimatedCost ?? 0;
-        const ov = stage[String(it.ingredientId)]?.price;
-        actual += ov != null ? ov * it.totalAmount : planned;
-      }
-      return { dayDate: d.dayDate, plannedCost: d.dayCost, actualCost: actual };
-    });
-  }, [trip, recipesMap, prices, shoppingExcluded, draftOverrides]);
-
-  const calculateDelta = (planned?: number | null, actual?: number | null): number => {
-    if (!planned || !actual || planned === 0) return 0;
-    return ((actual - planned) / planned) * 100;
-  };
-
-  const formatDelta = (delta: number): string => {
-    if (delta === 0) return '0%';
-    // Release-1.0: запятая вместо точки («+3,5%») — единый десятичный разделитель во всём UI
-    return `${delta > 0 ? '+' : ''}${delta.toLocaleString('ru-RU', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
-  };
-
-  const getDeltaChipClass = (delta: number): string => {
-    if (Math.abs(delta) < 0.001) return 'dim';
-    return delta > 0 ? 'fire' : 'ok';
-  };
-
-  const totalPlanned = shoppingItems
-    .filter(item => !shoppingExcluded.has(item.ingredientId))
-    .reduce((sum, item) => sum + (item.plannedCost || 0), 0);
-  // Фаза 13 (п.4): факт считается из ОБЩЕГО стейджа цен (draftOverrides + серверные
-  // оверрайды) — инлайн-поле «Закупки» на главной вкладке и модалка «Ввести чек»
-  // здесь дают одинаковый результат и мгновенно попадают в «По дням»/«На человека».
-  const actualUnitOf = (item: ShoppingItem): number | undefined =>
-    effectiveOverrides()[item.ingredientId]?.price ?? item.actualUnitPrice;
-  const totalActual = shoppingItems
-    .filter(item => !shoppingExcluded.has(item.ingredientId))
-    .reduce((sum, item) => {
-      const u = actualUnitOf(item);
-      return sum + (u != null ? item.totalAmount * u : (item.actualCost || 0));
-    }, 0);
-  const totalDelta = calculateDelta(totalPlanned, totalActual);
-
-  // Release-1.0: «По дням» уже включает фактические цены стейджа и исключения —
-  // таблица выводится из dayShopping (useMemo выше), отдельный «view»-слой не нужен.
-
-  // FIX: «только расхождения» учитывает стейдж-оверрайды (факт из общего стейджа),
-  // а не только флаг overridden из начального расчёта.
-  const filteredItems = onlyDiff
-    ? shoppingItems.filter(item => {
-        const u = actualUnitOf(item);
-        return item.overridden || (u != null && item.plannedUnitPrice != null && u !== item.plannedUnitPrice);
-      })
-    : shoppingItems;
-
-  // Fix-3 (п.2): чек нельзя ввести, пока в чеклисте не отмечено ни одной покупки.
-  // Не блокер: в чеклисте есть «Отметить всё» одной кнопкой.
+  // Fix-3 (п.2): чек вводим только после подтверждения закупки в чеклисте
   const canEnterCheck = boughtSet.size > 0;
 
-  // Fix-5 (п.10): CSV/«Печать» отсюда убраны — отчёт формируется из полосы
-  // «Готовность похода» (кнопка «Сформировать отчёт» → /trips/:id/print).
+  // Fix-5 (п.2): «на человека» — по реальному количеству людей
+  const realPeople = trip ? Math.max(1, realTripPeople(trip as any)) : 1;
+  const realPeopleLabel = Number.isInteger(realPeople) ? String(realPeople) : realPeople.toLocaleString('ru-RU', { maximumFractionDigits: 1 });
+  const totalPersonMeals = trip?.days?.reduce((acc: number, d: TripDay) =>
+    acc + (d.meals?.reduce((mealAcc: number, m: TripMeal) => mealAcc + (m.peopleOverride || d.peopleOverride || trip.defaultPeople || 1), 0) || 0)
+  , 0) || 1;
 
   if (loading) {
     return (
@@ -434,228 +425,103 @@ export default function PriceOverridesTab({ tripId }: Props) {
         <div className="note-box" style={{ color: 'var(--fire)' }}>
           {error || 'Поход не найден'}
         </div>
-        <Button variant="ghost">
-Повторить
-        </Button>
+        <Button variant="ghost">Повторить</Button>
       </div>
     );
   }
 
-  // U33/U34: «на человека» — по РЕАЛЬНОМУ количеству людей (среднее эффективных
-  // людей по дням, peopleOverride учитывается), подписи «делим на defaultPeople» убраны.
-  const realPeople = Math.max(1, realTripPeople(trip as any));
-  const realPeopleLabel = Number.isInteger(realPeople) ? String(realPeople) : realPeople.toLocaleString('ru-RU', { maximumFractionDigits: 1 });
-  const totalPersonMeals = trip.days?.reduce((acc: number, d: TripDay) => 
-    acc + (d.meals?.reduce((mealAcc: number, m: TripMeal) => mealAcc + (m.peopleOverride || d.peopleOverride || trip.defaultPeople || 1), 0) || 0)
-  , 0) || 1;
+  const segBtn = (id: TabType, label: string) => (
+    <button
+      key={id}
+      onClick={() => setActiveTab(id)}
+      className={`seg-btn whitespace-nowrap ${activeTab === id ? 'active' : ''}`}
+    >
+      {label}
+    </button>
+  );
 
   return (
     <div className="space-y-4">
-      {/* Информационная заметка */}
-      <div className="note-box">
-        ℹ Факт вводится СУММОЙ из чека за позицию («Факт ₽») — цена за единицу и все
-        сводки пересчитываются автоматически и распределяются на всех. Пустое поле = «план».
-        {!canEnterCheck && (
-          <b style={{ color: 'var(--fire, #d97706)' }}>
-            {' '}Ввод чека откроется, когда вы отметите покупки во вкладке «Чеклист»
-            (там же можно отметить всё одной кнопкой).
-          </b>
-        )}
+      {/* Fix-6 (п.17): информационная простыня убрана — подсказки живут в InfoTip
+          у колонок. Остаётся только одна строка, когда ввод действительно закрыт. */}
+      {!canEnterCheck && (
+        <div className="note-box" style={{ color: 'var(--fire, #d97706)' }}>
+          Суммы из чека можно вводить, когда во вкладке «Чеклист» отмечено хотя бы одно «взято».
+        </div>
+      )}
+
+      {/* Fix-6 (п.26): подтабы — тот же сегментированный контрол (.seg), что наверху страницы */}
+      <div className="seg w-full overflow-x-auto" style={{ maxWidth: '34rem' }}>
+        {segBtn('total', 'Закупка')}
+        {segBtn('days', 'По дням')}
+        {segBtn('person', 'На человека')}
       </div>
 
-      {/* Панель действий */}
-      <div className="flex gap-3 items-center flex-wrap">
-        {/* Fix-3 (п.2): гейт — чек вводим только после подтверждения закупки в чеклисте */}
-        <Button
-          variant="primary"
-          onClick={() => setShowModal(true)}
-          disabled={!canEnterCheck}
-          title={canEnterCheck ? undefined : 'Сначала отметьте купленное во вкладке «Чеклист»'}
-        >
-          Ввести чек
-        </Button>
-        {/* Fix-5 (п.10): отчёт — в полосе «Готовность похода» (сквозная, видна везде) */}
-        <label className="flex items-center gap-2 cursor-pointer" style={{ color: 'var(--muted)', fontSize: '12px' }}>
-          <input 
-            type="checkbox" 
-            checked={onlyDiff}
-            onChange={e => setOnlyDiff(e.target.checked)}
-          />
-          только расхождения
-        </label>
-      </div>
-
-      {/* Табы */}
-      <div className="flex gap-2">
-        <button
-          onClick={() => setActiveTab('total')}
-          className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${
-            activeTab === 'total' 
-              ? 'text-white' 
-              : ''
-          }`}
-          style={{
-            background: activeTab === 'total' ? 'var(--elev)' : 'transparent',
-            border: activeTab === 'total' ? '1px solid transparent' : '1px solid var(--border)',
-            color: activeTab === 'total' ? 'var(--text)' : 'var(--muted)',
-            backgroundImage: activeTab === 'total' ? 'linear-gradient(var(--elev), var(--elev)) padding-box, var(--grad-brand) border-box' : 'none'
-          }}
-        >
-          Закупка
-        </button>
-        <button
-          onClick={() => setActiveTab('days')}
-          className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${
-            activeTab === 'days' 
-              ? 'text-white' 
-              : ''
-          }`}
-          style={{
-            background: activeTab === 'days' ? 'var(--elev)' : 'transparent',
-            border: activeTab === 'days' ? '1px solid transparent' : '1px solid var(--border)',
-            color: activeTab === 'days' ? 'var(--text)' : 'var(--muted)',
-            backgroundImage: activeTab === 'days' ? 'linear-gradient(var(--elev), var(--elev)) padding-box, var(--grad-brand) border-box' : 'none'
-          }}
-        >
-          По дням
-        </button>
-        <button
-          onClick={() => setActiveTab('person')}
-          className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${
-            activeTab === 'person' 
-              ? 'text-white' 
-              : ''
-          }`}
-          style={{
-            background: activeTab === 'person' ? 'var(--elev)' : 'transparent',
-            border: activeTab === 'person' ? '1px solid transparent' : '1px solid var(--border)',
-            color: activeTab === 'person' ? 'var(--text)' : 'var(--muted)',
-            backgroundImage: activeTab === 'person' ? 'linear-gradient(var(--elev), var(--elev)) padding-box, var(--grad-brand) border-box' : 'none'
-          }}
-        >
-          На человека
-        </button>
-      </div>
-
-      {/* Вкладка: Закупка */}
+      {/* Вкладка: Закупка (группы по категориям, как в чеклисте; без внутреннего скролла) */}
       {activeTab === 'total' && (
-        <div className="rounded-xl overflow-hidden max-w-5xl" style={{ background: 'var(--surface)', border: '1px solid var(--border)', padding: 'var(--sp-1) var(--sp-3) var(--sp-4)' }}>
-          {/* Fix-5: длинная таблица скроллится внутри экрана, заголовок липкий */}
-          <div className="overflow-auto sticky-thead" style={{ maxHeight: '58vh' }}>
+        <div className="rounded-xl overflow-hidden max-w-5xl" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
           <table className="w-full text-sm">
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border)' }}>
                 <th className="px-2 py-3" title="Снять галочку, чтобы исключить продукт из расчёта (не удаляя его)"></th>
                 <th className="text-left px-2 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: '11px' }}>Продукт</th>
-                {/* Fix-3 (п.5) + Fix-5 (п.3/12): никаких «₽/ед», у каждого числа тултип */}
                 <th className="text-right px-2 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: '11px' }}>
-                  Надо купить
-                  <InfoTip text="Сколько нужно по расчёту меню (с учётом исключений и продуктов, добавленных к дню/походу)." />
+                  Нужно
+                  <InfoTip text="Сколько нужно по расчёту меню (с учётом правок состава, исключений и продуктов, добавленных к дню/походу)." />
                 </th>
                 <th className="text-right px-2 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: '11px' }}>
                   Взяли
-                  <InfoTip text="Сколько реально куплено (в штуках или весе) — попадёт в отчёт. Обычно чуть больше расчётного." />
+                  <InfoTip text="Сколько реально куплено — в любых единицах (г, кг, шт, уп). Одно хранилище с чеклистом: ввели там — видно здесь, и наоборот. Попадает в отчёт." />
                 </th>
                 <th className="text-right px-2 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: '11px' }}>
-                  План ₽
+                  Думали ₽
                   <InfoTip text="Плановая стоимость позиции: нужное количество × цена справочника на дату." />
                 </th>
                 <th className="text-right px-2 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: '11px' }}>
-                  Факт ₽
-                  <InfoTip text="Сумма из чека за эту позицию — сколько вы реально заплатили за купленное количество. Цена за единицу и распределение на всех посчитаются автоматически." />
+                  Заплатили ₽
+                  <InfoTip text="Сумма из чека за позицию — сколько реально заплатили за купленное количество. Цена за единицу и распределение на всех посчитаются автоматически." />
                 </th>
                 <th className="text-right px-2 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: '11px' }}>
-                  Δ
-                  <InfoTip text="Отклонение факта от плана: (факт − план) ÷ план × 100%." />
+                  Отклонение
+                  <InfoTip text="(Заплатили − Думали) ÷ Думали × 100%." />
                 </th>
               </tr>
             </thead>
             <tbody>
-              {filteredItems.map(item => {
-                const actualUnit = draftOverrides[item.ingredientId]?.price ?? item.actualUnitPrice ?? null;
-                const excluded = shoppingExcluded.has(item.ingredientId);
-                // Fix-3 (п.5): в поле — СУММА чека за позицию; Δ и итоги — тоже суммы.
-                // Fix-4 (п.10): округление до копеек — никаких «165,50240000000002».
-                const actualTotal = roundMoney(totalFromUnit(actualUnit, item.totalAmount));
-                const actualCostView = actualTotal ?? item.actualCost;
-                const delta = calculateDelta(item.plannedCost, actualCostView);
-                const deltaChipClass = getDeltaChipClass(delta);
-
-                return (
-                  <tr key={item.ingredientId} style={{ borderBottom: '1px solid var(--border)', opacity: excluded ? 0.45 : 1 }}>
-                    <td className="px-2 py-3 text-center">
-                      {/* Фаза 13 (п.5): soft-disable — продукт остаётся в списке, но не влияет на итог */}
-                      <input
-                        type="checkbox"
-                        checked={!excluded}
-                        onChange={() => toggleExcluded(item.ingredientId)}
-                        aria-label={excluded ? `Включить в расчёт: ${item.ingredientName}` : `Исключить из расчёта: ${item.ingredientName}`}
-                        title={excluded ? 'Включить в расчёт' : 'Исключить из расчёта (не удаляя)'}
-                        className="cursor-pointer"
-                        style={{ accentColor: 'var(--w2)' }}
-                      />
-                    </td>
-                    <td className="px-2 py-3">
-                      <b style={{ color: 'var(--text)' }}>{item.ingredientName}</b>
-                      {excluded && (
-                        <span className="chip-delta dim" style={{ marginLeft: 6, fontSize: 10 }}>искл.</span>
-                      )}
-                    </td>
-                    <td className="px-2 py-3 text-right" style={{ color: 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}>
-                      {formatAmount(item.totalAmount, item.unit)}
-                    </td>
-                    <td className="px-2 py-3 text-right">
-                      {/* Fix-5 (п.12): сколько реально взяли — свободный ввод в единицах продукта */}
-                      <AmountInput
-                        size="sm"
-                        value={draftOverrides[item.ingredientId]?.qty ?? null}
-                        unit={item.unit}
-                        disabled={!canEnterCheck}
-                        onChange={v => commitQty(item, v)}
-                        placeholder="—"
-                        ariaLabel={`Сколько реально куплено: ${item.ingredientName}`}
-                        testId={`qty-input-${item.ingredientId}`}
-                      />
-                    </td>
-                    <td className="px-2 py-3 text-right" style={{ color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>
-                      {excluded ? '—' : formatRub(item.plannedCost)}
-                    </td>
-                    <td className="px-2 py-3 text-right">
-                      <NumberField
-                        value={actualTotal}
-                        stepRef={item.plannedCost}
-                        placeholder={`план ${formatRub(item.plannedCost)}`}
-                        disabled={!canEnterCheck}
-                        onCommit={v => commitActualTotal(item, v)}
-                        testId={`actual-input-${item.ingredientId}`}
-                        ariaLabel={`Фактическая сумма из чека за позицию (₽): ${item.ingredientName}, куплено ${formatAmount(item.totalAmount, item.unit)}`}
-                      />
-                    </td>
-                    <td className="px-2 py-3 text-right">
-                      <span className={`chip-delta ${deltaChipClass}`}>
-                        {formatDelta(delta)}
-                      </span>
-                    </td>
-                  </tr>
-                );
-              })}
+              {checkGroups.map(group => (
+                <GroupRows
+                  key={group.category}
+                  category={group.category}
+                  items={group.items}
+                  shoppingExcluded={shoppingExcluded}
+                  actualMap={actualMap}
+                  pieceWeightById={pieceWeightById}
+                  canEnterCheck={canEnterCheck}
+                  draftOverrides={draftOverrides}
+                  calculateDelta={calculateDelta}
+                  formatDelta={formatDelta}
+                  getDeltaChipClass={getDeltaChipClass}
+                  toggleExcluded={toggleExcluded}
+                  commitActualTotal={commitActualTotal}
+                  commitTook={commitTook}
+                />
+              ))}
             </tbody>
           </table>
-          </div>
 
-          {/* Sticky итог */}
+          {/* Sticky итог — народный нейминг (Fix-6 п.21) */}
           <div className="sticky-totals">
             <span style={{ color: 'var(--text)' }}>
-              Итого план: <b style={{ fontVariantNumeric: 'tabular-nums' }}>{formatRub(totalPlanned)}</b>
+              Думали: <b style={{ fontVariantNumeric: 'tabular-nums' }}>{formatRub(totalPlanned)}</b>
             </span>
             <span style={{ color: 'var(--text)' }}>
-              Итого факт: <b style={{ fontVariantNumeric: 'tabular-nums', color: 'var(--w1)' }}>{formatRub(totalActual)}</b>
+              Заплатили: <b style={{ fontVariantNumeric: 'tabular-nums', color: 'var(--w1)' }}>{formatRub(totalActual)}</b>
             </span>
             <span className={`chip-delta ${getDeltaChipClass(totalDelta)}`}>
               {formatDelta(totalDelta)}
             </span>
             <span style={{ color: 'var(--muted)', fontSize: '12px' }}>
-              расхождение: {formatRub(totalActual - totalPlanned)}
+              разница: {formatRub(totalActual - totalPlanned)}
             </span>
             {shoppingExcluded.size > 0 && (
               <span style={{ color: 'var(--muted)', fontSize: '12px' }}>без {shoppingExcluded.size} искл.</span>
@@ -671,9 +537,9 @@ export default function PriceOverridesTab({ tripId }: Props) {
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border)' }}>
                 <th className="text-left px-4 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: '11px' }}>День</th>
-                <th className="text-right px-4 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: '11px' }}>План ₽</th>
-                <th className="text-right px-4 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: '11px' }}>Факт ₽</th>
-                <th className="text-right px-4 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: '11px' }}>Δ</th>
+                <th className="text-right px-4 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: '11px' }}>Думали ₽</th>
+                <th className="text-right px-4 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: '11px' }}>Заплатили ₽</th>
+                <th className="text-right px-4 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: '11px' }}>Отклонение</th>
               </tr>
             </thead>
             <tbody>
@@ -707,21 +573,21 @@ export default function PriceOverridesTab({ tripId }: Props) {
 
       {/* Вкладка: На человека */}
       {activeTab === 'person' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-3xl">
           <div className="rounded-xl p-4" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
             <b style={{ color: 'var(--text)' }}>На одного человека</b>
-            {/* U34: никакой технической «кухни» — только результат и понятный контекст */}
             <p style={{ color: 'var(--muted)', fontSize: '12px', marginTop: '4px' }}>
               {realPeopleLabel} чел. в походе
+              <InfoTip text="Среднее число участников по дням (переопределения «людей на день» учитываются)." />
             </p>
             <div className="flex justify-between py-2 mt-2" style={{ borderTop: '1px solid var(--border)' }}>
-              <span style={{ color: 'var(--muted)' }}>План</span>
+              <span style={{ color: 'var(--muted)' }}>Думали</span>
               <b style={{ color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>
                 {formatRub(totalPlanned / realPeople)}
               </b>
             </div>
             <div className="flex justify-between py-2" style={{ borderTop: '1px solid var(--border)' }}>
-              <span style={{ color: 'var(--muted)' }}>Факт</span>
+              <span style={{ color: 'var(--muted)' }}>Заплатили</span>
               <b style={{ color: 'var(--w1)', fontVariantNumeric: 'tabular-nums' }}>
                 {formatRub(totalActual / realPeople)}
               </b>
@@ -729,18 +595,19 @@ export default function PriceOverridesTab({ tripId }: Props) {
           </div>
 
           <div className="rounded-xl p-4" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
-            <b style={{ color: 'var(--text)' }}>На один человеко-приём</b>
+            <b style={{ color: 'var(--text)' }}>На один приём пищи</b>
             <p style={{ color: 'var(--muted)', fontSize: '12px', marginTop: '4px' }}>
               {totalPersonMeals} {mealsWord(totalPersonMeals)} за поход
+              <InfoTip text="Сумма по всем дням: приёмы пищи × число людей." />
             </p>
             <div className="flex justify-between py-2 mt-2" style={{ borderTop: '1px solid var(--border)' }}>
-              <span style={{ color: 'var(--muted)' }}>План</span>
+              <span style={{ color: 'var(--muted)' }}>Думали</span>
               <b style={{ color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>
                 {formatRub(totalPlanned / totalPersonMeals)}
               </b>
             </div>
             <div className="flex justify-between py-2" style={{ borderTop: '1px solid var(--border)' }}>
-              <span style={{ color: 'var(--muted)' }}>Факт</span>
+              <span style={{ color: 'var(--muted)' }}>Заплатили</span>
               <b style={{ color: 'var(--w1)', fontVariantNumeric: 'tabular-nums' }}>
                 {formatRub(totalActual / totalPersonMeals)}
               </b>
@@ -748,94 +615,110 @@ export default function PriceOverridesTab({ tripId }: Props) {
           </div>
         </div>
       )}
-
-      {/* Модалка "Ввести чек" */}
-      {showModal && (
-        <Modal onClose={() => setShowModal(false)}>
-          <div className="modal-sheet">
-            {/* U21: единый крестик в шапке модалки */}
-            <div className="flex items-start justify-between gap-3">
-              <b style={{ fontFamily: 'Unbounded', fontSize: '15px', color: 'var(--text)' }}>Ввести чек</b>
-              <button
-                type="button"
-                onClick={() => setShowModal(false)}
-                aria-label="Закрыть"
-                className="p-2 rounded-lg transition-colors shrink-0"
-                style={{ color: 'var(--muted)' }}
-              >
-                <X size={18} />
-              </button>
-            </div>
-            <p style={{ color: 'var(--muted)', fontSize: '12px', margin: 'var(--sp-1) 0 var(--sp-4)' }}>
-              {/* Fix-3 (п.5): сумма из чека за позицию — не цена за единицу */}
-              Введите, сколько заплатили по чеку за каждую позицию (₽ за купленное количество).
-              Пусто = «по плану». Цена за единицу и распределение на всех посчитаются сами.
-            </p>
-            {/* U41: чек разбит по категориям (алфавит), внутри категории — алфавит */}
-            <div className="flex flex-col gap-4">
-              {checkGroups.map(group => (
-                <div key={group.category}>
-                  {/* Fix-5 (п.24): группа — заметная плашка, а не сливающийся текст */}
-                  <div className="px-3 py-1.5 mb-2 text-xs font-extrabold uppercase tracking-wide"
-                       style={{ background: 'var(--elev)', border: '1px solid var(--border)', borderRadius: 'var(--r-input, 8px)', color: 'var(--text)' }}>
-                    {group.category}
-                  </div>
-                  <div className="flex flex-col gap-3">
-                    {group.items.map(item => (
-                      <div key={item.ingredientId} className="flex gap-3 items-center">
-                        <span style={{ flex: 1, fontSize: '13px', color: 'var(--text)' }}>
-                          {item.ingredientName}
-                          <span style={{ color: 'var(--muted)' }}> · {formatAmount(item.totalAmount, item.unit)}</span>
-                        </span>
-                        <span style={{ color: 'var(--muted)', fontSize: '12px', fontVariantNumeric: 'tabular-nums' }}>
-                          план {formatRub(item.plannedCost)}
-                        </span>
-                        {/* Fix-5 (п.12): сколько реально взяли */}
-                        <AmountInput
-                          size="sm"
-                          value={draftOverrides[item.ingredientId]?.qty ?? null}
-                          unit={item.unit}
-                          onChange={v => commitQty(item, v)}
-                          placeholder="взяли"
-                          ariaLabel={`Сколько реально куплено: ${item.ingredientName}`}
-                          testId={`modal-qty-${item.ingredientId}`}
-                        />
-                        <NumberField
-                          size="sm"
-                          value={roundMoney(totalFromUnit(
-                            draftOverrides[item.ingredientId]?.price ?? item.actualUnitPrice ?? null,
-                            item.totalAmount,
-                          ))}
-                          stepRef={item.plannedCost}
-                          placeholder={`план ${formatRub(item.plannedCost)}`}
-                          onCommit={v => commitActualTotal(item, v)}
-                          testId={`modal-input-${item.ingredientId}`}
-                          ariaLabel={`Фактическая сумма из чека (₽): ${item.ingredientName}, куплено ${formatAmount(item.totalAmount, item.unit)}`}
-                        />
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-            <div className="flex gap-3 mt-5">
-              <Button
-                variant="primary"
-                className="flex-1"
-                onClick={() => {
-                  setShowModal(false);
-                  showSuccess('Чек сохранён');
-                }}
-              >
-                Сохранить чек
-              </Button>
-              <Button variant="ghost" className="flex-1" onClick={() => setShowModal(false)}>
-                Отмена
-              </Button>
-            </div>
-          </div>
-        </Modal>
-      )}
     </div>
   );
 }
+
+/* ------------------------------------------------------------------ */
+/* Строки одной категории в таблице закупки                            */
+/* ------------------------------------------------------------------ */
+
+interface GroupRowsProps {
+  category: string;
+  items: ShoppingItem[];
+  shoppingExcluded: Set<string>;
+  actualMap: Record<string, ChecklistActual>;
+  pieceWeightById: Map<string, number | null>;
+  canEnterCheck: boolean;
+  draftOverrides: Record<string, ActualPriceDraft>;
+  calculateDelta: (planned?: number | null, actual?: number | null) => number;
+  formatDelta: (delta: number) => string;
+  getDeltaChipClass: (delta: number) => string;
+  toggleExcluded: (ingredientId: string) => void;
+  commitActualTotal: (item: ShoppingItem, total: number | null) => void;
+  commitTook: (ingredientId: string, value: ActualAmount | null) => void;
+}
+
+function GroupRows(props: GroupRowsProps) {
+  const {
+    category, items, shoppingExcluded, actualMap, pieceWeightById, canEnterCheck,
+    draftOverrides, calculateDelta, formatDelta, getDeltaChipClass,
+    toggleExcluded, commitActualTotal, commitTook,
+  } = props;
+  return (
+    <>
+      {/* Fix-6 (п.25/23): категория — заметная плашкой-строкой, формат как в чеклисте */}
+      <tr>
+        <td colSpan={7} className="px-3 py-1.5 text-xs font-extrabold uppercase tracking-wide"
+            style={{ background: 'var(--elev)', color: 'var(--text)', borderTop: '1px solid var(--border)', borderBottom: '1px solid var(--border)' }}>
+          {category}
+        </td>
+      </tr>
+      {items.map(item => {
+        const actualUnit = draftOverrides[item.ingredientId]?.price ?? item.actualUnitPrice ?? null;
+        const excluded = shoppingExcluded.has(item.ingredientId);
+        const actualTotal = roundMoney(totalFromUnit(actualUnit, item.totalAmount));
+        const actualCostView = actualTotal ?? item.actualCost;
+        const delta = calculateDelta(item.plannedCost, actualCostView);
+        const deltaChipClass = getDeltaChipClass(delta);
+        return (
+          <tr key={item.ingredientId} style={{ borderBottom: '1px solid var(--border)', opacity: excluded ? 0.45 : 1 }}>
+            <td className="px-2 py-2.5 text-center">
+              <input
+                type="checkbox"
+                checked={!excluded}
+                onChange={() => toggleExcluded(item.ingredientId)}
+                aria-label={excluded ? `Включить в расчёт: ${item.ingredientName}` : `Исключить из расчёта: ${item.ingredientName}`}
+                title={excluded ? 'Включить в расчёт' : 'Исключить из расчёта (не удаляя)'}
+                className="cursor-pointer"
+                style={{ accentColor: 'var(--w2)' }}
+              />
+            </td>
+            <td className="px-2 py-2.5">
+              <b style={{ color: 'var(--text)' }}>{item.ingredientName}</b>
+              {item.manual && (
+                <span className="chip-delta dim" style={{ marginLeft: 6, fontSize: 10 }}>к походу</span>
+              )}
+              {excluded && (
+                <span className="chip-delta dim" style={{ marginLeft: 6, fontSize: 10 }}>искл.</span>
+              )}
+            </td>
+            <td className="px-2 py-2.5 text-right" style={{ color: 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}>
+              {formatAmount(item.totalAmount, item.unit)}
+            </td>
+            <td className="px-2 py-2.5 text-right">
+              <FreeAmountInput
+                value={actualMap[String(item.ingredientId)] ?? null}
+                baseUnit={item.unit}
+                pieceWeightG={pieceWeightById.get(String(item.ingredientId)) ?? null}
+                onChange={v => commitTook(String(item.ingredientId), v)}
+                ariaLabel={`Сколько реально куплено: ${item.ingredientName}`}
+                testId={`qty-input-${item.ingredientId}`}
+              />
+            </td>
+            <td className="px-2 py-2.5 text-right" style={{ color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>
+              {excluded ? '—' : formatRub(item.plannedCost)}
+            </td>
+            <td className="px-2 py-2.5 text-right">
+              <NumberField
+                value={actualTotal}
+                stepRef={item.plannedCost}
+                placeholder={`думали ${formatRub(item.plannedCost)}`}
+                disabled={!canEnterCheck}
+                onCommit={v => commitActualTotal(item, v)}
+                testId={`actual-input-${item.ingredientId}`}
+                ariaLabel={`Сумма из чека (₽): ${item.ingredientName}, куплено ${formatAmount(item.totalAmount, item.unit)}`}
+              />
+            </td>
+            <td className="px-2 py-2.5 text-right">
+              <span className={`chip-delta ${deltaChipClass}`}>
+                {formatDelta(delta)}
+              </span>
+            </td>
+          </tr>
+        );
+      })}
+    </>
+  );
+}
+

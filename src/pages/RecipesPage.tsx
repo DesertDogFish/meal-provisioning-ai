@@ -7,6 +7,7 @@ import { humanizeCategory, servingsWord, ingredientsWord } from '../utils/text';
 import CustomSelect from '../components/CustomSelect'; // Fix-5 (п.19): «Все категории» — как везде
 import { api, getRecipes } from '../api/client';
 import { useToast } from '../components/ToastProvider';
+import { useConfirm } from '../components/ConfirmDialog'; // Fix-6 (п.7)
 import Modal from '../components/Modal';
 import RecipeEditorModal from '../components/RecipeEditorModal';
 import { Button } from '../components/Button';
@@ -32,6 +33,7 @@ const mealTypeLabels: Record<MealType, string> = {
 
 export default function RecipesPage() {
   const { showError, showSuccess } = useToast();
+  const { confirm, dialog: confirmDialog } = useConfirm(); // Fix-6 (п.7)
   // U37 (список 26.10): переход из похода «Изменить блюдо в справочнике» ведёт на
   // /recipes?edit=<id> — редактор должен открыться СРАЗУ, а не искать блюдо руками.
   const [searchParams, setSearchParams] = useSearchParams();
@@ -68,11 +70,21 @@ export default function RecipesPage() {
   };
 
   const handleDelete = async (recipe: Recipe) => {
-    // U16 (список багов 25.10): блюда — сущность верхнего уровня. Походы с V20
-    // живут на снапшотах рецептов, поэтому клиентская блокировка «используется
-    // в походах» устарела: удаление спрашивает только подтверждение, а сервер
-    // гарантирует изоляцию походов (доснепшотит висящие ссылки при удалении).
-    if (!window.confirm(`Удалить рецепт «${recipe.name}»? Действие необратимо.`)) return;
+    // U16 (список багов 25.10) + Fix-6 (п.7): блюда — сущность верхнего уровня.
+    // Походы с V20 живут на снапшотах рецептов, клиентская блокировка устарела —
+    // сервер гарантирует изоляцию. Подтверждение — брендовым диалогом.
+    const ok = await confirm({
+      title: `Удалить блюдо «${recipe.name}»?`,
+      confirmLabel: 'Удалить блюдо',
+      message: (
+        <>
+          Блюдо удалится из справочника вместе с составом ({recipe.ingredients?.length ?? 0} позиций).
+          Действие необратимо. Походы, уже спланированные с этим блюдом, не пострадают —
+          они живут на копиях (снепшотах).
+        </>
+      ),
+    });
+    if (!ok) return;
     try {
       await api.del(`/admin/recipes/${recipe.id}`);
       showSuccess('Рецепт удалён');
@@ -458,6 +470,9 @@ export default function RecipesPage() {
           onSaved={() => { loadRecipes(); }}
         />
       )}
+
+      {/* Fix-6 (п.7): брендовый диалог подтверждений */}
+      {confirmDialog}
     </div>
   );
 }

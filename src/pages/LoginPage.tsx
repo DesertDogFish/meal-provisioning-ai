@@ -103,7 +103,7 @@ export default function LoginPage() {
           }}>
             <BrandMark size={40} />
           </div>
-          <h1 className="text-3xl font-bold mb-2" style={{ fontFamily: 'Unbounded', color: 'var(--text)' }}>Провиант</h1>
+          <h1 className="text-3xl font-bold mb-2" style={{ fontFamily: 'var(--font-display)', color: 'var(--text)' }}>Провиант</h1>
           <p style={{ color: 'var(--muted)' }}>Планировщик питания для походов и яхт</p>
         </div>
 

@@ -236,7 +236,10 @@ public class SubstitutionService {
                 s.isAdded(),
                 s.isRemoved(),
                 s.getComment(),
-                s.getCreatedAt()
+                s.getCreatedAt(),
+                // Fix-6: единицы from/to для клиентских расчётов закупки
+                s.getFromIngredient() != null ? s.getFromIngredient().getUnit().name() : null,
+                s.getToIngredient() != null ? s.getToIngredient().getUnit().name() : null
         );
     }
 }

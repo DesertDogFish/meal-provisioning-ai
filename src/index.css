@@ -573,6 +573,9 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   width: min(560px, 92vw);
   max-height: 86vh;
   overflow: auto;
+  /* Fix-6 (п.12): скроллбар модалки не «торчит» — зарезервированная колея
+     и симметричные отступы, полоса тонкая (глобальный scrollbar-width) */
+  scrollbar-gutter: stable;
   padding: var(--sp-6);
   background: linear-gradient(160deg, color-mix(in srgb, var(--bg-2) 90%, transparent), color-mix(in srgb, var(--bg-0) 94%, transparent));
   backdrop-filter: blur(12px);
@@ -762,21 +765,23 @@ select {
   break-after: auto;
   page-break-after: auto;
 }
+/* Fix-6 (п.4): стили печатного документа — НА ЭКРАНЕ тоже (раньше жили только
+   внутри @media print, и на /trips/:id/print таблицы были без рамок). */
+.print-doc {
+  color: #10202b;
+}
+.print-doc .print-muted { color: #5b6b76; }
+.print-doc table { width: 100%; border-collapse: collapse; }
+.print-doc th, .print-doc td {
+  border: 1px solid #c9d2d8;
+  padding: 6px 8px;
+  text-align: left;
+  font-size: 13px;
+}
+.print-doc th { background: #f2f5f7; color: #435663; font-weight: 700; font-size: 11px; text-transform: uppercase; }
+.print-doc tbody tr:nth-child(even) { background: #fafbfc; }
 @media print {
-  .print-doc {
-    color: #10202b;
-  }
-  .print-doc .print-muted { color: #5b6b76; }
-  .print-doc table { width: 100%; border-collapse: collapse; }
-  /* Fix-5 (п.13): таблица С РАМКАМИ — нагромождение строк читается тяжело */
-  .print-doc th, .print-doc td {
-    border: 1px solid #c9d2d8;
-    padding: 6px 8px;
-    text-align: left;
-    font-size: 13px;
-  }
-  .print-doc th { background: #f2f5f7; color: #435663; font-weight: 700; font-size: 11px; text-transform: uppercase; }
-  .print-doc tbody tr:nth-child(even) { background: #fafbfc; }
+  .print-doc { color: #10202b; }
 }
 
 

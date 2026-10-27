@@ -256,3 +256,51 @@ GET  /api/v1/trips/{id}/summary/{menu|shopping|shopping/by-days|person}
 ## Deployment (Docker Compose)
 
 `docker compose up --build`: postgres (healthcheck pg_isready, порт только 127.0.0.1) → backend (healthcheck wget /meta, JWT_SECRET обязателен, profile по умолчанию `dev`) → frontend (nginx: SPA + прокси `/api`). Прод-сценарий: `SPRING_PROFILES_ACTIVE=prod`, `SEED_DEMO_USERS=false`, свой `POSTGRES_PASSWORD`, образы за реестром (задача P1: публикация в ghcr + стенд).
+
+
+## Патч «Fix-6» (UX-список 26.10, шестая итерация) — контракты
+
+### 1. Серверные правки состава в клиентских расчётах (п.22/25, R1-рассинхрон)
+- `GET /trips/{id}/ingredient-edits` → `TripIngredientEditResponse` дополнен полями
+  `fromUnit`/`toUnit` (единицы from/to-продуктов). Mock отдавал их и раньше — паритет.
+- Новый `src/utils/recipeEdits.ts`:
+  - `buildEffectiveIngredients(ingredients, edits)` — применяет правки к составу рецепта:
+    EXCLUDE → удалить строку; SCALE (from==to) → `amount × ratio`; SUBST → количество
+    from переносится на to (`× ratio`, флаг `substitutedFrom`); EXTRA (added/from=null) →
+    новая строка с `absolute: true` (абсолют на приём — людьми НЕ масштабируется, §3/V21).
+  - `buildEffectiveRecipesMap(recipesMap, edits, snapshotOf?)` — карта рецептов с
+    применёнными правками; ЕДИНЫЙ источник для меню/закупки/дней/«на человека»/чека/отчёта
+    (TripDetailPage, PriceOverridesTab, TripPrintPage).
+- `calculations.ts`: строки с `absolute` не масштабируются `people/baseServings`
+  (`calculateMenuByDays` прокидывает флаги `added`/`substitutedFrom` для бейджей меню).
+- Страницы больше не применяют `overlayEditsOnIngredients` к меню (menuOverlay остаётся
+  как библиотека хелперов — classifyEdits/stripSnapshotSuffix/editMatchesRecipe).
+
+### 2. Фактическое количество: свободные единицы (п.8/9/11)
+- Хранилище (localStorage, клиентский стейдж похода): `trip-checklist-actualqty-{tripId}` →
+  `Record<ingredientId, { amount: number; unit: string }>`, unit ∈ 'г'|'кг'|'мл'|'л'|'шт'|'уп'.
+  Совместимость: legacy-число (Fix-5) читается как `{amount, unit: ''}`.
+- ОДИН источник для чеклиста, колонки «Взяли» чека и печатного отчёта (повторного ввода нет).
+- `utils/checkUnits.ts`: `unitOptions(baseUnit, pieceWeightG)` (штучным с известным весом
+  штуки доступны г/кг), `convertToBase(...)` — приведение к базовой единице или null
+  (несопоставимо), `isActualLessThanNeeded(...)` — подсветка «взято меньше».
+- Компонент `FreeAmountInput` (число + чипы единиц).
+
+### 3. Подтверждения опасных действий (п.7)
+- `ConfirmDialog` + `useConfirm()` — промис-диалог (alertdialog): title/message/confirmLabel/
+  tone('danger'|'warning'). Заменяет window.confirm: удаление похода/приёма/блюда/продукта/
+  ручной позиции, смена дат похода, сброс демо-данных, закрытие Модалки B с правками.
+
+### 4. Чек: одна таблица вместо модалки (п.18/20/21/23/26/28)
+- PriceOverridesTab: модалка «Ввести чек», кнопка, чекбокс «только расхождения» и note-box
+  удалены. Ввод сумм — инлайн в таблице «Закупка», сгруппированной по категориям
+  (плашки-строки, формат как в чеклисте), полная высота без внутреннего скролла.
+- Нейминг колонок: «Нужно · Взяли · Думали ₽ · Заплатили ₽ · Отклонение».
+- Подтабы («Закупка/По дням/На человека») — сегменты `.seg`.
+
+### 5. Печатный отчёт (п.3/4/5)
+- Меню дня группируется по типам приёмов: плашки-заголовки (цвета бейджей приложения),
+  внутри — 2 колонки.
+- Стили `.print-doc` (рамки/зебра) действуют и на экране (вынесены из @media print).
+- План/факт: у позиции есть чек (`hasFact`) — выводится факт; все позиции с чеками —
+  плановые колонки не выводятся вовсе; «Расхождение» — только при смешанном состоянии.

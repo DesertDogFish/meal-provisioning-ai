@@ -131,7 +131,9 @@ export function AmountInput({
           Fix-4 (п.2): единый «квадратный» радиус всех полей ввода (--r-input). */}
       <span
         className="inline-flex items-stretch overflow-hidden"
-        style={{ border: '1px solid var(--border)', background: 'var(--elev)', borderRadius: 'var(--r-input, 8px)' }}
+        /* Fix-6 (п.19): справа к полю вплотную прилегает блок единиц (г/кг, шт) —
+           он квадратный, значит и правый край поля не скругляем */
+        style={{ border: '1px solid var(--border)', background: 'var(--elev)', borderRadius: 'var(--r-input, 8px) 0 0 var(--r-input, 8px)' }}
       >
         <input
           type="text"
