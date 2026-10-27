@@ -50,7 +50,12 @@ cors:
   allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://localhost:3000}
 
 integration:
-  off:
+  # ВНИМАНИЕ: ключ ОБЯЗАН быть в кавычках! YAML 1.1 трактует голое off как
+  # boolean false — SnakeYAML парсит `off:` в ключ `false`, и все свойства
+  # превращаются в integration[false].* (Spring их не находит, @Value молча
+  # уходит в дефолты). Именно так учётка OFF_USER_ID/OFF_PASSWORD «не доезжала»
+  # до провайдера при живых env (Fix-9, п.7). Регресс-страж: OffConfigBindingTest.
+  "off":
     products-url: https://world.openfoodfacts.org
     # Цены (fix U11): синхронизируются из проекта Open Prices —
     # краудсорсинговой базы цен Open Food Facts (GET /api/v1/prices?product_code=...).

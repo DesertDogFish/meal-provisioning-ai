@@ -79,7 +79,7 @@ class OpenFoodFactsProviderTest {
         String html = "<!DOCTYPE html><html lang=\"en\"><head><title>Page temporarily "
                 + "unavailable - Open Food Facts</title><style>*{margin:0}</style></head>"
                 + "<body><h1>Page temporarily unavailable</h1></body></html>";
-        String msg = OpenFoodFactsProvider.friendlyOffError(503, html);
+        String msg = OpenFoodFactsProvider.friendlyOffError(503, html, false);
         assertTrue(msg.contains("503"), "Код статуса должен быть виден: " + msg);
         assertTrue(msg.contains("OFF_USER_ID"), "Подсказка про учётку OFF: " + msg);
         assertFalse(msg.contains("<!DOCTYPE"), "HTML-дамп запрещён в сообщении");
@@ -88,19 +88,35 @@ class OpenFoodFactsProviderTest {
     }
 
     @Test
+    void friendlyOffError503DiffersByAuthMode() {
+        // Fix-9 (п.6): OFF блокирует по IP ДО проверки учётки — при настроенных
+        // кредах 503 означает временный блок IP (ждать), а не «настройте учётку».
+        String authedMsg = OpenFoodFactsProvider.friendlyOffError(503, null, true);
+        assertTrue(authedMsg.contains("ограничил ваш IP"), "Режим с учёткой — про IP-блок: " + authedMsg);
+        assertTrue(authedMsg.contains("30–60"), "Подсказка подождать: " + authedMsg);
+        assertFalse(authedMsg.contains("OFF_USER_ID"),
+                "С настроенной учёткой совет «настройте учётку» бессмысленен: " + authedMsg);
+
+        String anonMsg = OpenFoodFactsProvider.friendlyOffError(503, null, false);
+        assertTrue(anonMsg.contains("OFF_USER_ID"), "Анонимный режим — совет настроить учётку: " + anonMsg);
+        assertFalse(anonMsg.contains("ограничил ваш IP"));
+    }
+
+    @Test
     void friendlyOffErrorCoversTypicalCodesAndTruncatesUnknown() {
-        assertTrue(OpenFoodFactsProvider.friendlyOffError(429, "").contains("лимит"));
-        assertTrue(OpenFoodFactsProvider.friendlyOffError(401, null).contains("OFF_USER_ID"));
-        assertTrue(OpenFoodFactsProvider.friendlyOffError(403, null).contains("OFF_USER_ID"));
+        assertTrue(OpenFoodFactsProvider.friendlyOffError(429, "", false).contains("лимит"));
+        assertTrue(OpenFoodFactsProvider.friendlyOffError(429, "", true).contains("лимит"));
+        assertTrue(OpenFoodFactsProvider.friendlyOffError(401, null, false).contains("OFF_USER_ID"));
+        assertTrue(OpenFoodFactsProvider.friendlyOffError(403, null, true).contains("OFF_USER_ID"));
         // неизвестный код: короткий excerpt без тегов, длинное тело режется
         String longBody = "x".repeat(5000);
-        String msg = OpenFoodFactsProvider.friendlyOffError(500, "<b>oops</b> " + longBody);
+        String msg = OpenFoodFactsProvider.friendlyOffError(500, "<b>oops</b> " + longBody, false);
         assertTrue(msg.startsWith("Open Food Facts: HTTP 500"));
         assertFalse(msg.contains("<b>"));
         assertTrue(msg.length() <= 260, "Excerpt должен быть обрезан: " + msg.length());
         // null-тело не роняет
         assertEquals("Open Food Facts: HTTP 502",
-                OpenFoodFactsProvider.friendlyOffError(502, null));
+                OpenFoodFactsProvider.friendlyOffError(502, null, false));
     }
 
     @Test

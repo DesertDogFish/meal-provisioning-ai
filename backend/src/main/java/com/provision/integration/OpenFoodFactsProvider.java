@@ -204,7 +204,10 @@ public class OpenFoodFactsProvider implements PriceProvider, ProductInfoProvider
         } catch (HttpStatusCodeException e) {
             // Fix-9 (п.5): человекочитаемая ошибка — OFF на 503 отдаёт 25 КБ
             // HTML-заглушки, в тосте/БД это бесполезный дамп. Только суть + подсказка.
-            String message = friendlyOffError(e.getStatusCode().value(), e.getResponseBodyAsString());
+            // Fix-9 (п.6): подсказка зависит от режима — с настроенной учёткой 503
+            // означает временный IP-блок (ждать), без учётки — настроить креды.
+            String message = friendlyOffError(e.getStatusCode().value(), e.getResponseBodyAsString(),
+                    basicAuthHeader(offUserId, offPassword) != null);
             log.error("Failed to connect to Open Food Facts: {}", message);
             return ConnectionStatus.error(message);
         } catch (Exception e) {
@@ -217,14 +220,23 @@ public class OpenFoodFactsProvider implements PriceProvider, ProductInfoProvider
      * Fix-9 (п.5): короткое сообщение об ошибке OFF вместо дампа тела ответа.
      * Типовые коды получают готовую подсказку (что делать); неизвестные —
      * короткий текстовый excerpt (HTML-теги вычищены, максимум 200 символов).
+     * Fix-9 (п.6): для 503 подсказка зависит от authed — OFF блокирует по IP
+     * ДО проверки учётки, поэтому при настроенных кредах 503 = временный блок
+     * (лечится ожиданием), а не «настройте учётку».
      * Чистая функция — покрыта юнит-тестом.
      */
-    static String friendlyOffError(int status, String body) {
+    static String friendlyOffError(int status, String body, boolean authed) {
         String hint = switch (status) {
             case 401, 403 -> "доступ запрещён — проверьте учётку OFF (env OFF_USER_ID/OFF_PASSWORD).";
-            case 429 -> "превышен лимит запросов — повторите позже; для частых синхронизаций настройте учётку OFF.";
-            case 503 -> "сервис временно недоступен (перегрузка или лимит анонимных запросов по IP). "
-                    + "Настройте учётку OFF (env OFF_USER_ID/OFF_PASSWORD), пересоберите backend и повторите.";
+            case 429 -> authed
+                    ? "превышен лимит запросов — подождите несколько минут и повторите один раз."
+                    : "превышен лимит запросов — повторите позже; для частых синхронизаций настройте учётку OFF.";
+            case 503 -> authed
+                    ? "OFF временно ограничил ваш IP из-за частых запросов (ограничение "
+                        + "применяется до проверки учётки и снимается автоматически). "
+                        + "Подождите 30–60 минут, не повторяя попыток, затем повторите ОДИН раз."
+                    : "сервис временно недоступен (перегрузка или лимит анонимных запросов по IP). "
+                        + "Настройте учётку OFF (env OFF_USER_ID/OFF_PASSWORD), пересоберите backend и повторите.";
             default -> null;
         };
         if (hint != null) {
