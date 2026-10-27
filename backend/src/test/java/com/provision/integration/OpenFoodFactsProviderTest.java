@@ -14,8 +14,12 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Регрессионные тесты для переработанного OpenFoodFactsProvider:
- * 1. User-Agent строго по доке OFF ("AppName/Version (ContactEmail)").
- * 2. READ-запросы (search/testConnection) НЕ содержат user_id/password.
+ * 1. User-Agent строго по доке OFF ("AppName/Version (ContactEmail)");
+ *    при настроенной учётке контакт — её email (Fix-9).
+ * 2. Fix-9: поиск — API v2 (/api/v2/search; старый /cgi/search.pl закрыт OFF —
+ *    стабильный 503). Учётка OFF — ОПЦИОНАЛЬНА и передаётся ТОЛЬКО заголовком
+ *    Basic Auth; в query-параметрах (user_id/password) авторизации нет —
+ *    v2-API их не принимает, а их наличие провоцирует 503.
  * 3. Цены (fix U11) берутся из Open Prices, обновление карточек — через
  *    OFF Product API v2 ({@link ProductInfoProvider}); при ненастроенном
  *    URL или недоступной сети — graceful degradation (пустой результат
@@ -41,8 +45,38 @@ class OpenFoodFactsProviderTest {
     }
 
     @Test
-    void searchRequestUriHasNoAuthParams() throws Exception {
-        // Проверяем формируемый URI поиска: только поисковые параметры.
+    void userAgentUsesOffAccountEmailWhenConfigured() {
+        // Fix-9: контакт в UA — email учётки (рекомендация OFF), иначе дефолт
+        assertEquals("ProvisionApp/1.0.0 (user@mail.com)",
+                OpenFoodFactsProvider.buildUserAgent("user@mail.com"));
+        assertEquals("ProvisionApp/1.0.0 (support@provision.app)",
+                OpenFoodFactsProvider.buildUserAgent(null));
+        assertEquals("ProvisionApp/1.0.0 (support@provision.app)",
+                OpenFoodFactsProvider.buildUserAgent("  "));
+    }
+
+    @Test
+    void basicAuthHeaderIsBuiltOnlyWhenAccountConfigured() {
+        // Fix-9: учётка OFF — заголовок Basic Auth; без учётки — null (анонимно)
+        assertNull(OpenFoodFactsProvider.basicAuthHeader(null, null));
+        assertNull(OpenFoodFactsProvider.basicAuthHeader("", ""));
+        assertNull(OpenFoodFactsProvider.basicAuthHeader("user@mail.com", " "));
+        assertNull(OpenFoodFactsProvider.basicAuthHeader(null, "secret"));
+
+        String header = OpenFoodFactsProvider.basicAuthHeader("user@mail.com", "secret");
+        assertNotNull(header);
+        assertTrue(header.startsWith("Basic "), "Схема авторизации — Basic");
+        String decoded = new String(java.util.Base64.getDecoder()
+                .decode(header.substring("Basic ".length())),
+                java.nio.charset.StandardCharsets.UTF_8);
+        assertEquals("user@mail.com:secret", decoded);
+    }
+
+    @Test
+    void searchRequestUriIsApiV2WithoutAuthParams() throws Exception {
+        // Fix-9: проверяем формируемый URI поиска: API v2, только поисковые
+        // параметры; user_id/password в строке запроса ЗАПРЕЩЕНЫ (v2 их не
+        // принимает; авторизация — заголовком, см. basicAuthHeaderIsBuilt…).
         Class<?> builderClass = Class.forName(
                 "com.provision.integration.OpenFoodFactsProvider$UriStringBuilder");
         Method from = builderClass.getDeclaredMethod("from", String.class);
@@ -52,15 +86,14 @@ class OpenFoodFactsProviderTest {
         from.setAccessible(true); path.setAccessible(true); qp.setAccessible(true); build.setAccessible(true);
 
         Object b = from.invoke(null, "https://world.openfoodfacts.org");
-        b = path.invoke(b, "/cgi/search.pl");
-        b = qp.invoke(b, "search_simple", 1);
-        b = qp.invoke(b, "action", "process");
-        b = qp.invoke(b, "json", 1);
-        b = qp.invoke(b, "page_size", 5);
-        b = qp.invoke(b, "fields", "code,product_name,brands,quantity,image_url");
+        b = path.invoke(b, "/api/v2/search");
         b = qp.invoke(b, "search_terms", "milk");
+        b = qp.invoke(b, "fields", "code,product_name,brands,quantity,image_url");
+        b = qp.invoke(b, "page_size", 5);
         String uri = (String) build.invoke(b);
 
+        assertTrue(uri.contains("/api/v2/search"), "Поиск должен идти через API v2");
+        assertFalse(uri.contains("search.pl"), "Старый /cgi/search.pl закрыт OFF (503) — использовать запрещено");
         assertFalse(uri.contains("user_id"), "GET-запрос поиска не должен содержать user_id");
         assertFalse(uri.contains("password"), "GET-запрос поиска не должен содержать password");
         assertTrue(uri.contains("search_terms=milk"));
@@ -68,11 +101,10 @@ class OpenFoodFactsProviderTest {
     }
 
     @Test
-    void providerClassSourceHasNoCredentialPlumbing() {
-        // Страховка от регрессии: в исходнике провайдера больше нет
-        // offUserId/offPassword/withAuth. (prices-url больше НЕ запрещён:
-        // c fix U11 цены синхронизируются из Open Prices.)
-        List<String> forbidden = List.of("offUserId", "offPassword", "withAuth", "OFF_PASSWORD");
+    void providerSourceUsesV2SearchAndHeaderAuthOnly() {
+        // Fix-9 (страховка от регрессии): в исходнике провайдера нет старого
+        // эндпоинта и нет авторизации query-параметрами; учётка — только
+        // через заголовок (interceptor + basicAuthHeader).
         try {
             java.nio.file.Path src = java.nio.file.Path.of(
                     "src/main/java/com/provision/integration/OpenFoodFactsProvider.java");
@@ -81,10 +113,16 @@ class OpenFoodFactsProviderTest {
                         "backend/src/main/java/com/provision/integration/OpenFoodFactsProvider.java");
             }
             String code = java.nio.file.Files.readString(src);
-            for (String s : forbidden) {
-                assertFalse(code.contains(s),
-                        "В OpenFoodFactsProvider не должно быть упоминаний: " + s);
-            }
+            // проверяем именно СТРОКОВЫЙ ЛИТЕРАЛ эндпоинта (упоминания в
+            // javadoc/комментариях допустимы — они документируют запрет)
+            assertFalse(code.contains("\"/cgi/search.pl\""),
+                    "Старый эндпоинт /cgi/search.pl закрыт OFF — в коде его быть не должно");
+            assertFalse(code.contains("queryParam(\"user_id\""),
+                    "Авторизация query-параметром user_id запрещена (v2 её не принимает)");
+            assertFalse(code.contains("queryParam(\"password\""),
+                    "Авторизация query-параметром password запрещена");
+            assertTrue(code.contains("\"/api/v2/search\""), "Поиск — через API v2");
+            assertTrue(code.contains("basicAuthHeader"), "Учётка OFF — заголовком Basic Auth");
         } catch (java.io.IOException e) {
             fail("Не удалось прочитать исходник провайдера: " + e.getMessage());
         }
@@ -172,14 +210,17 @@ class OpenFoodFactsProviderTest {
     }
 
     @Test
-    void testConnectionDoesNotRequireCredentialsAnymore() throws Exception {
-        // У провайдера больше нет полей авторизации.
-        for (Field f : OpenFoodFactsProvider.class.getDeclaredFields()) {
-            assertFalse(f.getName().toLowerCase().contains("password"),
-                    "Поле с паролем не должно существовать: " + f.getName());
-            assertFalse(f.getName().toLowerCase().contains("userid"),
-                    "Поле с user_id не должно существовать: " + f.getName());
-        }
+    void credentialsAreOptionalAndNeverLeakToStrings() throws Exception {
+        // Fix-9: учётка ОПЦИОНАЛЬНА (анонимный режим — без неё), а её значения
+        // не должны попадать в логи/исключения: toString провайдера не содержит
+        // пароль, logConfig логирует только режим (auth: anonymous/OFF account).
+        OpenFoodFactsProvider provider = new OpenFoodFactsProvider(new ExchangeRateService());
+        setStringField(provider, "offUserId", "user@mail.com");
+        setStringField(provider, "offPassword", "s3cret");
+        String repr = String.valueOf(provider);
+        assertFalse(repr.contains("s3cret"), "Пароль не должен попадать в toString");
+        // без учётки basicAuthHeader -> null (анонимный режим остаётся рабочим)
+        assertNull(OpenFoodFactsProvider.basicAuthHeader(null, null));
     }
 
     private static void setStringField(Object target, String name, String value) throws Exception {

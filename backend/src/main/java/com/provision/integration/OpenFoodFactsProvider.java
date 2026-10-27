@@ -27,31 +27,47 @@ import java.util.regex.Pattern;
 /**
  * Провайдер Open Food Facts.
  *
- * Реализация приведена в соответствие с официальной документацией OFF
- * (https://openfoodfacts.github.io/openfoodfacts-server/api/):
+ * Fix-9 (интеграция, 27.10): приложение стабильно получало 503 «Page
+ * temporarily unavailable» — поиск ходил в УСТАРЕВШИЙ эндпоинт
+ * {@code /cgi/search.pl}, который OFF закрыл (503 даже с корректным
+ * User-Agent). Переведён на {@code GET /api/v2/search} (тот же формат
+ * ответа: {products: [...], count, page, ...}).
  *
- * 1. READ-операции (поиск продуктов) НЕ требуют авторизации — параметры
- *    user_id/password из GET-запросов убраны (для чтения аккаунт не нужен).
+ * Реализация приведена в соответствие с официальной документацией OFF
+ * (https://openfoodfacts.github.io/openfoodfacts-server/api/) и фактической
+ * политикой сервиса (2026):
+ *
+ * 1. Поиск — API v2 ({@code /api/v2/search}); карточка продукта — v2
+ *    ({@code /api/v2/product/{code}}).
  *
  * 2. Обязательный User-Agent в формате "AppName/Version (ContactEmail)" —
- *    без него OFF блокирует запросы как ботовые (503).
+ *    без него OFF блокирует запросы как ботовые (503). Если настроена учётная
+ *    запись OFF, контактом в UA указывается её email (рекомендация OFF).
  *
- * 3. Клиентский rate limiting: поиск ограничен 10 запросами в минуту на IP,
+ * 3. ОПЦИОНАЛЬНАЯ авторизация учёткой OFF (integration.off.user-id/password,
+ *    env OFF_USER_ID/OFF_PASSWORD) — HTTP Basic Auth ЗАГОЛОВКОМ (никогда не
+ *    query-параметрами: user_id/password в строке запроса v2-API не
+ *    аутентифицируют и провоцируют 503). Зарегистрированные пользователи
+ *    «не подвержены лимитам запросов и получают приоритетный доступ»
+ *    (сообщение самой OFF на странице 503); анонимный поиск жёстко
+ *    rate-limit'ится по IP. Без учётки провайдер работает анонимно.
+ *
+ * 4. Клиентский rate limiting: поиск ограничен 10 запросами в минуту на IP,
  *    поэтому вызовы сериализуются семафором + паузой ~6.5 c между запросами.
  *
- * 4. Обработка 429/503: WARN-логирование, экспоненциальный backoff
+ * 5. Обработка 429/503: WARN-логирование, экспоненциальный backoff
  *    (с учётом заголовка Retry-After, если он есть), максимум 3 повтора;
  *    при финальном провале — graceful degradation (пустой список вместо
  *    исключения).
  *
- * 5. Цены (fix U11): прайсы берутся из проекта Open Prices
+ * 6. Цены (fix U11): прайсы берутся из проекта Open Prices
  *    (https://prices.openfoodfacts.org, GET /api/v1/prices?product_code=...) —
  *    краудсорсинговая база цен OFF по штрихкоду. Цены в иностранных валютах
  *    конвертируются в RUB по ежедневному курсу ЦБ РФ ({@link ExchangeRateService});
  *    без доступного курса такая цена пропускается (graceful degradation —
  *    локальная база хранит только рубли).
  *
- * 6. Обновление карточек продуктов: fetchProductInfo() (см. {@link ProductInfoProvider})
+ * 7. Обновление карточек продуктов: fetchProductInfo() (см. {@link ProductInfoProvider})
  *    освежает название/бренд/фасовку/фото через OFF Product API v2; изменения
  *    учитываются в SyncLog.updatedCount при синхронизации цен.
  */
@@ -59,10 +75,14 @@ import java.util.regex.Pattern;
 @Slf4j
 public class OpenFoodFactsProvider implements PriceProvider, ProductInfoProvider {
 
+    /** Контакт по умолчанию для User-Agent (формат OFF: "AppName/Version (ContactEmail)"). */
+    private static final String DEFAULT_CONTACT = "support@provision.app";
+
     /**
      * User-Agent строго по доке OFF: "AppName/Version (ContactEmail)".
+     * При настроенной учётке OFF контакт подставляется из user-id (см. buildUserAgent).
      */
-    private static final String USER_AGENT = "ProvisionApp/1.0.0 (support@provision.app)";
+    private static final String USER_AGENT = "ProvisionApp/1.0.0 (" + DEFAULT_CONTACT + ")";
 
     /** Лимит OFF на поиск: 10 запросов в минуту => минимум 6 секунд между ними. */
     private static final Duration MIN_SEARCH_INTERVAL = Duration.ofMillis(6500);
@@ -91,18 +111,73 @@ public class OpenFoodFactsProvider implements PriceProvider, ProductInfoProvider
     @Value("${integration.off.prices-url:https://prices.openfoodfacts.org}")
     private String pricesUrl;
 
+    /**
+     * Fix-9: ОПЦИОНАЛЬНАЯ учётная запись OFF (env OFF_USER_ID/OFF_PASSWORD).
+     * Анонимный поиск OFF жёстко лимитирует (503 «Page temporarily
+     * unavailable»); зарегистрированные пользователи получают приоритетный
+     * доступ без лимитов. Учётка передаётся ТОЛЬКО заголовком Basic Auth —
+     * query-параметры user_id/password в API v2 не работают.
+     */
+    @Value("${integration.off.user-id:}")
+    private String offUserId;
+
+    @Value("${integration.off.password:}")
+    private String offPassword;
+
     public OpenFoodFactsProvider(ExchangeRateService exchangeRateService) {
         this.exchangeRateService = exchangeRateService;
+        // Fix-9: заголовки проставляются интерсептором на каждый запрос —
+        // учётка может быть внедрена @Value после конструктора, а UA зависит
+        // от неё (контакт = email учётки, иначе дефолтный).
         this.restClient = RestClient.builder()
-                .defaultHeader(HttpHeaders.USER_AGENT, USER_AGENT)
+                .requestInterceptor((request, body, execution) -> {
+                    request.getHeaders().set(HttpHeaders.USER_AGENT, buildUserAgent(offUserId));
+                    String auth = basicAuthHeader(offUserId, offPassword);
+                    if (auth != null) {
+                        request.getHeaders().set(HttpHeaders.AUTHORIZATION, auth);
+                    }
+                    return execution.execute(request, body);
+                })
                 .build();
+    }
+
+    /**
+     * User-Agent по формату OFF "AppName/Version (ContactEmail)":
+     * контакт — email учётки OFF (если настроена), иначе дефолтный.
+     * Чистая функция — покрыта юнит-тестом.
+     */
+    static String buildUserAgent(String contactEmail) {
+        String contact = (contactEmail == null || contactEmail.isBlank())
+                ? DEFAULT_CONTACT : contactEmail.trim();
+        return "ProvisionApp/1.0.0 (" + contact + ")";
+    }
+
+    /**
+     * Заголовок HTTP Basic Auth для учётки OFF; null — если учётка не
+     * настроена (анонимный режим). Чистая функция — покрыта юнит-тестом.
+     */
+    static String basicAuthHeader(String userId, String password) {
+        if (userId == null || userId.isBlank() || password == null || password.isBlank()) {
+            return null;
+        }
+        String token = java.util.Base64.getEncoder().encodeToString(
+                (userId.trim() + ":" + password)
+                        .getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        return "Basic " + token;
     }
 
     @PostConstruct
     void logConfig() {
-        log.info("Open Food Facts provider initialized with User-Agent: {}", USER_AGENT);
-        log.info("OFF: product cards/search via {}; prices via Open Prices {} (converted to RUB using CBR rates)",
-                productsUrl, pricesUrl);
+        boolean authed = basicAuthHeader(offUserId, offPassword) != null;
+        log.info("Open Food Facts provider initialized with User-Agent: {} (auth: {})",
+                buildUserAgent(offUserId), authed ? "OFF account (Basic Auth header)" : "anonymous");
+        if (!authed) {
+            log.warn("OFF credentials not set (integration.off.user-id/password or env "
+                    + "OFF_USER_ID/OFF_PASSWORD) — anonymous mode: OFF search is heavily "
+                    + "rate-limited and may return 503; set an account for priority access");
+        }
+        log.info("OFF: product cards/search via {} (API v2); prices via Open Prices {} "
+                + "(converted to RUB using CBR rates)", productsUrl, pricesUrl);
     }
 
     @Override
@@ -112,11 +187,17 @@ public class OpenFoodFactsProvider implements PriceProvider, ProductInfoProvider
 
     @Override
     public ConnectionStatus testConnection() {
-        // Проверка доступности — обычный READ-запрос, без авторизации.
+        // Fix-9: проверка доступности — минимальный READ-запрос к API v2
+        // (старый /cgi/search.pl закрыт OFF — стабильный 503).
+        String uri = UriStringBuilder.from(productsUrl)
+                .path("/api/v2/search")
+                .queryParam("search_terms", "milk")
+                .queryParam("fields", "code")
+                .queryParam("page_size", 1)
+                .build();
         try {
             restClient.get()
-                    .uri(productsUrl + "/cgi/search.pl?action=process&json=1"
-                            + "&search_simple=1&page_size=1&fields=code&search_terms=milk")
+                    .uri(uri)
                     .retrieve()
                     .toBodilessEntity();
             return ConnectionStatus.success();
@@ -128,15 +209,14 @@ public class OpenFoodFactsProvider implements PriceProvider, ProductInfoProvider
 
     @Override
     public List<ExternalProductDto> searchProducts(String query, int limit) {
-        // buildUri/queryParam: БЕЗ user_id/password — чтение не требует аккаунта.
+        // Fix-9: поиск через API v2 (https://world.openfoodfacts.org/api/v2/search).
+        // Учётка OFF (если настроена) уходит заголовком Basic Auth в интерсепторе;
+        // в query-параметрах авторизации НЕТ — v2 их не принимает.
         String uri = UriStringBuilder.from(productsUrl)
-                .path("/cgi/search.pl")
-                .queryParam("search_simple", 1)
-                .queryParam("action", "process")
-                .queryParam("json", 1)
-                .queryParam("page_size", limit)
-                .queryParam("fields", "code,product_name,brands,quantity,image_url")
+                .path("/api/v2/search")
                 .queryParam("search_terms", query)
+                .queryParam("fields", "code,product_name,brands,quantity,image_url")
+                .queryParam("page_size", limit)
                 .build();
 
         JsonNode response = executeWithThrottlingAndRetry(uri, "search \"" + query + "\"");
@@ -419,7 +499,8 @@ public class OpenFoodFactsProvider implements PriceProvider, ProductInfoProvider
     /**
      * Простой сборщик URI с корректным percent-encoding значений
      * (пробел -> %20, спецсимволы экранируются). Авторизационные параметры
-     * намеренно отсутствуют — READ-запросы OFF анонимны.
+     * в query намеренно отсутствуют — учётка OFF (Fix-9) передаётся
+     * заголовком Basic Auth (интерсептор RestClient), а не строкой запроса.
      */
     private static final class UriStringBuilder {
         private final StringBuilder sb = new StringBuilder();

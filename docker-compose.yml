@@ -35,9 +35,12 @@
       SPRING_JPA_HIBERNATE_DDL_AUTO: validate
       SPRING_FLYWAY_ENABLED: "true"
       JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env}
-      # Open Food Facts: READ-запросы (поиск продуктов) анонимные — учётная
-      # запись не требуется и больше НЕ передаётся (user_id/password убраны
-      # из GET-запросов согласно документации OFF).
+      # Fix-9 (интеграция): учётка Open Food Facts — ОПЦИОНАЛЬНА, но рекомендована:
+      # анонимный поиск OFF лимитирует по IP (503), зарегистрированные пользователи
+      # получают приоритетный доступ. Бэкенд передаёт её заголовком Basic Auth
+      # (не query-параметрами). Пусто = анонимный режим.
+      OFF_USER_ID: ${OFF_USER_ID:-}
+      OFF_PASSWORD: ${OFF_PASSWORD:-}
     ports:
       - "8080:8080"
     healthcheck:

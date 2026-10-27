@@ -168,6 +168,33 @@ primary/ghost дизайн-системы), `RecipesPage.test.tsx` (+«В мен
 Backend не менялся (все пункты клиентские). Fix-7 п.17 в ARCHITECTURE §«Свежесть фактов»
 помечен как superseded (Fix-8 п.6).
 
+### Fix-9 — интеграция Open Food Facts: 503 на поиск продуктов (27.10)
+
+Симптом: приложение на любой поиск/подключение OFF получало HTML-503 «Page temporarily
+unavailable». Диагностика живыми запросами (27.10): старый эндпоинт `/cgi/search.pl`
+ЗАКРЫТ со стороны OFF (503 даже с корректным User-Agent и с user_id/password в query);
+`GET /api/v2/search` + User-Agent — 200 OK (тот же формат `{products:[…]}`). Анонимный
+v2-поиск при этом жёстко rate-limit'ится по IP (серия запросов → временный блок 503),
+зарегистрированные пользователи — без лимитов и с приоритетом (сообщение OFF на стр. 503).
+
+| # | Проблема | Решение | Статус |
+|---|---|---|---|
+| 1 | Поиск и testConnection ходили в закрытый `/cgi/search.pl` → постоянный 503 | перевод на `GET /api/v2/search` (search_terms/fields/page_size; парсинг `products[]` без изменений — формат совместим); testConnection — v2-поиск page_size=1 | ✅ |
+| 2 | Учётка OFF не поддерживалась кодом, хотя README/.env.example её документировали (рассинхрон доков); user_id/password в query (как в нерабочем curl пользователя) v2-API не аутентифицирует | ОПЦИОНАЛЬНАЯ учётка `integration.off.user-id/password` (env `OFF_USER_ID`/`OFF_PASSWORD`) → заголовок HTTP Basic Auth через interceptor RestClient (НИКОГДА не query); без учётки — анонимный режим + WARN при старте; UA-контакт = email учётки, если задана | ✅ |
+| 3 | docker-compose не пробрасывал OFF_USER_ID/OFF_PASSWORD в backend (env из .env не доходили) | проброс env в сервисе backend + комментарий; `.env.example` и README уже документировали переменные — теперь код соответствует докам | ✅ |
+| 4 | Периодические анонимные 503 (rate-limit по IP) | сохранены throttling 6.5 c + retry/backoff на 429/5xx + graceful degradation; с учёткой — приоритетный доступ без лимитов | ✅ |
+
+Тесты Fix-9 (`OpenFoodFactsProviderTest`): v2-URI поиска без auth-параметров, страж
+«нет /cgi/search.pl и query-авторизации в исходнике», `buildUserAgent` (дефолт/email
+учётки), `basicAuthHeader` (null без учётки, корректный base64 с учёткой), учётка
+опциональна и не течёт в toString. Прежние тесты-запреты «никаких креденшелов»
+(`providerClassSourceHasNoCredentialPlumbing`, `testConnectionDoesNotRequireCredentialsAnymore`)
+сознательно заменены — политика OFF изменилась (анонимный поиск блокируется).
+Доки: ARCHITECTURE §«Внешние цены и карточки продуктов» (контракт v2 + авторизация);
+backend/README без изменений (уже описывал «креды из ENV»).
+Секреты: значения учётки — только в `.env` (не коммитить); пароль, засвеченный в чате
+диагностики, пользователю рекомендовано сменить.
+
 ### Fix-7 — доработки после шестой проверки (26.10, седьмая итерация)
 
 | # | Замечание | Решение | Статус |
