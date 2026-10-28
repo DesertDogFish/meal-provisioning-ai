@@ -52,5 +52,10 @@ export default defineConfig({
     hmr: {
       port: 3000,
     },
+    // Vite 6 по умолчанию отвечает «Blocked request. This host is not allowed» на
+    // запросы с чужим Host (защита от DNS-rebinding). При работе за обратным прокси
+    // (контейнер-песочница, домен превью заранее неизвестен) хост разрешается явно —
+    // только при VITE_ALLOW_ANY_HOST=true, локально поведение прежнее.
+    ...(process.env.VITE_ALLOW_ANY_HOST === "true" ? { allowedHosts: true } : {}),
   },
 });

@@ -153,8 +153,7 @@ export default function SyncLogsPage() {
   const startSync = async () => {
     setSyncing(true);
     try {
-      // Fix-15: OFF демонтирован (V24 удалила строку интеграции) — кнопка
-      // стучалась в /OFF/sync/prices и всегда получала 404 «мы не туда стучимся».
+      // Fix-15: единственный провайдер — Росстат (ЕМИСС); запуск идёт именно в него.
       await api.post('/admin/integrations/ROSSTAT/sync/prices');
       showSuccess('Синк запущен');
       await loadSyncLogs();
@@ -210,18 +209,25 @@ export default function SyncLogsPage() {
     );
   };
 
+  /**
+   * Чип действия по продукту (SyncDetailsBuilder): CREATED / UPDATED / SKIPPED / ERROR.
+   * SKIPPED_MANUAL больше не существует — синхронизация ЕМИСС перезаписывает любые цены
+   * привязанных продуктов, включая ручные (EmisPriceApplier).
+   */
   const getActionChip = (action: string) => {
     const styles: Record<string, { background: string; color: string }> = {
       UPDATED: { background: 'color-mix(in srgb, var(--wave-400) 14%, transparent)', color: 'var(--wave-300)' },
       CREATED: { background: 'var(--success-soft)', color: 'var(--wave-300)' },
-      SKIPPED_MANUAL: { background: 'color-mix(in srgb, var(--wave-400) 14%, transparent)', color: 'var(--wave-300)' },
-      SKIPPED_CURRENCY: { background: 'color-mix(in srgb, var(--line-strong) 28%, transparent)', color: 'var(--muted)' },
-      // Fix-15: SKIPPED — у категории нет ценовых данных в выгрузке (не ошибка)
+      // SKIPPED — у позиции ЕМИСС нет цен или единицы несовместимы (не ошибка)
       SKIPPED: { background: 'color-mix(in srgb, var(--line-strong) 28%, transparent)', color: 'var(--muted)' },
       ERROR: { background: 'var(--danger-soft)', color: 'var(--danger)' }
     };
+    // Исторические запуски могли содержать действия удалённых провайдеров —
+    // рисуем их нейтральным чипом вместо undefined-стиля.
+    const style = styles[action]
+      ?? { background: 'color-mix(in srgb, var(--line-strong) 28%, transparent)', color: 'var(--muted)' };
     return (
-      <span className="chip-delta" style={styles[action]}>
+      <span className="chip-delta" style={style}>
         {action}
       </span>
     );

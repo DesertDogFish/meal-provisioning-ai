@@ -1,5 +1,6 @@
 package com.provision.service;
 
+import com.provision.dto.emis.EmisProductDto;
 import com.provision.dto.error.ErrorResponse;
 import com.provision.dto.product.*;
 import com.provision.entity.*;
@@ -19,9 +20,11 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -35,6 +38,8 @@ public class ProductService {
     private final RecipeRepository recipeRepository;
     // R3 (Fix-3): ручные позиции закупки — продукт, занятый ими, нельзя удалить молча
     private final com.provision.repository.TripManualItemRepository manualItemRepository;
+    /** V26: локальная копия ЕМИСС — проверка кода привязки и название позиции для ответа. */
+    private final EmisCatalogService emisCatalogService;
 
     @Transactional(readOnly = true)
     public List<ProductCategoryDto> getAllCategories() {
@@ -73,7 +78,7 @@ public class ProductService {
             List<Long> categoryIds,
             List<UnitOfMeasure> units,
             String priceStatus,
-            String bindingStatus,
+            String priceSyncStatus,
             String usageStatus,
             String sort,
             String direction,
@@ -91,7 +96,7 @@ public class ProductService {
                 .and(ProductSpecifications.hasCategoryIn(categoryIds))
                 .and(ProductSpecifications.hasUnitIn(units))
                 .and(ProductSpecifications.hasPriceStatus(priceStatus))
-                .and(ProductSpecifications.hasBindingStatus(bindingStatus))
+                .and(ProductSpecifications.hasPriceSyncStatus(priceSyncStatus))
                 .and(ProductSpecifications.hasUsageStatus(usageStatus));
 
         Page<Ingredient> ingredients = ingredientRepository.findAll(spec, pageRequest);
@@ -110,9 +115,21 @@ public class ProductService {
                 usageCountByIngredient.put((Long) row[0], ((Number) row[1]).intValue());
             }
         }
+        // V26: привязка к ЕМИСС и статус синхронизации — тоже пакетно (два запроса на страницу):
+        // названия позиций справочника и множество продуктов, у которых есть цена из ЕМИСС.
+        List<String> emisCodes = ingredients.getContent().stream()
+                .map(Ingredient::getEmisCode)
+                .filter(c -> c != null && !c.isBlank())
+                .distinct()
+                .toList();
+        Map<String, EmisProductDto> emisByCode = emisCatalogService.describe(emisCodes);
+        Set<Long> syncedIds = ids.isEmpty() ? Set.of()
+                : new HashSet<>(priceRepository.findIngredientIdsWithSource(
+                        RecipeSource.ROSSTAT.name(), ids));
 
         return ingredients.map(i -> toProductResponse(i, priceByIngredient.get(i.getId()),
-                usageCountByIngredient.getOrDefault(i.getId(), 0)));
+                usageCountByIngredient.getOrDefault(i.getId(), 0),
+                emisByCode.get(i.getEmisCode()), syncedIds.contains(i.getId())));
     }
 
     @Transactional
@@ -144,6 +161,7 @@ public class ProductService {
                 .roundToPacks(request.roundToPacks() != null ? request.roundToPacks() : false)
                 .kcalPer100g(request.kcalPer100g())
                 .pieceWeightG(request.pieceWeightG())
+                .emisCode(normalizeEmisCode(request.emisCode()))
                 .build();
 
         ingredient = ingredientRepository.save(ingredient);
@@ -201,9 +219,13 @@ public class ProductService {
         ingredient.setRoundToPacks(request.roundToPacks() != null ? request.roundToPacks() : false);
         ingredient.setKcalPer100g(request.kcalPer100g());
         ingredient.setPieceWeightG(request.pieceWeightG());
+        // V26: привязка к позиции локального справочника ЕМИСС меняется свободно —
+        // продукт может быть занят в рецептах, на состав это не влияет.
+        ingredient.setEmisCode(normalizeEmisCode(request.emisCode()));
 
         ingredient = ingredientRepository.save(ingredient);
-        log.info("Updated product: {} (id={})", ingredient.getName(), ingredient.getId());
+        log.info("Updated product: {} (id={}, emisCode={})",
+                ingredient.getName(), ingredient.getId(), ingredient.getEmisCode());
         
         return toProductResponse(ingredient);
     }
@@ -251,17 +273,27 @@ public class ProductService {
     }
 
     private ProductResponse toProductResponse(Ingredient ingredient) {
-        // Одиночный путь (create/update/get-by-id): 2 точечных запроса допустимы.
+        // Одиночный путь (create/update/get-by-id): точечные запросы допустимы.
         Optional<IngredientPrice> currentPrice = priceRepository.findEffectivePrice(
                 ingredient.getId(), LocalDate.now());
         int usageCount = recipeIngredientRepository.findRecipeIdsByIngredientId(ingredient.getId()).size();
-        return toProductResponse(ingredient, currentPrice.orElse(null), usageCount);
+        EmisProductDto emis = ingredient.getEmisCode() == null ? null
+                : emisCatalogService.describe(List.of(ingredient.getEmisCode()))
+                        .get(ingredient.getEmisCode());
+        boolean synced = priceRepository.existsByIngredientIdAndSource(
+                ingredient.getId(), RecipeSource.ROSSTAT.name());
+        return toProductResponse(ingredient, currentPrice.orElse(null), usageCount, emis, synced);
     }
 
-    private ProductResponse toProductResponse(Ingredient ingredient, IngredientPrice currentPrice, int usageCount) {
+    /**
+     * @param emis   позиция локального справочника ЕМИСС (null — не привязан или кода нет в копии)
+     * @param synced есть ли у продукта цена, записанная синхронизацией из ЕМИСС
+     */
+    private ProductResponse toProductResponse(Ingredient ingredient, IngredientPrice currentPrice,
+                                              int usageCount, EmisProductDto emis, boolean synced) {
         // FIX P1 (аудит): N+1-версия этого метода делала findEffectivePrice +
-        // findRecipeIdsByIngredientId на каждый элемент страницы. Теперь цена и
-        // usageCount приходят параметрами (пакетная загрузка в getProducts).
+        // findRecipeIdsByIngredientId на каждый элемент страницы. Теперь цена, usageCount,
+        // описание ЕМИСС и признак синхронизации приходят параметрами (пакетная загрузка).
 
         ProductResponse.CurrentPriceDto priceDto = currentPrice != null ?
                 new ProductResponse.CurrentPriceDto(
@@ -272,8 +304,13 @@ public class ProductService {
                 )
                 : null;
 
-        // Определяем статус привязки
-        String bindingStatus = ingredient.getCode() != null ? "BOUND" : "UNBOUND";
+        // V26: статус синхронизации цены — по привязке к ЕМИСС и факту записанной цены.
+        // Прежний bindingStatus смотрел на внутренний code продукта и вводил в заблуждение:
+        // «BOUND» не означало, что цена откуда-то берётся.
+        String emisCode = ingredient.getEmisCode();
+        String status = emisCode == null || emisCode.isBlank()
+                ? ProductResponse.NOT_LINKED
+                : (synced ? ProductResponse.SYNCED : ProductResponse.NO_DATA);
 
         // Проверяем, что категория не null
         if (ingredient.getCategory() == null) {
@@ -296,7 +333,9 @@ public class ProductService {
                 null, // description
                 priceDto,
                 usageCount,
-                bindingStatus,
+                emisCode,
+                emis == null ? null : emis.name(),
+                status,
                 ingredient.getUpdatedAt()
         );
     }
@@ -308,6 +347,24 @@ public class ProductService {
                 category.getSlug(),
                 category.getSortOrder()
         );
+    }
+
+    /**
+     * Нормализация кода привязки: пусто → null (отвязать), иначе trim.
+     * Код обязан существовать в локальном справочнике — иначе продукт выглядел бы привязанным,
+     * а синхронизация молча не находила бы цен (ровно та боль, что была с id значений фильтра).
+     */
+    private String normalizeEmisCode(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        String code = raw.trim();
+        if (!emisCatalogService.exists(code)) {
+            throw new com.provision.exception.ValidationException(
+                    "VALIDATION_ERROR: позиция ЕМИСС " + code + " не найдена в локальном справочнике. "
+                    + "Выберите позицию из поиска; если её нет — сначала выполните синхронизацию");
+        }
+        return code;
     }
 
     private String normalizeName(String name) {

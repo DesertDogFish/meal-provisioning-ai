@@ -8,9 +8,30 @@ export const UNIT_LABELS: Record<UnitOfMeasure, string> = {
   PACK: 'уп'
 };
 export type MealType = 'BREAKFAST' | 'LUNCH' | 'DINNER' | 'SNACK';
-// Fix-13: 'ROSSTAT' — Росстат (ЕМИСС); 'OFF' — legacy-строки БД (провайдер демонтирован)
-export type RecipeSource = 'MANUAL' | 'OFF' | 'ROSSTAT' | 'API' | 'AI';
+// Источник рецепта/цены — как enum RecipeSource бэкенда (V28: значение 'OFF'
+// удалено вместе с провайдером Open Food Facts, legacy-строки переведены в MANUAL).
+export type RecipeSource = 'MANUAL' | 'ROSSTAT' | 'API' | 'AI';
 export type StagingStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
+
+/**
+ * Статус синхронизации цены продукта (ProductResponse.priceSyncStatus, V26):
+ * NOT_LINKED — источник цены не выбран, цену ведёт человек;
+ * NO_DATA — привязан к позиции ЕМИСС, но в локальной копии нет её цен;
+ * SYNCED — привязан, действующая цена получена из локальной копии ЕМИСС.
+ */
+export type PriceSyncStatus = 'NOT_LINKED' | 'NO_DATA' | 'SYNCED';
+
+/** Позиция локального справочника ЕМИСС (EmisProductDto) — результат поиска при привязке. */
+export interface EmisProduct {
+  code: string;
+  name: string;
+  /** Суффикс единицы наблюдения («кг», «25 пакетиков», «100 мл»); null — единица не распознана. */
+  unitLabel: string | null;
+  /** Самая свежая цена позиции по региону приложения; null — цен в копии нет. */
+  latestPrice: number | null;
+  /** Первый день месяца самой свежей цены (yyyy-MM-dd); null — цен нет. */
+  latestPriceDate: string | null;
+}
 
 export interface User {
   id: string;
@@ -50,6 +71,15 @@ export interface Ingredient {
   pieceWeightG?: number;
   /** FIX: отключённые продукты (enabled=false) исключаются из меню/закупки/чеков. undefined = включён. */
   enabled?: boolean;
+  /**
+   * V26: софт-привязка к позиции локального справочника ЕМИСС — декларативный
+   * «источник цены». null/undefined = цену ведёт человек.
+   */
+  emisCode?: string | null;
+  /** Название привязанной позиции ЕМИСС (из локальной копии). */
+  emisName?: string | null;
+  /** Синхронизирована ли цена из ЕМИСС (см. PriceSyncStatus). */
+  priceSyncStatus?: PriceSyncStatus;
   createdAt: string;
 }
 
@@ -59,6 +89,8 @@ export interface IngredientPrice {
   pricePerUnit: number;
   currency: string;
   effectiveFrom: string;
+  /** MANUAL — ввёл человек; ROSSTAT — применила синхронизация ЕМИСС; API — машинный источник. */
+  source?: string;
 }
 
 export interface RecipeIngredient {

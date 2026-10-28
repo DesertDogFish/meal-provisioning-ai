@@ -23,7 +23,23 @@ public record SyncLogResponse(
     public record SyncDetails(
         Integer requestCount,
         List<SyncItem> items,
-        List<SyncError> errors
+        List<SyncError> errors,
+        Mirror mirror
+    ) {}
+
+    /**
+     * Итог обновления локальной копии ЕМИСС (V26): справочник и цены за окно хранения.
+     * null, если синк не дошёл до записи копии (портал недоступен).
+     */
+    public record Mirror(
+        String regionCode,
+        Integer catalogUpserted,
+        Integer pricePoints,
+        Integer pricesUpserted,
+        Integer pricesDropped,
+        Integer pricesDeleted,
+        Integer yearFrom,
+        Integer yearTo
     ) {}
     
     public record SyncItem(

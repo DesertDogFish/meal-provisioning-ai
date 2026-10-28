@@ -2,6 +2,7 @@ package com.provision.repository;
 
 import com.provision.entity.IngredientPrice;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -57,6 +58,30 @@ public interface IngredientPriceRepository extends JpaRepository<IngredientPrice
             @Param("ingredientIds") java.util.Collection<Long> ingredientIds);
 
     boolean existsByIngredientIdAndEffectiveFrom(Long ingredientId, LocalDate effectiveFrom);
+
+    /** Есть ли у продукта цена указанного источника (статус «цена синхронизирована»). */
+    boolean existsByIngredientIdAndSource(Long ingredientId, String source);
+
+    /**
+     * Пакетно: у каких продуктов из набора есть цена указанного источника — один запрос
+     * на страницу списка продуктов вместо N+1.
+     */
+    @Query("SELECT DISTINCT p.ingredient.id FROM IngredientPrice p "
+            + "WHERE p.source = :source AND p.ingredient.id IN :ingredientIds")
+    List<Long> findIngredientIdsWithSource(@Param("source") String source,
+                                           @Param("ingredientIds") java.util.Collection<Long> ingredientIds);
     
     Optional<IngredientPrice> findByIngredientIdAndEffectiveFrom(Long ingredientId, LocalDate effectiveFrom);
+
+    /**
+     * Запуск №17: синхронизация стирает ручные цены привязанного продукта — ряд должен
+     * остаться однородным (только источник ЕМИСС). Удаляются строки {@code source='MANUAL'}
+     * на датах, которых не коснулась выгрузка; перезаписанные точки к этому моменту уже
+     * помечены кодом провайдера.
+     *
+     * @return сколько ручных цен удалено
+     */
+    @Modifying
+    @Query("DELETE FROM IngredientPrice p WHERE p.ingredient.id = :ingredientId AND p.source = 'MANUAL'")
+    int deleteManualByIngredientId(@Param("ingredientId") Long ingredientId);
 }

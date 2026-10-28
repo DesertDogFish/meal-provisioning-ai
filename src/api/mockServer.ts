@@ -20,21 +20,10 @@ const prices: IngredientPrice[] = [...mockPrices];
 // CONTRACT-P1: состояние синхронизации интеграций для SYNC_ALREADY_RUNNING
 let syncRunning = false;
 
-// Fix-14: mock-хранилище привязок ингредиентов (повторяет upsert
-// IntegrationService.createMapping + список GET /mappings + DELETE).
-interface MockBinding {
-  mappingId: number; ingredientId: number; ingredientName: string;
-  externalCode: string; externalName: string | null;
-  packAmount: number | null; packUnit: string | null; createdAt: string;
-}
-let mockBindings: MockBinding[] = [];
-let mockBindingSeq = 1;
-
-// U11 mock-parity (Fix-13: Росстат/ЕМИСС вместо OFF): состояние
-// /admin/integrations* (как IntegrationController + IntegrationService).
-// По умолчанию интеграция подключена — в демо-режиме «Обновить цены» работает
-// сразу. errorMessage='Connected successfully' — как у реального бэкенда
-// (фронт не должен трактовать его как ошибку).
+// U11 mock-parity: состояние /admin/integrations* (как IntegrationController +
+// IntegrationService). По умолчанию интеграция подключена — в демо-режиме
+// «Обновить цены» работает сразу. errorMessage='Connected successfully' — как у
+// реального бэкенда (фронт не должен трактовать его как ошибку).
 let integrationState: {
   id: number; provider: string; status: string; baseUrl: string;
   lastConnectedAt: string | null; lastSyncAt: string | null; errorMessage: string | null;
@@ -48,16 +37,42 @@ let integrationState: {
   errorMessage: 'Connected successfully',
 };
 
-// Fix-13: демо-каталог категорий Росстата (форма ExternalProductDto).
-// packUnit обязателен: бэкенд отбрасывает цены без единицы фасовки.
-// Fix-14: добавлены price/priceDate — поиск сразу показывает свежую цену категории.
-const ROSSTAT_CATALOG = [
-  { code: '101', name: 'Гречневая крупа', packAmount: 1, packUnit: 'KG', price: 89.1, priceDate: '2026-09-01' },
-  { code: '102', name: 'Молоко питьевое', packAmount: 1, packUnit: 'L', price: 91.5, priceDate: '2026-09-01' },
-  { code: '103', name: 'Яйца куриные', packAmount: 10, packUnit: 'PCS', price: 12.4, priceDate: '2026-09-01' },
-  { code: '104', name: 'Сахар-песок', packAmount: 1, packUnit: 'KG', price: 17.3, priceDate: '2026-09-01' },
-  { code: '105', name: 'Говядина (кроме бескостного мяса)', packAmount: 1, packUnit: 'KG', price: 612.8, priceDate: '2026-09-01' },
+// Локальный справочник ЕМИСС (форма EmisProductDto: code/name/unitLabel/latestPrice/
+// latestPriceDate). Названия, единицы и цены — реальные позиции классификатора
+// (регион 643004.АГ, апрель 2026), чтобы демо показывало те же цифры, что боевая копия.
+// Позиция 1115 намеренно без цены: демо состояния NO_DATA («привязан, но цен нет»).
+const EMIS_CATALOG = [
+  { code: '111', name: 'Говядина (кроме бескостного мяса), кг', unitLabel: 'кг', latestPrice: 734.88, latestPriceDate: '2026-04-01' },
+  { code: '201', name: 'Колбаса вареная, кг', unitLabel: 'кг', latestPrice: 580.02, latestPriceDate: '2026-04-01' },
+  { code: '303', name: 'Консервы мясные, кг', unitLabel: 'кг', latestPrice: 712.91, latestPriceDate: '2026-04-01' },
+  { code: '604', name: 'Консервы рыбные натуральные и с добавлением масла, кг', unitLabel: 'кг', latestPrice: 711.92, latestPriceDate: '2026-04-01' },
+  { code: '803', name: 'Масло подсолнечное, л', unitLabel: 'л', latestPrice: 153.3, latestPriceDate: '2026-04-01' },
+  { code: '1115', name: 'Молоко сухое цельное, кг', unitLabel: 'кг', latestPrice: null, latestPriceDate: null },
+  { code: '1127', name: 'Молоко сгущенное с сахаром, кг', unitLabel: 'кг', latestPrice: 417.72, latestPriceDate: '2026-04-01' },
+  { code: '1204', name: 'Сыры твердые, полутвердые и мягкие, кг', unitLabel: 'кг', latestPrice: 967.92, latestPriceDate: '2026-04-01' },
+  { code: '1501', name: 'Яйца куриные, 10 шт.', unitLabel: '10 шт.', latestPrice: 113.85, latestPriceDate: '2026-04-01' },
+  { code: '1601', name: 'Сахар-песок, кг', unitLabel: 'кг', latestPrice: 72.38, latestPriceDate: '2026-04-01' },
+  { code: '1905', name: 'Чай черный байховый пакетированный, 25 пакетиков', unitLabel: '25 пакетиков', latestPrice: 84.14, latestPriceDate: '2026-04-01' },
+  { code: '2002', name: 'Соль поваренная пищевая, кг', unitLabel: 'кг', latestPrice: 22.63, latestPriceDate: '2026-04-01' },
+  { code: '2207', name: 'Хлеб и булочные изделия из пшеничной муки различных сортов, кг', unitLabel: 'кг', latestPrice: 122.01, latestPriceDate: '2026-04-01' },
+  { code: '2301', name: 'Рис шлифованный, кг', unitLabel: 'кг', latestPrice: 125.3, latestPriceDate: '2026-04-01' },
+  { code: '2307', name: 'Крупа гречневая-ядрица, кг', unitLabel: 'кг', latestPrice: 79.59, latestPriceDate: '2026-04-01' },
+  { code: '2309', name: 'Овсяные хлопья "Геркулес", кг', unitLabel: 'кг', latestPrice: 112.27, latestPriceDate: '2026-04-01' },
+  { code: '2403', name: 'Макаронные изделия из пшеничной муки высшего сорта, кг', unitLabel: 'кг', latestPrice: 121.01, latestPriceDate: '2026-04-01' },
+  { code: '3306', name: 'Вода питьевая, л', unitLabel: 'л', latestPrice: 44.07, latestPriceDate: '2026-04-01' },
 ];
+
+const emisByCode = (code?: string | null) =>
+  code ? EMIS_CATALOG.find(c => c.code === code) ?? null : null;
+
+/**
+ * Статус синхронизации цены продукта (паритет с ProductService.toProductResponse):
+ * нет привязки → NOT_LINKED; привязан и в копии есть цены → SYNCED; иначе NO_DATA.
+ */
+const priceSyncStatusOf = (code?: string | null): string => {
+  if (!code) return 'NOT_LINKED';
+  return emisByCode(code)?.latestPrice != null ? 'SYNCED' : 'NO_DATA';
+};
 
 // Журнал синхронизаций (SyncLogDto), свежие записи первыми
 const integrationSyncLogs: Array<{
@@ -400,6 +415,41 @@ function mockKcalOf(qty: number, unit?: string, kcalPer100g?: number | null, pie
 }
 
 export const mockServer = {
+  /**
+   * Нормализация кода привязки к ЕМИСС (паритет с ProductService.normalizeEmisCode):
+   * пусто → null (отвязать), неизвестный код → 400 VALIDATION_ERROR.
+   */
+  normalizeEmisCode(raw: unknown): string | null {
+    const code = String(raw ?? '').trim();
+    if (!code) return null;
+    if (!emisByCode(code)) {
+      throw {
+        status: 400,
+        message: 'VALIDATION_ERROR',
+        detail: `позиция ЕМИСС ${code} не найдена в локальном справочнике. Выберите позицию из поиска`,
+      } as any;
+    }
+    return code;
+  },
+
+  /**
+   * Действующая цена продукта в форме ProductResponse.currentPrice.
+   * Источник — ROSSTAT у привязанных к ЕМИСС (цену применила синхронизация),
+   * MANUAL у остальных (цену ведёт человек).
+   */
+  currentPriceOf(p: Ingredient): { value: number; currency: string; effectiveFrom: string; source: string } | undefined {
+    const own = prices
+      .filter(pr => pr.ingredientId === p.id)
+      .sort((a, b) => (a.effectiveFrom < b.effectiveFrom ? 1 : -1))[0];
+    if (!own) return undefined;
+    return {
+      value: own.pricePerUnit,
+      currency: own.currency,
+      effectiveFrom: own.effectiveFrom,
+      source: p.emisCode ? 'ROSSTAT' : 'MANUAL',
+    };
+  },
+
   handleRequest<T>(method: string, path: string, body?: any): T {
     // Отрезаем query string для матчинга маршрута
     const pathWithoutQuery = path.split('?')[0];
@@ -453,63 +503,58 @@ export const mockServer = {
       };
       return { ...integrationState } as T;
     }
-    // U11 mock-parity: поиск внешних товаров — GET /admin/integrations/:provider/products/search
-    const integSearch = pathWithoutQuery.match(/^\/admin\/integrations\/([^/]+)\/products\/search$/);
-    if (integSearch && method === 'GET') {
+    // Локальный справочник ЕМИСС — GET /admin/emis/products?query=&limit= (EmisController).
+    // Поиск по подстрокe названия/кода; пустой query — первые limit позиций по алфавиту.
+    if (pathWithoutQuery === '/admin/emis/products' && method === 'GET') {
       const url = new URL(`http://localhost${path}`);
       const query = (url.searchParams.get('query') || '').trim().toLowerCase();
-      // Fix-13: категории Росстата в форме ExternalProductDto
-      return ROSSTAT_CATALOG
-        .filter(p => !query || p.name.toLowerCase().includes(query))
-        .map(p => ({ ...p, brand: 'Росстат', imageUrl: null })) as T;
+      const limit = Number(url.searchParams.get('limit') ?? 20);
+      const found = EMIS_CATALOG
+        .filter(c => !query || c.name.toLowerCase().includes(query) || c.code.includes(query))
+        .sort((a, b) => a.name.localeCompare(b.name, 'ru'))
+        .slice(0, Number.isFinite(limit) && limit > 0 ? limit : 20);
+      return found.map(c => ({ ...c })) as T;
     }
-    // Fix-14: список текущих привязок — GET /admin/integrations/:provider/mappings
-    const integMappings = pathWithoutQuery.match(/^\/admin\/integrations\/([^/]+)\/mappings$/);
-    if (integMappings && method === 'GET') {
-      return mockBindings.map(b => ({ ...b })) as T;
-    }
-    // U11 mock-parity + Fix-14: привязка ингредиента к внешнему товару.
-    // Реальный бэкенд делает upsert (повторная привязка = замена товара, не ошибка)
-    // и отвечает 200 + тело привязки (IngredientBindingDto, Fix-15).
-    const mappingPost = pathWithoutQuery.match(/^\/admin\/integrations\/ingredients\/([^/]+)\/mapping$/);
-    if (mappingPost && method === 'POST') {
-      const ingredientId = Number(mappingPost[1]);
-      const ing = products.find(p => Number(p.id) === ingredientId);
-      const code = String(body?.externalCode ?? '');
-      const cat = ROSSTAT_CATALOG.find(c => c.code === code);
-      let binding = mockBindings.find(b => b.ingredientId === ingredientId);
-      if (binding) {
-        binding.externalCode = code;
-        binding.externalName = cat?.name ?? binding.externalName;
-        binding.packAmount = body?.packAmount ?? binding.packAmount;
-        binding.packUnit = body?.packUnit ?? binding.packUnit;
-      } else {
-        binding = {
-          mappingId: mockBindingSeq++,
-          ingredientId,
-          ingredientName: ing?.name ?? `#${ingredientId}`,
-          externalCode: code,
-          externalName: cat?.name ?? null,
-          packAmount: body?.packAmount ?? null,
-          packUnit: body?.packUnit ?? null,
-          createdAt: new Date().toISOString(),
-        };
-        mockBindings.push(binding);
+    // Загрузка выгрузки ЕМИСС вручную — POST /admin/integrations/:provider/upload
+    // (паритет с IntegrationService.uploadSnapshot: 404 неизвестный провайдер,
+    // 400 EMPTY_FILE, 409 SYNC_ALREADY_RUNNING, успех — { logId }; подключение
+    // провайдера НЕ требуется: файл админ принес сам, портал не задействован).
+    const integUpload = pathWithoutQuery.match(/^\/admin\/integrations\/([^/]+)\/upload$/);
+    if (integUpload && method === 'POST') {
+      const provider = integUpload[1];
+      if (provider !== integrationState.provider) {
+        throw { status: 404, message: 'Integration not found: ' + provider, detail: `Unknown provider ${provider}` } as any;
       }
-      // Fix-15: паритет с бэкендом — 200 + тело привязки (пустой ответ ронял
-      // фронтенд: «Failed to execute 'json' … Unexpected end of JSON input»).
-      return { ...binding } as T;
-    }
-    // Fix-14: отвязка — DELETE /admin/integrations/ingredients/:id/mapping/:provider
-    const mappingDel = pathWithoutQuery.match(/^\/admin\/integrations\/ingredients\/([^/]+)\/mapping\/([^/]+)$/);
-    if (mappingDel && method === 'DELETE') {
-      const ingredientId = Number(mappingDel[1]);
-      const before = mockBindings.length;
-      mockBindings = mockBindings.filter(b => b.ingredientId !== ingredientId);
-      if (mockBindings.length === before) {
-        throw { status: 404, message: 'Mapping not found', detail: 'Mapping not found' } as any;
+      const fileName = String(body?.__file?.name ?? '');
+      const fileSize = Number(body?.__file?.size ?? 0);
+      if (!fileName || fileSize <= 0) {
+        throw { status: 400, message: 'EMPTY_FILE', detail: 'Загруженный файл пуст' } as any;
       }
-      return null as T;
+      if (syncRunning) {
+        throw { status: 409, message: 'SYNC_ALREADY_RUNNING', detail: 'A synchronization is already in progress' } as any;
+      }
+      syncRunning = true;
+      const log = {
+        id: integrationSyncLogs.length + 1,
+        provider,
+        type: 'PRICES',
+        status: 'RUNNING',
+        startedAt: new Date().toISOString(),
+        finishedAt: null as string | null,
+        createdCount: 0,
+        updatedCount: 0,
+        errorCount: 0,
+      };
+      integrationSyncLogs.unshift(log);
+      setTimeout(() => {
+        log.status = 'SUCCESS';
+        log.finishedAt = new Date().toISOString();
+        log.createdCount = 3;
+        log.updatedCount = 2;
+        integrationState = { ...integrationState, lastSyncAt: log.finishedAt };
+        syncRunning = false;
+      }, 1500);
+      return { logId: log.id } as T;
     }
     // U11 mock-parity: синхронизация цен — POST /admin/integrations/:provider/sync/prices.
     // Порядок проверок как в IntegrationService.syncPrices: неизвестный провайдер → 404,
@@ -714,7 +759,12 @@ export const mockServer = {
         unitLabel: UNIT_LABELS[p.unit] || p.unit,
         categoryName: p.category,
         usageRecipes: recipes.filter(r => r.ingredients.some(i => i.ingredientId === p.id)).length,
-        bindingStatus: p.code ? 'BOUND' : 'UNBOUND'
+        currentPrice: this.currentPriceOf(p),
+        emisCode: p.emisCode ?? null,
+        emisName: emisByCode(p.emisCode)?.name ?? null,
+        priceSyncStatus: priceSyncStatusOf(p.emisCode),
+        // Привязка к ЕМИСС — «софт»: BOUND означает «источник цены выбран».
+        bindingStatus: p.emisCode ? 'BOUND' : 'UNBOUND'
       }));
       const totalElements = content.length;
       const totalPages = size > 0 ? Math.ceil(totalElements / size) : 0;
@@ -745,6 +795,10 @@ export const mockServer = {
         throw { status: 400, message: 'VALIDATION_ERROR', detail: 'pieceWeightG is required for PCS/PACK when kcalPer100g is set' } as any;
       }
 
+      // Паритет с ProductService.normalizeEmisCode: код обязан быть в локальном
+      // справочнике, иначе продукт выглядел бы привязанным, а синк не находил бы цен.
+      const emisCode = this.normalizeEmisCode(body.emisCode);
+
       const newProduct: Ingredient = {
         id: `ing_${Date.now()}`,
         name: body.name,
@@ -756,6 +810,7 @@ export const mockServer = {
         roundToPacks: body.roundToPacks,
         kcalPer100g: body.kcalPer100g,
         pieceWeightG: body.pieceWeightG,
+        emisCode,
         createdAt: new Date().toISOString()
       };
 
@@ -796,7 +851,9 @@ export const mockServer = {
         packSize: body.packSize,
         roundToPacks: body.roundToPacks,
         kcalPer100g: body.kcalPer100g,
-        pieceWeightG: body.pieceWeightG
+        pieceWeightG: body.pieceWeightG,
+        // Пустая строка/null = отвязать (цену снова ведёт человек)
+        emisCode: body.emisCode === undefined ? products[index].emisCode : this.normalizeEmisCode(body.emisCode)
       };
 
       return products[index];

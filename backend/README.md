@@ -7,7 +7,7 @@
 - Java 17 (target — `pom.xml <java.version>`), Spring Boot 3.2.5
 - Spring Data JPA + Hibernate (`ddl-auto=validate`), PostgreSQL 15
 - Spring Security: stateless JWT (access 1 ч / refresh 7 д с ротацией, хэш refresh в БД), CORS из ENV, fail-fast `JWT_SECRET`
-- Flyway V1–V20 (apply at startup)
+- Flyway V1–V28 (apply at startup)
 - springdoc-openapi (Swagger в profile `dev`)
 - Lombok; маппинг DTO ручной (record'ы); зависимость MapStruct присутствует, но не используется — к удалению (PLAN P1)
 - Тесты: JUnit 5 + AssertJ + Mockito + MockMvc; Testcontainers ИЛИ LocalPgFallback (initdb локального PostgreSQL, работает в CI без Docker)
@@ -22,14 +22,16 @@ backend/
 │   ├── dto/             # request/response-контракты (в т.ч. summary/*, error/*)
 │   ├── entity/          # JPA-сущности (recipes/ingredients c trip_id/snapshot_of — V20)
 │   ├── exception/       # доменные исключения + GlobalExceptionHandler (RFC7807-подобные ответы)
-│   ├── integration/     # OpenFoodFactsProvider (креды из ENV, диагностика 429/503)
+│   ├── integration/     # RosstatEmisProvider (ЕМИСС/fedstat.ru: Struts-токен, SDMX-парсер,
+│   │                    #   диагностика 302/403/503), EmisDataSource, EmisSnapshot
 │   ├── repository/      # Spring Data JPA (@Query JOIN FETCH / DISTINCT ON) + Specifications
 │   ├── security/        # JwtService, JwtAuthenticationFilter
 │   ├── service/         # SummaryService.computeShopping, TripCatalogSnapshotService,
-│   │                    # TripIngredientEditService, TripShoppingExclusionService, PriceResolutionService...
+│   │                    # TripIngredientEditService, TripShoppingExclusionService, PriceResolutionService,
+│   │                    # Emis* (MirrorService/CatalogService/PriceApplier/Unit), PriceSyncService...
 │   └── specification/   # ProductSpecifications (фильтры продуктов, isGlobal)
 ├── src/main/resources/
-│   ├── db/migration/    # Flyway V1–V20 (применённые не правим!)
+│   ├── db/migration/    # Flyway V1–V28 (применённые не правим!)
 │   ├── application.yml  # базовый (INFO)
 │   ├── application-dev.yml / application-prod.yml
 └── src/test/            # unit + integration (@ContainerSuite / LocalPgFallback) + smoke
@@ -85,7 +87,9 @@ Swagger: http://localhost:8080/swagger-ui.html (dev). Health: `GET /api/v1/meta`
 - Продукты: `GET|POST /api/v1/admin/products[/{id}]`, `GET /api/v1/admin/products/paginated`, `check-name`; алиас `/admin/ingredients`
 - Цены: `GET /api/v1/admin/ingredient-prices/ingredient/{id}`, `POST /api/v1/admin/ingredient-prices`
 - Блюда: `POST|PUT|DELETE /api/v1/admin/recipes[/{id}]` (состав — в теле запроса)
-- Интеграции/OFF: `GET|PUT /api/v1/admin/integrations[/{id}]`, `POST .../{provider}/sync/*`, staging approve/reject, ingredient-mappings
+- Интеграции (единственный провайдер — `ROSSTAT`): `GET /api/v1/admin/integrations`, `POST .../{provider}/connect|disconnect`, `POST .../{provider}/sync/prices` (202 `{logId}`), `POST .../{provider}/upload` (multipart-поле `file` — ручная загрузка SDMX-выгрузки ЕМИСС, 202 `{logId}`), `GET .../sync-logs`
+- ЕМИСС (локальная копия): `GET /api/v1/admin/emis/products?query=&limit=` — поиск позиций справочника для привязки продукта (`EmisProductDto` с последней ценой и периодом)
+- Staging: `GET|POST /api/v1/admin/staging`, `POST .../{id}/approve|reject`
 - `GET /api/v1/admin/sync-logs`, `GET /api/v1/admin/sync-logs/kpi`
 
 ## Тесты
@@ -111,15 +115,20 @@ mvn test -Dtest=SnapshotIsolationIntegrationTest      # изоляция сне�
 7. **Изоляция:** пользователь видит только свои походы (ownership-фильтры, 404 на чужое); ADMIN-зона под `@PreAuthorize`.
 8. **Округления и формулы** — эталон в `ARCHITECTURE.md` («Эталон округлений», «Core Calculations»).
 9. **Состав приёма**: RECIPE/SCALED/EXTRA/EXCLUDED + замены хранятся в `trip_ingredient_substitutions` (SCALE = «замена на себя» с ratio; EXCLUDE = removed; EXTRA = added); порядок в конвейере: SCALE → people → EXCLUDE → EXTRA → substitutions. Девиация до задачи R5: EXTRA трактуется конвейером как per-serving (спека — абсолют на приём).
-10. **Ручные позиции закупки** (`trip_manual_items`) отсутствуют, запланированы миграцией V21 (PLAN R3); обходных решений поверх не добавлять.
+10. **Ручные позиции закупки** (`trip_manual_items`, V22) реализованы: `TripManualItemController` + учёт в `SummaryService.computeShopping` (позиция без продукта берётся по введённой цене).
 
 ## Миграции
 
-Flyway, `src/main/resources/db/migration`, нумерация V1–V20 без ретроспективных правок:
+Flyway, `src/main/resources/db/migration`, нумерация V1–V28 без ретроспективных правок:
 
 - пропуски номеров осознанные: V9 не создавалась; V14/V15 (сид демо-юзеров) удалены из дерева **до** широкого применения и заменены `DevDataInitializer`/`DevTripsInitializer` (profile `dev` + `SEED_DEMO_USERS`); в старых БД могли остаться демо-юзеры — cleanup-запрос в корне README;
 - V17/V18 — сид-каталог (204 продукта / 201 блюдо) с ценами и 24-месячной историей;
 - V19 — правки состава приёма (`added/removed/amount_per_serving`) и `trip_shopping_exclusions`;
-- V20 — снепшоты каталога (`trip_id`, `snapshot_of`, partial-unique имён продуктов) + бэкфил существующих походов; повторный прогон безопасен.
+- V20 — снепшоты каталога (`trip_id`, `snapshot_of`, partial-unique имён продуктов) + бэкфил существующих походов; повторный прогон безопасен;
+- V21–V23 — дневные исключения закупки, `trip_manual_items` (V22), day-scope исключений;
+- V24/V25 — интеграция Росстата (строка `integrations`, source `ROSSTAT`) и статус `PARTIAL` в CHECK `sync_logs.status`;
+- V26 — локальная копия ЕМИСС: `emis_products`, `emis_prices`, `ingredients.emis_code` (без FK — привязка «софт»);
+- V27 — сид из реальной выгрузки владельца: 885 позиций справочника и 2260 ценовых точек (регион `643004.АГ`, 2026); `ON CONFLICT DO NOTHING`, повторный прогон безопасен;
+- V28 — привязка 187 продуктов к позициям ЕМИСС, 7 переименований под номенклатуру, демонтаж legacy: `ingredient_mappings`/`external_products` дропнуты, `source='OFF'` вычищен из CHECK-ов и данных (рецепты → `MANUAL`, цены → `API`).
 
 Правила для новых миграций — `AGENTS.md` раздел 8.

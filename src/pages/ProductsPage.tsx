@@ -4,6 +4,7 @@ import { useConfirm } from '../components/ConfirmDialog'; // Fix-6 (п.7)
 import { Plus, Search, X } from 'lucide-react';
 import { NumberField } from '../components/NumberField';
 import { ProductTable, type ProductRow } from '../components/ProductTable';
+import { EmisLinkPicker } from '../components/EmisLinkPicker';
 import Modal from '../components/Modal';
 import CustomSelect from '../components/CustomSelect';
 import { DatePicker } from '../components/DatePicker';
@@ -46,6 +47,10 @@ export default function ProductsPage() {
   // вкладкой «Цены» в админке, из-за чего цену «невозможно было установить» на месте)
   const [formPrice, setFormPrice] = useState('');
   const [formPriceDate, setFormPriceDate] = useState('');
+  // V26/V28: источник цены — позиция локального справочника ЕМИСС («софт»-привязка).
+  // Пустая строка = не привязан, цену ведёт человек.
+  const [formEmisCode, setFormEmisCode] = useState('');
+  const [formEmisName, setFormEmisName] = useState<string | null>(null);
   const [priceByIngredient, setPriceByIngredient] = useState<Record<string, number>>({});
   const [duplicateWarning, setDuplicateWarning] = useState<{ type: 'hard' | 'soft'; message: string } | null>(null);
 
@@ -77,12 +82,15 @@ export default function ProductsPage() {
 
       // FIX: маппинг ProductResponse (бэкенд) -> ProductRow (фронтенд):
       // category у бэкенда — объект {name}, id — число, а не строка.
+      // bindingStatus больше не приходит с бэкенда: «привязан» = выбран источник цены
+      // (emis_code), поэтому выводим его из привязки к ЕМИСС.
       setProducts(
         rawList.map(p => ({
           ...p,
           id: String(p.id),
           categoryName: p.categoryName ?? p.category?.name ?? '',
-          categoryId: p.categoryId ?? (p.category != null ? String(p.category.id ?? '') : undefined)
+          categoryId: p.categoryId ?? (p.category != null ? String(p.category.id ?? '') : undefined),
+          bindingStatus: p.bindingStatus ?? (p.emisCode ? 'BOUND' : 'UNBOUND')
         }))
       );
       setCategories(categoriesData);
@@ -172,7 +180,9 @@ export default function ProductsPage() {
         packSize: formPackSize,
         roundToPacks: formRoundToPacks,
         kcalPer100g: formCalories,
-        pieceWeightG: formPieceWeightG
+        pieceWeightG: formPieceWeightG,
+        // null = отвязать источник цены (бэкенд: пусто → null)
+        emisCode: formEmisCode.trim() || null
       };
 
       let savedId: string | number | undefined = editingProduct?.id;
@@ -254,6 +264,8 @@ export default function ProductsPage() {
     setFormPieceWeightG(product.pieceWeightG ?? null);
     setFormPrice('');
     setFormPriceDate(new Date().toISOString().slice(0, 10));
+    setFormEmisCode(product.emisCode ?? '');
+    setFormEmisName(product.emisName ?? null);
     setShowModal(true);
   };
 
@@ -268,6 +280,8 @@ export default function ProductsPage() {
     setFormPieceWeightG(null);
     setFormPrice('');
     setFormPriceDate('');
+    setFormEmisCode('');
+    setFormEmisName(null);
     setDuplicateWarning(null);
   };
 
@@ -377,7 +391,7 @@ export default function ProductsPage() {
             onChange={setBindingStatus}
             options={[
               { value: '', label: 'Интеграция: все' },
-              { value: 'BOUND', label: 'привязаны к OFF' },
+              { value: 'BOUND', label: 'привязаны к ЕМИСС' },
               { value: 'UNBOUND', label: 'не привязаны' },
             ]}
             ariaLabel="Фильтр по привязке к интеграции"
@@ -535,6 +549,18 @@ export default function ProductsPage() {
                   )}
                 </div>
               )}
+
+              {/* V26/V28: откуда брать цену — позиция ЕМИСС (ищется по локальной копии).
+                  Ручная цена ниже остаётся доступной, но у привязанного продукта
+                  синхронизация её перезапишет. */}
+              <EmisLinkPicker
+                value={formEmisCode}
+                linkedName={formEmisName}
+                onChange={(code, name) => {
+                  setFormEmisCode(code);
+                  setFormEmisName(name);
+                }}
+              />
 
               <div>
                 <label className="block text-sm font-medium mb-1" style={{ color: 'var(--muted)' }}>

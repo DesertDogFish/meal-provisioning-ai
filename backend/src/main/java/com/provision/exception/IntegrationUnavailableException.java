@@ -5,7 +5,7 @@ package com.provision.exception;
  * (сетевая ошибка, 403 анти-бота, HTML вместо данных, изменившаяся разметка).
  * Это НЕ баг Provision — отдаём клиенту понятный 502 Bad Gateway вместо 500.
  *
- * <p>Fix-13: заменила OFF-специфичную IntegrationAuthException вместе
+ * <p>Fix-13: заменила специфичную для учётных данных IntegrationAuthException вместе
  * с демонтированной интеграцией Open Food Facts.</p>
  */
 public class IntegrationUnavailableException extends RuntimeException {

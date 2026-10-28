@@ -216,6 +216,54 @@ export class ApiClient {
     });
   }
 
+  /**
+   * Отправка multipart-тела (загрузка файла). Content-Type НЕ ставим: браузер
+   * сам подставляет его вместе с границей multipart — ручной заголовок ломает запрос.
+   */
+  private async sendFile(url: string, form: FormData): Promise<Response> {
+    const token = this.getToken();
+    return fetch(url, {
+      method: 'POST',
+      headers: { ...(token && { Authorization: `Bearer ${token}` }) },
+      body: form
+    });
+  }
+
+  /**
+   * Разбор ответа бэкенда: 4xx/5xx → ApiClientError (ProblemDetail),
+   * 204/пустое тело → null, иначе JSON.
+   */
+  private async readEnvelope<T>(response: Response): Promise<T> {
+    if (!response.ok) {
+      let errorData: ApiError;
+      try {
+        errorData = await response.json();
+      } catch {
+        errorData = {
+          status: response.status,
+          title: 'Unknown Error',
+          detail: response.statusText
+        };
+      }
+      throw new ApiClientError(errorData);
+    }
+
+    if (response.status === 204) {
+      return null as T;
+    }
+
+    // Fix-15 (баг «Failed to execute 'json' on 'Response': Unexpected end of
+    // JSON input»): эндпоинты, отвечающие 200 с ПУСТЫМ телом, роняли парсинг —
+    // вызывающий код получал исключение при фактически успешной операции.
+    // Пустой текст → null. Ответы-фейки в тестах могут не иметь text() — фолбэк на .json().
+    if (typeof response.text === 'function') {
+      const text = await response.text();
+      if (!text.trim()) return null as T;
+      return JSON.parse(text) as T;
+    }
+    return response.json();
+  }
+
   private async request<T>(
     method: string,
     path: string,
@@ -278,35 +326,7 @@ export class ApiClient {
       }
     }
 
-    if (!response.ok) {
-      let errorData: ApiError;
-      try {
-        errorData = await response.json();
-      } catch {
-        errorData = {
-          status: response.status,
-          title: 'Unknown Error',
-          detail: response.statusText
-        };
-      }
-      throw new ApiClientError(errorData);
-    }
-
-    if (response.status === 204) {
-      return null as T;
-    }
-
-    // Fix-15 (баг «Failed to execute 'json' on 'Response': Unexpected end of
-    // JSON input»): эндпоинты, отвечающие 200 с ПУСТЫМ телом (таким был
-    // POST …/ingredients/:id/mapping до фикса), роняли парсинг — вызывающий
-    // код получал исключение при фактически успешной операции. Пустой текст →
-    // null. Ответы-фейки в тестах могут не иметь text() — фолбэк на .json().
-    if (typeof response.text === 'function') {
-      const text = await response.text();
-      if (!text.trim()) return null as T;
-      return JSON.parse(text) as T;
-    }
-    return response.json();
+    return this.readEnvelope<T>(response);
   }
 
   async get<T>(path: string, options?: { failMode?: string; params?: Record<string, string> }): Promise<T> {
@@ -315,6 +335,32 @@ export class ApiClient {
 
   async post<T>(path: string, body?: unknown, options?: { failMode?: string }): Promise<T> {
     return this.request<T>('POST', path, body, options);
+  }
+
+  /**
+   * Загрузка файла (multipart/form-data) — выгрузка ЕМИСС SDMX из раздела
+   * «Интеграции» (POST /admin/integrations/:provider/upload → 202 { logId }).
+   *
+   * <p>Отдельный метод: JSON-тело здесь не подходит. В mock-режиме вместо
+   * байтов уходит описание файла ({ name, size }) — mock-серверу достаточно
+   * имени, чтобы повторить поведение бэкенда (EMPTY_FILE / snapshotSource).</p>
+   */
+  async postFile<T>(path: string, file: File, fieldName = 'file'): Promise<T> {
+    if (!this.modeResolved) {
+      await this.resolveMode();
+    }
+
+    if (this.mode === 'mock') {
+      const { mockServer } = await import('./mockServer');
+      return mockServer.handleRequest<T>('POST', path, {
+        __file: { name: file.name, size: file.size },
+      });
+    }
+
+    const form = new FormData();
+    form.append(fieldName, file, file.name);
+    const response = await this.sendFile(`${this.baseUrl}${path}`, form);
+    return this.readEnvelope<T>(response);
   }
 
   async put<T>(path: string, body?: unknown, options?: { failMode?: string }): Promise<T> {

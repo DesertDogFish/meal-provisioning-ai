@@ -48,6 +48,15 @@ public class Ingredient {
     @Builder.Default
     private Boolean roundToPacks = false;
 
+    /**
+     * V26: «софт-привязка» к позиции локального справочника ЕМИСС — код классификатора
+     * (например «105» = «Фарш мясной, кг»). Декларация «откуда хотим брать цену»:
+     * внешнего ключа нет, продукт не ломается, если справочник ещё не загружен.
+     * {@code null} — цена ведётся вручную.
+     */
+    @Column(name = "emis_code", length = 16)
+    private String emisCode;
+
     // V20: trip_id NULL = глобальный справочник; иначе копия продукта для похода
     @Column(name = "trip_id")
     private Long tripId;

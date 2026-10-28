@@ -282,7 +282,32 @@ public class SyncLogService {
             }
         }
 
-        return new SyncLogResponse.SyncDetails(requestCount, items, errors);
+        return new SyncLogResponse.SyncDetails(requestCount, items, errors,
+                parseMirror(detailsMap.get("mirror")));
+    }
+
+    /** Блок локальной копии ЕМИСС: тот же defensive-подход, что и для items/errors. */
+    @SuppressWarnings("unchecked")
+    private static SyncLogResponse.Mirror parseMirror(Object raw) {
+        if (!(raw instanceof Map<?, ?> map)) {
+            return null;
+        }
+        try {
+            Map<String, Object> m = (Map<String, Object>) map;
+            return new SyncLogResponse.Mirror(
+                    asString(m.get("regionCode")),
+                    asInteger(m.get("catalogUpserted")),
+                    asInteger(m.get("pricePoints")),
+                    asInteger(m.get("pricesUpserted")),
+                    asInteger(m.get("pricesDropped")),
+                    asInteger(m.get("pricesDeleted")),
+                    asInteger(m.get("yearFrom")),
+                    asInteger(m.get("yearTo"))
+            );
+        } catch (Exception e) {
+            log.warn("Skipping malformed sync log mirror block: {}", e.getMessage());
+            return null;
+        }
     }
 
     // --- defensive helpers для парсинга jsonb (см. FIX выше) ---

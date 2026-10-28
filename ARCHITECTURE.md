@@ -130,219 +130,194 @@ DTO-рассинхрон имён/единиц закрыт нормализац
 
 Бэкфил: миграция V20 перевела существовавшие походы на снепшоты (temp-таблицы соответствий, перепривязка overrides/exclusions/substitutions). Повторный прогон миграций безопасен (IF NOT EXISTS + DROP temp-таблиц в начале).
 
-## Внешние цены: Росстат / ЕМИСС (Fix-13)
+## Цены: локальная копия ЕМИСС (Росстат)
 
-Единственный активный провайдер цен — `RosstatEmisProvider` (code `ROSSTAT`):
-официальные средние потребительские цены Росстата через ЕМИСС (fedstat.ru) —
-«средняя цена по больнице» в рублях, ежемесячно, по ~сотне базовых категорий
-(«Гречневая крупа», «Молоко питьевое»…), без ключей и лимитов по IP.
-Пайплайн синхронизации общий (`POST /admin/integrations/{provider}/sync/prices`
-→ 202 `{logId}` → `IntegrationService.executePriceSync` (`@Async`-граница) →
-`PriceSyncService.runPriceSync`): маппинги ингредиент↔внешняя категория
-(`IngredientMapping`, source `ROSSTAT`), цены — `applyMappingPricesInTx`
-(upsert `IngredientPrice` по датам, `source=MANUAL` никогда не перезаписывается).
+Единственный провайдер — `RosstatEmisProvider` (code `ROSSTAT`): официальные средние
+потребительские цены Росстата через ЕМИСС (fedstat.ru) — «средняя цена по больнице»
+в рублях, ежемесячно, по 885 позициям классификатора. Портал — **только транспорт**:
+приложение больше не ходит в сеть за ценой при расчёте чека.
 
-**Транзакционная модель фонового синка (Fix-16)** — фон работает БЕЗ БД-сессии
-(`open-in-view: false`, внешний HTTP не должен держать транзакцию и соединение пула),
-отсюда два жёстких правила для любого нового кода в этом пайплайне:
+Контракт провайдера сужен до `PriceProvider` (`code`, `testConnection`) + `EmisDataSource`
+(`downloadSnapshot`, `parseSnapshot`): `searchProducts`/`fetchPrices` удалены вместе с
+ручной привязкой товара к внешней карточке.
 
-1. **Никаких JPA-сущностей между транзакциями.** Маппинги читаются одним
-   `JOIN FETCH`-запросом (`IngredientMappingRepository.findBySourceWithIngredientAndProduct`:
-   `LEFT JOIN FETCH internalIngredient`, `LEFT JOIN FETCH externalProduct`,
-   `externalCode IS NOT NULL`) в короткой read-only транзакции
-   `PriceSyncService.loadPriceSyncTargets` и сразу превращаются в plain-record
-   `PriceSyncTarget(mappingId, ingredientId, ingredientName, ingredientUnit,
-   externalCode, productId, packAmount, packUnit)`. `LEFT JOIN` — чтобы маппинг без
-   карточки внешнего продукта не исчезал, а показывался в деталях строкой `SKIPPED`
-   («Нет карточки внешнего продукта»); две `@ManyToOne`-ассоциации в одном fetch не
-   дают `MultipleBagFetchException` (не коллекция). Нарушение этого правила и было
-   багом: LAZY-прокси `IngredientMapping` читались в фоновом потоке после закрытия
-   сессии → `LazyInitializationException: could not initialize proxy [Ingredient#…] -
-   no Session` на первом маппинге, синк финишировал фаталом с пустыми items.
-2. **Короткие транзакции — только через self-прокси.** `REQUIRES_NEW`-методы
-   (`applyMappingPricesInTx`, `ExternalProductCardService.refresh`, `finalizeSyncLog`)
-   вызываются через `self()` (`ObjectProvider<…>`): internal call через `this.` обходит
-   прокси Spring, и аннотация молча игнорируется (запись шла на auto-commit отдельных
-   `save()`). Внутри транзакции ингредиент и карточка **перезагружаются по id**
-   (`findById`) — detached-объекты в сессию не передаются: managed-сущность нужна для
-   dirty-checking ручной цены и для связи новой `IngredientPrice`.
+### Локальная копия (V26) и сид (V27)
 
-Слои синка цен (Fix-16, R8/R9): `PriceSyncService` — оркестрация, запись цен,
-финализация журнала, парсинг кода провайдера (`mappingSourceOrNull` — единая точка
-для синка и «Текущих привязок»); `ExternalProductCardService` — освежение карточки
-внешнего продукта (U11); `UnitPriceConverter` — пересчёт фасовки в цену за единицу;
-`SyncDetailsBuilder` — сборка `SyncLog.details`; `IntegrationService` — подключения,
-поиск, привязки и `@Async`-граница.
+- `emis_products` — справочник позиций: `code` (PK, код классификатора, например `2307`),
+  `name` («Крупа гречневая-ядрица, кг»), распознанная единица наблюдения
+  (`unit_kind` MASS/VOLUME/COUNT/OTHER, `unit_amount`, `unit_scale` KG/G/L/ML/PCS,
+  `unit_label`), `loaded_at`.
+- `emis_prices` — точки цен: `(emis_code, region_code, period_year, period_month)` unique,
+  `price numeric(14,2)`, `loaded_at`. Индекс `idx_emis_prices_lookup` — под «последняя цена».
+- Регион — только `643004.АГ` («Российская Федерация без учета новых субъектов
+  (с 01.01.2023)»); глубина — `period-years: 2` (точки вне окна отбрасываются при записи,
+  устаревшие удаляются из таблицы).
+- Внешних ключей между `emis_*` и `ingredients` нет намеренно: привязка «софт», продукт не
+  должен ломаться, пока справочник не загружен.
+- `V27` — сид из реальной выгрузки владельца (`data (2).xml`, 28.10.2026): 885 позиций
+  справочника и 2260 ценовых точек, чтобы приложение работало, даже если прод-синк
+  с порталом не пройдёт. `V28` переклассифицирует позиции вида «упаковка N шт.» и приводит
+  семь названий продуктов к формулировкам ЕМИСС.
 
-**Протокол** (порт CRAN-пакета fedstatAPIr — референсная реализация, активно
-поддерживается; прямая «ссылка на CSV» у ЕМИСС отсутствует):
+### Единица наблюдения (`EmisUnit`)
+
+Название позиции ЕМИСС определяет, **к чему относится цена ряда**:
+
+- «Яйца куриные, 10 шт.» / «Чай …, 25 пакетиков» — число штук в единице наблюдения
+  (`COUNT`, `unit_amount=10`/`25`): цена указана ЗА ДЕСЯТОК / ЗА ПАЧКУ пакетиков;
+- «Бумага офисная, упаковка 500 листов», «Салфетки …, упаковка 100 шт.» — слово-упаковка
+  впереди числа: цена указана ЗА УПАКОВКУ ЦЕЛИКОМ (`COUNT`, `unit_amount=1`). Проверено
+  реальными ценами (апрель 2026): пачка бумаги 500 листов = 423,07 ₽ — за лист так не бывает;
+- «…, кг» / «…, л» / «…, 100 мл» — MASS/VOLUME с масштабом.
+
+`EmisPriceApplier` + `EmisUnit.pricePerUnit` приводят цену ряда к единице продукта
+(`piece_weight_g` для штучных): KG→KG = P; KG→PCS = P·pw/1000; G(n)→KG = P·1000/n;
+G(n)→PCS = P·pw/n; L→L = P; ML(n)→L = P·1000/n; COUNT(n)→PCS = P/n. Несовместимые
+пары (MASS→L, VOLUME→PCS) не угадываются — точка отбрасывается и попадает в `skipped`
+счётчик запуска. Никаких эвристик «молоко → литр» больше нет: единица берётся из названия
+позиции, а не из догадки.
+
+### Пайплайн синхронизации
+
+`POST /admin/integrations/ROSSTAT/sync/prices` → 202 `{logId}` →
+`IntegrationService.executePriceSync` (`@Async`-граница) → `PriceSyncService.runSync`:
+
+1. **download** — одна попытка, без транзакции и без БД-сессии (`open-in-view: false`);
+2. **`EmisMirrorService.store`** (`REQUIRES_NEW`) — upsert справочника и цен, обрезка окна
+   `period-years`; счётчики (`products`, `prices`, `deleted`) уходят в `SyncLog.details.mirror`
+   вместе с `snapshotSource` («портал rosstat» / «файл <имя>»);
+3. **`EmisPriceApplier.apply`** на каждый привязанный продукт (`REQUIRES_NEW`) —
+   пересчёт единицы, upsert `ingredient_prices` (`source=ROSSTAT`) по датам точек;
+4. **`finalizeSyncLog`** — статус ВЫВОДИТСЯ из счётчиков: `errors==0 → SUCCESS`,
+   `errors>0 && работа выполнена → PARTIAL`, `errors>0 && ничего не сделано → FAILED`.
+
+**Ручные цены не защищены (решение владельца, запуск №17).** У привязанного к ЕМИСС
+продукта синхронизация перезаписывает действующую цену любого источника, а оставшиеся
+ручные срезы удаляет (`IngredientPriceRepository.deleteManualByIngredientId`) — иначе
+стоимость меню считалась бы по вчерашней ручной цифре. В деталях запуска это видно как
+`перезаписано N, удалено M`. Значение `SKIPPED_MANUAL` из `details` ушло; действия —
+`CREATED/UPDATED/SKIPPED/ERROR`.
+
+Правила Fix-16 для фонового кода остаются в силе: **никаких JPA-сущностей между
+транзакциями** (между шагами передаются plain-record `LinkedProduct`/`LocalPrice`),
+**короткие `REQUIRES_NEW`-транзакции только через self-прокси** (`ObjectProvider<…>`:
+вызов через `this.` обходит прокси Spring и аннотация молча игнорируется), внутри
+транзакции сущность перезагружается по id.
+
+### Ручная загрузка выгрузки (multipart)
+
+ЕМИСС блокирует зарубежные дата-центры и отдаёт `302`/`503` на узкие наборы фильтров,
+поэтому владелец может скачать выгрузку сам и положить её в приложение:
+
+- `POST /admin/integrations/{provider}/upload`, multipart-поле `file` → 202 `{logId}`;
+- `IntegrationService.uploadSnapshot` → `@Async executeUploadSync` → тот же
+  `PriceSyncService.runSync`, но с `parseSnapshot(bytes, fileName)` вместо скачивания.
+  Подключение провайдера НЕ требуется (портал не задействован);
+- защиты: неизвестный провайдер → 404, пустой файл → 400 `EMPTY_FILE`, уже идущий синк →
+  409 `SYNC_ALREADY_RUNNING`, ошибка чтения → 400 `FILE_READ_ERROR`, пустой/слишком
+  большой/не-SDMX файл → `IntegrationUnavailableException` с причиной;
+- лимит: `spring.servlet.multipart.max-file-size`/`max-request-size` =
+  `${EMIS_UPLOAD_MAX_FILE_SIZE:32MB}` — согласован с `max-response-bytes`;
+- фронтенд: блок «Загрузить выгрузку ЕМИСС вручную» в разделе «Интеграции»
+  (`api.postFile`), дальше тот же поллинг журнала, что и для обычного синка.
+
+### Привязка продукта к позиции ЕМИСС («софт»)
+
+- `ingredients.emis_code` (V26) — единственный след привязки: никаких внешних сущностей;
+- `GET /admin/emis/products?query=&limit=` (`EmisController` → `EmisCatalogService`) —
+  поиск по локальной копии, `EmisProductDto(code, name, unitLabel, latestPrice,
+  latestPriceDate)`: цена и период видны сразу, до выбора позиции;
+- `ProductRequest.emisCode`: пусто/null = отвязать, неизвестный код =
+  `VALIDATION_ERROR` (опечатка не должна молча ломать синхронизацию);
+- `ProductResponse`: `emisCode`, `emisName`, `priceSyncStatus` =
+  `NOT_LINKED` (источник не выбран) / `NO_DATA` (привязан, но цен в копии нет) /
+  `SYNCED` (действующая цена получена из ЕМИСС); считается пакетно, без N+1;
+- фронтенд: `EmisLinkPicker` в модалке продукта (debounce-поиск, цена и период в списке,
+  «Отвязать»), колонка «Цена синхронизирована» в `ProductTable`, фильтр «привязаны к ЕМИСС»;
+- ручная привязка из раздела «Интеграции» удалена, таблицы `ingredient_mappings` и
+  `external_products` дропнуты в V28 (код их не читал, строки были пусты).
+
+### Протокол портала (как качаем)
+
+Порт CRAN-пакета fedstatAPIr (референсная реализация); прямая «ссылка на CSV» у ЕМИСС
+отсутствует:
 
 1. `GET {base-url}/indicator/{indicator-id}` — страница показателя (cookie-сессия;
    сессия прогревается GET главной страницы портала — JSESSIONID до целевого запроса);
 2. одноразовый Struts CSRF-токен: канонически из `div#downloadTokenHolder`
-   (`input[name=struts.token.name]` → имя, `input[name=<имя>]` → значение),
-   но живая разметка может отличаться — поэтому fallback: пара токенов ищется
-   по всему документу, затем одиночный `input[name=struts.token]`. Если токен
-   не найден, ошибка содержит диагностику страницы (title, размер, маркеры
-   протокола, видимый текст) — единственный канал отладки, т.к. ЕМИСС блокирует
-   зарубежные дата-центры и разработчик не видит живую страницу;
+   (`input[name=struts.token.name]` → имя, `input[name=<имя>]` → значение), fallback —
+   пара токенов по всему документу, затем одиночный `input[name=struts.token]`. Имя поля
+   **не хардкодится**: на fedstat.ru `struts.token.name = token`. С неверным именем портал
+   отвечает `200 text/html` и заглушкой «CSRF блокировка» (127 байт). Если токен не найден,
+   ошибка несёт диагностику страницы (title, размер, маркеры протокола, видимый текст) —
+   единственный канал отладки, т.к. ЕМИСС блокирует зарубежные дата-центры;
 3. словари фильтров из встроенного JS страницы: объект после маркера `filters:`
    (извлечение балансировкой скобок с учётом строк; читается Jackson напрямую —
-   ALLOW_SINGLE_QUOTES / ALLOW_UNQUOTED_FIELD_NAMES, без строковых gsub-трюков
-   R-пакета и его «12-го тега script»); оси — `left_columns`/`top_columns`/`groups`;
-4. `POST {base-url}/indicator/downloadData.do?format=sdmx`, form-urlencoded
-   (порядок частей — как в эталоне): `title`, `struts.token.name`,
-   `<имя токена>`, `id` (= `indicator-id`), `lineObjectIds*`,
-   `columnObjectIds*`, `selectedFilterIds*` (`field_value`), `filterObjectIds`
-   (поле «0» — сам показатель — уходит в filterObjectIds, не в оси).
-   Три обязательных следствия живой разметки (curl-зонд владельца 28.10.2026,
-   `plans/2026-10-28-emis-download-csrf-and-volume.md`):
-   - имя CSRF-поля **не хардкодится** — это значение `input[name=struts.token.name]`,
-     на fedstat.ru оно равно `token`, а не `struts.token`. С неверным именем
-     портал отвечает `200 text/html` и заглушкой «CSRF блокировка» (127 байт);
-   - поле `id` обязательно: без него экшен не знает, что выгружать, и отвечает
-     `200 text/html` — перерисованной страницей показателя (~41 КБ);
-   - POST идёт клиентом с `Redirect.NEVER`: `302` + `Location` означает, что
-     портал **отклонил набор фильтров**, а не перенаправил. Следование по
-     `Location` давало `200 + HTML` и подменяло диагноз («истёк токен»);
-5. ответ — SDMX GenericData XML: `CodeLists` (словари измерений) +
-   `Series/Obs` (ряды цен). Парсер namespace-agnostic (localName), DOCTYPE
-   запрещён (XXE). Измерение товаров находится по заголовку CodeList
-   («товар/продукт/номенклатур»), регион — «ОКАТО/территор», «Виды показателя» —
-   если среди значений есть «цена», берутся только ценовые ряды (не индексы).
-   **Форма ответа — SDMX 1.0, не 2.1** (сверено с реальной выгрузкой
-   `downloadData.do?format=sdmx`, 28.10.2026): год лежит в `Obs/generic:Time`,
-   а месяц — в атрибуте РЯДА `Series/Attributes/Value[@concept="PERIOD"]`
-   русским названием («январь»); элементов `ObsDimension`/`TimePeriod` в ответе
-   нет. Дата точки собирается из пары «год из `Time` + месяц из `PERIOD`»,
-   цена — из `Obs/ObsValue/@value` с запятой как десятичным разделителем.
+   ALLOW_SINGLE_QUOTES / ALLOW_UNQUOTED_FIELD_NAMES);
+4. `POST {base-url}/indicator/downloadData.do?format=sdmx`, form-urlencoded: `title`,
+   `struts.token.name`, `<имя токена>`, `id` (= `indicator-id`; без него — `200 text/html`,
+   перерисованная страница показателя), `lineObjectIds*`, `columnObjectIds*`,
+   `selectedFilterIds*`, `filterObjectIds`. POST идёт с `Redirect.NEVER`: `302` + `Location`
+   означает, что портал **отклонил набор фильтров**;
+5. ответ — SDMX **1.0** GenericData: `CodeLists` (словари; всегда полные — 885 товаров и
+   450 ОКАТО независимо от выбранных фильтров, поэтому одна выгрузка обновляет весь
+   справочник) + `Series/Obs`. Парсер namespace-agnostic (localName), DOCTYPE запрещён (XXE).
+   Год — в `Obs/generic:Time`, месяц — в атрибуте РЯДА
+   `Series/Attributes/Value[@concept="PERIOD"]` русским названием («январь»), регион —
+   `s_OKATO`, товар — `s_grtov` (код классификатора, НЕ id значения фильтра со страницы),
+   цена — `Obs/ObsValue/@value` с запятой как десятичным разделителем.
 
-**Выбор фильтров**: регион — из конфига (точное совпадение → вхождение →
-«российская…» → первое значение); товары, годы и единицы измерения — ВСЕ
-значения; поле «Период» — только `period-months` последних месяцев (дефолт 2).
-Одно POST-запрос на синхронизацию.
+**Выбор фильтров**: регион — один (из конфига); товары, годы и единицы — ВСЕ значения;
+ось «Период» — `period-months` последних месяцев (дефолт 0 = все 12, окно хранения режет
+`EmisMirrorService`). Один POST на синхронизацию.
 
-Два инварианта, подтверждённые живым зондом:
+Инварианты, подтверждённые живым зондом владельца:
 
 - **все поля с несколькими значениями обязаны присутствовать** в `selectedFilterIds`,
-  иначе портал отвечает `302` (эталон `fedstat_data_ids_filter` останавливает такой
-  запрос ещё на клиенте); поля с единственным значением портал добавляет сам,
-  флаг `checked` из разметки не используется;
-- **ось «Год» сужать НЕЛЬЗЯ**: портал отвечает `302` на любое её сужение —
-  проверено на 2026+2025 (4 попытки, все `302`) и на 2023+2024 (`302`), тогда как
-  полный набор годов даёт `200`. Разница в телах запросов — ровно 25 id годов
-  (625 байт), прочие части побайтово совпадают. При этом сужение «Периода»
-  (1 месяц → `200`, 5 649 772 байта) и «Товаров» (2 товара → `200`, 499 770 байт)
-  портал принимает нормально, а браузерный UI отправляет сразу узкий набор по всем
-  четырём осям (13 значений, 1053 байта → `200`);
-- **объём выгрузки необходимо ограничивать по месяцам**: полный ряд (2000…текущий
-  год × 885 товаров × 12 месяцев) — это 927 `selectedFilterIds` и ответ
-  **65 076 787 байт**, который читается в `String` (~130 МБ) и парсится полным
-  DOM (пик ~600–700 МБ heap). Один месяц — 5 649 772 байта, т.е. `period-months=2`
-  даёт ~11 МБ; `period-months<=0` возвращает полный ряд и допустим только при
-  явно заданном `-Xmx` ≥ 2 ГБ. Окно месяцев отсчитывается от ПРОШЛОГО месяца:
-  данные за текущий ЕМИСС публикует на 6–10-й рабочий день после его окончания.
+  иначе портал отвечает `302`;
+- **ось «Год» сужать НЕЛЬЗЯ**: `302` на любое сужение (проверено на 2026+2025 и 2023+2024),
+  тогда как сужение «Периода» (1 месяц → `200`, 5 649 772 байта) и «Товаров»
+  (2 товара → `200`, 499 770 байт) принимается;
+- **объём надо ограничивать**: полный ряд (2000…текущий год × 885 товаров × 12 месяцев) —
+  927 `selectedFilterIds` и **65 076 787 байт** (~130 МБ в `String`, пик 600–700 МБ heap
+  на DOM). Один регион + `max-response-bytes: 32MB` — предохранитель от OOM: ответ больше
+  лимита не парсим;
+- портал троттлит: после ~12 быстрых POST — `503` от nginx.
 
-**«Гарантированный быстрый вызов»** (требование Fix-13, боль OFF-эры — 40 с
-ретраев при подключении): ровно одна попытка на операцию, никаких backoff-саг;
-два уровня кэша с TTL (`cache-hours`, дефолт 24 — данные обновляются раз в месяц):
+**Конфигурация**: `integration.rosstat.{base-url, indicator-id (31448 — «Средние
+потребительские цены на товары и услуги», месяц; альтернатива 37426 — недельные), region,
+region-code (643004.АГ), user-agent, period-years (2), period-months (0),
+max-response-bytes}`; `integration.contact-email` — контакт для UA;
+`EMIS_UPLOAD_MAX_FILE_SIZE` — лимит multipart. Кэша нет намеренно: единственная точка
+входа — кнопка синхронизации (или загруженный файл), и её смысл — положить в БД свежие
+данные, а не отдать вчерашние. Страж биндинга — `RosstatConfigBindingTest`
+(реальный yml → `@Value`).
 
-- `testConnection` — только GET страницы показателя (словарь категорий из
-  фильтров; секунды, тяжёлая выгрузка не запускается);
-- `searchProducts` (Fix-14) — список категорий из `CodeList` SDMX-выгрузки (вся
-  номенклатура: словарь в ответе полный независимо от выбранных фильтров, на
-  индикаторе 31448 — 885 позиций) + свежая цена каждой категории из той же
-  кэшируемой выгрузки (одноразовый регион-фильтрованный запрос, не ретраи).
-  При недоступности выгрузки — graceful-fallback на словарь СТРАНИЦЫ без цен
-  (`price=null`), поиск не падает;
-- **каталог обязан браться из того же источника, что и цены**: справочник страницы
-  ключуется id ЗНАЧЕНИЯ фильтра (Апельсины = `1743453`), а SDMX — кодом
-  КЛАССИФИКАТОРА (Апельсины = `2703`). Это разные пространства имён. `code` из
-  поиска сохраняется в привязке товара и потом приходит в `fetchPrices`, который
-  ищет ряды по коду классификатора, — при рассогласовании привязанный товар не
-  находит цену никогда. В fallback-ветке (словарь страницы) рассогласование
-  возможно, поэтому она логируется WARN;
-- `fetchPrices` — полная SDMX-выгрузка, но зовётся только фоновым синком
-  (UI получает 202 `{logId}` и не блокируется); при сбое обновления отдаётся
-  предыдущий кэш (graceful degradation), при отсутствии кэша —
-  `IntegrationUnavailableException` (502) с человекочитаемой причиной
-  (403 анти-бот / `302` — портал отклонил набор фильтров, в сообщении виден
-  `Location` / `200` + HTML — в сообщении видны фактический `Content-Type` и
-  начало тела, поэтому заглушка «CSRF блокировка» отличается от перерисованной
-  страницы показателя / разметка изменилась / таймаут / DNS).
+**Ограничения (честно)**: ЕМИСС блокирует зарубежные дата-центры (403 анти-бот — из
+песочницы CI live-проверка невозможна, работает из сети пользователя РФ); портал
+нестабилен, поэтому ручная загрузка файла — полноценный, а не аварийный путь; данные —
+раз в месяц; позиции общие («Консервы мясные», не «Тушёнка говяжья 325 г»), поэтому часть
+продуктов привязана к цене своей категории — приближённо, по решению владельца
+(отчёт об отклонениях — в плане задачи).
 
-**Единицы**: Росстат отдаёт цену «за единицу категории» — эвристика `guessPack`
-(яйца → 10 PCS, молоко/кефир/сок/вода/напиток/квас/морс → 1 L, остальное → 1 KG).
-`packUnit` обязателен: `convertToIngredientUnit(null, …)` возвращает null, и цена
-была бы молча отброшена. Валюта всегда RUB — конвертация ЦБ не нужна
-(`ExchangeRateService` демонтирован вместе с OFF).
+**История: Open Food Facts (демонтирован полностью, Fix-13 + V28)**. U11/Fix-9/Fix-11
+строили OFF-интеграцию (Search-a-licious + фолбэк Open Prices + карточки v2 + курсы ЦБ),
+но поисковый хост OFF недостижим из сети пользователя, подключение жевало ~40 с ретраев,
+а фолбэк-каталог не давал «средней цены по больнице». Удалены провайдер, конвертер валют,
+карточка внешнего товара, `integration.off`/`integration.cbr`, `OFF_*` в compose/.env,
+OFF-тесты и бейдж «OFF» в UI. V28 вычистила legacy-данные: `recipes.source='OFF'` →
+`MANUAL`, `ingredient_prices.source='OFF'` → `API`, строки `integrations`/`sync_logs`
+провайдера OFF удалены, CHECK-ограничения сужены, `RecipeSource.OFF` удалён из enum.
 
-**Конфигурация**: `integration.rosstat.base-url` (https://www.fedstat.ru),
-`indicator-id` (дефолт **31448** «Средние потребительские цены на товары и
-услуги», месяц; альтернатива 37426 — недельные), `region` («Российская
-Федерация»), `cache-hours` (24), `user-agent`; `integration.contact-email` —
-контакт для UA. Env: `ROSSTAT_BASE_URL`/`ROSSTAT_INDICATOR_ID`/`ROSSTAT_REGION`/
-`ROSSTAT_CACHE_HOURS`/`ROSSTAT_USER_AGENT`/`INTEGRATION_CONTACT_EMAIL`
-(docker-compose пробрасывает из `.env`). Страж биндинга — `RosstatConfigBindingTest`
-(реальный yml → @Value; наследник `OffConfigBindingTest` — ловушка YAML-boolean
-ключа «off» ушла вместе с OFF, но урок задокументирован в yml).
-
-**Привязки ингредиентов (Fix-14)**: `IntegrationService.createMapping` —
-идемпотентный **upsert** по ключу `(internalIngredientId, source)`: повторная
-привязка того же ингредиента не ошибка, а замена внешнего товара (раньше —
-`IllegalStateException: Mapping already exists`, блокировавший пользователя).
-Список текущих привязок — `GET /admin/integrations/{provider}/mappings`
-(`IngredientBindingDto`), отвязка — `DELETE …/ingredients/{id}/mapping/{provider}`;
-во фронте блок «Текущие привязки» (видимость + «Отвязать»). Цены в результате
-поиска (`ExternalProductDto.price/priceDate`) — последняя точка категории из
-кэшируемой выгрузки; см. `searchProducts` выше.
-
-**Результат синхронизации (Fix-15, с Fix-16 — `PriceSyncService.runPriceSync`)**:
-синк пишет в `SyncLog.details` (jsonb) полный процесс: `requestCount` (число обращений к
-провайдеру), `items[]` — постатейно на каждый маппинг (продукт, внешний код,
-дата/старая→новая цена самой свежей точки, `action`
-`CREATED/UPDATED/SKIPPED_MANUAL/SKIPPED/ERROR`, `reason` — счётчики точек или
-текст ошибки), `errors[]` — человекочитаемые сообщения сбоев, `fatalError` —
-фатальная ошибка вне цикла маппингов. Статус ВЫВОДИТСЯ из счётчиков (раньше
-хардкодился `SUCCESS` при любых ошибках): `errors==0 → SUCCESS`;
-`errors>0 && created+updated==0 → FAILED`; `errors>0 && работа выполнена →
-PARTIAL` (миграция V25 расширяет CHECK `sync_logs.status`). Фронтенд: drawer
-журнала показывает fatalError/items/errors («запросов к источнику» вместо
-«к OFF»), чип и фильтр `PARTIAL` — янтарные; `IntegrationsPage` поллит журнал
-каждые 2 с, пока есть `RUNNING`, и показывает итоговый тост со счётчиками,
-когда запущенный запуск финишировал (записи больше не «статичные до F5»);
-`SyncLogsPage` стартует синк через `ROSSTAT` (кнопка OFF-эры стучалась в
-удалённого провайдера), карточка провайдера — живые данные
-`GET /admin/integrations`. Контракт маппинга: `POST …/ingredients/{id}/mapping`
-отвечает **200 + `IngredientBindingDto`** (пустое тело ломало `response.json()`
-фронтенда — «Unexpected end of JSON input»); `client.ts` дополнительно терпит
-пустое тело любого 2xx (защитный слой).
-
-**Ограничения (честно)**: ЕМИСС блокирует зарубежные дата-центры (403 анти-бот —
-из песочницы CI live-проверка невозможна, работает из сети пользователя РФ);
-портал нестабилен («бесконечно падающий ЕМИСС» — README fedstatAPIr), поэтому
-кэш + graceful degradation вместо ретраев; данные — раз в месяц; категории общие
-(«йогурт питьевой», не «со вкусом манго»); единицы — эвристика.
-
-**История: Open Food Facts (демонтирован в Fix-13)**. U11/Fix-9/Fix-11 строили
-OFF-интеграцию (Search-a-licious + фолбэк Open Prices + карточки v2 + курсы ЦБ),
-но поисковый хост OFF (`search.openfoodfacts.org`, OVH) недостижим из сети
-пользователя (TLS-сброс провайдера), подключение жевало ~40 с ретраев, а
-фолбэк-каталог не давал «средней цены по больнице». Удалены:
-`OpenFoodFactsProvider`, `ExchangeRateService`, `IntegrationAuthException`
-(заменена `IntegrationUnavailableException`), OFF-тесты, `integration.off`/
-`integration.cbr` в yml, `OFF_*` в compose/.env. Legacy сохранена: `RecipeSource.OFF`
-и «OFF» в CHECK-ограничениях (существующие строки БД), бейдж «OFF» в ProductTable.
-Миграция V24: «ROSSTAT» в CHECK-и source (паттерн V16), сид строки integrations
-ROSSTAT (список интеграций читается из БД), DELETE строки OFF.
-
-Mock-сервер повторяет контракт роутов `/admin/integrations*` (список
-IntegrationDto, connect/disconnect, sync-logs, sync → `{logId}` с фоновым
-переходом лога в SUCCESS со счётчиками, products/search → ExternalProductDto —
-каталог категорий Росстата, ingredients/:id/mapping → 200 + тело привязки
-(Fix-15, паритет с бэкендом)), включая коды 409
-`INTEGRATION_DISCONNECTED` / `SYNC_ALREADY_RUNNING` и 404 для неизвестного
-провайдера (`mockIntegrations.test.ts`).
+Mock-сервер повторяет контракт (`mockIntegrations.test.ts`): `GET /admin/integrations`
+(IntegrationDto), connect/disconnect, `GET …/sync-logs` (SyncLogDto),
+`POST …/{provider}/sync/prices` и `POST …/{provider}/upload` → `{logId}` с фоновым
+переходом лога в SUCCESS со счётчиками, коды 409 `INTEGRATION_DISCONNECTED` /
+`SYNC_ALREADY_RUNNING`, 400 `EMPTY_FILE`, 404 для неизвестного провайдера;
+`GET /admin/emis/products` — `EmisProductDto` с реальными позициями справочника;
+`/admin/products` — `emisCode`/`emisName`/`priceSyncStatus`/`currentPrice` как в
+`ProductResponse`. Роутов ручной привязки (`products/search`, `ingredients/:id/mapping`)
+в моке больше нет — как и в бэкенде.
 
 ## Правки состава приёма (V19 + composition API)
 
@@ -414,14 +389,16 @@ GET  /api/v1/trips/{id}/summary/{menu|shopping|shopping/by-days|person}
 - `PriceResolutionService` — actual = override ?: planned.
 - `SecurityConfig` + `JwtService`/`JwtAuthenticationFilter` — stateless JWT, CORS из ENV, fail-fast секрета (`JwtProperties.validate`).
 - `DevDataInitializer` / `DevTripsInitializer` — демо-пользователи и демо-походы (profile `dev` + `SEED_DEMO_USERS=true`), демо-походы создаются через снепшот-сервис.
-- `RosstatEmisProvider` (`PriceProvider`) — средние потребительские цены Росстата через ЕМИСС/fedstat.ru (Fix-13): Struts-токен → POST downloadData.do?format=sdmx → SDMX-парсер; два уровня кэша (каталог — страница показателя, цены — полная выгрузка только в фоновом синке).
+- `RosstatEmisProvider` (`PriceProvider` + `EmisDataSource`) — транспорт ЕМИСС: Struts-токен → POST `downloadData.do?format=sdmx` → SDMX-парсер (`downloadSnapshot` / `parseSnapshot` для загруженного файла); кэша нет — выгрузка сразу уходит в БД.
+- `EmisMirrorService` — локальная копия справочника и цен (`emis_products`/`emis_prices`), окно `period-years`; `EmisCatalogService` — поиск позиций для привязки (`GET /admin/emis/products`).
+- `PriceSyncService` — оркестрация синка (портал или файл), `EmisPriceApplier` + `EmisUnit` — пересчёт цены ряда в единицу продукта и запись `ingredient_prices`, `SyncDetailsBuilder` — `SyncLog.details`.
 - `GlobalExceptionHandler` — коды конфликтов и field-errors.
 
 ### Frontend
 
-- `api/client.ts` — режимы, refresh single-flight, `auth:session-lost`; `api/mockServer.ts` — mock-паритет роутов.
+- `api/client.ts` — режимы, refresh single-flight, `auth:session-lost`, `postFile` (multipart-загрузка выгрузки ЕМИСС); `api/mockServer.ts` — mock-паритет роутов.
 - `Modal` — единая портальная модалка (U3/U21): оверлей `.modal-overlay`, закрытие крестиком / Esc / кликом по фону; все модальные окна (TripForm, AddMealModal, MealCompositionModal, RecipeEditorModal, ApiModeBadge, детали рецепта/продукта, ввод чека) рендерятся через портал, e2e-селекторы скопятся на `.modal-overlay`.
-- `TripDetailPage` (5 вкладок) + `PriceOverridesTab` (чеки план/факт); `RecipeEditorModal` (админ-редактор блюда с составом); `ProductsPage` (CRUD + цена срезу); `CustomSelect/NumberField/DateRange/DatePicker` (контракты CR-3/CR-4).
+- `TripDetailPage` (5 вкладок) + `PriceOverridesTab` (чеки план/факт); `RecipeEditorModal` (админ-редактор блюда с составом); `ProductsPage` (CRUD + цена срезом + `EmisLinkPicker` — источник цены из ЕМИСС); `ProductTable` (колонка «Цена синхронизирована»); `IntegrationsPage` (подключение, синк, ручная загрузка файла) + `IntegrationSyncLogs`; `CustomSelect/NumberField/DateRange/DatePicker` (контракты CR-3/CR-4).
 - Дизайн-система «Провиант»: токены в `src/index.css`, design-pack в `provisions/` (источник правды дизайна; миграция — DESIGN_MIGRATION.md, ведётся отдельно).
 
 ## Security
@@ -434,9 +411,10 @@ GET  /api/v1/trips/{id}/summary/{menu|shopping|shopping/by-days|person}
 
 ## Database
 
-- PostgreSQL 15, Flyway V1–V20. Пропуски номеров осознанные: V9 не создавалась, V14/V15 удалены из истории дерева (урок: применённые миграции НЕ удалять и НЕ править; только новые номера; в существующих БД демо-юзеры V14/V15 могли остаться — cleanup-запрос в README).
+- PostgreSQL 15, Flyway V1–V28. Пропуски номеров осознанные: V9 не создавалась, V14/V15 удалены из истории дерева (урок: применённые миграции НЕ удалять и НЕ править; только новые номера; в существующих БД демо-юзеры V14/V15 могли остаться — cleanup-запрос в README).
 - Снепшоты: `recipes.trip_id/snapshot_of`, `ingredients.trip_id/snapshot_of`; partial unique `(name_norm, unit) WHERE trip_id IS NULL`; копии создаются с `code = NULL`.
-- История цен: `ingredient_prices` UNIQUE(ingredient_id, effective_from); сид V13/V17 генерирует 24 мес. сезонного дрейфа детерминированно.
+- История цен: `ingredient_prices` UNIQUE(ingredient_id, effective_from), `source` ∈ MANUAL/ROSSTAT/API (V28 сузил CHECK, значение OFF вычищено); сид V13/V17 генерирует 24 мес. сезонного дрейфа детерминированно.
+- Локальная копия ЕМИСС (V26): `emis_products` (PK `code`, единица наблюдения) и `emis_prices` (unique `(emis_code, region_code, period_year, period_month)`, индекс под «последнюю цену»); `ingredients.emis_code` — софт-привязка без FK. V27 — сид (885 позиций, 2260 точек из реальной выгрузки), V28 — привязки (187 продуктов), переименования под номенклатуру ЕМИСС и демонтаж legacy (`ingredient_mappings`, `external_products`, source `OFF`).
 - Гигиена: pack репозитория ~112 МБ из-за исторического коммита `node_modules` — переписывание истории в PLAN P1.
 
 ## Testing Strategy

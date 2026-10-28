@@ -1,9 +1,9 @@
-import { useState, useEffect } from 'react';
-import { Wifi, WifiOff, RefreshCw, Search, Link, Unlink, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Wifi, WifiOff, RefreshCw, Upload, X, CheckCircle, XCircle, Link, Unlink } from 'lucide-react';
 import { useToast } from '../components/ToastProvider';
 import { api } from '../api/client';
 import { Button } from '../components/Button';
-import CustomSelect from '../components/CustomSelect'; // Fix-6 (п.1)
+import { IntegrationSyncLogs, type SyncLogEntry } from '../components/IntegrationSyncLogs';
 
 interface Integration {
   id: number;
@@ -15,68 +15,23 @@ interface Integration {
   errorMessage: string | null;
 }
 
-interface SyncLog {
-  id: number;
-  provider: string;
-  type: string;
-  status: string;
-  startedAt: string;
-  finishedAt: string | null;
-  createdCount: number;
-  updatedCount: number;
-  errorCount: number;
+/** Лимит совпадает с бэкендом: spring.servlet.multipart.max-file-size (EMIS_UPLOAD_MAX_FILE_SIZE). */
+const MAX_UPLOAD_BYTES = 32 * 1024 * 1024;
+
+function formatSize(bytes: number): string {
+  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} МБ`;
+  if (bytes >= 1024) return `${Math.round(bytes / 1024)} КБ`;
+  return `${bytes} Б`;
 }
 
-interface ExternalProduct {
-  code: string;
-  name: string;
-  brand: string | null;
-  packAmount: number | null;
-  packUnit: string | null;
-  imageUrl: string | null;
-  // Fix-14: свежая цена категории и её период (месяц) — приходят из поиска,
-  // чтобы админ видел реальную цифру до привязки. null, если выгрузка цен
-  // ещё не выполнена/недоступна (поиск при этом работает).
-  price: number | null;
-  priceDate: string | null;
-}
-
-// Fix-14: текущая привязка ингредиента к внешнему товару (GET /mappings)
-interface Binding {
-  mappingId: number;
-  ingredientId: number;
-  ingredientName: string;
-  externalCode: string;
-  externalName: string | null;
-  packAmount: number | null;
-  packUnit: string | null;
-  createdAt: string | null;
-}
-
-interface Ingredient {
-  id: string;
-  name: string;
-}
-
-// Fix-14: хелперы отображения цены/периода в результатах поиска
-function formatPrice(v: number): string {
-  return v.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-function unitLabel(packUnit: string | null): string {
-  switch ((packUnit || '').toUpperCase()) {
-    case 'KG': return 'кг';
-    case 'L': return 'л';
-    case 'PCS': return 'шт';
-    default: return packUnit || 'ед.';
-  }
-}
-function formatPeriod(iso: string): string {
-  // priceDate приходит как ISO LocalDate (yyyy-MM-dd) — показываем месяц и год
-  const d = new Date(iso.length <= 10 ? `${iso}T00:00:00` : iso);
-  if (isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' });
-}
-
+/**
+ * Интеграции: единственный провайдер — Росстат (ЕМИСС).
+ *
+ * <p>Ручная привязка товаров отсюда убрана (боль запусков №14–17): продукт связывается
+ * с позицией ЕМИСС в своём же редакторе («Продукты» → «Источник цены»), а здесь остаются
+ * только способы наполнить локальную копию ЕМИСС — синхронизация с портала и ручная
+ * загрузка скачанного файла SDMX (портал закрывается анти-ботом, файл надёжнее).</p>
+ */
 export default function IntegrationsPage() {
   const { showError, showSuccess } = useToast();
 
@@ -104,24 +59,20 @@ export default function IntegrationsPage() {
   };
 
   const [integrations, setIntegrations] = useState<Integration[]>([]);
-  const [syncLogs, setSyncLogs] = useState<SyncLog[]>([]);
-  const [ingredients, setIngredients] = useState<Ingredient[]>([]);
+  const [syncLogs, setSyncLogs] = useState<SyncLogEntry[]>([]);
   const [loading, setLoading] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<ExternalProduct[]>([]);
-  const [selectedIngredient, setSelectedIngredient] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
-  // Fix-14: текущие привязки (что уже связано) — снимают неопределённость
-  // «якобы маппинг уже есть, хотя хрен знает что там есть».
-  const [bindings, setBindings] = useState<Binding[]>([]);
-  // Fix-15: id запуска, за которым следим после «Обновить цены» — поллинг
-  // доживает его до терминального статуса и показывает честный итог.
+  const [uploading, setUploading] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [fileError, setFileError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  // Fix-15: id запуска, за которым следим после «Обновить цены»/загрузки файла —
+  // поллинг доживает его до терминального статуса и показывает честный итог.
   const [watchedLogId, setWatchedLogId] = useState<number | null>(null);
 
   useEffect(() => {
     loadIntegrations();
     loadSyncLogs();
-    loadIngredients();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -139,7 +90,7 @@ export default function IntegrationsPage() {
 
   const loadSyncLogs = async () => {
     try {
-      const data = await api.get<SyncLog[]>('/admin/integrations/sync-logs');
+      const data = await api.get<SyncLogEntry[]>('/admin/integrations/sync-logs');
       setSyncLogs(data);
     } catch (error) {
       console.error('Failed to load sync logs:', error);
@@ -150,40 +101,10 @@ export default function IntegrationsPage() {
     }
   };
 
-  const loadIngredients = async () => {
-    try {
-      const data = await api.get<any>('/admin/products');
-      setIngredients(data.content || data);
-    } catch (error) {
-      console.error('Failed to load ingredients:', error);
-      setIngredients([]);
-      showError('Не удалось загрузить список ингредиентов');
-    }
-  };
-
-  // Fix-14: загрузка текущих привязок Росстата. Молча глотает «не подключено» —
-  // блок привязок рендерится только при CONNECTED, так что это страховка от гонки.
-  const loadBindings = async () => {
-    try {
-      const data = await api.get<Binding[]>('/admin/integrations/ROSSTAT/mappings');
-      setBindings(Array.isArray(data) ? data : []);
-    } catch (error) {
-      console.error('Failed to load bindings:', error);
-      setBindings([]);
-    }
-  };
-
   // Fix-13: единственная интеграция — Росстат (ЕМИСС); OFF демонтирован
   const rosstatIntegration = integrations.find(i => i.provider === 'ROSSTAT');
-  const rosstatConnected = rosstatIntegration?.status === 'CONNECTED';
-  // Fix-15: пока фон не завершился — кнопку «Обновить цены» держим занятой
+  // Fix-15: пока фон не завершился — кнопки запуска держим занятыми
   const hasRunningSync = syncLogs.some(l => l.status === 'RUNNING');
-
-  // Fix-14: как только интеграция подключена — показываем, что уже привязано.
-  useEffect(() => {
-    if (rosstatConnected) loadBindings();
-    else setBindings([]);
-  }, [rosstatConnected]);
 
   const handleConnect = async (provider: string) => {
     setLoading(true);
@@ -269,6 +190,59 @@ export default function IntegrationsPage() {
     }
   };
 
+  /** Выбор файла: сразу валидируем пустой/слишком большой, чтобы не гонять запрос. */
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0] ?? null;
+    setFileError(null);
+    if (!file) {
+      setSelectedFile(null);
+      return;
+    }
+    if (file.size === 0) {
+      setSelectedFile(null);
+      setFileError('Файл пуст — скачайте выгрузку ЕМИСС заново');
+      return;
+    }
+    if (file.size > MAX_UPLOAD_BYTES) {
+      setSelectedFile(null);
+      setFileError(`Файл ${formatSize(file.size)} — больше лимита ${formatSize(MAX_UPLOAD_BYTES)}`);
+      return;
+    }
+    setSelectedFile(file);
+  };
+
+  /**
+   * Ручная загрузка выгрузки ЕМИСС (POST /admin/integrations/ROSSTAT/upload).
+   * Подключение провайдера не требуется: портал не задействован вовсе.
+   * Ответ — 202 { logId }; дальше следим за запуском как за обычным синком.
+   */
+  const handleUpload = async () => {
+    if (!selectedFile) return;
+    setUploading(true);
+    setFileError(null);
+    try {
+      const result = await api.postFile<any>('/admin/integrations/ROSSTAT/upload', selectedFile);
+      if (isFailureEnvelope(result)) {
+        showError(extractErrorMessage(result));
+        setUploading(false);
+        return;
+      }
+      showSuccess(
+        `Файл «${selectedFile.name}» принят, цены пересчитываются` +
+        `${result?.logId != null ? ` (задача #${result.logId})` : ''}`
+      );
+      setSelectedFile(null);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      await loadSyncLogs();
+      if (result?.logId != null) setWatchedLogId(result.logId);
+      await loadIntegrations();
+    } catch (error: any) {
+      console.error('Failed to upload snapshot:', error);
+      handleApiError(error, 'Не удалось загрузить файл');
+      setUploading(false);
+    }
+  };
+
   // Fix-15: поллинг журнала и интеграций, пока есть RUNNING-записи
   // (фоновая часть синка обновляет их в БД; UI должен оживать без F5).
   useEffect(() => {
@@ -291,12 +265,14 @@ export default function IntegrationsPage() {
       if (!syncLogs.some(l => l.status === 'RUNNING')) {
         setWatchedLogId(null);
         setSyncing(false);
+        setUploading(false);
       }
       return;
     }
     if (log.status === 'RUNNING') return;
     setWatchedLogId(null);
     setSyncing(false);
+    setUploading(false);
     const counts = `создано: ${log.createdCount}, обновлено: ${log.updatedCount}, ошибок: ${log.errorCount}`;
     if (log.status === 'SUCCESS') {
       showSuccess(`Синхронизация цен завершена (${counts})`);
@@ -307,62 +283,6 @@ export default function IntegrationsPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [syncLogs, watchedLogId]);
-
-  const handleSearchProducts = async () => {
-    if (!searchQuery.trim() || !selectedIngredient) return;
-    
-    try {
-      const data = await api.get<ExternalProduct[]>(
-        `/admin/integrations/ROSSTAT/products/search?query=${encodeURIComponent(searchQuery)}&limit=20`
-      );
-      setSearchResults(data);
-      if (data.length === 0) {
-        showError('Ничего не найдено');
-      }
-    } catch (error: any) {
-      console.error('Failed to search products:', error);
-      // ЗАДАЧА 3: сброс результатов + русское сообщение
-      setSearchResults([]);
-      handleApiError(error, 'Не удалось выполнить поиск товаров');
-    }
-  };
-
-  const handleCreateMapping = async (product: ExternalProduct) => {
-    if (!selectedIngredient) return;
-    
-    try {
-      await api.post(`/admin/integrations/ingredients/${selectedIngredient}/mapping`, {
-        provider: 'ROSSTAT',
-        externalCode: product.code,
-        packAmount: product.packAmount,
-        packUnit: product.packUnit
-      });
-      
-      setSearchResults([]);
-      setSearchQuery('');
-      setSelectedIngredient(null);
-      // Fix-14: бэкенд теперь делает upsert — повторная привязка того же
-      // ингредиента не ошибка, а замена товара. Перечитываем список привязок.
-      await loadBindings();
-      showSuccess(`Привязано: ${product.name}`);
-    } catch (error: any) {
-      console.error('Failed to create mapping:', error);
-      handleApiError(error, 'Не удалось создать связь с товаром');
-    }
-  };
-
-  // Fix-14: отвязка ингредиента от внешнего товара (DELETE уже был на бэкенде,
-  // но не использовался в UI — админ не мог убрать/заменить привязку).
-  const handleDeleteMapping = async (binding: Binding) => {
-    try {
-      await api.del(`/admin/integrations/ingredients/${binding.ingredientId}/mapping/ROSSTAT`);
-      setBindings(prev => prev.filter(b => b.mappingId !== binding.mappingId));
-      showSuccess(`Привязка «${binding.ingredientName}» удалена`);
-    } catch (error: any) {
-      console.error('Failed to delete mapping:', error);
-      handleApiError(error, 'Не удалось удалить привязку');
-    }
-  };
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -391,7 +311,7 @@ export default function IntegrationsPage() {
       <div>
         <h1 className="text-2xl md:text-3xl font-bold" style={{ color: 'var(--text)' }}>Интеграции</h1>
         <p className="mt-1" style={{ color: 'var(--muted)' }}>
-          Подключение к внешним сервисам для получения актуальных цен
+          Локальная копия ЕМИСС Росстата — источник плановых цен
         </p>
       </div>
 
@@ -399,18 +319,23 @@ export default function IntegrationsPage() {
       <div className="rounded-xl p-6" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
         <div className="flex items-start justify-between mb-4">
           <div className="flex items-start gap-4">
-            <div className="w-12 h-12 rounded-lg flex items-center justify-center" 
+            <div className="w-12 h-12 rounded-lg flex items-center justify-center"
                  style={{ background: 'linear-gradient(135deg, var(--w1), var(--w2))' }}>
               <Wifi size={24} style={{ color: 'var(--on-fire)' }} />
             </div>
             <div>
               <h2 className="text-xl font-bold" style={{ color: 'var(--text)' }}>Росстат (ЕМИСС)</h2>
               <p className="text-sm mt-1" style={{ color: 'var(--muted)' }}>
-                Официальные средние потребительские цены Росстата (ЕМИСС, fedstat.ru)
-                на базовые продукты питания — «средняя цена по больнице» в рублях,
-                ежемесячно, без ключей и лимитов. Привяжите категории («Гречневая крупа»,
-                «Молоко питьевое»…) к ингредиентам — синхронизация наполнит плановые цены.
-                Введённые вручную цены не перезаписываются.
+                Официальные средние потребительские цены Росстата (ЕМИСС, fedstat.ru) —
+                «средняя цена по больнице» в рублях, ежемесячно, без ключей и лимитов.
+                Синхронизация складывает выгрузку в локальную копию (справочник позиций
+                и цены за последние два года), а цены продуктов берутся уже из неё:
+                портал для расчёта меню не нужен. Привязка продукта к позиции ЕМИСС
+                настраивается в редакторе продукта («Продукты» → «Источник цены»).
+              </p>
+              <p className="text-sm mt-2" style={{ color: 'var(--amber-300, var(--text))' }}>
+                Синхронизация перезаписывает цены всех привязанных продуктов, включая
+                введённые вручную: у привязанного продукта цена всегда из ЕМИСС.
               </p>
               <div className="flex items-center gap-2 mt-2">
                 {rosstatIntegration && getStatusIcon(rosstatIntegration.status)}
@@ -443,217 +368,93 @@ export default function IntegrationsPage() {
           </div>
         </div>
 
-        <div className="flex gap-3">
+        <div className="flex gap-3 flex-wrap">
           {!rosstatIntegration || rosstatIntegration.status !== 'CONNECTED' ? (
             <Button variant="primary" size="sm" onClick={() => handleConnect('ROSSTAT')} disabled={loading} aria-label="Подключить интеграцию">
-                          <Link size={16} />
-                          Подключить
-                        </Button>
+              <Link size={16} />
+              Подключить
+            </Button>
           ) : (
             <>
               <Button variant="primary" size="sm" onClick={() => handleSyncPrices('ROSSTAT')} disabled={syncing || hasRunningSync} aria-label="Синхронизировать цены">
-                              <RefreshCw size={16} className={syncing || hasRunningSync ? 'animate-spin' : ''} />
-                              {syncing || hasRunningSync ? 'Синхронизация...' : 'Обновить цены'}
-                            </Button>
+                <RefreshCw size={16} className={syncing || hasRunningSync ? 'animate-spin' : ''} />
+                {syncing || hasRunningSync ? 'Синхронизация...' : 'Обновить цены'}
+              </Button>
               <Button variant="danger" size="sm" onClick={() => handleDisconnect('ROSSTAT')} disabled={loading} aria-label="Отключить интеграцию">
-                              <Unlink size={16} />
-                              Отключить
-                            </Button>
+                <Unlink size={16} />
+                Отключить
+              </Button>
             </>
           )}
         </div>
+
+        {/* Ручная загрузка выгрузки: портал ЕМИСС закрывается анти-ботом и отдаёт 302/503,
+            поэтому файл, скачанный владельцем вручную, — полноценный способ наполнить
+            локальную копию. Блок виден всегда: подключение провайдера для него не нужно. */}
+        <div className="mt-6 pt-5" style={{ borderTop: '1px solid var(--border)' }}>
+          <h3 className="text-base font-bold" style={{ color: 'var(--text)' }}>
+            Загрузить выгрузку ЕМИСС вручную
+          </h3>
+          <p className="text-sm mt-1" style={{ color: 'var(--muted)' }}>
+            Файл SDMX-выгрузки (XML) с портала ЕМИСС — тот же набор данных, что берёт
+            синхронизация. Выберите файл и нажмите «Прогрузить»: позиции справочника и
+            цены попадут в локальную копию, цены привязанных продуктов пересчитаются.
+          </p>
+
+          <div className="flex gap-2 items-center mt-3 flex-wrap">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".xml,application/xml,text/xml"
+              onChange={handleFileChange}
+              className="hidden"
+              aria-label="Файл выгрузки ЕМИСС"
+              data-testid="emis-file-input"
+            />
+            <Button variant="ghost" size="sm" onClick={() => fileInputRef.current?.click()} disabled={uploading} aria-label="Выбрать файл выгрузки">
+              <Upload size={16} />
+              Выбрать файл
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={handleUpload}
+              disabled={uploading || !selectedFile || syncing || hasRunningSync}
+              aria-label="Прогрузить выгрузку ЕМИСС"
+            >
+              <RefreshCw size={16} className={uploading ? 'animate-spin' : ''} />
+              {uploading ? 'Загрузка…' : 'Прогрузить'}
+            </Button>
+
+            {selectedFile && (
+              <span className="flex items-center gap-2 text-sm" style={{ color: 'var(--text)' }}>
+                <span className="chip-delta">{selectedFile.name} · {formatSize(selectedFile.size)}</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedFile(null);
+                    if (fileInputRef.current) fileInputRef.current.value = '';
+                  }}
+                  aria-label="Убрать выбранный файл"
+                  className="p-1 rounded transition-colors"
+                  style={{ color: 'var(--muted)' }}
+                >
+                  <X size={14} />
+                </button>
+              </span>
+            )}
+          </div>
+
+          {fileError && (
+            <p className="text-xs mt-2" style={{ color: 'var(--fire)' }}>{fileError}</p>
+          )}
+          <p className="text-xs mt-2" style={{ color: 'var(--muted)' }}>
+            Ограничение размера — {formatSize(MAX_UPLOAD_BYTES)} (EMIS_UPLOAD_MAX_FILE_SIZE).
+          </p>
+        </div>
       </div>
 
-      {/* Product Mapping */}
-      {rosstatIntegration?.status === 'CONNECTED' && (
-        <div className="rounded-xl p-6" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
-          <h3 className="text-lg font-bold mb-4" style={{ color: 'var(--text)' }}>
-            Привязка товаров
-          </h3>
-          
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium mb-2" style={{ color: 'var(--muted)' }}>
-                Выберите ингредиент
-              </label>
-              {/* Fix-6 (п.1): единый стиль выпадающих списков */}
-              <CustomSelect
-                value={String(selectedIngredient ?? '')}
-                onChange={v => setSelectedIngredient(v || null)}
-                options={[{ value: '', label: 'Выберите ингредиент…' }, ...ingredients.map(ing => ({ value: String(ing.id), label: ing.name }))]}
-                ariaLabel="Ингредиент для привязки"
-              />
-            </div>
-
-            {selectedIngredient && (
-              <div>
-                <label className="block text-sm font-medium mb-2" style={{ color: 'var(--muted)' }}>
-                  Поиск категории в Росстате
-                </label>
-                <div className="flex gap-2">
-                  <div className="relative flex-1">
-                    <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--muted)' }} />
-                    <input
-                      type="text"
-                      value={searchQuery}
-                      onChange={e => setSearchQuery(e.target.value)}
-                      onKeyPress={e => e.key === 'Enter' && handleSearchProducts()}
-                      placeholder="Введите название продукта..."
-                      className="w-full pl-10 pr-4 py-2 rounded-lg outline-none"
-                      style={{ background: 'var(--elev)', border: '1px solid var(--border)', color: 'var(--text)' }}
-                    />
-                  </div>
-                  <Button variant="primary" size="sm" onClick={handleSearchProducts} aria-label="Найти товар">
-                                      Найти
-                                    </Button>
-                </div>
-              </div>
-            )}
-
-            {searchResults.length > 0 && (
-              <div className="space-y-2">
-                <p className="text-sm font-medium" style={{ color: 'var(--muted)' }}>
-                  Найдено товаров: {searchResults.length}
-                </p>
-                <div className="space-y-2 max-h-96 overflow-y-auto">
-                  {searchResults.map(product => (
-                    <div
-                      key={product.code}
-                      className="flex items-center gap-3 p-3 rounded-lg"
-                      style={{ background: 'var(--elev)', border: '1px solid var(--border)' }}
-                    >
-                      {product.imageUrl && (
-                        <img 
-                          src={product.imageUrl} 
-                          alt={product.name}
-                          className="w-12 h-12 rounded object-cover"
-                        />
-                      )}
-                      <div className="flex-1">
-                        <p className="font-medium" style={{ color: 'var(--text)' }}>{product.name}</p>
-                        {product.brand && (
-                          <p className="text-xs" style={{ color: 'var(--muted)' }}>{product.brand}</p>
-                        )}
-                        <p className="text-xs" style={{ color: 'var(--muted)' }}>
-                          Код: {product.code}
-                          {product.packAmount && product.packUnit && (
-                            <> • {product.packAmount} {product.packUnit}</>
-                          )}
-                        </p>
-                        {/* Fix-14: свежая цена категории из ЕМИСС (₽ за единицу фасовки).
-                            Если выгрузка цен недоступна — подсказка, что цена придёт после синка. */}
-                        {product.price != null ? (
-                          <p className="text-sm font-semibold mt-0.5" style={{ color: 'var(--ok)' }}>
-                            {formatPrice(product.price)} ₽
-                            <span className="font-normal" style={{ color: 'var(--muted)' }}>
-                              {' '}/ {unitLabel(product.packUnit)}
-                              {product.priceDate ? ` • ${formatPeriod(product.priceDate)}` : ''}
-                            </span>
-                          </p>
-                        ) : (
-                          <p className="text-xs mt-0.5" style={{ color: 'var(--muted)' }}>
-                            {/* Fix-15: честная подпись — цена приходит из той же
-                                SDMX-выгрузки ЕМИСС, что и синк; «появится после
-                                синхронизации» было обещанием, которое не сбывалось,
-                                когда выгрузка недоступна. */}
-                            Цена недоступна: выгрузка ЕМИСС не удалась или у категории
-                            нет ценовых данных (подробности — в журнале синков)
-                          </p>
-                        )}
-                      </div>
-                      <Button variant="primary" size="sm" onClick={() => handleCreateMapping(product)} aria-label="Привязать товар">
-                                              Привязать
-                                            </Button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Fix-14: Текущие привязки — видно, что уже связано; можно отвязать/заменить */}
-      {rosstatConnected && (
-        <div className="rounded-xl p-6" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-bold" style={{ color: 'var(--text)' }}>Текущие привязки</h3>
-            <span className="text-sm" style={{ color: 'var(--muted)' }}>{bindings.length}</span>
-          </div>
-          {bindings.length === 0 ? (
-            <p className="text-sm" style={{ color: 'var(--muted)' }}>
-              Пока ничего не привязано — выберите ингредиент выше и найдите подходящую категорию Росстата.
-            </p>
-          ) : (
-            <div className="space-y-2">
-              {bindings.map(b => (
-                <div
-                  key={b.mappingId}
-                  className="flex items-center gap-3 p-3 rounded-lg"
-                  style={{ background: 'var(--elev)', border: '1px solid var(--border)' }}
-                >
-                  <div className="flex-1">
-                    <p className="font-medium" style={{ color: 'var(--text)' }}>{b.ingredientName}</p>
-                    <p className="text-xs" style={{ color: 'var(--muted)' }}>
-                      → {b.externalName || 'категория'} • Код: {b.externalCode}
-                      {b.packAmount != null && b.packUnit ? <> • {b.packAmount} {unitLabel(b.packUnit)}</> : null}
-                    </p>
-                  </div>
-                  <Button variant="danger" size="sm" onClick={() => handleDeleteMapping(b)} aria-label={`Отвязать ${b.ingredientName}`}>
-                    <Unlink size={16} />
-                    Отвязать
-                  </Button>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Sync Logs */}
-      {syncLogs.length > 0 && (
-        <div className="rounded-xl p-6" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
-          <h3 className="text-lg font-bold mb-4" style={{ color: 'var(--text)' }}>
-            Журнал синхронизаций
-          </h3>
-          <div className="space-y-2">
-            {syncLogs.slice(0, 10).map(log => (
-              <div
-                key={log.id}
-                className="flex items-center justify-between p-3 rounded-lg"
-                style={{ background: 'var(--elev)', border: '1px solid var(--border)' }}
-              >
-                <div className="flex items-center gap-3">
-                  {log.status === 'SUCCESS' ? (
-                    <CheckCircle size={20} style={{ color: 'var(--ok)' }} />
-                  ) : log.status === 'FAILED' ? (
-                    <XCircle size={20} style={{ color: 'var(--fire)' }} />
-                  ) : log.status === 'PARTIAL' ? (
-                    /* Fix-15: завершено с ошибками, но часть работы выполнена */
-                    <AlertCircle size={20} style={{ color: 'var(--amber-300, var(--fire))' }} />
-                  ) : (
-                    <AlertCircle size={20} style={{ color: 'var(--muted)' }} />
-                  )}
-                  <div>
-                    <p className="text-sm font-medium" style={{ color: 'var(--text)' }}>
-                      {log.type} - {log.status}
-                    </p>
-                    <p className="text-xs" style={{ color: 'var(--muted)' }}>
-                      {new Date(log.startedAt).toLocaleString('ru-RU')}
-                    </p>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <p className="text-xs" style={{ color: 'var(--muted)' }}>
-                    Создано: {log.createdCount} • Обновлено: {log.updatedCount} • Ошибок: {log.errorCount}
-                  </p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+      <IntegrationSyncLogs logs={syncLogs} />
     </div>
   );
 }
-

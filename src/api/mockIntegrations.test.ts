@@ -6,8 +6,11 @@ import { mockServer } from './mockServer';
  * U11 mock-parity: маршруты /admin/integrations* повторяют IntegrationController:
  * GET список (IntegrationDto), POST connect/disconnect, GET sync-logs (SyncLogDto),
  * POST :provider/sync/prices → {logId} с фоновым завершением лога,
- * 409 INTEGRATION_DISCONNECTED / SYNC_ALREADY_RUNNING, 404 для неизвестного
- * провайдера, GET products/search (ExternalProductDto), POST ingredients/:id/mapping.
+ * 409 INTEGRATION_DISCONNECTED / SYNC_ALREADY_RUNNING, 404 для неизвестного провайдера.
+ *
+ * Тесты ручной привязки (products/search, ingredients/:id/mapping) удалены вместе с
+ * функциональностью: V28 снесла ingredient_mappings/external_products, привязка
+ * продукта к позиции ЕМИСС живёт в ingredients.emis_code и правится в редакторе продукта.
  */
 const call = (method: string, path: string, body?: unknown) =>
   mockServer.handleRequest<any>(method, path, body as any);
@@ -75,60 +78,5 @@ describe('MOCK-INTEGRATIONS: /admin/integrations* (U11 parity)', () => {
     expect(err.status).toBe(404);
     const err2 = grab(() => call('POST', '/admin/integrations/HACKER/connect', null));
     expect(err2.status).toBe(404);
-  });
-
-  it('products/search отдаёт ExternalProductDto, mapping возвращает 200 + тело привязки (Fix-15)', () => {
-    // Fix-13: каталог — категории Росстата (ЕМИСС), поиск по подстроке
-    const found = call('GET', '/admin/integrations/ROSSTAT/products/search?query=греч&limit=20', null);
-    expect(found.length).toBe(1);
-    expect(found[0]).toMatchObject({ code: '101', brand: 'Росстат', packUnit: 'KG' });
-    expect(found[0].name).toBe('Гречневая крупа');
-
-    const all = call('GET', '/admin/integrations/ROSSTAT/products/search?query=&limit=20', null);
-    expect(all.length).toBeGreaterThanOrEqual(5);
-
-    const mapped = call('POST', '/admin/integrations/ingredients/1/mapping', {
-      provider: 'ROSSTAT',
-      externalCode: '101',
-      packAmount: 1,
-      packUnit: 'KG',
-    });
-    // Fix-15: бэкенд больше не отвечает пустым телом — возвращает IngredientBindingDto
-    expect(mapped).toMatchObject({ ingredientId: 1, externalCode: '101' });
-  });
-
-  it('Fix-14: products/search отдаёт цену категории (price/priceDate)', () => {
-    const found = call('GET', '/admin/integrations/ROSSTAT/products/search?query=греч&limit=20', null);
-    expect(found[0]).toMatchObject({ code: '101', packUnit: 'KG' });
-    expect(typeof found[0].price).toBe('number');
-    expect(found[0].priceDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
-  });
-
-  it('Fix-14: привязки — upsert (POST), список (GET), отвязка (DELETE)', () => {
-    // Первая привязка ингредиента 2 → появляется в списке (Fix-15: ответ — тело привязки)
-    expect(call('POST', '/admin/integrations/ingredients/2/mapping',
-      { provider: 'ROSSTAT', externalCode: '102', packAmount: 1, packUnit: 'L' }))
-      .toMatchObject({ ingredientId: 2, externalCode: '102' });
-    let list = call('GET', '/admin/integrations/ROSSTAT/mappings', null);
-    const b2 = list.find((b: any) => b.ingredientId === 2);
-    expect(b2).toBeTruthy();
-    expect(b2.externalCode).toBe('102');
-
-    // Повторная привязка ТОГО ЖЕ ингредиента = замена товара (upsert), не дубль
-    call('POST', '/admin/integrations/ingredients/2/mapping',
-      { provider: 'ROSSTAT', externalCode: '104', packAmount: 1, packUnit: 'KG' });
-    list = call('GET', '/admin/integrations/ROSSTAT/mappings', null);
-    const b2again = list.filter((b: any) => b.ingredientId === 2);
-    expect(b2again.length).toBe(1);
-    expect(b2again[0].externalCode).toBe('104');
-
-    // Отвязка удаляет запись
-    expect(call('DELETE', '/admin/integrations/ingredients/2/mapping/ROSSTAT', null)).toBeNull();
-    list = call('GET', '/admin/integrations/ROSSTAT/mappings', null);
-    expect(list.find((b: any) => b.ingredientId === 2)).toBeUndefined();
-
-    // Отвязка отсутствующей → 404 (паритет с deleteMapping)
-    const err = grab(() => call('DELETE', '/admin/integrations/ingredients/2/mapping/ROSSTAT', null));
-    expect(err.status).toBe(404);
   });
 });

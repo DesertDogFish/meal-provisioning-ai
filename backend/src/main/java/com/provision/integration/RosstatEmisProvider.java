@@ -45,17 +45,22 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Fix-13: интеграция с Росстатом через ЕМИСС (fedstat.ru) — официальные
- * средние потребительские цены на продукты питания (рубли, ежемесячно,
- * по регионам РФ). Заменила демонтированную интеграцию Open Food Facts
- * (поисковый хост OFF недостижим из сети пользователя — TLS-блокировка
- * провайдера, а fallback-каталог Open Prices ограничен).
+ * Интеграция с Росстатом через ЕМИСС (fedstat.ru) — официальные средние потребительские
+ * цены на продукты питания (рубли, ежемесячно, по регионам РФ).
  *
  * <h3>Зачем</h3>
  * Приложению нужна «средняя цена по больнице» для плановых цен похода:
- * Росстат ежемесячно публикует очищенные усреднённые цены по ~сотне
- * базовых категорий («Гречневая крупа», «Тушёнка», «Молоко»…). Без ключей,
- * без лимитов по IP, данные уже в рублях (конвертация валют не нужна).
+ * Росстат ежемесячно публикует очищенные усреднённые цены по сотням
+ * базовых категорий («Крупа гречневая-ядрица», «Консервы мясные», «Молоко питьевое»…).
+ * Без ключей, без лимитов по IP, данные уже в рублях (конвертация валют не нужна).
+ *
+ * <h3>Роль модуля после перехода на локальную копию</h3>
+ * Портал — только транспорт: этот класс умеет открыть страницу показателя, взять
+ * одноразовый CSRF-токен, собрать форму и разобрать SDMX-ответ в
+ * {@link EmisSnapshot}. Дальше слепок уходит в нашу БД ({@link com.provision.service.EmisMirrorService}),
+ * а поиск позиций и цены читаются уже локально ({@link com.provision.service.EmisCatalogService}).
+ * Кэша здесь нет намеренно: единственная точка входа — кнопка «Синхронизировать»,
+ * и её смысл — положить в БД свежие данные, а не отдать вчерашние.
  *
  * <h3>Протокол (референс — CRAN-пакет fedstatAPIr)</h3>
  * Прямой ссылка-на-CSV у ЕМИСС нет: выгрузка — это Struts-форма с
@@ -72,39 +77,24 @@ import java.util.regex.Pattern;
  *       form-urlencoded: title, struts.token.name, struts.token,
  *       lineObjectIds*, columnObjectIds*, selectedFilterIds* (field_value),
  *       filterObjectIds → SDMX GenericData XML;</li>
- *   <li>парсинг: CodeLists = словари измерений (каталог категорий),
+ *   <li>парсинг: CodeLists = словари измерений (справочник товаров, всегда полный),
  *       Series/Obs = ряды цен по месяцам.</li>
  * </ol>
- *
- * <h3>Гарантия «быстрого вызова» (требование Fix-13)</h3>
- * Два уровня кэша с TTL (integration.rosstat.cache-hours, дефолт 24ч —
- * данные обновляются раз в месяц, чаще не нужно):
- * <ul>
- *   <li>{@link #searchProducts} — Fix-14: возвращает и категорию, и её свежую
- *       цену. Цена берётся из полной SDMX-выгрузки, которая кэшируется
- *       (cache-hours) и отфильтрована по региону, — это одноразовый запрос,
- *       в установившемся режиме мгновенный из кэша. Если выгрузка недоступна —
- *       graceful-fallback на словарь категорий со страницы показателя (один GET)
- *       без цен: поиск не падает;</li>
- *   <li>{@link #fetchPrices} — полная SDMX-выгрузка, но вызывается только
- *       фоновой синхронизацией цен (POST /admin/integrations/ROSSTAT/sync/prices
- *       → 202 {logId}, UI не блокируется). При сбое обновления используется
- *       предыдущий кэш (graceful degradation).</li>
- * </ul>
- * Никаких ретраев с многоминутными паузами: одна попытка, понятная ошибка.
  *
  * <h3>Ограничения (честно)</h3>
  * <ul>
  *   <li>ЕМИСС блокирует запросы из зарубежных дата-центров (403 анти-бот) —
  *       работает из сети пользователя (РФ);</li>
- *   <li>категории общие: «йогурт питьевой», а не «йогурт со вкусом манго»;</li>
- *   <li>единицы измерения угадываются эвристикой по названию категории
- *       (яйца — ₽/10 шт, молоко — ₽/л, остальное — ₽/кг);</li>
+ *   <li>портал отклоняет (302) сужение оси «Год», поэтому год уходит целиком,
+ *       а окно хранения «два последних года» режется уже у нас
+ *       ({@link com.provision.service.EmisMirrorService});</li>
+ *   <li>позиции классификатора общие: «Консервы мясные, кг», а не «тушёнка говяжья 325 г»
+ *       конкретного производителя;</li>
  *   <li>обновление раз в месяц (для плановых цен достаточно).</li>
  * </ul>
  */
 @Component
-public class RosstatEmisProvider implements PriceProvider {
+public class RosstatEmisProvider implements PriceProvider, EmisDataSource {
 
     private static final Logger log = LoggerFactory.getLogger(RosstatEmisProvider.class);
 
@@ -157,53 +147,38 @@ public class RosstatEmisProvider implements PriceProvider {
     /** Раскладка осей таблицы (left_columns+groups → строки, top_columns → колонки). */
     public record ObjectIds(List<String> line, List<String> column) {}
 
-    public record PricePoint(LocalDate date, BigDecimal price) {}
-
-    /** Кэш полной выгрузки: каталог категорий + ряды цен по категориям. */
-    public record Snapshot(Instant fetchedAt,
-                           LinkedHashMap<String, String> catalog,
-                           Map<String, List<PricePoint>> prices) {}
-
-    /** Каталог категорий без цен (быстрый путь searchProducts). */
-    public record CatalogSnapshot(Instant fetchedAt, LinkedHashMap<String, String> catalog) {}
-
-    public record PackGuess(BigDecimal amount, String unit) {}
-
     // ==================== Конфигурация ====================
 
     private final String baseUrl;
     private final String indicatorId;
     private final String regionTitle;
-    private final Duration cacheTtl;
-    /** Глубина истории цен в годах для поля «Год»; <=0 — выгружать весь ряд. */
+    /** Глубина окна «Период» в месяцах; <=0 — все 12 месяцев (см. buildFormBody). */
     private final int periodMonths;
+    /** Предохранитель от OOM: ответ больше этого размера не парсим (дефект №6). */
+    private final long maxResponseBytes;
     private final Transport transport;
-
-    private volatile Snapshot snapshot;
-    private volatile CatalogSnapshot catalogSnapshot;
 
     @Autowired
     public RosstatEmisProvider(
             @Value("${integration.rosstat.base-url:https://www.fedstat.ru}") String baseUrl,
             @Value("${integration.rosstat.indicator-id:31448}") String indicatorId,
-            @Value("${integration.rosstat.region:Российская Федерация}") String regionTitle,
-            @Value("${integration.rosstat.cache-hours:24}") long cacheHours,
-            @Value("${integration.rosstat.period-months:2}") int periodMonths,
+            @Value("${integration.rosstat.region:Российская Федерация без учета новых субъектов (с 01.01.2023)}") String regionTitle,
+            @Value("${integration.rosstat.period-months:0}") int periodMonths,
+            @Value("${integration.rosstat.max-response-bytes:33554432}") long maxResponseBytes,
             @Value("${integration.rosstat.user-agent:ProvisionApp/1.0 (dev@provision.app)}") String userAgent) {
-        this(baseUrl, indicatorId, regionTitle, Duration.ofHours(Math.max(1, cacheHours)),
-                periodMonths,
+        this(baseUrl, indicatorId, regionTitle, periodMonths, maxResponseBytes,
                 new JdkTransport(userAgent, baseUrl.endsWith("/")
                         ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl));
     }
 
     /** Тестовый конструктор: транспорт подменяется фейком. */
     RosstatEmisProvider(String baseUrl, String indicatorId, String regionTitle,
-                        Duration cacheTtl, int periodMonths, Transport transport) {
+                        int periodMonths, long maxResponseBytes, Transport transport) {
         this.baseUrl = baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;
         this.indicatorId = indicatorId;
         this.regionTitle = regionTitle;
-        this.cacheTtl = cacheTtl;
         this.periodMonths = periodMonths;
+        this.maxResponseBytes = maxResponseBytes;
         this.transport = transport;
     }
 
@@ -217,7 +192,7 @@ public class RosstatEmisProvider implements PriceProvider {
     @Override
     public ConnectionStatus testConnection() {
         // Одна попытка, короткий таймаут — «подключить» не должно висеть минутами
-        // (боль Fix-12: OFF-подключение жевало ~40с ретраев перед фолбэком).
+        // (боль Fix-12: прежнее подключение жевало ~40с ретраев перед фолбэком).
         try (Session s = transport.open()) {
             PageResult p = s.get(baseUrl + "/indicator/" + indicatorId);
             if (p.status() == 200) {
@@ -246,140 +221,59 @@ public class RosstatEmisProvider implements PriceProvider {
         }
     }
 
-    @Override
-    public List<ExternalProductDto> searchProducts(String query, int limit) {
-        // Fix-14: поиск сразу возвращает и цену категории, чтобы админ видел
-        // реальную цифру до привязки (боль «в результате даже цена не высвечивается»).
-        //
-        // Дефект №8 (plans/2026-10-28-emis-download-csrf-and-volume): справочник страницы
-        // показателя ключуется id ЗНАЧЕНИЯ фильтра (Апельсины = 1743453), а SDMX-выгрузка —
-        // кодом КЛАССИФИКАТОРА (Апельсины = 2703). Это разные пространства имён. Отданный
-        // поиском code сохраняется в привязке товара и затем приходит в
-        // fetchPrices(externalCode), который ищет ряды по коду классификатора, — при
-        // рассогласовании привязанный товар не находит цену НИКОГДА. Поэтому каталог берём
-        // из той же выгрузки, что и цены (CodeList «Виды товаров и услуг» в ответе содержит
-        // всю номенклатуру, 885 позиций, независимо от выбранных фильтров).
-        //
-        // Выгрузка кэшируется (cache-hours, дефолт 24) и отфильтрована по региону, т.е. это
-        // ОДНОРАТНЫЙ запрос (не «30 ретраев»), в установившемся режиме мгновенный из кэша.
-        // Если она недоступна (анти-бот, истёк токен, портал лёг) — graceful-fallback на
-        // словарь страницы: показываем справочник без цен, поиск не падает.
-        LinkedHashMap<String, String> catalog = null;
-        Map<String, List<PricePoint>> prices = Map.of();
-        try {
-            Snapshot snap = snapshotOrFetch();
-            catalog = snap.catalog();
-            prices = snap.prices();
-        } catch (RuntimeException e) {
-            log.warn("ЕМИСС: выгрузка цен для поиска недоступна ({}), показываю справочник страницы без цен",
-                    e.getMessage());
-        }
-        if (catalog == null) {
-            log.warn("ЕМИСС: справочник отдан по словарю страницы — его коды (id значений) не совпадают "
-                    + "с кодами классификатора в ценах, привязка может не найти ряд");
-            catalog = catalogOrFetch().catalog();
-        }
-
-        String q = normalize(query);
-        int cap = limit <= 0 ? 50 : Math.min(limit, 200);
-        List<ExternalProductDto> out = new ArrayList<>();
-        for (Map.Entry<String, String> e : catalog.entrySet()) {
-            if (out.size() >= cap) break;
-            if (q.isEmpty() || normalize(e.getValue()).contains(q)) {
-                PackGuess pack = guessPack(e.getValue());
-                PricePoint last = lastPrice(prices.get(e.getKey()));
-                out.add(new ExternalProductDto(e.getKey(), e.getValue(), "Росстат",
-                        pack.amount(), pack.unit(), null,
-                        last == null ? null : last.price(),
-                        last == null ? null : last.date()));
-            }
-        }
-        return out;
-    }
-
-    /** Последняя (самая свежая по дате) точка цены; null, если ряд пуст/отсутствует. */
-    private static PricePoint lastPrice(List<PricePoint> points) {
-        if (points == null || points.isEmpty()) return null;
-        PricePoint best = points.get(0);
-        for (PricePoint p : points) {
-            if (p.date().isAfter(best.date())) best = p;
-        }
-        return best;
-    }
-
-    @Override
-    public List<ExternalPriceDto> fetchPrices(String externalCode, LocalDate since) {
-        Snapshot s = snapshotOrFetch();
-        List<PricePoint> points = s.prices().getOrDefault(externalCode, List.of());
-        List<ExternalPriceDto> out = new ArrayList<>();
-        for (PricePoint p : points) {
-            if (since != null && p.date().isBefore(since)) continue;
-            out.add(new ExternalPriceDto(externalCode, p.price(), "RUB", p.date()));
-        }
-        out.sort(Comparator.comparing(ExternalPriceDto::date));
-        return out;
-    }
-
     // ==================== Загрузка данных ====================
 
-    /** Быстрый путь: только словарь категорий (один GET страницы показателя). */
-    private CatalogSnapshot catalogOrFetch() {
-        CatalogSnapshot cur = this.catalogSnapshot;
-        if (cur != null && !expired(cur.fetchedAt())) return cur;
-        try (Session s = transport.open()) {
-            PageResult page = s.get(baseUrl + "/indicator/" + indicatorId);
-            if (page.status() == 403) throw new IntegrationUnavailableException(ANTIBOT_403);
-            if (page.status() != 200) {
-                throw new IntegrationUnavailableException(
-                        "ЕМИСС: HTTP " + page.status() + " при открытии показателя " + indicatorId);
-            }
-            EmisFilters filters = parseFiltersFromPage(page.body());
-            EmisField goods = filters == null ? null : findGoodsField(filters);
-            if (goods == null || goods.values().isEmpty()) {
-                throw new IntegrationUnavailableException(
-                        "ЕМИСС: на странице показателя " + indicatorId
-                        + " не найден справочник товаров (фильтр «Виды товаров…»). Диагностика: "
-                        + pageDiagnostics(page.body()));
-            }
-            CatalogSnapshot fresh = new CatalogSnapshot(Instant.now(), new LinkedHashMap<>(goods.values()));
-            this.catalogSnapshot = fresh;
-            return fresh;
-        } catch (IOException e) {
-            if (cur != null) {
-                log.warn("ЕМИСС: справочник не обновился ({}), использую кэш от {}", friendlyIo(e), cur.fetchedAt());
-                return cur;
-            }
-            throw new IntegrationUnavailableException("ЕМИСС недоступен: " + friendlyIo(e), e);
+    /**
+     * Свежая выгрузка для синхронизации: страница показателя → токен → POST-форма → SDMX.
+     * Кэш не используется (см. javadoc класса), исключения — {@code IntegrationUnavailableException}
+     * с диагностикой фактического ответа портала.
+     */
+    @Override
+    public EmisSnapshot downloadSnapshot() {
+        EmisSnapshot fresh = downloadAndParse();
+        log.info("ЕМИСС: выгружено позиций справочника {} , рядов цен {} (регион {})",
+                fresh.catalog().size(), fresh.prices().size(), fresh.regionCode());
+        return fresh;
+    }
+
+    /**
+     * Разбор выгрузки, загруженной админом файлом («Интеграции → Загрузить файл выгрузки»).
+     *
+     * <p>Сеть не используется вообще: файл — тот же SDMX-ответ портала, поэтому разбирается
+     * тем же {@link #parseSdmx(String, String)}. Проверяем только то, что можем проверить без
+     * портала: размер (тот же предел {@code max-response-bytes}, что и для HTTP-ответа) и
+     * признак SDMX в теле — иначе админ получил бы «синк успешен, 0 точек» на произвольном
+     * XML/HTML (портал на ошибку отдаёт HTML-страницу, а не выгрузку).</p>
+     */
+    @Override
+    public EmisSnapshot parseSnapshot(byte[] payload, String fileName) {
+        String name = fileName == null || fileName.isBlank() ? "без имени" : fileName;
+        if (payload == null || payload.length == 0) {
+            throw new IntegrationUnavailableException("ЕМИСС: файл «" + name + "» пуст");
         }
-    }
-
-    /** Тяжёлый путь: страница + токен + POST-выгрузка SDMX. Только для фоновой
-     *  синхронизации цен; при сбое — предыдущий кэш, если он есть. */
-    private Snapshot snapshotOrFetch() {
-        Snapshot cur = this.snapshot;
-        if (cur != null && !expired(cur.fetchedAt())) return cur;
-        try {
-            Snapshot fresh = downloadAndParse();
-            this.snapshot = fresh;
-            log.info("ЕМИСС: выгружено категорий {}, точек цен {}",
-                    fresh.catalog().size(),
-                    fresh.prices().values().stream().mapToInt(List::size).sum());
-            return fresh;
-        } catch (RuntimeException e) {
-            if (cur != null) {
-                log.warn("ЕМИСС: выгрузка не удалась ({}), использую кэш цен от {}",
-                        e.getMessage(), cur.fetchedAt());
-                return cur;
-            }
-            throw e;
+        if (maxResponseBytes > 0 && payload.length > maxResponseBytes) {
+            throw new IntegrationUnavailableException("ЕМИСС: файл «" + name + "» равен "
+                    + payload.length + " байт и превышает предел max-response-bytes="
+                    + maxResponseBytes);
         }
+        String xml = new String(payload, StandardCharsets.UTF_8);
+        if (!xml.contains("GenericData") && !xml.contains("generic:Series")) {
+            throw new IntegrationUnavailableException("ЕМИСС: файл «" + name + "» не похож на "
+                    + "SDMX-выгрузку (нет GenericData/generic:Series). Нужен ответ портала "
+                    + "downloadData.do?format=sdmx, а не HTML-страница или XLS");
+        }
+        EmisSnapshot parsed = parseSdmx(xml, regionTitle);
+        if (parsed.catalog().isEmpty() && parsed.prices().isEmpty()) {
+            throw new IntegrationUnavailableException("ЕМИСС: в файле «" + name + "» нет ни "
+                    + "позиций справочника, ни ценовых рядов — возможно, выгрузка пустая");
+        }
+        log.info("ЕМИСС: файл «{}» ({} байт) разобран — позиций справочника {}, рядов цен {}, регион {}",
+                name, payload.length, parsed.catalog().size(), parsed.prices().size(),
+                parsed.regionCode());
+        return parsed;
     }
 
-    private boolean expired(Instant fetchedAt) {
-        return fetchedAt.plus(cacheTtl).isBefore(Instant.now());
-    }
-
-    private Snapshot downloadAndParse() {
+    private EmisSnapshot downloadAndParse() {
         try (Session s = transport.open()) {
             PageResult page = s.get(baseUrl + "/indicator/" + indicatorId);
             if (page.status() == 403) throw new IntegrationUnavailableException(ANTIBOT_403);
@@ -453,7 +347,19 @@ public class RosstatEmisProvider implements PriceProvider {
                         + "если в теле «CSRF блокировка» — имя поля токена на портале "
                         + "изменилось (ожидаем значение input[name=struts.token.name])");
             }
-            Snapshot parsed = parseSdmx(data.body(), regionTitle);
+            // Дефект №6 (объём): ось «Год» портал сужать не даёт, поэтому полный ответ
+            // теоретически может оказаться огромным. DOM-парсинг 65 МБ XML — это пик
+            // 600–700 МБ heap и OutOfMemoryError контейнера; честнее отказать с внятной
+            // причиной и подсказкой, чем уронить приложение.
+            if (maxResponseBytes > 0 && data.body() != null
+                    && data.body().length() > maxResponseBytes) {
+                throw new IntegrationUnavailableException(
+                        "ЕМИСС вернул слишком большой ответ: " + data.body().length() + " символов "
+                        + "(предел max-response-bytes=" + maxResponseBytes + "). Уменьшите окно "
+                        + "выгрузки ROSSTAT_PERIOD_MONTHS (сейчас " + periodMonths + ") — портал "
+                        + "отклоняет только сужение оси «Год», «Период» и «Товары» сужать можно");
+            }
+            EmisSnapshot parsed = parseSdmx(data.body(), regionTitle);
             log.info("ЕМИСС: выгрузка разобрана — категорий={} рядов цен={} (indicator={})",
                     parsed.catalog().size(), parsed.prices().size(), indicatorId);
             return parsed;
@@ -840,7 +746,7 @@ public class RosstatEmisProvider implements PriceProvider {
      * и DataSet/Series/Obs (ряды). Пространства имён игнорируем (localName),
      * DOCTYPE запрещён (XXE). Структура — по fedstat_parse_sdmx_to_table.
      */
-    static Snapshot parseSdmx(String xml, String regionTitle) {
+    static EmisSnapshot parseSdmx(String xml, String regionTitle) {
         Document doc;
         try {
             DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
@@ -897,7 +803,7 @@ public class RosstatEmisProvider implements PriceProvider {
         // 2) Series/Obs → цены по категориям
         LinkedHashMap<String, String> catalog =
                 codeLists.getOrDefault(productField, new LinkedHashMap<>());
-        Map<String, List<PricePoint>> prices = new HashMap<>();
+        Map<String, List<EmisSnapshot.PricePoint>> prices = new HashMap<>();
         if (productField != null) {
             for (Element series : descendants(doc.getDocumentElement(), "Series")) {
                 Map<String, String> dims = new HashMap<>();
@@ -926,15 +832,19 @@ public class RosstatEmisProvider implements PriceProvider {
                     LocalDate date = obsDate(obs, seriesMonth);
                     BigDecimal price = parseDecimal(raw);
                     if (date == null || price == null || price.compareTo(BigDecimal.ZERO) <= 0) continue;
-                    prices.computeIfAbsent(product, k -> new ArrayList<>()).add(new PricePoint(date, price));
+                    prices.computeIfAbsent(product, k -> new ArrayList<>())
+                        .add(new EmisSnapshot.PricePoint(date, price));
                 }
             }
-            prices.values().forEach(l -> l.sort(Comparator.comparing(PricePoint::date)));
+            prices.values().forEach(l -> l.sort(Comparator.comparing(EmisSnapshot.PricePoint::date)));
         } else {
             throw new IntegrationUnavailableException(
                     "ЕМИСС: в SDMX-ответе не найдено измерение товаров (CodeList «Виды товаров…») — структура изменилась");
         }
-        return new Snapshot(Instant.now(), catalog, prices);
+        // Код региона (ОКАТО) берём из разобранного словаря: под ним точки лягут в
+        // emis_prices. Если измерения территорий в ответе нет — null, и EmisMirrorService
+        // подставит код из конфига (integration.rosstat.region-code).
+        return new EmisSnapshot(Instant.now(), regionCode, catalog, prices);
     }
 
     private static String findFieldByTitle(Map<String, String> titles, String... needles) {
@@ -1063,25 +973,6 @@ public class RosstatEmisProvider implements PriceProvider {
             return null;
         }
     }
-
-    // ==================== Единицы измерения (эвристика) ====================
-
-    /**
-     * Росстат отдаёт цену «за единицу категории»: большинство — ₽/кг,
-     * молоко/кефир/соки — ₽/л, яйца — ₽/10 шт. packUnit ОБЯЗАТЕЛЕН:
-     * IntegrationService.convertToIngredientUnit(null, …) возвращает null,
-     * и цена была бы молча отброшена.
-     */
-    static PackGuess guessPack(String categoryTitle) {
-        String t = normalize(categoryTitle);
-        if (t.contains("яйц")) return new PackGuess(BigDecimal.TEN, "PCS");
-        for (String w : List.of("молоко", "кефир", "сок", "вода", "напиток", "квас", "морс")) {
-            if (t.contains(w)) return new PackGuess(BigDecimal.ONE, "L");
-        }
-        return new PackGuess(BigDecimal.ONE, "KG");
-    }
-
-    // ==================== Утилиты ====================
 
     static String normalize(String s) {
         return s == null ? "" : s.toLowerCase().replaceAll("\\s+", " ").trim();

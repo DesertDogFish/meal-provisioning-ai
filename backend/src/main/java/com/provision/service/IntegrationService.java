@@ -1,14 +1,21 @@
 package com.provision.service;
 
-import com.provision.dto.integration.IngredientBindingDto;
 import com.provision.dto.integration.IntegrationDto;
-import com.provision.dto.integration.IngredientMappingRequest;
 import com.provision.dto.integration.SyncLogDto;
-import com.provision.entity.*;
+import com.provision.entity.Integration;
+import com.provision.entity.SyncLog;
+import com.provision.entity.User;
+import com.provision.exception.ConflictException;
 import com.provision.exception.NotFoundException;
-import com.provision.integration.*;
-import com.provision.repository.*;
+import com.provision.exception.ValidationException;
+import com.provision.integration.ConnectionStatus;
+import com.provision.integration.PriceProvider;
+import com.provision.repository.IntegrationRepository;
+import com.provision.repository.SyncLogRepository;
+import com.provision.repository.UserRepository;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,56 +26,53 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+/**
+ * Карточка интеграции и граница запуска синхронизации.
+ *
+ * <p>Ответственность сужена намеренно: здесь только подключение/отключение провайдера,
+ * запуск фонового синка (с проверкой «уже бежит»), приём файла выгрузки от админа и чтение
+ * журнала. Ручной привязки
+ * товаров здесь больше нет — продукт связывается с позицией локальной копии ЕМИСС
+ * в разделе «Продукты» ({@code ingredients.emis_code}), а сам синк живёт в
+ * {@link PriceSyncService}.</p>
+ */
 @Service
 @Slf4j
 public class IntegrationService {
 
     private final Map<String, PriceProvider> providers;
     private final IntegrationRepository integrationRepository;
-    private final ExternalProductRepository externalProductRepository;
-    private final IngredientMappingRepository mappingRepository;
-    private final IngredientRepository ingredientRepository;
     private final SyncLogRepository syncLogRepository;
     private final UserRepository userRepository;
-    /** Fix-16: фоновая синхронизация цен — здесь только граница {@code @Async} (R8/R9). */
+    /** Фоновая синхронизация — здесь только граница {@code @Async} (Fix-16, R8/R9). */
     private final PriceSyncService priceSyncService;
     // FIX (P1): self-injection через ObjectProvider — вызов @Async-метода должен идти
     // через прокси Spring, иначе аннотация игнорируется при internal call.
     // ObjectProvider нужен, чтобы unit-тесты конструировали сервис с null-бином.
-    private final org.springframework.beans.factory.ObjectProvider<IntegrationService> selfProvider;
+    private final ObjectProvider<IntegrationService> selfProvider;
 
-    public IntegrationService(
-            List<PriceProvider> providerList,
-            IntegrationRepository integrationRepository,
-            ExternalProductRepository externalProductRepository,
-            IngredientMappingRepository mappingRepository,
-            IngredientRepository ingredientRepository,
-            SyncLogRepository syncLogRepository,
-            UserRepository userRepository,
-            PriceSyncService priceSyncService) {
-        this(providerList, integrationRepository, externalProductRepository, mappingRepository,
-                ingredientRepository, syncLogRepository, userRepository, priceSyncService, null);
+    /** Конструктор для unit-тестов: без self-провайдера (синк вызывается синхронно). */
+    public IntegrationService(List<PriceProvider> providerList,
+                              IntegrationRepository integrationRepository,
+                              SyncLogRepository syncLogRepository,
+                              UserRepository userRepository,
+                              PriceSyncService priceSyncService) {
+        this(providerList, integrationRepository, syncLogRepository, userRepository,
+                priceSyncService, null);
     }
 
-    @org.springframework.beans.factory.annotation.Autowired
-    public IntegrationService(
-            List<PriceProvider> providerList,
-            IntegrationRepository integrationRepository,
-            ExternalProductRepository externalProductRepository,
-            IngredientMappingRepository mappingRepository,
-            IngredientRepository ingredientRepository,
-            SyncLogRepository syncLogRepository,
-            UserRepository userRepository,
-            PriceSyncService priceSyncService,
-            org.springframework.beans.factory.ObjectProvider<IntegrationService> selfProvider) {
+    @Autowired
+    public IntegrationService(List<PriceProvider> providerList,
+                              IntegrationRepository integrationRepository,
+                              SyncLogRepository syncLogRepository,
+                              UserRepository userRepository,
+                              PriceSyncService priceSyncService,
+                              ObjectProvider<IntegrationService> selfProvider) {
         this.providers = new HashMap<>();
         for (PriceProvider provider : providerList) {
             this.providers.put(provider.code(), provider);
         }
         this.integrationRepository = integrationRepository;
-        this.externalProductRepository = externalProductRepository;
-        this.mappingRepository = mappingRepository;
-        this.ingredientRepository = ingredientRepository;
         this.syncLogRepository = syncLogRepository;
         this.userRepository = userRepository;
         this.priceSyncService = priceSyncService;
@@ -91,7 +95,7 @@ public class IntegrationService {
         }
 
         ConnectionStatus status = provider.testConnection();
-        
+
         Integration integration = integrationRepository.findByProvider(providerCode)
                 .orElseGet(() -> Integration.builder()
                         .provider(providerCode)
@@ -99,11 +103,9 @@ public class IntegrationService {
                         .build());
 
         integration.setStatus(status.available() ? "CONNECTED" : "ERROR");
-        // FIX (баг «Ошибка: Connected successfully»): раньше сюда писалось
-        // status.message() даже при успехе ("Connected successfully" из
-        // ConnectionStatus.success()). Поле error_message семантически — текст
-        // ошибки, и UI выводит его красным блоком на карточке интеграции, поэтому
-        // при успешном подключении errorMessage должен быть очищен (null).
+        // FIX (баг «Ошибка: Connected successfully»): поле error_message семантически — текст
+        // ошибки, и UI выводит его красным блоком на карточке интеграции, поэтому при
+        // успешном подключении errorMessage должен быть очищен (null).
         integration.setErrorMessage(status.available() ? null : status.message());
         integration.setLastConnectedAt(status.available() ? LocalDateTime.now() : null);
 
@@ -128,141 +130,73 @@ public class IntegrationService {
         return toIntegrationDto(integration);
     }
 
-    @Transactional(readOnly = true)
-    public List<ExternalProductDto> searchProducts(String providerCode, String query, int limit) {
-        Integration integration = integrationRepository.findByProvider(providerCode)
-                .orElseThrow(() -> new NotFoundException("Integration not found: " + providerCode));
-
-        if (!"CONNECTED".equals(integration.getStatus())) {
-            throw new IllegalStateException("Provider is not connected");
-        }
-
-        PriceProvider provider = providers.get(providerCode);
-        return provider.searchProducts(query, limit);
-    }
-
-    @Transactional
-    public IngredientBindingDto createMapping(Long ingredientId, IngredientMappingRequest request) {
-        Ingredient ingredient = ingredientRepository.findById(ingredientId)
-                .orElseThrow(() -> new NotFoundException("Ingredient not found: " + ingredientId));
-
-        RecipeSource source = parseProviderSource(request.provider());
-
-        // Получаем или создаём внешний продукт
-        ExternalProduct externalProduct = externalProductRepository
-                .findByProviderAndExternalCode(request.provider(), request.externalCode())
-                .orElseGet(() -> {
-                    ExternalProduct newProduct = ExternalProduct.builder()
-                            .provider(request.provider())
-                            .externalCode(request.externalCode())
-                            .name(ingredient.getName())
-                            .packAmount(request.packAmount())
-                            .packUnit(request.packUnit())
-                            .build();
-                    return externalProductRepository.save(newProduct);
-                });
-
-        // Fix-14: идемпотентный upsert вместо «Mapping already exists».
-        // Раньше повторная привязка того же ингредиента (замена товара, повторный
-        // клик, попытка перепривязать после неочевидного успеха) падала с
-        // IllegalStateException, а пользователь не видел, ЧТО уже привязано, и не
-        // мог это изменить. Теперь существующий маппинг (ingredientId, source)
-        // просто переводится на новый внешний товар.
-        IngredientMapping mapping = mappingRepository
-                .findByInternalIngredientIdAndSource(ingredientId, source)
-                .orElse(null);
-        boolean isNew = mapping == null;
-        if (isNew) {
-            mapping = IngredientMapping.builder()
-                    .source(source)
-                    .internalIngredient(ingredient)
-                    .build();
-        }
-        mapping.setExternalName(ingredient.getName());
-        mapping.setExternalCode(request.externalCode());
-        mapping.setExternalProduct(externalProduct);
-
-        // Fix-15: save() без переприсваивания — JPA (IDENTITY) проставляет id и
-        // createdAt (@PrePersist) на том же экземпляре, а мок-repository в тестах
-        // возвращает null (переприсваивание роняло toBindingDto NPE).
-        mappingRepository.save(mapping);
-        log.info("{} mapping for ingredient {} to external product {}",
-                isNew ? "Created" : "Updated", ingredientId, request.externalCode());
-        // Fix-15: отвечаем готовой привязкой (200 + тело). Раньше контроллер
-        // возвращал ПУСТОЙ 200 — фронтенд response.json() падал с
-        // «Failed to execute 'json' … Unexpected end of JSON input», хотя
-        // маппинг фактически создавался (боль п.1/п.4 сообщения владельца).
-        return toBindingDto(mapping);
-    }
-
     /**
-     * Fix-14: список текущих привязок провайдера (для UI «Текущие привязки»,
-     * чтобы админ видел, что уже связано, и мог перепривязать/отвязать).
-     * Для провайдера, не являющегося источником рецептов, — пустой список.
-     */
-    @Transactional(readOnly = true)
-    public List<IngredientBindingDto> getMappings(String providerCode) {
-        // Fix-16: код провайдера → RecipeSource парсит PriceSyncService (одно место
-        // на обе выборки маппингов: «Текущие привязки» и фоновый синк цен).
-        RecipeSource source = priceSyncService.mappingSourceOrNull(providerCode);
-        if (source == null) return List.of();
-        return mappingRepository.findBySourceWithIngredients(source).stream()
-                .map(this::toBindingDto)
-                .toList();
-    }
-
-    /** Fix-15: единая сборка DTO привязки (список «Текущие привязки» и ответ createMapping). */
-    private IngredientBindingDto toBindingDto(IngredientMapping m) {
-        ExternalProduct ep = m.getExternalProduct();
-        return new IngredientBindingDto(
-                m.getId(),
-                m.getInternalIngredient().getId(),
-                m.getInternalIngredient().getName(),
-                m.getExternalCode(),
-                m.getExternalName(),
-                ep != null ? ep.getPackAmount() : null,
-                ep != null ? ep.getPackUnit() : null,
-                m.getCreatedAt());
-    }
-
-    @Transactional
-    public void deleteMapping(Long ingredientId, String providerCode) {
-        IngredientMapping mapping = mappingRepository.findByInternalIngredientIdAndSource(
-                ingredientId, parseProviderSource(providerCode))
-                .orElseThrow(() -> new NotFoundException("Mapping not found"));
-
-        mappingRepository.delete(mapping);
-        log.info("Deleted mapping for ingredient {} from provider {}", ingredientId, providerCode);
-    }
-
-    /**
-     * FIX (P1, аудит Phase 11): синхронизация цен стала фоновой.
-     * Проверка провайдера/конкурентности и создание SyncLog(RUNNING) выполняются
-     * в потоке запроса; долгие внешние HTTP-вызовы провайдера цен уходят в пул
-     * "off-sync-*" через @Async-прокси (self via ObjectProvider — иначе internal call
-     * обошёл бы прокси Spring и аннотация не сработала).
-     * Контроллер по-прежнему отвечает 202 ACCEPTED + logId: прогресс виден в /sync-logs.
+     * FIX (P1, аудит Phase 11): синхронизация — фоновая.
+     * Проверка провайдера/конкурентности и создание SyncLog(RUNNING) выполняются в потоке
+     * запроса; тяжёлая выгрузка ЕМИСС уходит в пул через {@code @Async}-прокси (self via
+     * ObjectProvider — иначе internal call обошёл бы прокси Spring и аннотация не сработала).
+     * Контроллер отвечает 202 ACCEPTED + logId: прогресс виден в /sync-logs.
      */
     public SyncLog syncPrices(String providerCode, Long userId) {
         Integration integration = integrationRepository.findByProvider(providerCode)
                 .orElseThrow(() -> new NotFoundException("Integration not found: " + providerCode));
 
         if (!"CONNECTED".equals(integration.getStatus())) {
-            throw new com.provision.exception.ConflictException("INTEGRATION_DISCONNECTED: Provider is not connected");
+            throw new ConflictException("INTEGRATION_DISCONNECTED: Provider is not connected");
         }
 
-        // Проверка на параллельный запуск
+        SyncLog syncLog = startSyncLog(providerCode, userId);
+        self().executePriceSync(providerCode, syncLog.getId());
+
+        return syncLog;
+    }
+
+    /**
+     * Загрузка выгрузки ЕМИСС файлом (Запуск №17: «чтобы я мог в интеграциях прогрузить файл
+     * сам»). Админ скачивает SDMX с портала вручную — браузером, под своей сессией, без нашего
+     * анти-бота — и кладёт его в локальную копию тем же конвейером, что и кнопка
+     * «Синхронизировать»: справочник + цены за два последних года + применение к привязанным
+     * продуктам.
+     *
+     * <p>Отличие от {@link #syncPrices}: статус {@code CONNECTED} НЕ требуется. Файл и есть
+     * план Б на случай, когда портал недоступен (403 анти-бота, 503 троттлинга), и требовать
+     * для него успешного подключения — значит оставить админа без единственного рабочего пути.</p>
+     *
+     * @param payload  байты файла (предел размера проверяет провайдер: {@code max-response-bytes})
+     * @param fileName исходное имя файла — уходит в журнал синка
+     */
+    public SyncLog uploadSnapshot(String providerCode, Long userId, byte[] payload, String fileName) {
+        if (!providers.containsKey(providerCode)) {
+            throw new NotFoundException("Provider not found: " + providerCode);
+        }
+        if (payload == null || payload.length == 0) {
+            throw new ValidationException("EMPTY_FILE: Файл выгрузки пуст");
+        }
+
+        SyncLog syncLog = startSyncLog(providerCode, userId);
+        log.info("ЕМИСС: загрузка файла «{}» ({} байт) запущена как синк {} провайдера {}",
+                fileName, payload.length, syncLog.getId(), providerCode);
+        self().executeUploadSync(providerCode, syncLog.getId(), payload, fileName);
+
+        return syncLog;
+    }
+
+    /**
+     * Общая часть запуска: проверка «уже бежит» + запись журнала в статусе RUNNING.
+     * Выполняется в потоке запроса (до {@code @Async}), чтобы конкурентный запуск получил
+     * 409 сразу, а не «где-то в фоне».
+     */
+    private SyncLog startSyncLog(String providerCode, Long userId) {
         Optional<SyncLog> runningSync = syncLogRepository.findRunningByProvider(providerCode);
         if (runningSync.isPresent()) {
-            throw new com.provision.exception.ConflictException("SYNC_ALREADY_RUNNING: Sync is already running for provider " + providerCode);
+            throw new ConflictException(
+                    "SYNC_ALREADY_RUNNING: Sync is already running for provider " + providerCode);
         }
 
-        // Получение пользователя
-        com.provision.entity.User user = userRepository.findById(userId)
+        User user = userRepository.findById(userId)
                 .orElseThrow(() -> new NotFoundException("User not found"));
 
-        // Создаём лог синхронизации
-        SyncLog syncLog = SyncLog.builder()
+        return syncLogRepository.save(SyncLog.builder()
                 .provider(providerCode)
                 .type("PRICES")
                 .status("RUNNING")
@@ -272,32 +206,27 @@ public class IntegrationService {
                 .createdCount(0)
                 .updatedCount(0)
                 .errorCount(0)
-                .build();
-        syncLog = syncLogRepository.save(syncLog);
+                .build());
+    }
 
-        // FIX (P1): тяжёлая часть (внешний HTTP + запись цен) — в фоне, в PriceSyncService.
-        // self == this для unit-тестов (ObjectProvider=null): синхронный вызов без прокси.
-        IntegrationService self = selfProvider != null ? selfProvider.getObject() : this;
-        self.executePriceSync(providerCode, syncLog.getId());
-
-        return syncLog;
+    /** Прокси Spring для {@code @Async}-методов (internal call обошёл бы прокси). */
+    private IntegrationService self() {
+        return selfProvider != null ? selfProvider.getObject() : this;
     }
 
     /**
-     * Фоновая часть синхронизации цен: выполняется вне HTTP-потока и вне БД-транзакции,
-     * исключения не выпрыгивают наружу (async) — статус и детали пишутся в SyncLog.
-     *
-     * <p>Fix-16: вся работа (чтение маппингов слепком, внешний HTTP, запись цен,
-     * финализация журнала) переехала в {@link PriceSyncService} — здесь осталась только
-     * граница {@code @Async}. Причина переезда: в фоновом потоке нет БД-сессии
-     * ({@code open-in-view: false}), а прежний код обращался к LAZY-ассоциациям
-     * {@code IngredientMapping} уже после закрытия сессии и падал на первом же маппинге с
-     * {@code LazyInitializationException: could not initialize proxy [Ingredient#…] - no Session}
-     * — синк финишировал фатальной ошибкой при пустых деталях («Постатейных данных нет»).</p>
+     * Фоновая часть синхронизации: вне HTTP-потока и вне БД-транзакции, исключения наружу
+     * не выпрыгивают — статус и детали пишутся в SyncLog ({@link PriceSyncService}).
      */
     @Async("taskExecutor")
     public void executePriceSync(String providerCode, Long syncLogId) {
         priceSyncService.runPriceSync(providerCode, syncLogId);
+    }
+
+    /** Фоновая часть загрузки файла: тот же конвейер, только слепок разбирается из байтов. */
+    @Async("taskExecutor")
+    public void executeUploadSync(String providerCode, Long syncLogId, byte[] payload, String fileName) {
+        priceSyncService.runPriceSyncFromFile(providerCode, syncLogId, payload, fileName);
     }
 
     @Transactional(readOnly = true)
@@ -309,19 +238,6 @@ public class IntegrationService {
                 .map(this::toSyncLogDto)
                 .toList();
     }
-
-    /**
-     * Парсит код провайдера в RecipeSource с понятной ошибкой вместо
-     * "No enum constant ..." (IllegalArgumentException из valueOf).
-     */
-    private RecipeSource parseProviderSource(String providerCode) {
-        try {
-            return RecipeSource.valueOf(providerCode);
-        } catch (IllegalArgumentException e) {
-            throw new NotFoundException("Неизвестный источник/провайдер: " + providerCode);
-        }
-    }
-
 
     private IntegrationDto toIntegrationDto(Integration integration) {
         return new IntegrationDto(

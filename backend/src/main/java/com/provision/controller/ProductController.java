@@ -30,15 +30,15 @@ public class ProductController {
             @RequestParam(required = false) List<Long> categoryId,
             @RequestParam(required = false) List<UnitOfMeasure> unit,
             @RequestParam(required = false) String priceStatus,
-            @RequestParam(required = false) String bindingStatus,
+            @RequestParam(required = false) String priceSyncStatus,
             @RequestParam(required = false) String usageStatus,
             @RequestParam(required = false, defaultValue = "name") String sort,
             @RequestParam(required = false, defaultValue = "asc") String direction,
             @RequestParam(required = false, defaultValue = "0") int page,
             @RequestParam(required = false, defaultValue = "20") int size
     ) {
-        return productService.getProducts(query, categoryId, unit, priceStatus, 
-                bindingStatus, usageStatus, sort, direction, page, size);
+        return productService.getProducts(query, categoryId, unit, priceStatus,
+                priceSyncStatus, usageStatus, sort, direction, page, size);
     }
 
     @PostMapping("/api/v1/admin/products")

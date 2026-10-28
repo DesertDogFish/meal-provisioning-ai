@@ -1,10 +1,14 @@
 package com.provision.entity;
 
+/**
+ * Источник рецепта/цены.
+ *
+ * <p>Значение {@code OFF} (Open Food Facts) удалено вместе с провайдером: импорт рецептов
+ * и цен из OFF больше не поддерживается, legacy-строки переведены в {@code MANUAL}
+ * миграцией V28. CHECK-ограничения колонок {@code source} сужены там же.</p>
+ */
 public enum RecipeSource {
     MANUAL,
-    /** Legacy: Open Food Facts. Провайдер демонтирован (Fix-13), значение
-     *  сохранено для существующих строк ingredient_mappings/recipes. */
-    OFF,
     /** Росстат (ЕМИСС) — код провайдера "ROSSTAT", см. RosstatEmisProvider.code(). */
     ROSSTAT,
     API,

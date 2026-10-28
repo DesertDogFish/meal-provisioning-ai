@@ -3,6 +3,7 @@ package com.provision.specification;
 import com.provision.entity.Ingredient;
 import com.provision.entity.IngredientPrice;
 import com.provision.entity.RecipeIngredient;
+import com.provision.entity.RecipeSource;
 import com.provision.entity.UnitOfMeasure;
 import jakarta.persistence.criteria.JoinType;
 import jakarta.persistence.criteria.Predicate;
@@ -82,15 +83,33 @@ public final class ProductSpecifications {
         };
     }
 
-    /** BOUND / UNBOUND — привязан ли продукт к внешнему коду (ingredient.code). */
-    public static Specification<Ingredient> hasBindingStatus(String bindingStatus) {
+    /**
+     * NOT_LINKED / NO_DATA / SYNCED — статус синхронизации цены (V26).
+     *
+     * <p>Считается по привязке {@code ingredients.emis_code} и наличию цены, записанной
+     * синхронизацией ({@code ingredient_prices.source='ROSSTAT'}) — те же правила, что и в
+     * {@code ProductService.toProductResponse}, поэтому фильтр и колонка таблицы не расходятся.</p>
+     */
+    public static Specification<Ingredient> hasPriceSyncStatus(String priceSyncStatus) {
         return (root, cq, cb) -> {
-            if (bindingStatus == null || bindingStatus.isBlank()) {
+            if (priceSyncStatus == null || priceSyncStatus.isBlank()) {
                 return null;
             }
-            return switch (bindingStatus) {
-                case "BOUND" -> cb.isNotNull(root.get("code"));
-                case "UNBOUND" -> cb.isNull(root.get("code"));
+            Predicate linked = cb.and(
+                    cb.isNotNull(root.get("emisCode")),
+                    cb.notEqual(root.get("emisCode"), ""));
+            var sub = cq.subquery(Long.class);
+            var price = sub.from(IngredientPrice.class);
+            sub.select(price.get("ingredient").get("id"))
+                    .where(cb.and(
+                            cb.equal(price.get("ingredient").get("id"), root.get("id")),
+                            cb.equal(price.get("source"), RecipeSource.ROSSTAT.name())
+                    ));
+            Predicate synced = cb.exists(sub);
+            return switch (priceSyncStatus) {
+                case "NOT_LINKED" -> cb.not(linked);
+                case "SYNCED" -> cb.and(linked, synced);
+                case "NO_DATA" -> cb.and(linked, cb.not(synced));
                 default -> null;
             };
         };

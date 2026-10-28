@@ -19,8 +19,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Fix-13: страж биндинга конфигурации ЕМИСС/Росстата — наследник
- * OffConfigBindingTest (тот сторожил ловушку YAML-boolean ключа "off").
+ * Страж биндинга конфигурации ЕМИСС/Росстата.
  *
  * Воспроизводит цепочку как в рантайме: РЕАЛЬНЫЙ application.yml (classpath)
  * → плейсхолдеры ${ROSSTAT_*} → свойства integration.rosstat.* → @Value-поля
@@ -29,7 +28,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @DisplayName("application.yml: биндинг integration.rosstat (Fix-13)")
 class RosstatConfigBindingTest {
 
-    /** Зонд с теми же @Value-выражениями, что у RosstatEmisProvider. */
+    /** Зонд с теми же @Value-выражениями, что у RosstatEmisProvider и сервисов копии. */
     static class Probe {
         @Value("${integration.rosstat.base-url:}")
         String baseUrl;
@@ -37,8 +36,14 @@ class RosstatConfigBindingTest {
         String indicatorId;
         @Value("${integration.rosstat.region:}")
         String region;
-        @Value("${integration.rosstat.cache-hours:0}")
-        long cacheHours;
+        @Value("${integration.rosstat.region-code:}")
+        String regionCode;
+        @Value("${integration.rosstat.period-years:0}")
+        int periodYears;
+        @Value("${integration.rosstat.period-months:-1}")
+        int periodMonths;
+        @Value("${integration.rosstat.max-response-bytes:0}")
+        long maxResponseBytes;
         @Value("${integration.rosstat.user-agent:}")
         String userAgent;
     }
@@ -61,14 +66,18 @@ class RosstatConfigBindingTest {
     }
 
     @Test
-    @DisplayName("Дефолты без env: fedstat.ru, показатель 31448, РФ, кэш 24ч, UA с контактом")
+    @DisplayName("Дефолты без env: fedstat.ru, показатель 31448, регион 643004.АГ, окно 2 года, все месяцы")
     void defaults() throws Exception {
         try (var ctx = contextWith(null)) {
             Probe p = ctx.getBean(Probe.class);
             assertEquals("https://www.fedstat.ru", p.baseUrl);
             assertEquals("31448", p.indicatorId);
-            assertEquals("Российская Федерация", p.region);
-            assertEquals(24, p.cacheHours);
+            // Решение владельца: только «РФ без учета новых субъектов (с 01.01.2023)», не «643».
+            assertEquals("Российская Федерация без учета новых субъектов (с 01.01.2023)", p.region);
+            assertEquals("643004.АГ", p.regionCode);
+            assertEquals(2, p.periodYears);
+            assertEquals(0, p.periodMonths);
+            assertEquals(33_554_432L, p.maxResponseBytes);
             // spring.application.name из yml = "provision", app.version дефолтный 0.0.0
             assertTrue(p.userAgent.contains("provision/0.0.0"), "UA: " + p.userAgent);
             assertTrue(p.userAgent.contains("dev@provision.app"), "UA должен содержать контакт: " + p.userAgent);
@@ -81,25 +90,29 @@ class RosstatConfigBindingTest {
         try (var ctx = contextWith(Map.of(
                 "ROSSTAT_INDICATOR_ID", "37426",
                 "ROSSTAT_REGION", "Белгородская область",
-                "ROSSTAT_CACHE_HOURS", "6",
+                "ROSSTAT_REGION_CODE", "14000000000",
+                "ROSSTAT_PERIOD_YEARS", "3",
+                "ROSSTAT_PERIOD_MONTHS", "6",
                 "INTEGRATION_CONTACT_EMAIL", "oleg@example.com"))) {
             Probe p = ctx.getBean(Probe.class);
             assertEquals("37426", p.indicatorId);
             assertEquals("Белгородская область", p.region);
-            assertEquals(6, p.cacheHours);
+            assertEquals("14000000000", p.regionCode);
+            assertEquals(3, p.periodYears);
+            assertEquals(6, p.periodMonths);
             assertTrue(p.userAgent.contains("oleg@example.com"), "UA: " + p.userAgent);
         }
     }
 
     @Test
-    @DisplayName("Регресс-страж: блок integration.off демонтирован вместе с OFF-провайдером")
-    void offBlockIsGone() throws Exception {
+    @DisplayName("Регресс-страж: integration.rosstat биндится вложенной картой (ловушка YAML 1.1)")
+    void rosstatBlockIsNestedMap() throws Exception {
         try (var ctx = contextWith(null)) {
-            // Ключ rosstat обязан биндиться как вложенная карта (не как скаляр/boolean —
-            // ловушка YAML 1.1, из-за которой «off» когда-то стал integration[false].*)
+            // Ключ rosstat обязан биндиться как вложенная карта, а не как скаляр/boolean:
+            // в YAML 1.1 «off»/«on» парсятся в false/true, и блок когда-то превратился
+            // в integration[false].* — свойства перестали доезжать до @Value.
             assertNotNull(ctx.getEnvironment().getProperty("integration.rosstat.base-url"));
-            assertNull(ctx.getEnvironment().getProperty("integration.off.user-id"),
-                    "OFF-конфиг должен быть удалён из application.yml");
+            assertNotNull(ctx.getEnvironment().getProperty("integration.rosstat.region-code"));
             assertNull(ctx.getEnvironment().getProperty("integration[false].user-id"));
         }
     }

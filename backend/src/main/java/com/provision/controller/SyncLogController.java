@@ -1,6 +1,5 @@
 package com.provision.controller;
 
-import com.provision.dto.integration.IntegrationSettingsRequest;
 import com.provision.dto.sync.SyncKpiResponse;
 import com.provision.dto.sync.SyncLogResponse;
 import com.provision.entity.User;

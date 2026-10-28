@@ -18,7 +18,7 @@ const mk = (over: Partial<ProductRow>): ProductRow => ({
 });
 
 const products: ProductRow[] = [
-  // Fix-13: источник цены — Росстат (ЕМИСС); OFF — legacy-строки БД
+  // Источник цены: ROSSTAT — из локальной копии ЕМИСС, MANUAL — ввёл человек
   mk({ id: 'a', name: 'Гречка', categoryName: 'Крупы', usageRecipes: 2, currentPrice: { value: 89, currency: 'RUB', source: 'ROSSTAT' } }),
   mk({ id: 'b', name: 'Соль', categoryName: 'Специи', usageRecipes: 0, unit: 'KG', packSize: undefined }),
   mk({ id: 'c', name: 'Тушёнка', categoryName: 'Мясо', unit: 'PCS', pieceWeightG: 325, usageRecipes: 5, bindingStatus: 'BOUND', code: '4600000000001' }),
@@ -163,7 +163,7 @@ describe('ProductTable (рендер и взаимодействия)', () => {
     // Соль и Тушёнка без цены → 2 чипа «нет цены»
     expect(screen.getAllByText('нет цены')).toHaveLength(2);
     expect(screen.getByText(/89 RUB/)).toBeTruthy();
-    expect(screen.getByText('Росстат')).toBeTruthy();
+    expect(screen.getByText('ЕМИСС')).toBeTruthy();
     expect(screen.getByText('ручная')).toBeTruthy();
   });
 

@@ -26,6 +26,13 @@ public interface IngredientRepository extends JpaRepository<Ingredient, Long>, J
     List<Ingredient> findByNameNorm(@Param("nameNorm") String nameNorm);
     
     Optional<Ingredient> findByCode(String code);
+
+    /**
+     * V26: глобальные продукты с привязкой к локальной копии ЕМИСС — целевой набор
+     * синхронизации цен. Снепшоты походов (trip_id NOT NULL) исключены: история неизменна.
+     */
+    @Query("SELECT i FROM Ingredient i WHERE i.emisCode IS NOT NULL AND i.tripId IS NULL ORDER BY i.name")
+    List<Ingredient> findByEmisCodeIsNotNullAndTripIdIsNull();
     boolean existsByCode(String code);
     
     // FIX (скрытый N+1): category — LAZY @ManyToOne; IngredientService.toDto читает

@@ -6,7 +6,6 @@ import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.math.BigDecimal;
-import java.time.Duration;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
@@ -24,7 +23,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * зарубежные дата-центры, 403), поэтому здесь — синтетические фикстуры,
  * структурно повторяющие документированный формат.</p>
  */
-@DisplayName("RosstatEmisProvider: протокол ЕМИСС (токен, фильтры, SDMX, кэш)")
+@DisplayName("RosstatEmisProvider: протокол ЕМИСС (токен, фильтры, SDMX-выгрузка)")
 class RosstatEmisProviderTest {
 
     /** Фиксированная «сегодняшня» дата: окно месяцев в buildFormBody обязано быть
@@ -166,8 +165,9 @@ class RosstatEmisProviderTest {
     }
 
     private static RosstatEmisProvider provider(FakeTransport t) {
+        // Кэша больше нет: единственная точка входа — downloadSnapshot() («Синхронизировать»).
         return new RosstatEmisProvider("https://www.fedstat.ru", "31448",
-                "Российская Федерация", Duration.ofHours(24), 2, t);
+                "Российская Федерация", 2, 33_554_432L, t);
     }
 
     // ==================== Чистые функции парсинга ====================
@@ -463,31 +463,6 @@ class RosstatEmisProviderTest {
         assertThat(RosstatEmisProvider.monthFromRuName(null)).isNull();
     }
 
-    /**
-     * Дефект №8: словарь страницы показателя ключуется id значения фильтра, а цены в
-     * SDMX — кодом классификатора. Фикстура {@link #PAGE_HTML} эту разницу скрывала:
-     * там id значения (101) случайно равен коду классификатора. На боевом ответе
-     * (товар «105» отсутствует в словаре страницы) поиск обязан отдать код из выгрузки.
-     */
-    @Test
-    @DisplayName("searchProducts: код категории = код классификатора SDMX, им же находятся цены")
-    void searchProductsUsesSdmxClassifierCodes() throws IOException {
-        FakeTransport t = new FakeTransport();
-        t.dataBody = resource("emis/data-31448-real.xml");
-        var provider = provider(t);
-
-        var found = provider.searchProducts("Фарш", 10);
-
-        assertThat(found).hasSize(1);
-        assertThat(found.get(0).code()).isEqualTo("105");
-        assertThat(found.get(0).name()).isEqualTo("Фарш мясной, кг");
-        assertThat(found.get(0).price()).isEqualByComparingTo("557.59");
-        assertThat(found.get(0).priceDate()).isEqualTo(LocalDate.of(2026, 4, 1));
-
-        // то же пространство имён: код из поиска находит ряды цен
-        assertThat(provider.fetchPrices("105", null)).hasSize(8);
-    }
-
     private static String resource(String path) throws IOException {
         try (var in = RosstatEmisProviderTest.class.getClassLoader().getResourceAsStream(path)) {
             if (in == null) throw new IOException("нет тестового ресурса: " + path);
@@ -504,17 +479,6 @@ class RosstatEmisProviderTest {
         assertThat(RosstatEmisProvider.parsePeriod("2025")).isEqualTo(LocalDate.of(2025, 1, 1));
         assertThat(RosstatEmisProvider.parsePeriod("не период")).isNull();
         assertThat(RosstatEmisProvider.parsePeriod(null)).isNull();
-    }
-
-    @Test
-    @DisplayName("guessPack: яйца → 10 PCS, молоко → 1 L, остальное → 1 KG")
-    void guessesPackUnits() {
-        assertThat(RosstatEmisProvider.guessPack("Яйца куриные"))
-                .isEqualTo(new RosstatEmisProvider.PackGuess(BigDecimal.TEN, "PCS"));
-        assertThat(RosstatEmisProvider.guessPack("Молоко питьевое"))
-                .isEqualTo(new RosstatEmisProvider.PackGuess(BigDecimal.ONE, "L"));
-        assertThat(RosstatEmisProvider.guessPack("Гречневая крупа"))
-                .isEqualTo(new RosstatEmisProvider.PackGuess(BigDecimal.ONE, "KG"));
     }
 
     // ==================== Поведение провайдера (fake transport) ====================
@@ -562,84 +526,29 @@ class RosstatEmisProviderTest {
     }
 
     @Test
-    @DisplayName("searchProducts: Fix-14 — фильтр по подстроке, pack-эвристика И свежая цена категории из выгрузки")
-    void searchProductsReturnsPrice() {
+    @DisplayName("downloadSnapshot: полная выгрузка SDMX, POST-тело с токеном, справочник и цены по месяцам")
+    void downloadSnapshotFullPipeline() {
         FakeTransport t = new FakeTransport();
         var p = provider(t);
 
-        List<ExternalProductDto> found = p.searchProducts("греч", 20);
-        assertThat(found).hasSize(1);
-        var product = found.get(0);
-        assertThat(product.code()).isEqualTo("101");
-        assertThat(product.name()).isEqualTo("Гречневая крупа");
-        assertThat(product.brand()).isEqualTo("Росстат");
-        assertThat(product.packAmount()).isEqualByComparingTo("1");
-        assertThat(product.packUnit()).isEqualTo("KG");
-        // Fix-14: цена подтянута из SDMX (РФ, последний месяц 2025-09 = 89.1)
-        assertThat(product.price()).isEqualByComparingTo("89.1");
-        assertThat(product.priceDate()).isEqualTo(LocalDate.of(2025, 9, 1));
-
-        // Яйца — pack 10 PCS; в SDMX-фикстуре нет ряда для 103 → цена null (не падаем)
-        var eggs = p.searchProducts("яйц", 20);
-        assertThat(eggs).hasSize(1);
-        assertThat(eggs.get(0).packAmount()).isEqualByComparingTo("10");
-        assertThat(eggs.get(0).packUnit()).isEqualTo("PCS");
-        assertThat(eggs.get(0).price()).isNull();
-
-        // Выгрузка закэширована: повторный поиск не идёт в сеть заново
-        int postsAfterFirst = t.posts;
-        assertThat(postsAfterFirst).isEqualTo(1);
-        p.searchProducts("молоко", 20);
-        assertThat(t.posts).isEqualTo(postsAfterFirst);
-
-        // Пустой запрос — ВЕСЬ словарный справочник страницы (3 категории, включая
-        // 103 без ценового ряда — список не урезается до «только те, у кого есть цена»)
-        assertThat(p.searchProducts("", 50)).hasSize(3);
-    }
-
-    @Test
-    @DisplayName("searchProducts: Fix-14 — выгрузка цен недоступна → graceful-fallback на справочник без цен")
-    void searchProductsFallbackWithoutPrices() {
-        FakeTransport t = new FakeTransport();
-        t.dataStatus = 500; // SDMX-выгрузка падает, но страница показателя (GET) доступна
-        var p = provider(t);
-
-        List<ExternalProductDto> found = p.searchProducts("греч", 20);
-        assertThat(found).hasSize(1);
-        assertThat(found.get(0).code()).isEqualTo("101");
-        assertThat(found.get(0).name()).isEqualTo("Гречневая крупа");
-        // Поиск работает, но без цены (выгрузка недоступна)
-        assertThat(found.get(0).price()).isNull();
-        assertThat(found.get(0).priceDate()).isNull();
-    }
-
-    @Test
-    @DisplayName("fetchPrices: полная выгрузка SDMX, POST-тело с токеном, цены RUB по месяцам, фильтр since")
-    void fetchPricesFullPipeline() {
-        FakeTransport t = new FakeTransport();
-        var p = provider(t);
-
-        List<ExternalPriceDto> prices = p.fetchPrices("101", null);
+        EmisSnapshot snapshot = p.downloadSnapshot();
         assertThat(t.posts).isEqualTo(1);
         // CSRF-токен уходит в поле с именем, прочитанным со страницы, и запрос содержит id показателя
         assertThat(t.lastFormBody).contains("struts.token.name=token");
         assertThat(t.lastFormBody).contains("token=TOKEN123");
         assertThat(t.lastFormBody).contains("id=31448");
         assertThat(t.lastFormBody).doesNotContain("struts.token=TOKEN123");
-        assertThat(prices).hasSize(2);
-        assertThat(prices.get(0).code()).isEqualTo("101");
-        assertThat(prices.get(0).currency()).isEqualTo("RUB");
-        assertThat(prices.get(0).price()).isEqualByComparingTo("87.4");
-        assertThat(prices.get(0).date()).isEqualTo(LocalDate.of(2025, 8, 1));
+        // справочник (CodeList товаров) и ряды цен — то, что укладывается в локальную копию
+        assertThat(snapshot.catalog()).containsEntry("101", "Гречневая крупа");
+        assertThat(snapshot.prices().get("101")).hasSize(2);
+        assertThat(snapshot.prices().get("101").get(0).price()).isEqualByComparingTo("87.4");
+        assertThat(snapshot.prices().get("101").get(0).date()).isEqualTo(LocalDate.of(2025, 8, 1));
+        // неизвестная позиция — просто отсутствует, без ошибки
+        assertThat(snapshot.prices()).doesNotContainKey("999");
 
-        // since отсекает ранние точки
-        assertThat(p.fetchPrices("101", LocalDate.of(2025, 9, 1))).hasSize(1);
-        // неизвестная категория — пусто, без ошибки
-        assertThat(p.fetchPrices("999", null)).isEmpty();
-        // кэш: вторая серия вызовов не идёт в сеть
-        int postsBefore = t.posts;
-        p.fetchPrices("102", null);
-        assertThat(t.posts).isEqualTo(postsBefore);
+        // кэша нет: каждый запуск синхронизации — новая выгрузка
+        p.downloadSnapshot();
+        assertThat(t.posts).isEqualTo(2);
     }
 
     @Test
@@ -658,7 +567,7 @@ class RosstatEmisProviderTest {
         t.dataContentType = "text/html;charset=UTF-8";
         var p = provider(t);
 
-        assertThatThrownBy(() -> p.fetchPrices("101", null))
+        assertThatThrownBy(p::downloadSnapshot)
                 .isInstanceOf(IntegrationUnavailableException.class)
                 // R10: по сообщению должно быть понятно, ЧТО именно ответил портал
                 .hasMessageContaining("CSRF блокировка")
@@ -675,33 +584,12 @@ class RosstatEmisProviderTest {
         t.dataLocation = "/indicator/31448.do";
         var p = provider(t);
 
-        assertThatThrownBy(() -> p.fetchPrices("101", null))
+        assertThatThrownBy(p::downloadSnapshot)
                 .isInstanceOf(IntegrationUnavailableException.class)
                 .hasMessageContaining("302")
                 .hasMessageContaining("/indicator/31448.do")
                 .hasMessageContaining("фильтр")
                 .hasMessageNotContaining("истёк");
-    }
-
-    @Test
-    @DisplayName("Сбой сети при ЖИВОМ кэше → отдаём предыдущие данные (graceful degradation)")
-    void staleCacheOnFailure() {
-        FakeTransport t = new FakeTransport();
-        var p = provider(t);
-        assertThat(p.fetchPrices("101", null)).hasSize(2); // прогрели кэш
-
-        t.ioFailure = true; // сеть упала, TTL не истёк — но даже при истечении:
-        var cached = p.fetchPrices("101", null);
-        assertThat(cached).hasSize(2); // свежий кэш отдаётся без сети
-
-        // Прогоняем TTL: новый провайдер с нулевым кэшем и упавшей сетью → ошибка
-        FakeTransport dead = new FakeTransport();
-        dead.ioFailure = true;
-        var p2 = new RosstatEmisProvider("https://www.fedstat.ru", "31448",
-                "Российская Федерация", Duration.ofHours(24), 2, dead);
-        assertThatThrownBy(() -> p2.fetchPrices("101", null))
-                .isInstanceOf(IntegrationUnavailableException.class)
-                .hasMessageContaining("недоступен");
     }
 
     @Test

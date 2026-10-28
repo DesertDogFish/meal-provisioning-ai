@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Edit2, Trash2 } from 'lucide-react';
-import type { UnitOfMeasure } from '../types';
+import type { PriceSyncStatus, UnitOfMeasure } from '../types';
 import { humanizeUnit } from '../utils/text';
 import { Button } from './Button';
 
@@ -20,10 +20,30 @@ export interface ProductRow {
     value: number;
     currency: string;
     source: string;
+    effectiveFrom?: string;
   };
   usageRecipes: number;
+  /** BOUND/UNBOUND — выбран ли источник цены (привязка к позиции ЕМИСС). */
   bindingStatus: string;
+  /** Код позиции локального справочника ЕМИСС (ingredients.emis_code, V26). */
+  emisCode?: string | null;
+  /** Название привязанной позиции ЕМИСС. */
+  emisName?: string | null;
+  /** Синхронизирована ли цена из ЕМИСС: NOT_LINKED / NO_DATA / SYNCED. */
+  priceSyncStatus?: PriceSyncStatus | string;
 }
+
+/**
+ * Подпись колонки «Цена синхронизирована» (ProductResponse.priceSyncStatus):
+ * SYNCED — действующая цена пришла из локальной копии ЕМИСС;
+ * NO_DATA — продукт привязан, но цен позиции в копии нет (нужна синхронизация);
+ * NOT_LINKED — источник цены не выбран, цену ведёт человек.
+ */
+export const PRICE_SYNC_LABELS: Record<string, { label: string; tone: 'ok' | 'warn' | 'dim' }> = {
+  SYNCED: { label: 'да, из ЕМИСС', tone: 'ok' },
+  NO_DATA: { label: 'нет данных', tone: 'warn' },
+  NOT_LINKED: { label: 'не привязан', tone: 'dim' },
+};
 
 export type ProductSortKey = 'name' | 'category' | 'unit' | 'price' | 'usage';
 
@@ -161,9 +181,31 @@ export function ProductTable({ products, filters, onEdit, onDelete, onResetFilte
       <span style={{ color: 'var(--text)' }}>
         {price.value.toLocaleString('ru-RU')} {price.currency}
         <span className="chip-delta dim" style={{ marginLeft: '8px' }}>
-          {/* Fix-13: источник цены — Росстат (ЕМИСС) / legacy OFF / ручная */}
-          {price.source === 'ROSSTAT' ? 'Росстат' : price.source === 'OFF' ? 'OFF' : 'ручная'}
+          {/* Источник цены: ROSSTAT — применила синхронизация ЕМИСС, MANUAL — ввёл человек,
+              API — машинный источник (legacy-строки, V28). Значения 'OFF' больше нет. */}
+          {price.source === 'ROSSTAT' ? 'ЕМИСС' : price.source === 'API' ? 'API' : 'ручная'}
         </span>
+      </span>
+    );
+  };
+
+  /**
+   * Колонка «цена синхронизирована»: короткий ответ + подсказка с позицией ЕМИСС
+   * и датой действующей цены (боль «даже цена не высвечивается»).
+   */
+  const formatSyncStatus = (product: ProductRow) => {
+    const status = String(product.priceSyncStatus ?? (product.emisCode ? 'NO_DATA' : 'NOT_LINKED'));
+    const meta = PRICE_SYNC_LABELS[status] ?? { label: status, tone: 'dim' as const };
+    const tone =
+      meta.tone === 'ok' ? { background: 'var(--success-soft)', color: 'var(--wave-300)' }
+      : meta.tone === 'warn' ? { background: 'color-mix(in srgb, var(--amber-500) 14%, transparent)', color: 'var(--amber-300)' }
+      : { background: 'color-mix(in srgb, var(--line-strong) 28%, transparent)', color: 'var(--muted)' };
+    const title = product.emisName
+      ? `ЕМИСС: ${product.emisName}${product.currentPrice?.effectiveFrom ? ` · цена от ${product.currentPrice.effectiveFrom}` : ''}`
+      : 'Источник цены не выбран — цену ведёт человек';
+    return (
+      <span className="chip-delta" style={tone} title={title} data-testid="price-sync-status">
+        {meta.label}
       </span>
     );
   };
@@ -205,6 +247,9 @@ export function ProductTable({ products, filters, onEdit, onDelete, onResetFilte
             >
               Цена{sortIndicator('price')}
             </th>
+            <th className="text-left px-4 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: '11px' }}>
+              Цена синхронизирована
+            </th>
             <th
               className="text-right px-4 py-3 font-bold cursor-pointer"
               style={{ color: 'var(--muted)', fontSize: '11px' }}
@@ -237,6 +282,9 @@ export function ProductTable({ products, filters, onEdit, onDelete, onResetFilte
               </td>
               <td className="px-4 py-3">
                 {formatPrice(product.currentPrice)}
+              </td>
+              <td className="px-4 py-3">
+                {formatSyncStatus(product)}
               </td>
               <td className="px-4 py-3 text-right" style={{ color: 'var(--text)' }}>
                 {product.usageRecipes}

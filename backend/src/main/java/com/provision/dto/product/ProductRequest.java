@@ -27,5 +27,13 @@ public record ProductRequest(
     BigDecimal pieceWeightG,
     
     @Size(max = 1000)
-    String description
+    String description,
+
+    /**
+     * Код позиции локального справочника ЕМИСС — «откуда брать цену» (V26).
+     * {@code null}/пустая строка = отвязать (цену ведёт человек). Сервис проверяет,
+     * что код есть в локальной копии: опечатка не должна молча ломать синхронизацию.
+     */
+    @Size(max = 16)
+    String emisCode
 ) {}
