@@ -1,0 +1,389 @@
+<?xml version="1.0" encoding="utf-8"?>
+<GenericData
+ xmlns="http://www.SDMX.org/resources/SDMXML/schemas/v1_0/message"
+ xmlns:common="http://www.SDMX.org/resources/SDMXML/schemas/v1_0/common"
+ xmlns:compact="http://www.SDMX.org/resources/SDMXML/schemas/v1_0/compact"
+ xmlns:cross="http://www.SDMX.org/resources/SDMXML/schemas/v1_0/cross"
+ xmlns:generic="http://www.SDMX.org/resources/SDMXML/schemas/v1_0/generic"
+ xmlns:query="http://www.SDMX.org/resources/SDMXML/schemas/v1_0/query"
+ xmlns:structure="http://www.SDMX.org/resources/SDMXML/schemas/v1_0/structure"
+ xmlns:utility="http://www.SDMX.org/resources/SDMXML/schemas/v1_0/utility"
+ xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+ xsi:schemaLocation="http://www.SDMX.org/resources/SDMXML/schemas/v1_0/message SDMXMessage.xsd">
+<Header Id="singHead">
+	<ID>-2105463194</ID>
+	<Test>false</Test>
+	<Truncated>false</Truncated>
+	<Prepared>2026-10-28T15:34:26</Prepared>
+	<Extracted>2026-10-28T15:34:26</Extracted>
+	<Sender id="UIS">
+		<Name xml:lang="en">Official statistics</Name>
+		<Name xml:lang="ru">Государственная статистика</Name>
+	</Sender>
+	<DataSetAgency>1</DataSetAgency>
+	<DataSetID>1921001</DataSetID>
+</Header>
+<CodeLists>
+	<structure:CodeList id="s_grtov">
+		<structure:Name xml:lang="ru">Виды товаров и услуг</structure:Name>
+		<structure:Code value="105">
+			<structure:Description xml:lang="ru">Фарш мясной, кг</structure:Description>
+		</structure:Code>
+		<structure:Code value="106">
+			<structure:Description xml:lang="ru">Пельмени, манты, равиоли, кг</structure:Description>
+		</structure:Code>
+		<structure:Code value="2703">
+			<structure:Description xml:lang="ru">Апельсины, кг</structure:Description>
+		</structure:Code>
+		<structure:Code value="2711">
+			<structure:Description xml:lang="ru">Бананы, кг</structure:Description>
+		</structure:Code>
+	</structure:CodeList>
+	<structure:CodeList id="s_OKATO">
+		<structure:Name xml:lang="ru">Классификатор объектов административно-территориального деления (ОКАТО)</structure:Name>
+		<structure:Code value="643">
+			<structure:Description xml:lang="ru">Российская Федерация</structure:Description>
+		</structure:Code>
+		<structure:Code value="643004.АГ">
+			<structure:Description xml:lang="ru">Российская Федерация без учета новых субъектов (с 01.01.2023)</structure:Description>
+		</structure:Code>
+		<structure:Code value="030">
+			<structure:Description xml:lang="ru">Центральный федеральный округ</structure:Description>
+		</structure:Code>
+	</structure:CodeList>
+</CodeLists>
+<Description Id="signObj">
+	<Indicator id="31448" name="Средние потребительские цены (тарифы) на товары и услуги">
+		<Units>
+			<Unit value="рубль"/>
+		</Units>
+		<Periodicities>
+			<Periodicity value="Месячная - не охарактеризована" releases="на 6-10-й рабочий день после отчетного периода" next-release="12.10.2027"/>
+			<Periodicity value="По специальному графику - не охарактеризована" releases="по специальному графику" next-release="12.10.2027"/>
+		</Periodicities>
+		<DataRange start="2000" end="2026"/>
+		<LastUpdate value="2026-10-12T12:38:01"/>
+		<Dimensions>
+			<Dimension value="s_grtov" agencyID="1">
+				<Name xml:lang="ru">Виды товаров и услуг</Name>
+			</Dimension>
+			<Dimension value="s_OKATO" agencyID="1">
+				<Name xml:lang="ru">Классификатор объектов административно-территориального деления (ОКАТО)</Name>
+			</Dimension>
+		</Dimensions>
+		<Methodology value="Средняя потребительская цена (тариф) – средняя величина из уровней цен на товар (услугу)-представитель, зарегистрированная в различных организациях торговли и сферы услуг. Средняя цена (тариф) на товар (услугу) формируется под влиянием многообразных ассортиментных, а также территориальных сдвигов, сезонных колебаний и других факторов.  («Официальная статистическая методология наблюдения за потребительскими ценами на товары и услуги и расчета индексов потребительских цен», утвержденная приказом Росстата № 915 от 15 декабря 2021 г.)"/>
+		<Organization value="Федеральная служба государственной статистики"/>
+		<Department value="Управление статистики цен"/>
+		<Allocations>
+			<Allocation id="1.29.2.">
+				<Name xml:lang="ru">По федеральному плану статработ / Федеральная служба государственной статистики / Цены и тарифы / Средние потребительские цены (тарифы) на продовольственные, непродовольственные товары и услуги </Name>
+			</Allocation>
+			<Allocation id="2.10.5.">
+				<Name xml:lang="ru">По федеральному плану статработ / Росстат и другие субъекты официального статистического учета / Официальная статистическая информация, предоставляемая в соответствии с вопросниками международных организаций / Вопросник по ценам производителей сельскохозяйственной продукции</Name>
+			</Allocation>
+			<Allocation id="2.10.15.">
+				<Name xml:lang="ru">По федеральному плану статработ / Росстат и другие субъекты официального статистического учета / Официальная статистическая информация, предоставляемая в соответствии с вопросниками международных организаций / Вопросник по ценам на энергию</Name>
+			</Allocation>
+			<Allocation id="2.10.18.">
+				<Name xml:lang="ru">По федеральному плану статработ / Росстат и другие субъекты официального статистического учета / Официальная статистическая информация, предоставляемая в соответствии с вопросниками международных организаций / Вопросники для межгосударственного обмена статистической информацией в рамках государств - участников Содружества Независимых Государств</Name>
+			</Allocation>
+			<Allocation id="2.10.45.">
+				<Name xml:lang="ru">По федеральному плану статработ / Росстат и другие субъекты официального статистического учета / Официальная статистическая информация, предоставляемая в соответствии с вопросниками международных организаций / Вопросник по ценам и налогам на энергоносители</Name>
+			</Allocation>
+			<Allocation id="2.10.109.">
+				<Name xml:lang="ru">По федеральному плану статработ / Росстат и другие субъекты официального статистического учета / Официальная статистическая информация, предоставляемая в соответствии с вопросниками международных организаций / Российский статистический вопросник по зерну</Name>
+			</Allocation>
+			<Allocation id="2.10.110.">
+				<Name xml:lang="ru">По федеральному плану статработ / Росстат и другие субъекты официального статистического учета / Официальная статистическая информация, предоставляемая в соответствии с вопросниками международных организаций / Ежегодный вопросник по сахару</Name>
+			</Allocation>
+		</Allocations>
+		<Comment value=" Статистические данные по Российской Федерации публикуются без учета статистической информации по Донецкой Народной Республике (ДНР), Луганской Народной Республике (ЛНР), Запорожской и Херсонской областям"/>
+		<Responsible>
+			<Name xml:lang="ru">Гершов С.А.</Name>
+			<Contacts xml:lang="ru">(495) 568-00-42 (доб.  99456) gershovsa@rosstat.gov.ru</Contacts>
+		</Responsible>
+	</Indicator>
+</Description>
+<DataSet>
+<generic:Series>
+		<generic:SeriesKey>
+			<generic:Value concept="s_OKATO" value="643"/>
+			<generic:Value concept="s_grtov" value="105"/>
+		</generic:SeriesKey>
+		<generic:Attributes>
+			<generic:Value concept="EI" value="рубль"/>
+			<generic:Value concept="PERIOD" value="январь"/>
+		</generic:Attributes>
+		<generic:Obs>
+			<generic:Time>2025</generic:Time>
+			<generic:ObsValue value="502,55"/>
+		</generic:Obs>
+	</generic:Series>
+	<generic:Series>
+		<generic:SeriesKey>
+			<generic:Value concept="s_OKATO" value="643"/>
+			<generic:Value concept="s_grtov" value="105"/>
+		</generic:SeriesKey>
+		<generic:Attributes>
+			<generic:Value concept="EI" value="рубль"/>
+			<generic:Value concept="PERIOD" value="февраль"/>
+		</generic:Attributes>
+		<generic:Obs>
+			<generic:Time>2025</generic:Time>
+			<generic:ObsValue value="507,83"/>
+		</generic:Obs>
+	</generic:Series>
+	<generic:Series>
+		<generic:SeriesKey>
+			<generic:Value concept="s_OKATO" value="643"/>
+			<generic:Value concept="s_grtov" value="105"/>
+		</generic:SeriesKey>
+		<generic:Attributes>
+			<generic:Value concept="EI" value="рубль"/>
+			<generic:Value concept="PERIOD" value="март"/>
+		</generic:Attributes>
+		<generic:Obs>
+			<generic:Time>2025</generic:Time>
+			<generic:ObsValue value="511,38"/>
+		</generic:Obs>
+	</generic:Series>
+	<generic:Series>
+		<generic:SeriesKey>
+			<generic:Value concept="s_OKATO" value="643"/>
+			<generic:Value concept="s_grtov" value="105"/>
+		</generic:SeriesKey>
+		<generic:Attributes>
+			<generic:Value concept="EI" value="рубль"/>
+			<generic:Value concept="PERIOD" value="апрель"/>
+		</generic:Attributes>
+		<generic:Obs>
+			<generic:Time>2025</generic:Time>
+			<generic:ObsValue value="517,56"/>
+		</generic:Obs>
+	</generic:Series>
+	<generic:Series>
+		<generic:SeriesKey>
+			<generic:Value concept="s_OKATO" value="643"/>
+			<generic:Value concept="s_grtov" value="105"/>
+		</generic:SeriesKey>
+		<generic:Attributes>
+			<generic:Value concept="EI" value="рубль"/>
+			<generic:Value concept="PERIOD" value="январь"/>
+		</generic:Attributes>
+		<generic:Obs>
+			<generic:Time>2026</generic:Time>
+			<generic:ObsValue value="550,64"/>
+		</generic:Obs>
+	</generic:Series>
+	<generic:Series>
+		<generic:SeriesKey>
+			<generic:Value concept="s_OKATO" value="643"/>
+			<generic:Value concept="s_grtov" value="105"/>
+		</generic:SeriesKey>
+		<generic:Attributes>
+			<generic:Value concept="EI" value="рубль"/>
+			<generic:Value concept="PERIOD" value="февраль"/>
+		</generic:Attributes>
+		<generic:Obs>
+			<generic:Time>2026</generic:Time>
+			<generic:ObsValue value="551,64"/>
+		</generic:Obs>
+	</generic:Series>
+	<generic:Series>
+		<generic:SeriesKey>
+			<generic:Value concept="s_OKATO" value="643"/>
+			<generic:Value concept="s_grtov" value="105"/>
+		</generic:SeriesKey>
+		<generic:Attributes>
+			<generic:Value concept="EI" value="рубль"/>
+			<generic:Value concept="PERIOD" value="март"/>
+		</generic:Attributes>
+		<generic:Obs>
+			<generic:Time>2026</generic:Time>
+			<generic:ObsValue value="556,05"/>
+		</generic:Obs>
+	</generic:Series>
+	<generic:Series>
+		<generic:SeriesKey>
+			<generic:Value concept="s_OKATO" value="643"/>
+			<generic:Value concept="s_grtov" value="105"/>
+		</generic:SeriesKey>
+		<generic:Attributes>
+			<generic:Value concept="EI" value="рубль"/>
+			<generic:Value concept="PERIOD" value="апрель"/>
+		</generic:Attributes>
+		<generic:Obs>
+			<generic:Time>2026</generic:Time>
+			<generic:ObsValue value="557,59"/>
+		</generic:Obs>
+	</generic:Series>
+	<generic:Series>
+		<generic:SeriesKey>
+			<generic:Value concept="s_OKATO" value="643004.АГ"/>
+			<generic:Value concept="s_grtov" value="106"/>
+		</generic:SeriesKey>
+		<generic:Attributes>
+			<generic:Value concept="EI" value="рубль"/>
+			<generic:Value concept="PERIOD" value="январь"/>
+		</generic:Attributes>
+		<generic:Obs>
+			<generic:Time>2025</generic:Time>
+			<generic:ObsValue value="413,75"/>
+		</generic:Obs>
+	</generic:Series>
+	<generic:Series>
+		<generic:SeriesKey>
+			<generic:Value concept="s_OKATO" value="643004.АГ"/>
+			<generic:Value concept="s_grtov" value="106"/>
+		</generic:SeriesKey>
+		<generic:Attributes>
+			<generic:Value concept="EI" value="рубль"/>
+			<generic:Value concept="PERIOD" value="февраль"/>
+		</generic:Attributes>
+		<generic:Obs>
+			<generic:Time>2025</generic:Time>
+			<generic:ObsValue value="415,53"/>
+		</generic:Obs>
+	</generic:Series>
+	<generic:Series>
+		<generic:SeriesKey>
+			<generic:Value concept="s_OKATO" value="643004.АГ"/>
+			<generic:Value concept="s_grtov" value="106"/>
+		</generic:SeriesKey>
+		<generic:Attributes>
+			<generic:Value concept="EI" value="рубль"/>
+			<generic:Value concept="PERIOD" value="март"/>
+		</generic:Attributes>
+		<generic:Obs>
+			<generic:Time>2025</generic:Time>
+			<generic:ObsValue value="416,71"/>
+		</generic:Obs>
+	</generic:Series>
+	<generic:Series>
+		<generic:SeriesKey>
+			<generic:Value concept="s_OKATO" value="643004.АГ"/>
+			<generic:Value concept="s_grtov" value="106"/>
+		</generic:SeriesKey>
+		<generic:Attributes>
+			<generic:Value concept="EI" value="рубль"/>
+			<generic:Value concept="PERIOD" value="апрель"/>
+		</generic:Attributes>
+		<generic:Obs>
+			<generic:Time>2025</generic:Time>
+			<generic:ObsValue value="419,19"/>
+		</generic:Obs>
+	</generic:Series>
+	<generic:Series>
+		<generic:SeriesKey>
+			<generic:Value concept="s_OKATO" value="643004.АГ"/>
+			<generic:Value concept="s_grtov" value="106"/>
+		</generic:SeriesKey>
+		<generic:Attributes>
+			<generic:Value concept="EI" value="рубль"/>
+			<generic:Value concept="PERIOD" value="январь"/>
+		</generic:Attributes>
+		<generic:Obs>
+			<generic:Time>2026</generic:Time>
+			<generic:ObsValue value="443,76"/>
+		</generic:Obs>
+	</generic:Series>
+	<generic:Series>
+		<generic:SeriesKey>
+			<generic:Value concept="s_OKATO" value="643004.АГ"/>
+			<generic:Value concept="s_grtov" value="106"/>
+		</generic:SeriesKey>
+		<generic:Attributes>
+			<generic:Value concept="EI" value="рубль"/>
+			<generic:Value concept="PERIOD" value="февраль"/>
+		</generic:Attributes>
+		<generic:Obs>
+			<generic:Time>2026</generic:Time>
+			<generic:ObsValue value="444,59"/>
+		</generic:Obs>
+	</generic:Series>
+	<generic:Series>
+		<generic:SeriesKey>
+			<generic:Value concept="s_OKATO" value="643004.АГ"/>
+			<generic:Value concept="s_grtov" value="106"/>
+		</generic:SeriesKey>
+		<generic:Attributes>
+			<generic:Value concept="EI" value="рубль"/>
+			<generic:Value concept="PERIOD" value="март"/>
+		</generic:Attributes>
+		<generic:Obs>
+			<generic:Time>2026</generic:Time>
+			<generic:ObsValue value="443,02"/>
+		</generic:Obs>
+	</generic:Series>
+	<generic:Series>
+		<generic:SeriesKey>
+			<generic:Value concept="s_OKATO" value="643004.АГ"/>
+			<generic:Value concept="s_grtov" value="106"/>
+		</generic:SeriesKey>
+		<generic:Attributes>
+			<generic:Value concept="EI" value="рубль"/>
+			<generic:Value concept="PERIOD" value="апрель"/>
+		</generic:Attributes>
+		<generic:Obs>
+			<generic:Time>2026</generic:Time>
+			<generic:ObsValue value="441,6"/>
+		</generic:Obs>
+	</generic:Series>
+	<generic:Series>
+		<generic:SeriesKey>
+			<generic:Value concept="s_OKATO" value="030"/>
+			<generic:Value concept="s_grtov" value="105"/>
+		</generic:SeriesKey>
+		<generic:Attributes>
+			<generic:Value concept="EI" value="рубль"/>
+			<generic:Value concept="PERIOD" value="январь"/>
+		</generic:Attributes>
+		<generic:Obs>
+			<generic:Time>2025</generic:Time>
+			<generic:ObsValue value="500,55"/>
+		</generic:Obs>
+	</generic:Series>
+	<generic:Series>
+		<generic:SeriesKey>
+			<generic:Value concept="s_OKATO" value="030"/>
+			<generic:Value concept="s_grtov" value="105"/>
+		</generic:SeriesKey>
+		<generic:Attributes>
+			<generic:Value concept="EI" value="рубль"/>
+			<generic:Value concept="PERIOD" value="февраль"/>
+		</generic:Attributes>
+		<generic:Obs>
+			<generic:Time>2025</generic:Time>
+			<generic:ObsValue value="506,01"/>
+		</generic:Obs>
+	</generic:Series>
+	<generic:Series>
+		<generic:SeriesKey>
+			<generic:Value concept="s_OKATO" value="030"/>
+			<generic:Value concept="s_grtov" value="105"/>
+		</generic:SeriesKey>
+		<generic:Attributes>
+			<generic:Value concept="EI" value="рубль"/>
+			<generic:Value concept="PERIOD" value="март"/>
+		</generic:Attributes>
+		<generic:Obs>
+			<generic:Time>2025</generic:Time>
+			<generic:ObsValue value="507,53"/>
+		</generic:Obs>
+	</generic:Series>
+	<generic:Series>
+		<generic:SeriesKey>
+			<generic:Value concept="s_OKATO" value="030"/>
+			<generic:Value concept="s_grtov" value="105"/>
+		</generic:SeriesKey>
+		<generic:Attributes>
+			<generic:Value concept="EI" value="рубль"/>
+			<generic:Value concept="PERIOD" value="апрель"/>
+		</generic:Attributes>
+		<generic:Obs>
+			<generic:Time>2025</generic:Time>
+			<generic:ObsValue value="509,93"/>
+		</generic:Obs>
+	</generic:Series>
+	</DataSet>
+</GenericData>

@@ -61,8 +61,15 @@ integration:
   # Протокол (референс — CRAN-пакет fedstatAPIr, активно поддерживается):
   #   1. GET {base-url}/indicator/{indicator-id} — страница показателя (cookie-сессия);
   #   2. одноразовый Struts CSRF-токен из div#downloadTokenHolder;
-  #   3. POST {base-url}/indicator/downloadData.do?format=sdmx
-  #      (фильтры: регион + все товары + все периоды) → SDMX GenericData XML;
+  #   3. POST {base-url}/indicator/downloadData.do?format=sdmx — тело: title,
+  #      struts.token.name, <имя токена со страницы>=<токен>, id=<indicator-id>,
+  #      lineObjectIds/columnObjectIds, selectedFilterIds, filterObjectIds.
+  #      Имя CSRF-поля НЕ хардкодится: на fedstat.ru struts.token.name = «token».
+  #      POST выполняется БЕЗ следования редиректам — 302 означает «портал отклонил
+  #      набор фильтров», а не перенаправление. Ответ — SDMX GenericData XML;
+  #      фильтры: регион (одно значение) + все товары + ВСЕ годы + последние
+  #      period-months месяцев (иначе выгрузка ~65 МБ и DOM-парсинг на 600–700 МБ heap).
+  #      Сужать поле «Год» нельзя: портал отвечает на это 302 (см. ARCHITECTURE.md).
   #   4. CodeLists = словарь категорий, Series/Obs = цены по месяцам.
   # Тяжёлая выгрузка — только в фоновой синхронизации цен; поиск категорий
   # работает со страницы показателя и кэшируется (cache-hours). UI не ждёт ЕМИСС.
@@ -78,6 +85,19 @@ integration:
     region: ${ROSSTAT_REGION:Российская Федерация}
     user-agent: ${ROSSTAT_USER_AGENT:${spring.application.name:ProvisionApp}/${app.version:0.0.0} (${integration.contact-email:dev@provision.app})}
     cache-hours: ${ROSSTAT_CACHE_HOURS:24}
+    # Сколько последних месяцев выгружать из поля «Период»
+    # (plans/2026-10-28-emis-download-csrf-and-volume.md, дефект №6). Полный ряд ЕМИСС —
+    # 885 товаров × 450 ОКАТО × 27 лет × 12 месяцев = 927 selectedFilterIds и ответ
+    # 65 076 787 байт, который читается в String (~130 МБ) и парсится полным DOM
+    # (пик ~600–700 МБ heap) — при типовом контейнере это OutOfMemoryError.
+    # Один месяц — 5 649 772 байта (эксперимент F1), т.е. 2 месяца ≈ 11 МБ.
+    # 0 или меньше — все 12 месяцев.
+    #
+    # ПОЧЕМУ МЕСЯЦЫ, А НЕ ГОДЫ: портал отклоняет (302) ЛЮБОЕ сужение оси «Год» —
+    # проверено на 2026+2025 и на 2023+2024 (эксперименты E1/E2). Сужение «Периода»
+    # и «Товаров» принимает (F1/F2). Окно считается от прошлого месяца: данные за
+    # текущий ЕМИСС публикует на 6–10-й рабочий день после его окончания.
+    period-months: ${ROSSTAT_PERIOD_MONTHS:2}
 
 springdoc:
   api-docs:

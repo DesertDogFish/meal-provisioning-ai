@@ -43,6 +43,11 @@
       ROSSTAT_INDICATOR_ID: ${ROSSTAT_INDICATOR_ID:-31448}
       ROSSTAT_REGION: ${ROSSTAT_REGION:-Российская Федерация}
       ROSSTAT_CACHE_HOURS: ${ROSSTAT_CACHE_HOURS:-24}
+      # Сколько последних месяцев выгружать из поля «Период». Полный ряд ЕМИСС даёт
+      # ответ ~65 МБ и DOM-парсинг на 600–700 МБ heap; 1 месяц ≈ 5,6 МБ, 2 ≈ 11 МБ.
+      # 0 или меньше — все 12 месяцев (только с явно заданным -Xmx ≥ 2 ГБ).
+      # Сужать поле «Год» нельзя — портал отвечает 302 (см. ARCHITECTURE.md).
+      ROSSTAT_PERIOD_MONTHS: ${ROSSTAT_PERIOD_MONTHS:-2}
       INTEGRATION_CONTACT_EMAIL: ${INTEGRATION_CONTACT_EMAIL:-}
     ports:
       - "8080:8080"
