@@ -50,49 +50,34 @@ cors:
   allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://localhost:3000}
 
 integration:
-  # ВНИМАНИЕ: ключ ОБЯЗАН быть в кавычках! YAML 1.1 трактует голое off как
-  # boolean false — SnakeYAML парсит `off:` в ключ `false`, и все свойства
-  # превращаются в integration[false].* (Spring их не находит, @Value молча
-  # уходит в дефолты). Именно так учётка OFF_USER_ID/OFF_PASSWORD «не доезжала»
-  # до провайдера при живых env (Fix-9, п.7). Регресс-страж: OffConfigBindingTest.
-  "off":
-    products-url: https://world.openfoodfacts.org
-    # Цены (fix U11): синхронизируются из проекта Open Prices —
-    # краудсорсинговой базы цен Open Food Facts (GET /api/v1/prices?product_code=...).
-    # Цены в иностранных валютах конвертируются в RUB по ежедневному курсу
-    # ЦБ РФ (integration.cbr.url); без доступного курса такая цена пропускается
-    # (graceful degradation — локальная база хранит только рубли).
-    # Тот же провайдер обогащает карточки продуктов (название, бренд, фасовка,
-    # фото) через OFF Product API v2 при синхронизации цен.
-    prices-url: https://prices.openfoodfacts.org
-    # Fix-11: полнотекстовый поиск продуктов — сервис Search-a-licious
-    # (официальная дока OFF: full-text НЕ доступен в /api/v2/search —
-    # search_terms там молча игнорируется; /cgi/search.pl закрыт).
-    search-url: https://search.openfoodfacts.org
-    # Fix-9 (интеграция): учётная запись world.openfoodfacts.org — ОПЦИОНАЛЬНА.
-    # Fix-11 (дока OFF): user-id — это USERNAME аккаунта, НЕ email
-    # («You must not use your email address»); email-контакт для User-Agent —
-    # отдельный contact-email. Анонимные запросы OFF жёстко лимитирует по IP
-    # (503/IP-бан); зарегистрированные пользователи получают приоритетный
-    # доступ. Учётка передаётся заголовком HTTP Basic Auth (никогда не
-    # query-параметрами). Без учётки провайдер работает в анонимном режиме
-    # (WARN в логах при старте). Значения — только из окружения, не коммитить.
-    user-id: ${OFF_USER_ID:}
-    password: ${OFF_PASSWORD:}
-    # Fix-11: контакт для User-Agent (формат OFF: "AppName/Version (ContactEmail)").
-    # Не задан → user-id, если он похож на email (legacy) → support@provision.app.
-    contact-email: ${OFF_CONTACT_EMAIL:}
-    # Fix-11 (п.7): ОПЦИОНАЛЬНЫЙ прокси для всех запросов OFF — спасение там,
-    # где провайдер/файрвол режет TLS до хостов OFF (кейс: search.openfoodfacts.org
-    # на OVH — «Remote host terminated the handshake»). Форматы:
-    # http://host:port (для HTTPS-целей — CONNECT-туннель) или socks5://host:port.
-    # Пример с локальным proxychains/outline: http://172.17.0.1:1080
-    proxy-url: ${OFF_PROXY_URL:}
-  # Ежедневные курсы валют ЦБ РФ (fix U11): daily_json.js, rate = Value/Nominal,
-  # для RUB курс всегда 1. Ответ кэшируется на календарные сутки; при недоступности
-  # ЦБ используется предыдущий кэш, цены в неизвестных валютах пропускаются.
-  cbr:
-    url: https://www.cbr-xml-daily.ru/daily_json.js
+  # Контактный email для User-Agent внешних интеграций (вежливость публичных API).
+  contact-email: ${INTEGRATION_CONTACT_EMAIL:dev@provision.app}
+  # Fix-13: Росстат (ЕМИСС) — официальные средние потребительские цены на
+  # продукты питания (рубли, ежемесячно, по регионам РФ). Заменила демонтированную
+  # интеграцию Open Food Facts: поисковый хост OFF (search.openfoodfacts.org)
+  # недостижим из сети пользователя (TLS-блокировка провайдера), а резервный
+  # каталог Open Prices ограничен и не даёт «средней цены по больнице».
+  #
+  # Протокол (референс — CRAN-пакет fedstatAPIr, активно поддерживается):
+  #   1. GET {base-url}/indicator/{indicator-id} — страница показателя (cookie-сессия);
+  #   2. одноразовый Struts CSRF-токен из div#downloadTokenHolder;
+  #   3. POST {base-url}/indicator/downloadData.do?format=sdmx
+  #      (фильтры: регион + все товары + все периоды) → SDMX GenericData XML;
+  #   4. CodeLists = словарь категорий, Series/Obs = цены по месяцам.
+  # Тяжёлая выгрузка — только в фоновой синхронизации цен; поиск категорий
+  # работает со страницы показателя и кэшируется (cache-hours). UI не ждёт ЕМИСС.
+  # ВНИМАНИЕ: ЕМИСС блокирует зарубежные дата-центры (403 анти-бот) — работает
+  # из сети пользователя (РФ). Ключ "rosstat" — не YAML-boolean, кавычки не
+  # обязательны (в отличие от снятого "off": YAML 1.1 парсил его как false).
+  rosstat:
+    base-url: ${ROSSTAT_BASE_URL:https://www.fedstat.ru}
+    # 31448 = «Средние потребительские цены на товары и услуги» (ежемесячно, регионы+товары).
+    # Альтернатива: 37426 = «Еженедельные средние потребительские цены (тарифы)…».
+    indicator-id: ${ROSSTAT_INDICATOR_ID:31448}
+    # Значение региона из справочника ОКАТО (подстрока «российск» тоже сработает).
+    region: ${ROSSTAT_REGION:Российская Федерация}
+    user-agent: ${ROSSTAT_USER_AGENT:${spring.application.name:ProvisionApp}/${app.version:0.0.0} (${integration.contact-email:dev@provision.app})}
+    cache-hours: ${ROSSTAT_CACHE_HOURS:24}
 
 springdoc:
   api-docs:

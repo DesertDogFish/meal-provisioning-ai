@@ -2,7 +2,7 @@
 
 ## Overview
 
-Provision — SPA + REST-бэкенд + PostgreSQL. Домен: каталог продуктов и блюд (глобальный, ведёт админ), походы пользователей (меню по дням/приёмам), расчёт закупок/стоимости/калорийности, интеграция Open Food Facts.
+Provision — SPA + REST-бэкенд + PostgreSQL. Домен: каталог продуктов и блюд (глобальный, ведёт админ), походы пользователей (меню по дням/приёмам), расчёт закупок/стоимости/калорийности, интеграция Росстат/ЕМИСС (средние потребительские цены).
 
 Ключевой инвариант (V20): **поход не ссылается на глобальный справочник** — приёмы пищи указывают на trip-scoped копии блюд и продуктов; справочник и цены свободно живут своей жизнью, план похода заморожен на момент планирования.
 
@@ -130,18 +130,116 @@ DTO-рассинхрон имён/единиц закрыт нормализац
 
 Бэкфил: миграция V20 перевела существовавшие походы на снепшоты (temp-таблицы соответствий, перепривязка overrides/exclusions/substitutions). Повторный прогон миграций безопасен (IF NOT EXISTS + DROP temp-таблиц в начале).
 
-## Внешние цены и карточки продуктов (U11: Open Prices + ЦБ РФ)
+## Внешние цены: Росстат / ЕМИСС (Fix-13)
 
-Пайплайн синхронизации цен (`POST /admin/integrations/{provider}/sync/prices` → 202 `{logId}` → фоновый `IntegrationService.executePriceSync`) берёт реальные данные из проектов Open Food Facts:
+Единственный активный провайдер цен — `RosstatEmisProvider` (code `ROSSTAT`):
+официальные средние потребительские цены Росстата через ЕМИСС (fedstat.ru) —
+«средняя цена по больнице» в рублях, ежемесячно, по ~сотне базовых категорий
+(«Гречневая крупа», «Молоко питьевое»…), без ключей и лимитов по IP.
+Пайплайн синхронизации общий (`POST /admin/integrations/{provider}/sync/prices`
+→ 202 `{logId}` → фоновый `IntegrationService.executePriceSync`): маппинги
+ингредиент↔внешняя категория (`IngredientMapping`, source `ROSSTAT`), цены —
+`applyMappingPricesInTx` (upsert `IngredientPrice` по датам, `source=MANUAL`
+никогда не перезаписывается).
 
-- **Цены — Open Prices** (`prices.openfoodfacts.org`, `GET /api/v1/prices?product_code=…&order_by=-date&size=10`): краудсорсинговые цены по штрихкоду в валюте магазина. Провайдер конвертирует их в RUB по ежедневному курсу ЦБ РФ; цена в валюте без доступного курса пропускается (graceful degradation — локальная база хранит только рубли).
-- **Курсы — ЦБ РФ** (`ExchangeRateService`, `cbr-xml-daily.ru/daily_json.js`): курс = `Value / Nominal` (у части валют Nominal = 10/100), RUB всегда 1; кэш на календарные сутки; при недоступности ЦБ используется предыдущий кэш, а без кэша цены в иностранных валютах просто пропускаются — синхронизация не падает.
-- **Карточки продуктов — OFF Product API v2** (`ProductInfoProvider.fetchProductInfo`): при синхронизации цен для провайдеров, реализующих интерфейс (`instanceof`-хук в `executePriceSync`), освежаются название/бренд/фасовка/фото `ExternalProduct`; изменения идут в `SyncLog.updatedCount`, провал обновления карточки не считается ошибкой синхронизации (цены уже сохранены).
-- Пайплайн записи цен прежний: `applyMappingPricesInTx` фильтрует RUB, считает цену за единицу из фасовки (`calculateUnitPrice`), upsert-ит `IngredientPrice` по датам и никогда не перезаписывает `source=MANUAL`.
-- Все HTTP-запросы OFF/Open Prices проходят единый throttling (`acquireSearchSlot`: ≤10 req/min, интервал 6.5 c, экспоненциальный backoff на 429/5xx). U11 попутно исправил критический баг main: формула ожидания была инвертирована («прошло − интервал» вместо «интервал − прошло») — при стартовом `lastSearchAt = EPOCH` первый запрос засыпал на ~56 лет (полный hang поиска/синка), а permit семафора не освобождался (deadlock второго запроса). Теперь permit освобождается в `finally`, регресс охраняет `throttleDoesNotSleepForeverAndReleasesPermit`.
-- **Поиск продуктов — Search-a-licious (Fix-11, 27.10, по официальной доке OFF)**: `GET {search-url}/search?q=…&fields=code,product_name,brands,quantity,image_url&page_size=…` (`search-url` по умолчанию `https://search.openfoodfacts.org`), ответ `{hits:[…], count, page,…}`, `brands` — МАССИВ (парсер `parseSearchHits` джоинит через «, »). Причины миграции: `/cgi/search.pl` ЗАКРЫТ (стабильный 503 даже с корректным UA); `/api/v2/search` full-text НЕ поддерживает — «Full-text search is not available in the v2 server-side API» (дока), `search_terms` молча игнорируется и выдача = вся база (~4.8 млн, нерелевантно). Оба запрещены страж-тестом `providerSourceUsesSearchServiceAndHeaderAuthOnly`. v2 остаётся для карточек продукта (`/api/v2/product/{code}`). `testConnection` — минимальный запрос к поисковому сервису (q=milk, page_size=1). Rate-limits доки: 10 req/min/IP поиск, 15 req/min/IP карточки (throttling 6.5 c укладывается), превышение — вплоть до IP-бана; глобальные лимиты дают 503 независимо от IP.
-- **Авторизация OFF (Fix-9 + Fix-11)**: READ-операции по доке авторизации не требуют — обязателен только кастомный User-Agent `AppName/Version (ContactEmail)`; учётка ОПЦИОНАЛЬНА и даёт приоритет при глобальных лимитах («Registered users are not subject to request limits» — стр. 503 OFF). `integration.off.user-id` — это **USERNAME** аккаунта, «You must not use your email address» (сноска user_id_not_email доки; targeted-WARN при старте, если значение похоже на email); email-контакт для UA — отдельный `integration.off.contact-email` (fallback: email-подобный user-id → `support@provision.app`). Передача — заголовком **HTTP Basic Auth** через interceptor RestClient; query-параметры user_id/password докой разрешены только на POST/PUT/DELETE и ЗАПРЕЩЕНЫ в коде (страж-тест). Без учётки — анонимный режим (WARN «OFF credentials not set»).
-- Конфигурация: `integration.off.products-url`, `integration.off.prices-url`, `integration.off.search-url`, `integration.off.user-id`, `integration.off.password`, `integration.off.contact-email`, `integration.off.proxy-url`, `integration.cbr.url`; docker-compose пробрасывает `OFF_USER_ID`/`OFF_PASSWORD`/`OFF_CONTACT_EMAIL`/`OFF_PROXY_URL` из `.env`. **Прокси (Fix-11 п.7):** `OFF_PROXY_URL` (http(s)://host:port — CONNECT-туннель для HTTPS, или socks5://host:port) — применяется к общей фабрике запросов провайдера (действует на все хосты OFF); кейс: провайдер пользователя режет TLS до `search.openfoodfacts.org` (OVH) — curl (35) Connection reset с хост-машины; таймауты фабрики: connect 10 c / read 30 c. **YAML-ловушка (Fix-9 п.7):** ключ `off` в application.yml ОБЯЗАН быть в кавычках (`"off":`) — YAML 1.1 парсит голый `off:` как boolean false, свойства уезжают в `integration[false].*` и @Value молча уходит в дефолты; страж — `OffConfigBindingTest` (биндит креды через реальный yml). Mock-сервер повторяет контракт роутов `/admin/integrations*` (список IntegrationDto, connect/disconnect, sync-logs, sync → `{logId}` с фоновым переходом лога в SUCCESS со счётчиками, products/search → ExternalProductDto, ingredients/:id/mapping), включая коды 409 `INTEGRATION_DISCONNECTED` / `SYNC_ALREADY_RUNNING` и 404 для неизвестного провайдера (`mockIntegrations.test.ts`).
+**Протокол** (порт CRAN-пакета fedstatAPIr — референсная реализация, активно
+поддерживается; прямая «ссылка на CSV» у ЕМИСС отсутствует):
+
+1. `GET {base-url}/indicator/{indicator-id}` — страница показателя (cookie-сессия;
+   сессия прогревается GET главной страницы портала — JSESSIONID до целевого запроса);
+2. одноразовый Struts CSRF-токен: канонически из `div#downloadTokenHolder`
+   (`input[name=struts.token.name]` → имя, `input[name=<имя>]` → значение),
+   но живая разметка может отличаться — поэтому fallback: пара токенов ищется
+   по всему документу, затем одиночный `input[name=struts.token]`. Если токен
+   не найден, ошибка содержит диагностику страницы (title, размер, маркеры
+   протокола, видимый текст) — единственный канал отладки, т.к. ЕМИСС блокирует
+   зарубежные дата-центры и разработчик не видит живую страницу;
+3. словари фильтров из встроенного JS страницы: объект после маркера `filters:`
+   (извлечение балансировкой скобок с учётом строк; читается Jackson напрямую —
+   ALLOW_SINGLE_QUOTES / ALLOW_UNQUOTED_FIELD_NAMES, без строковых gsub-трюков
+   R-пакета и его «12-го тега script»); оси — `left_columns`/`top_columns`/`groups`;
+4. `POST {base-url}/indicator/downloadData.do?format=sdmx`, form-urlencoded:
+   `title`, `struts.token.name`, `struts.token`, `lineObjectIds*`,
+   `columnObjectIds*`, `selectedFilterIds*` (`field_value`), `filterObjectIds`
+   (поле «0» — сам показатель — уходит в filterObjectIds, не в оси);
+5. ответ — SDMX GenericData XML: `CodeLists` (словари измерений) +
+   `Series/Obs` (ряды цен). Парсер namespace-agnostic (localName), DOCTYPE
+   запрещён (XXE). Измерение товаров находится по заголовку CodeList
+   («товар/продукт/номенклатур»), регион — «ОКАТО/территор», «Виды показателя» —
+   если среди значений есть «цена», берутся только ценовые ряды (не индексы).
+
+**Выбор фильтров**: регион — из конфига (точное совпадение → вхождение →
+«российская…» → первое значение); товары и периоды — ВСЕ значения (полный ряд
+выгружается целиком, режется на своей стороне — один POST на синхронизацию).
+
+**«Гарантированный быстрый вызов»** (требование Fix-13, боль OFF-эры — 40 с
+ретраев при подключении): ровно одна попытка на операцию, никаких backoff-саг;
+два уровня кэша с TTL (`cache-hours`, дефолт 24 — данные обновляются раз в месяц):
+
+- `testConnection` — только GET страницы показателя (словарь категорий из
+  фильтров; секунды, тяжёлая выгрузка не запускается);
+- `searchProducts` (Fix-14) — список категорий из словаря СТРАНИЦЫ (вся
+  номенклатура, включая категории без данных за период) + свежая цена каждой
+  категории из кэшируемой SDMX-выгрузки (одноразовый регион-фильтрованный
+  запрос, не ретраи). При недоступности выгрузки — graceful-fallback на
+  справочник без цен (`price=null`), поиск не падает;
+- `fetchPrices` — полная SDMX-выгрузка, но зовётся только фоновым синком
+  (UI получает 202 `{logId}` и не блокируется); при сбое обновления отдаётся
+  предыдущий кэш (graceful degradation), при отсутствии кэша —
+  `IntegrationUnavailableException` (502) с человекочитаемой причиной
+  (403 анти-бот / HTML вместо SDMX — истёк одноразовый токен / разметка
+  изменилась / таймаут / DNS).
+
+**Единицы**: Росстат отдаёт цену «за единицу категории» — эвристика `guessPack`
+(яйца → 10 PCS, молоко/кефир/сок/вода/напиток/квас/морс → 1 L, остальное → 1 KG).
+`packUnit` обязателен: `convertToIngredientUnit(null, …)` возвращает null, и цена
+была бы молча отброшена. Валюта всегда RUB — конвертация ЦБ не нужна
+(`ExchangeRateService` демонтирован вместе с OFF).
+
+**Конфигурация**: `integration.rosstat.base-url` (https://www.fedstat.ru),
+`indicator-id` (дефолт **31448** «Средние потребительские цены на товары и
+услуги», месяц; альтернатива 37426 — недельные), `region` («Российская
+Федерация»), `cache-hours` (24), `user-agent`; `integration.contact-email` —
+контакт для UA. Env: `ROSSTAT_BASE_URL`/`ROSSTAT_INDICATOR_ID`/`ROSSTAT_REGION`/
+`ROSSTAT_CACHE_HOURS`/`ROSSTAT_USER_AGENT`/`INTEGRATION_CONTACT_EMAIL`
+(docker-compose пробрасывает из `.env`). Страж биндинга — `RosstatConfigBindingTest`
+(реальный yml → @Value; наследник `OffConfigBindingTest` — ловушка YAML-boolean
+ключа «off» ушла вместе с OFF, но урок задокументирован в yml).
+
+**Привязки ингредиентов (Fix-14)**: `IntegrationService.createMapping` —
+идемпотентный **upsert** по ключу `(internalIngredientId, source)`: повторная
+привязка того же ингредиента не ошибка, а замена внешнего товара (раньше —
+`IllegalStateException: Mapping already exists`, блокировавший пользователя).
+Список текущих привязок — `GET /admin/integrations/{provider}/mappings`
+(`IngredientBindingDto`), отвязка — `DELETE …/ingredients/{id}/mapping/{provider}`;
+во фронте блок «Текущие привязки» (видимость + «Отвязать»). Цены в результате
+поиска (`ExternalProductDto.price/priceDate`) — последняя точка категории из
+кэшируемой выгрузки; см. `searchProducts` выше.
+
+**Ограничения (честно)**: ЕМИСС блокирует зарубежные дата-центры (403 анти-бот —
+из песочницы CI live-проверка невозможна, работает из сети пользователя РФ);
+портал нестабилен («бесконечно падающий ЕМИСС» — README fedstatAPIr), поэтому
+кэш + graceful degradation вместо ретраев; данные — раз в месяц; категории общие
+(«йогурт питьевой», не «со вкусом манго»); единицы — эвристика.
+
+**История: Open Food Facts (демонтирован в Fix-13)**. U11/Fix-9/Fix-11 строили
+OFF-интеграцию (Search-a-licious + фолбэк Open Prices + карточки v2 + курсы ЦБ),
+но поисковый хост OFF (`search.openfoodfacts.org`, OVH) недостижим из сети
+пользователя (TLS-сброс провайдера), подключение жевало ~40 с ретраев, а
+фолбэк-каталог не давал «средней цены по больнице». Удалены:
+`OpenFoodFactsProvider`, `ExchangeRateService`, `IntegrationAuthException`
+(заменена `IntegrationUnavailableException`), OFF-тесты, `integration.off`/
+`integration.cbr` в yml, `OFF_*` в compose/.env. Legacy сохранена: `RecipeSource.OFF`
+и «OFF» в CHECK-ограничениях (существующие строки БД), бейдж «OFF» в ProductTable.
+Миграция V24: «ROSSTAT» в CHECK-и source (паттерн V16), сид строки integrations
+ROSSTAT (список интеграций читается из БД), DELETE строки OFF.
+
+Mock-сервер повторяет контракт роутов `/admin/integrations*` (список
+IntegrationDto, connect/disconnect, sync-logs, sync → `{logId}` с фоновым
+переходом лога в SUCCESS со счётчиками, products/search → ExternalProductDto —
+каталог категорий Росстата, ingredients/:id/mapping), включая коды 409
+`INTEGRATION_DISCONNECTED` / `SYNC_ALREADY_RUNNING` и 404 для неизвестного
+провайдера (`mockIntegrations.test.ts`).
 
 ## Правки состава приёма (V19 + composition API)
 
@@ -213,7 +311,7 @@ GET  /api/v1/trips/{id}/summary/{menu|shopping|shopping/by-days|person}
 - `PriceResolutionService` — actual = override ?: planned.
 - `SecurityConfig` + `JwtService`/`JwtAuthenticationFilter` — stateless JWT, CORS из ENV, fail-fast секрета (`JwtProperties.validate`).
 - `DevDataInitializer` / `DevTripsInitializer` — демо-пользователи и демо-походы (profile `dev` + `SEED_DEMO_USERS=true`), демо-походы создаются через снепшот-сервис.
-- `OpenFoodFactsProvider` (`PriceProvider` + `ProductInfoProvider`) — поиск/карточки продуктов OFF + цены Open Prices (U11); `ExchangeRateService` — ежедневные курсы ЦБ РФ к RUB (кэш на сутки, graceful degradation).
+- `RosstatEmisProvider` (`PriceProvider`) — средние потребительские цены Росстата через ЕМИСС/fedstat.ru (Fix-13): Struts-токен → POST downloadData.do?format=sdmx → SDMX-парсер; два уровня кэша (каталог — страница показателя, цены — полная выгрузка только в фоновом синке).
 - `GlobalExceptionHandler` — коды конфликтов и field-errors.
 
 ### Frontend

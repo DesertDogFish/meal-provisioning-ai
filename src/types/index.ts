@@ -8,7 +8,8 @@ export const UNIT_LABELS: Record<UnitOfMeasure, string> = {
   PACK: 'уп'
 };
 export type MealType = 'BREAKFAST' | 'LUNCH' | 'DINNER' | 'SNACK';
-export type RecipeSource = 'MANUAL' | 'API' | 'AI';
+// Fix-13: 'ROSSTAT' — Росстат (ЕМИСС); 'OFF' — legacy-строки БД (провайдер демонтирован)
+export type RecipeSource = 'MANUAL' | 'OFF' | 'ROSSTAT' | 'API' | 'AI';
 export type StagingStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
 
 export interface User {

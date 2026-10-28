@@ -303,6 +303,59 @@ class OpenFoodFactsProviderTest {
     }
 
     @Test
+    void parseOpenPricesProductsHandlesRealFallbackShape() throws Exception {
+        // Fix-11 (п.8): фолбэк-поиск через Open Prices (search.openfoodfacts.org
+        // блокируется провайдером пользователя). Реальный формат (живой запрос 27.10):
+        // {items:[{code, product_name, brands — СТРОКА, quantity, image_url}], total}
+        com.fasterxml.jackson.databind.ObjectMapper om = new com.fasterxml.jackson.databind.ObjectMapper();
+        com.fasterxml.jackson.databind.JsonNode response = om.readTree("""
+                {
+                  "items": [
+                    {"code": "7622210720566",
+                     "product_name": "Milka au lait du pays alpin",
+                     "brands": "Milka",
+                     "quantity": "3 x 100g",
+                     "image_url": "https://images.openfoodfacts.org/img/front.jpg",
+                     "price_count": 50},
+                    {"code": "3760020500559",
+                     "product_name": "Coconut milk",
+                     "brands": "Jardin Bio étic, LEA Nature",
+                     "quantity": null,
+                     "product_quantity": 394,
+                     "product_quantity_unit": "ml"},
+                    {"code": "1541513213246", "product_name": null},
+                    {"product_name": "Без кода"}
+                  ],
+                  "total": 809, "page": 1, "size": 4
+                }
+                """);
+        List<ExternalProductDto> parsed = OpenFoodFactsProvider.parseOpenPricesProducts(response);
+        assertEquals(2, parsed.size(), "Заглушки без code/name пропускаются");
+
+        ExternalProductDto milka = parsed.get(0);
+        assertEquals("7622210720566", milka.code());
+        assertEquals("Milka au lait du pays alpin", milka.name());
+        assertEquals("Milka", milka.brand());
+        assertEquals("https://images.openfoodfacts.org/img/front.jpg", milka.imageUrl());
+
+        ExternalProductDto coconut = parsed.get(1);
+        assertEquals("Jardin Bio étic, LEA Nature", coconut.brand());
+        // quantity null → product_quantity 394 + unit ml → 0.394 L
+        assertThat(coconut.packAmount()).isEqualByComparingTo("0.394");
+        assertEquals("L", coconut.packUnit());
+    }
+
+    @Test
+    void parseOpenPricesProductsIsGracefulOnGarbage() throws Exception {
+        assertTrue(OpenFoodFactsProvider.parseOpenPricesProducts(null).isEmpty());
+        com.fasterxml.jackson.databind.ObjectMapper om = new com.fasterxml.jackson.databind.ObjectMapper();
+        assertTrue(OpenFoodFactsProvider.parseOpenPricesProducts(om.readTree("{}")).isEmpty());
+        // ответ Search-a-licious (hits) не парсится как Open Prices (items) — и наоборот
+        assertTrue(OpenFoodFactsProvider.parseOpenPricesProducts(
+                om.readTree("{\"hits\":[{\"code\":\"1\",\"product_name\":\"x\"}]}")).isEmpty());
+    }
+
+    @Test
     void parseSearchHitsIsGracefulOnGarbage() throws Exception {
         assertTrue(OpenFoodFactsProvider.parseSearchHits(null).isEmpty());
         com.fasterxml.jackson.databind.ObjectMapper om = new com.fasterxml.jackson.databind.ObjectMapper();

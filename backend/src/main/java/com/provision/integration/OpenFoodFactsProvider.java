@@ -306,9 +306,13 @@ public class OpenFoodFactsProvider implements PriceProvider, ProductInfoProvider
         boolean authed = basicAuthHeader(offUserId, offPassword) != null;
         // Fix-11 (п.6): транзиентные сетевые/TLS-сбои («Remote host terminated
         // the handshake», таймауты) ретраятся — единичный обрыв рукопожатия не
-        // должен ронять «Подключить»; HTTP-ошибки не ретраятся (503 объясняет
-        // friendlyOffError). Connection refused — тоже без ретраев (нечего слушать).
-        String lastIoMessage = null;
+        // должен ронять «Подключить»; 4xx не ретраятся. Connection refused —
+        // тоже без ретраев (нечего слушать).
+        // Fix-11 (п.8): если поисковый сервис СОВСЕМ недоступен (провайдер режет
+        // TLS до OVH-хоста — подтверждённый кейс пользователя) или отвечает 5xx,
+        // пробуем фолбэк-хост Open Prices (та же инфраструктура, что
+        // world.openfoodfacts.org) — через него поиск тоже умеет работать.
+        String lastFailure = null;
         for (int attempt = 0; attempt <= IO_RETRIES; attempt++) {
             try {
                 restClient.get()
@@ -321,12 +325,17 @@ public class OpenFoodFactsProvider implements PriceProvider, ProductInfoProvider
                 // HTML-заглушки, в тосте/БД это бесполезный дамп. Только суть + подсказка.
                 // Fix-9 (п.6): подсказка зависит от режима — с настроенной учёткой 503
                 // означает временный IP-блок (ждать), без учётки — настроить креды.
-                String message = friendlyOffError(e.getStatusCode().value(), e.getResponseBodyAsString(), authed);
-                log.error("Failed to connect to Open Food Facts: {}", message);
-                return ConnectionStatus.error(message);
+                lastFailure = friendlyOffError(e.getStatusCode().value(), e.getResponseBodyAsString(), authed);
+                if (e.getStatusCode().is5xxServerError()) {
+                    log.warn("OFF search probe got HTTP {} — trying Open Prices fallback",
+                            e.getStatusCode().value());
+                    break; // 5xx — пробуем фолбэк
+                }
+                log.error("Failed to connect to Open Food Facts: {}", lastFailure);
+                return ConnectionStatus.error(lastFailure); // 4xx — фолбэк бессмыслен
             } catch (ResourceAccessException e) {
                 String root = rootCauseMessage(e);
-                lastIoMessage = friendlyIoError(root, searchUrl);
+                lastFailure = friendlyIoError(root, searchUrl);
                 log.warn("OFF connection attempt {}/{} failed (I/O): {}", attempt + 1, IO_RETRIES + 1, root);
                 if (isTransientIoFailure(e) && attempt < IO_RETRIES) {
                     sleep(1000L << attempt); // 1s, 2s
@@ -338,8 +347,42 @@ public class OpenFoodFactsProvider implements PriceProvider, ProductInfoProvider
                 return ConnectionStatus.error(e.getMessage());
             }
         }
-        log.error("Failed to connect to Open Food Facts: {}", lastIoMessage);
-        return ConnectionStatus.error(lastIoMessage);
+        return fallbackConnectionProbe(lastFailure);
+    }
+
+    /**
+     * Fix-11 (п.8): фолбэк-зонд «Подключить» — Open Prices на той же
+     * инфраструктуре, что world.openfoodfacts.org (доступен там, где
+     * search.openfoodfacts.org блокируют). Успех → интеграция РАБОТАЕТ
+     * (поиск продуктов пойдёт через каталог Open Prices — подмножество OFF
+     * с заявленными ценами), о чём честно сообщаем в message.
+     */
+    private ConnectionStatus fallbackConnectionProbe(String primaryFailure) {
+        if (pricesUrl == null || pricesUrl.isBlank()) {
+            log.error("Failed to connect to Open Food Facts: {}", primaryFailure);
+            return ConnectionStatus.error(primaryFailure);
+        }
+        String uri = UriStringBuilder.from(pricesUrl)
+                .path("/api/v1/products")
+                .queryParam("size", 1)
+                .build();
+        try {
+            restClient.get()
+                    .uri(uri)
+                    .retrieve()
+                    .toBodilessEntity();
+            String message = "Подключено через резервный хост: search.openfoodfacts.org "
+                    + "недоступен из вашей сети (" + primaryFailure + "). Поиск продуктов "
+                    + "будет идти через каталог Open Prices (подмножество OFF — продукты "
+                    + "с заявленными ценами); синхронизация цен и карточки работают штатно.";
+            log.warn("{}", message);
+            return ConnectionStatus.success(message);
+        } catch (Exception e) {
+            String message = primaryFailure
+                    + " Резервный хост Open Prices тоже недоступен: " + rootCauseMessage(e);
+            log.error("Failed to connect to Open Food Facts (both hosts): {}", message);
+            return ConnectionStatus.error(message);
+        }
     }
 
     /**
@@ -459,11 +502,72 @@ public class OpenFoodFactsProvider implements PriceProvider, ProductInfoProvider
                 .build();
 
         JsonNode response = executeWithThrottlingAndRetry(uri, "search \"" + query + "\"");
-        if (response == null) {
-            // Graceful degradation: после исчерпания ретраев — пустой результат.
+        if (response != null) {
+            return parseSearchHits(response);
+        }
+        // Fix-11 (п.8): Search-a-licious недоступен (провайдер блокирует OVH-хост,
+        // сбой) — фолбэк на поиск продуктов в Open Prices: хост на той же
+        // инфраструктуре, что world.openfoodfacts.org, каталог уже (продукты
+        // с заявленными ценами), но импорт продолжает работать.
+        log.warn("Search-a-licious unavailable — falling back to Open Prices product search for \"{}\"", query);
+        return searchViaOpenPrices(query, limit);
+    }
+
+    /**
+     * Fix-11 (п.8): фолбэк-поиск — Open Prices
+     * {@code GET /api/v1/products?product_name__like=…&size=…} (регистронезависимый
+     * LIKE по названию; параметр проверен живым запросом 27.10: search=... API
+     * игнорирует, волшебный суффикс — __like).
+     */
+    private List<ExternalProductDto> searchViaOpenPrices(String query, int limit) {
+        if (pricesUrl == null || pricesUrl.isBlank()) {
             return Collections.emptyList();
         }
-        return parseSearchHits(response);
+        String uri = UriStringBuilder.from(pricesUrl)
+                .path("/api/v1/products")
+                .queryParam("product_name__like", query)
+                .queryParam("size", limit)
+                .build();
+        JsonNode response = executeWithThrottlingAndRetry(uri, "fallback product search \"" + query + "\"");
+        if (response == null) {
+            // Graceful degradation: оба хоста недоступны — пустой результат.
+            return Collections.emptyList();
+        }
+        return parseOpenPricesProducts(response);
+    }
+
+    /**
+     * Fix-11 (п.8): парсер ответа Open Prices /api/v1/products —
+     * {items:[{code, product_name, brands (СТРОКА), quantity, image_url,
+     * product_quantity, product_quantity_unit, price_count,…}], total,…}.
+     * Позиции без code/name пропускаются (в каталоге есть заглушки без метаданных).
+     * Чистая функция — покрыта юнит-тестом.
+     */
+    static List<ExternalProductDto> parseOpenPricesProducts(JsonNode response) {
+        List<ExternalProductDto> results = new ArrayList<>();
+        if (response == null || !response.has("items") || !response.get("items").isArray()) {
+            return results;
+        }
+        for (JsonNode item : response.get("items")) {
+            String code = textOrNull(item, "code");
+            String name = textOrNull(item, "product_name");
+            if (code == null || name == null) {
+                continue; // заглушки без названия/кода бесполезны
+            }
+            String quantity = textOrNull(item, "quantity");
+            if (quantity == null) {
+                // product_quantity + product_quantity_unit ("394" + "ml" → "394 ml")
+                JsonNode pq = item.path("product_quantity");
+                String unit = textOrNull(item, "product_quantity_unit");
+                if (pq.isNumber() || pq.isTextual()) {
+                    quantity = pq.asText() + (unit != null ? " " + unit : "");
+                }
+            }
+            PackInfo packInfo = parseQuantity(quantity);
+            results.add(new ExternalProductDto(code, name, textOrNull(item, "brands"),
+                    packInfo.amount(), packInfo.unit(), textOrNull(item, "image_url")));
+        }
+        return results;
     }
 
     /**

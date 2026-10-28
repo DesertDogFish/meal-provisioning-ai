@@ -1,5 +1,5 @@
 // Регрессия: ложная ошибка "Ошибка: Connected successfully" при успешном
-// подключении OFF-интеграции. Бэкенд на POST /admin/integrations/OFF/connect
+// подключении интеграции (Fix-13: Росстат). Бэкенд на POST /admin/integrations/ROSSTAT/connect
 // возвращает HTTP 200 с телом IntegrationDto, где errorMessage === "Connected
 // successfully" (ConnectionStatus.success()). Фронтенд не должен трактовать
 // это поле как ошибку.
@@ -31,7 +31,7 @@ function jsonResponse(status: number, body: unknown) {
   return { ok: status >= 200 && status < 300, status, json: async () => body };
 }
 
-describe('IntegrationsPage: handleConnect (OFF)', () => {
+describe('IntegrationsPage: handleConnect (ROSSTAT)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -41,7 +41,7 @@ describe('IntegrationsPage: handleConnect (OFF)', () => {
       if (path.endsWith('/connect')) {
         return {
           id: 1,
-          provider: 'OFF',
+          provider: 'ROSSTAT',
           status: 'CONNECTED',
           errorMessage: 'Connected successfully', // служебное сообщение бэкенда при успехе
         };
@@ -65,7 +65,7 @@ describe('IntegrationsPage: handleConnect (OFF)', () => {
       if (path.endsWith('/connect')) {
         return {
           id: 1,
-          provider: 'OFF',
+          provider: 'ROSSTAT',
           status: 'ERROR',
           errorMessage: 'Connection refused',
         };

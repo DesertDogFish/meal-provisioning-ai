@@ -1,5 +1,6 @@
 package com.provision.controller;
 
+import com.provision.dto.integration.IngredientBindingDto;
 import com.provision.dto.integration.IngredientMappingRequest;
 import com.provision.dto.integration.IntegrationDto;
 import com.provision.dto.integration.SyncLogDto;
@@ -45,6 +46,11 @@ public class IntegrationController {
             @RequestParam String query,
             @RequestParam(defaultValue = "20") int limit) {
         return integrationService.searchProducts(provider, query, limit);
+    }
+
+    @GetMapping("/{provider}/mappings")
+    public List<IngredientBindingDto> getMappings(@PathVariable String provider) {
+        return integrationService.getMappings(provider);
     }
 
     @PostMapping("/ingredients/{ingredientId}/mapping")

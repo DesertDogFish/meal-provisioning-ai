@@ -34,6 +34,23 @@ interface ExternalProduct {
   packAmount: number | null;
   packUnit: string | null;
   imageUrl: string | null;
+  // Fix-14: свежая цена категории и её период (месяц) — приходят из поиска,
+  // чтобы админ видел реальную цифру до привязки. null, если выгрузка цен
+  // ещё не выполнена/недоступна (поиск при этом работает).
+  price: number | null;
+  priceDate: string | null;
+}
+
+// Fix-14: текущая привязка ингредиента к внешнему товару (GET /mappings)
+interface Binding {
+  mappingId: number;
+  ingredientId: number;
+  ingredientName: string;
+  externalCode: string;
+  externalName: string | null;
+  packAmount: number | null;
+  packUnit: string | null;
+  createdAt: string | null;
 }
 
 interface Ingredient {
@@ -41,12 +58,31 @@ interface Ingredient {
   name: string;
 }
 
+// Fix-14: хелперы отображения цены/периода в результатах поиска
+function formatPrice(v: number): string {
+  return v.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+function unitLabel(packUnit: string | null): string {
+  switch ((packUnit || '').toUpperCase()) {
+    case 'KG': return 'кг';
+    case 'L': return 'л';
+    case 'PCS': return 'шт';
+    default: return packUnit || 'ед.';
+  }
+}
+function formatPeriod(iso: string): string {
+  // priceDate приходит как ISO LocalDate (yyyy-MM-dd) — показываем месяц и год
+  const d = new Date(iso.length <= 10 ? `${iso}T00:00:00` : iso);
+  if (isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' });
+}
+
 export default function IntegrationsPage() {
   const { showError, showSuccess } = useToast();
 
   // FIX: корректное извлечение детали ошибки из ApiClientError.
   // У объекта ошибки нет поля detail — оно лежит в error.error.detail (ProblemDetail),
-  // либо это нативная Error с message. Graceful fallback для OFF-интеграции.
+  // либо это нативная Error с message. Graceful fallback для интеграций.
   const extractErrorMessage = (error: any): string =>
     error?.error?.detail ?? error?.detail ?? error?.message ?? 'Неизвестная ошибка';
 
@@ -61,7 +97,7 @@ export default function IntegrationsPage() {
   const handleApiError = (error: any, fallback: string) => {
     const msg = extractErrorMessage(error);
     if (/not connected|Provider is not connected/i.test(msg)) {
-      showError('Интеграция OFF не подключена — сначала подключите её, чтобы обновлять цены');
+      showError('Интеграция не подключена — сначала подключите её, чтобы обновлять цены');
       return;
     }
     showError(msg || fallback);
@@ -75,6 +111,9 @@ export default function IntegrationsPage() {
   const [searchResults, setSearchResults] = useState<ExternalProduct[]>([]);
   const [selectedIngredient, setSelectedIngredient] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
+  // Fix-14: текущие привязки (что уже связано) — снимают неопределённость
+  // «якобы маппинг уже есть, хотя хрен знает что там есть».
+  const [bindings, setBindings] = useState<Binding[]>([]);
 
   useEffect(() => {
     loadIntegrations();
@@ -119,6 +158,29 @@ export default function IntegrationsPage() {
     }
   };
 
+  // Fix-14: загрузка текущих привязок Росстата. Молча глотает «не подключено» —
+  // блок привязок рендерится только при CONNECTED, так что это страховка от гонки.
+  const loadBindings = async () => {
+    try {
+      const data = await api.get<Binding[]>('/admin/integrations/ROSSTAT/mappings');
+      setBindings(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error('Failed to load bindings:', error);
+      setBindings([]);
+    }
+  };
+
+  // Fix-13: единственная интеграция — Росстат (ЕМИСС); OFF демонтирован
+  const rosstatIntegration = integrations.find(i => i.provider === 'ROSSTAT');
+  const rosstatConnected = rosstatIntegration?.status === 'CONNECTED';
+
+  // Fix-14: как только интеграция подключена — показываем, что уже привязано.
+  useEffect(() => {
+    if (rosstatConnected) loadBindings();
+    else setBindings([]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rosstatConnected]);
+
   const handleConnect = async (provider: string) => {
     setLoading(true);
     try {
@@ -126,7 +188,7 @@ export default function IntegrationsPage() {
       // FIX: раньше здесь было что-то вроде
       //   const errorMsg = result?.message || result?.error;
       //   if (errorMsg) showError('Ошибка: ' + errorMsg);
-      // и успешный ответ OFF-бэкенда с message="Connected successfully"
+      // и успешный ответ бэкенда с message="Connected successfully"
       // распознавался как ошибка ("Ошибка: Connected successfully").
       //
       // Теперь явная проверка статуса:
@@ -210,7 +272,7 @@ export default function IntegrationsPage() {
     
     try {
       const data = await api.get<ExternalProduct[]>(
-        `/admin/integrations/OFF/products/search?query=${encodeURIComponent(searchQuery)}&limit=20`
+        `/admin/integrations/ROSSTAT/products/search?query=${encodeURIComponent(searchQuery)}&limit=20`
       );
       setSearchResults(data);
       if (data.length === 0) {
@@ -229,7 +291,7 @@ export default function IntegrationsPage() {
     
     try {
       await api.post(`/admin/integrations/ingredients/${selectedIngredient}/mapping`, {
-        provider: 'OFF',
+        provider: 'ROSSTAT',
         externalCode: product.code,
         packAmount: product.packAmount,
         packUnit: product.packUnit
@@ -238,10 +300,26 @@ export default function IntegrationsPage() {
       setSearchResults([]);
       setSearchQuery('');
       setSelectedIngredient(null);
-      showSuccess('Связь с товаром создана');
+      // Fix-14: бэкенд теперь делает upsert — повторная привязка того же
+      // ингредиента не ошибка, а замена товара. Перечитываем список привязок.
+      await loadBindings();
+      showSuccess(`Привязано: ${product.name}`);
     } catch (error: any) {
       console.error('Failed to create mapping:', error);
       handleApiError(error, 'Не удалось создать связь с товаром');
+    }
+  };
+
+  // Fix-14: отвязка ингредиента от внешнего товара (DELETE уже был на бэкенде,
+  // но не использовался в UI — админ не мог убрать/заменить привязку).
+  const handleDeleteMapping = async (binding: Binding) => {
+    try {
+      await api.del(`/admin/integrations/ingredients/${binding.ingredientId}/mapping/ROSSTAT`);
+      setBindings(prev => prev.filter(b => b.mappingId !== binding.mappingId));
+      showSuccess(`Привязка «${binding.ingredientName}» удалена`);
+    } catch (error: any) {
+      console.error('Failed to delete mapping:', error);
+      handleApiError(error, 'Не удалось удалить привязку');
     }
   };
 
@@ -267,8 +345,6 @@ export default function IntegrationsPage() {
     }
   };
 
-  const offIntegration = integrations.find(i => i.provider === 'OFF');
-
   return (
     <div className="space-y-6">
       <div>
@@ -278,7 +354,7 @@ export default function IntegrationsPage() {
         </p>
       </div>
 
-      {/* Open Food Facts Card */}
+      {/* Росстат (ЕМИСС) Card — Fix-13 */}
       <div className="rounded-xl p-6" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
         <div className="flex items-start justify-between mb-4">
           <div className="flex items-start gap-4">
@@ -287,27 +363,28 @@ export default function IntegrationsPage() {
               <Wifi size={24} style={{ color: 'var(--on-fire)' }} />
             </div>
             <div>
-              <h2 className="text-xl font-bold" style={{ color: 'var(--text)' }}>Open Food Facts</h2>
+              <h2 className="text-xl font-bold" style={{ color: 'var(--text)' }}>Росстат (ЕМИСС)</h2>
               <p className="text-sm mt-1" style={{ color: 'var(--muted)' }}>
-                Open Food Facts идентифицирует продукты (штрихкод, название, бренд, фото)
-                и обновляет данные карточек. Цены синхронизируются из Open Prices —
-                краудсорсинговой базы цен OFF — и конвертируются в рубли по ежедневному
-                курсу ЦБ РФ. Введённые вручную цены не перезаписываются.
+                Официальные средние потребительские цены Росстата (ЕМИСС, fedstat.ru)
+                на базовые продукты питания — «средняя цена по больнице» в рублях,
+                ежемесячно, без ключей и лимитов. Привяжите категории («Гречневая крупа»,
+                «Молоко питьевое»…) к ингредиентам — синхронизация наполнит плановые цены.
+                Введённые вручную цены не перезаписываются.
               </p>
               <div className="flex items-center gap-2 mt-2">
-                {offIntegration && getStatusIcon(offIntegration.status)}
+                {rosstatIntegration && getStatusIcon(rosstatIntegration.status)}
                 <span className="text-sm" style={{ color: 'var(--text)' }}>
-                  {offIntegration ? getStatusText(offIntegration.status) : 'Не подключено'}
+                  {rosstatIntegration ? getStatusText(rosstatIntegration.status) : 'Не подключено'}
                 </span>
               </div>
-              {offIntegration?.lastConnectedAt && (
+              {rosstatIntegration?.lastConnectedAt && (
                 <p className="text-xs mt-1" style={{ color: 'var(--muted)' }}>
-                  Последнее подключение: {new Date(offIntegration.lastConnectedAt).toLocaleString('ru-RU')}
+                  Последнее подключение: {new Date(rosstatIntegration.lastConnectedAt).toLocaleString('ru-RU')}
                 </p>
               )}
-              {offIntegration?.lastSyncAt && (
+              {rosstatIntegration?.lastSyncAt && (
                 <p className="text-xs" style={{ color: 'var(--muted)' }}>
-                  Последняя синхронизация: {new Date(offIntegration.lastSyncAt).toLocaleString('ru-RU')}
+                  Последняя синхронизация: {new Date(rosstatIntegration.lastSyncAt).toLocaleString('ru-RU')}
                 </p>
               )}
               {/* FIX (баг «Ошибка: Connected successfully»): бэкенд сохранял в
@@ -316,9 +393,9 @@ export default function IntegrationsPage() {
                   Теперь бэкенд чистит поле при успехе; на всякий случай красным
                   выводим ошибку только для статуса ERROR, а устаревшее текстовое
                   поле при CONNECTED не показываем вовсе. */}
-              {offIntegration?.status === 'ERROR' && offIntegration.errorMessage && (
+              {rosstatIntegration?.status === 'ERROR' && rosstatIntegration.errorMessage && (
                 <p className="text-xs mt-1" style={{ color: 'var(--fire)' }}>
-                  Ошибка: {offIntegration.errorMessage}
+                  Ошибка: {rosstatIntegration.errorMessage}
                 </p>
               )}
             </div>
@@ -326,18 +403,18 @@ export default function IntegrationsPage() {
         </div>
 
         <div className="flex gap-3">
-          {!offIntegration || offIntegration.status !== 'CONNECTED' ? (
-            <Button variant="primary" size="sm" onClick={() => handleConnect('OFF')} disabled={loading} aria-label="Подключить интеграцию">
+          {!rosstatIntegration || rosstatIntegration.status !== 'CONNECTED' ? (
+            <Button variant="primary" size="sm" onClick={() => handleConnect('ROSSTAT')} disabled={loading} aria-label="Подключить интеграцию">
                           <Link size={16} />
                           Подключить
                         </Button>
           ) : (
             <>
-              <Button variant="primary" size="sm" onClick={() => handleSyncPrices('OFF')} disabled={syncing} aria-label="Синхронизировать цены">
+              <Button variant="primary" size="sm" onClick={() => handleSyncPrices('ROSSTAT')} disabled={syncing} aria-label="Синхронизировать цены">
                               <RefreshCw size={16} className={syncing ? 'animate-spin' : ''} />
                               {syncing ? 'Синхронизация...' : 'Обновить цены'}
                             </Button>
-              <Button variant="danger" size="sm" onClick={() => handleDisconnect('OFF')} disabled={loading} aria-label="Отключить интеграцию">
+              <Button variant="danger" size="sm" onClick={() => handleDisconnect('ROSSTAT')} disabled={loading} aria-label="Отключить интеграцию">
                               <Unlink size={16} />
                               Отключить
                             </Button>
@@ -347,7 +424,7 @@ export default function IntegrationsPage() {
       </div>
 
       {/* Product Mapping */}
-      {offIntegration?.status === 'CONNECTED' && (
+      {rosstatIntegration?.status === 'CONNECTED' && (
         <div className="rounded-xl p-6" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
           <h3 className="text-lg font-bold mb-4" style={{ color: 'var(--text)' }}>
             Привязка товаров
@@ -370,7 +447,7 @@ export default function IntegrationsPage() {
             {selectedIngredient && (
               <div>
                 <label className="block text-sm font-medium mb-2" style={{ color: 'var(--muted)' }}>
-                  Поиск товара в Open Food Facts
+                  Поиск категории в Росстате
                 </label>
                 <div className="flex gap-2">
                   <div className="relative flex-1">
@@ -422,6 +499,21 @@ export default function IntegrationsPage() {
                             <> • {product.packAmount} {product.packUnit}</>
                           )}
                         </p>
+                        {/* Fix-14: свежая цена категории из ЕМИСС (₽ за единицу фасовки).
+                            Если выгрузка цен недоступна — подсказка, что цена придёт после синка. */}
+                        {product.price != null ? (
+                          <p className="text-sm font-semibold mt-0.5" style={{ color: 'var(--ok)' }}>
+                            {formatPrice(product.price)} ₽
+                            <span className="font-normal" style={{ color: 'var(--muted)' }}>
+                              {' '}/ {unitLabel(product.packUnit)}
+                              {product.priceDate ? ` • ${formatPeriod(product.priceDate)}` : ''}
+                            </span>
+                          </p>
+                        ) : (
+                          <p className="text-xs mt-0.5" style={{ color: 'var(--muted)' }}>
+                            Цена появится после синхронизации
+                          </p>
+                        )}
                       </div>
                       <Button variant="primary" size="sm" onClick={() => handleCreateMapping(product)} aria-label="Привязать товар">
                                               Привязать
@@ -432,6 +524,43 @@ export default function IntegrationsPage() {
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {/* Fix-14: Текущие привязки — видно, что уже связано; можно отвязать/заменить */}
+      {rosstatConnected && (
+        <div className="rounded-xl p-6" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-bold" style={{ color: 'var(--text)' }}>Текущие привязки</h3>
+            <span className="text-sm" style={{ color: 'var(--muted)' }}>{bindings.length}</span>
+          </div>
+          {bindings.length === 0 ? (
+            <p className="text-sm" style={{ color: 'var(--muted)' }}>
+              Пока ничего не привязано — выберите ингредиент выше и найдите подходящую категорию Росстата.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {bindings.map(b => (
+                <div
+                  key={b.mappingId}
+                  className="flex items-center gap-3 p-3 rounded-lg"
+                  style={{ background: 'var(--elev)', border: '1px solid var(--border)' }}
+                >
+                  <div className="flex-1">
+                    <p className="font-medium" style={{ color: 'var(--text)' }}>{b.ingredientName}</p>
+                    <p className="text-xs" style={{ color: 'var(--muted)' }}>
+                      → {b.externalName || 'категория'} • Код: {b.externalCode}
+                      {b.packAmount != null && b.packUnit ? <> • {b.packAmount} {unitLabel(b.packUnit)}</> : null}
+                    </p>
+                  </div>
+                  <Button variant="danger" size="sm" onClick={() => handleDeleteMapping(b)} aria-label={`Отвязать ${b.ingredientName}`}>
+                    <Unlink size={16} />
+                    Отвязать
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

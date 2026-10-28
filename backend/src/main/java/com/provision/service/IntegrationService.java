@@ -1,5 +1,6 @@
 package com.provision.service;
 
+import com.provision.dto.integration.IngredientBindingDto;
 import com.provision.dto.integration.IntegrationDto;
 import com.provision.dto.integration.IngredientMappingRequest;
 import com.provision.dto.integration.SyncLogDto;
@@ -148,13 +149,7 @@ public class IntegrationService {
         Ingredient ingredient = ingredientRepository.findById(ingredientId)
                 .orElseThrow(() -> new NotFoundException("Ingredient not found: " + ingredientId));
 
-        // Проверяем, существует ли уже маппинг для этого ингредиента и провайдера
-        Optional<IngredientMapping> existing = mappingRepository.findByInternalIngredientIdAndSource(
-                ingredientId, parseProviderSource(request.provider()));
-
-        if (existing.isPresent()) {
-            throw new IllegalStateException("Mapping already exists for this ingredient and provider");
-        }
+        RecipeSource source = parseProviderSource(request.provider());
 
         // Получаем или создаём внешний продукт
         ExternalProduct externalProduct = externalProductRepository
@@ -170,16 +165,54 @@ public class IntegrationService {
                     return externalProductRepository.save(newProduct);
                 });
 
-        IngredientMapping mapping = IngredientMapping.builder()
-                .externalName(ingredient.getName())
-                .source(parseProviderSource(request.provider()))
-                .internalIngredient(ingredient)
-                .externalCode(request.externalCode())
-                .externalProduct(externalProduct)
-                .build();
+        // Fix-14: идемпотентный upsert вместо «Mapping already exists».
+        // Раньше повторная привязка того же ингредиента (замена товара, повторный
+        // клик, попытка перепривязать после неочевидного успеха) падала с
+        // IllegalStateException, а пользователь не видел, ЧТО уже привязано, и не
+        // мог это изменить. Теперь существующий маппинг (ingredientId, source)
+        // просто переводится на новый внешний товар.
+        IngredientMapping mapping = mappingRepository
+                .findByInternalIngredientIdAndSource(ingredientId, source)
+                .orElse(null);
+        boolean isNew = mapping == null;
+        if (isNew) {
+            mapping = IngredientMapping.builder()
+                    .source(source)
+                    .internalIngredient(ingredient)
+                    .build();
+        }
+        mapping.setExternalName(ingredient.getName());
+        mapping.setExternalCode(request.externalCode());
+        mapping.setExternalProduct(externalProduct);
 
         mappingRepository.save(mapping);
-        log.info("Created mapping for ingredient {} to external product {}", ingredientId, request.externalCode());
+        log.info("{} mapping for ingredient {} to external product {}",
+                isNew ? "Created" : "Updated", ingredientId, request.externalCode());
+    }
+
+    /**
+     * Fix-14: список текущих привязок провайдера (для UI «Текущие привязки»,
+     * чтобы админ видел, что уже связано, и мог перепривязать/отвязать).
+     * Для провайдера, не являющегося источником рецептов, — пустой список.
+     */
+    @Transactional(readOnly = true)
+    public List<IngredientBindingDto> getMappings(String providerCode) {
+        RecipeSource source = parseMappingSource(providerCode);
+        if (source == null) return List.of();
+        return mappingRepository.findBySourceWithIngredients(source).stream()
+                .map(m -> {
+                    ExternalProduct ep = m.getExternalProduct();
+                    return new IngredientBindingDto(
+                            m.getId(),
+                            m.getInternalIngredient().getId(),
+                            m.getInternalIngredient().getName(),
+                            m.getExternalCode(),
+                            m.getExternalName(),
+                            ep != null ? ep.getPackAmount() : null,
+                            ep != null ? ep.getPackUnit() : null,
+                            m.getCreatedAt());
+                })
+                .toList();
     }
 
     @Transactional

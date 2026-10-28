@@ -11,7 +11,8 @@ import java.util.List;
 import java.util.Optional;
 
 @Repository
-public interface SyncLogRepository extends JpaRepository<SyncLog, Long> {
+public interface SyncLogRepository extends JpaRepository<SyncLog, Long>,
+        org.springframework.data.jpa.repository.JpaSpecificationExecutor<SyncLog> {
     List<SyncLog> findByProviderOrderByStartedAtDesc(String provider);
     List<SyncLog> findAllByOrderByStartedAtDesc();
     
@@ -21,21 +22,13 @@ public interface SyncLogRepository extends JpaRepository<SyncLog, Long> {
     @Query("SELECT s FROM SyncLog s WHERE s.status = 'RUNNING'")
     List<SyncLog> findAllRunning();
     
-    @Query("SELECT s FROM SyncLog s WHERE " +
-           "(:provider IS NULL OR s.provider = :provider) AND " +
-           "(:type IS NULL OR s.type = :type) AND " +
-           "(:status IS NULL OR s.status = :status) AND " +
-           "(:from IS NULL OR s.startedAt >= :from) AND " +
-           "(:to IS NULL OR s.startedAt <= :to) " +
-           "ORDER BY s.startedAt DESC")
-    List<SyncLog> findByFilters(
-        @Param("provider") String provider,
-        @Param("type") String type,
-        @Param("status") String status,
-        @Param("from") LocalDateTime from,
-        @Param("to") LocalDateTime to
-    );
-    
+    // Fix-12: findByFilters с JPQL-паттерном «(:param IS NULL OR col = :param)»
+    // УДАЛЁН — на Hibernate 6 + PostgreSQL NULL-параметры в таких запросах
+    // падают в рантайме («could not determine data type of parameter»), и журнал
+    // синков + KPI (/admin/sync-logs, /admin/sync-logs/kpi) отдавали 500.
+    // Фильтрация переехала в JPA Specification (SyncLogService.filtersSpec):
+    // предикаты собираются в Java только для непустых фильтров — NULL-параметров
+    // в запросе нет вовсе.
     @Query("SELECT COUNT(s) FROM SyncLog s WHERE s.provider = :provider AND s.status = 'SUCCESS' AND s.startedAt >= :since")
     long countSuccessfulSince(@Param("provider") String provider, @Param("since") LocalDateTime since);
     

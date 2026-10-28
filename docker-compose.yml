@@ -35,19 +35,15 @@
       SPRING_JPA_HIBERNATE_DDL_AUTO: validate
       SPRING_FLYWAY_ENABLED: "true"
       JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env}
-      # Fix-9 (интеграция): учётка Open Food Facts — ОПЦИОНАЛЬНА, но рекомендована:
-      # анонимные запросы OFF лимитирует по IP (503/бан), зарегистрированные
-      # пользователи получают приоритетный доступ. Бэкенд передаёт её заголовком
-      # Basic Auth (не query-параметрами). Пусто = анонимный режим.
-      # Fix-11 (дока OFF): OFF_USER_ID — это USERNAME аккаунта, НЕ email!
-      OFF_USER_ID: ${OFF_USER_ID:-}
-      OFF_PASSWORD: ${OFF_PASSWORD:-}
-      OFF_CONTACT_EMAIL: ${OFF_CONTACT_EMAIL:-}
-      # Fix-11 (п.7): опциональный прокси для запросов OFF (http://host:port или
-      # socks5://host:port) — если провайдер режет TLS до search.openfoodfacts.org.
-      # Для доступа к прокси на хост-машине из контейнера используйте
-      # http://host.docker.internal:PORT (Docker Desktop) вместо 127.0.0.1.
-      OFF_PROXY_URL: ${OFF_PROXY_URL:-}
+      # Fix-13 (интеграция): Росстат/ЕМИСС (fedstat.ru) — официальные средние
+      # потребительские цены. Ключи/пароли НЕ нужны; переменные ниже — только
+      # для переопределения дефолтов (показатель 31448 = месячные цены, регион РФ).
+      # ВНИМАНИЕ: ЕМИСС блокирует зарубежные дата-центры (403 анти-бот) —
+      # контейнер должен выходить в интернет из сети РФ (как и хост пользователя).
+      ROSSTAT_INDICATOR_ID: ${ROSSTAT_INDICATOR_ID:-31448}
+      ROSSTAT_REGION: ${ROSSTAT_REGION:-Российская Федерация}
+      ROSSTAT_CACHE_HOURS: ${ROSSTAT_CACHE_HOURS:-24}
+      INTEGRATION_CONTACT_EMAIL: ${INTEGRATION_CONTACT_EMAIL:-}
     ports:
       - "8080:8080"
     healthcheck:

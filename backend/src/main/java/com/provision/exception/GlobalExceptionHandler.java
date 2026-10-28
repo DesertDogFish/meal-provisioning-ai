@@ -190,13 +190,14 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
     }
 
-    @ExceptionHandler(com.provision.exception.IntegrationAuthException.class)
-    public ResponseEntity<ErrorResponse> handleIntegrationAuth(
-            com.provision.exception.IntegrationAuthException ex,
+    @ExceptionHandler(com.provision.exception.IntegrationUnavailableException.class)
+    public ResponseEntity<ErrorResponse> handleIntegrationUnavailable(
+            com.provision.exception.IntegrationUnavailableException ex,
             HttpServletRequest request
     ) {
-        // Сбой авторизации внешнего API (OFF) — не наш баг: 502 вместо 500.
-        log.error("Integration auth failed: {}", ex.getMessage());
+        // Fix-13: внешний интеграционный сервис (ЕМИСС/Росстат) недоступен или
+        // ответил не тем — не наш баг: 502 вместо 500.
+        log.error("Integration unavailable: {}", ex.getMessage());
         ErrorResponse error = new ErrorResponse(
                 "about:blank",
                 "Bad Gateway",

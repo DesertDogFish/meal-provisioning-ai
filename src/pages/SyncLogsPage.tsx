@@ -203,7 +203,7 @@ export default function SyncLogsPage() {
         <div className="flex items-center gap-4 flex-wrap">
           <div className="flex items-center gap-2">
             <div className="w-2 h-2 rounded-full" style={{ background: 'var(--ok)' }}></div>
-            <b style={{ color: 'var(--text)' }}>Open Food Facts · Open Prices</b>
+            <b style={{ color: 'var(--text)' }}>Росстат (ЕМИСС)</b>
           </div>
           <span style={{ color: 'var(--muted)', fontSize: '12px' }}>
             подключён 20.10.2026 18:04 · последний синк 21.10.2026 06:00
@@ -435,8 +435,17 @@ export default function SyncLogsPage() {
               <div className="mt-4">
                 <b style={{ color: 'var(--muted)', fontSize: '12px' }}>Ошибки</b>
                 {selectedLog.details.errors.map((err, idx) => (
-                  <div key={idx} className="chip-delta fire" style={{ display: 'block', marginTop: '6px' }}>
-                    {err.externalCode} · {err.message}
+                  /* Fix-11 (п.9): длинные сообщения (legacy-записи с HTML-дампами
+                     OFF) режем до 160 символов; полный текст — в title. */
+                  <div
+                    key={idx}
+                    className="chip-delta fire"
+                    style={{ display: 'block', marginTop: '6px' }}
+                    title={err.message}
+                  >
+                    {err.externalCode} · {err.message && err.message.length > 160
+                      ? `${err.message.slice(0, 160)}…`
+                      : err.message}
                   </div>
                 ))}
               </div>

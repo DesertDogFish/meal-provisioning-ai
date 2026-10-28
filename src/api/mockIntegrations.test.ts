@@ -25,36 +25,36 @@ describe('MOCK-INTEGRATIONS: /admin/integrations* (U11 parity)', () => {
   it('GET /admin/integrations — список интеграций в форме IntegrationDto', () => {
     const list = call('GET', '/admin/integrations', null);
     expect(Array.isArray(list)).toBe(true);
-    expect(list[0]).toMatchObject({ provider: 'OFF' });
+    expect(list[0]).toMatchObject({ provider: 'ROSSTAT' });
     expect(list[0]).toHaveProperty('status');
     expect(list[0]).toHaveProperty('lastSyncAt');
     expect(list[0]).toHaveProperty('errorMessage');
   });
 
   it('disconnect блокирует синк (409 INTEGRATION_DISCONNECTED), connect возвращает статус', () => {
-    const off = call('POST', '/admin/integrations/OFF/disconnect', null);
+    const off = call('POST', '/admin/integrations/ROSSTAT/disconnect', null);
     expect(off.status).toBe('DISCONNECTED');
 
-    const err = grab(() => call('POST', '/admin/integrations/OFF/sync/prices', null));
+    const err = grab(() => call('POST', '/admin/integrations/ROSSTAT/sync/prices', null));
     expect(err.status).toBe(409);
     expect(err.message).toBe('INTEGRATION_DISCONNECTED');
 
-    const on = call('POST', '/admin/integrations/OFF/connect', null);
+    const on = call('POST', '/admin/integrations/ROSSTAT/connect', null);
     expect(on.status).toBe('CONNECTED');
     // Паритет с бэкендом: служебное сообщение, а не ошибка
     expect(on.errorMessage).toBe('Connected successfully');
   });
 
   it('sync/prices → {logId}, поверх running 409, лог фоново завершается SUCCESS со счётчиками', async () => {
-    const res = call('POST', '/admin/integrations/OFF/sync/prices', null);
+    const res = call('POST', '/admin/integrations/ROSSTAT/sync/prices', null);
     expect(typeof res.logId).toBe('number');
 
-    const err = grab(() => call('POST', '/admin/integrations/OFF/sync/prices', null));
+    const err = grab(() => call('POST', '/admin/integrations/ROSSTAT/sync/prices', null));
     expect(err.status).toBe(409);
     expect(err.message).toBe('SYNC_ALREADY_RUNNING');
 
     const running = call('GET', '/admin/integrations/sync-logs', null);
-    expect(running[0]).toMatchObject({ provider: 'OFF', type: 'PRICES', status: 'RUNNING' });
+    expect(running[0]).toMatchObject({ provider: 'ROSSTAT', type: 'PRICES', status: 'RUNNING' });
     expect(running[0].finishedAt).toBeNull();
 
     // Фоновое «завершение» синка (1.5 с) — как executePriceSync на реальном бэкенде
@@ -78,17 +78,55 @@ describe('MOCK-INTEGRATIONS: /admin/integrations* (U11 parity)', () => {
   });
 
   it('products/search отдаёт ExternalProductDto, mapping возвращает 200 (null-тело)', () => {
-    const found = call('GET', '/admin/integrations/OFF/products/search?query=nutella&limit=20', null);
-    expect(found.length).toBeGreaterThan(0);
-    expect(found[0]).toMatchObject({ code: '3017620422003', brand: 'Ferrero', packUnit: 'KG' });
-    expect(found[0].name).toContain('nutella');
+    // Fix-13: каталог — категории Росстата (ЕМИСС), поиск по подстроке
+    const found = call('GET', '/admin/integrations/ROSSTAT/products/search?query=греч&limit=20', null);
+    expect(found.length).toBe(1);
+    expect(found[0]).toMatchObject({ code: '101', brand: 'Росстат', packUnit: 'KG' });
+    expect(found[0].name).toBe('Гречневая крупа');
+
+    const all = call('GET', '/admin/integrations/ROSSTAT/products/search?query=&limit=20', null);
+    expect(all.length).toBeGreaterThanOrEqual(5);
 
     const mapped = call('POST', '/admin/integrations/ingredients/1/mapping', {
-      provider: 'OFF',
-      externalCode: '3017620422003',
-      packAmount: 0.35,
+      provider: 'ROSSTAT',
+      externalCode: '101',
+      packAmount: 1,
       packUnit: 'KG',
     });
     expect(mapped).toBeNull();
+  });
+
+  it('Fix-14: products/search отдаёт цену категории (price/priceDate)', () => {
+    const found = call('GET', '/admin/integrations/ROSSTAT/products/search?query=греч&limit=20', null);
+    expect(found[0]).toMatchObject({ code: '101', packUnit: 'KG' });
+    expect(typeof found[0].price).toBe('number');
+    expect(found[0].priceDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+
+  it('Fix-14: привязки — upsert (POST), список (GET), отвязка (DELETE)', () => {
+    // Первая привязка ингредиента 2 → появляется в списке
+    expect(call('POST', '/admin/integrations/ingredients/2/mapping',
+      { provider: 'ROSSTAT', externalCode: '102', packAmount: 1, packUnit: 'L' })).toBeNull();
+    let list = call('GET', '/admin/integrations/ROSSTAT/mappings', null);
+    let b2 = list.find((b: any) => b.ingredientId === 2);
+    expect(b2).toBeTruthy();
+    expect(b2.externalCode).toBe('102');
+
+    // Повторная привязка ТОГО ЖЕ ингредиента = замена товара (upsert), не дубль
+    call('POST', '/admin/integrations/ingredients/2/mapping',
+      { provider: 'ROSSTAT', externalCode: '104', packAmount: 1, packUnit: 'KG' });
+    list = call('GET', '/admin/integrations/ROSSTAT/mappings', null);
+    const b2again = list.filter((b: any) => b.ingredientId === 2);
+    expect(b2again.length).toBe(1);
+    expect(b2again[0].externalCode).toBe('104');
+
+    // Отвязка удаляет запись
+    expect(call('DELETE', '/admin/integrations/ingredients/2/mapping/ROSSTAT', null)).toBeNull();
+    list = call('GET', '/admin/integrations/ROSSTAT/mappings', null);
+    expect(list.find((b: any) => b.ingredientId === 2)).toBeUndefined();
+
+    // Отвязка отсутствующей → 404 (паритет с deleteMapping)
+    const err = grab(() => call('DELETE', '/admin/integrations/ingredients/2/mapping/ROSSTAT', null));
+    expect(err.status).toBe(404);
   });
 });

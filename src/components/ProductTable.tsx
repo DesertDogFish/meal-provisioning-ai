@@ -161,7 +161,8 @@ export function ProductTable({ products, filters, onEdit, onDelete, onResetFilte
       <span style={{ color: 'var(--text)' }}>
         {price.value.toLocaleString('ru-RU')} {price.currency}
         <span className="chip-delta dim" style={{ marginLeft: '8px' }}>
-          {price.source === 'OFF' ? 'OFF' : 'ручная'}
+          {/* Fix-13: источник цены — Росстат (ЕМИСС) / legacy OFF / ручная */}
+          {price.source === 'ROSSTAT' ? 'Росстат' : price.source === 'OFF' ? 'OFF' : 'ручная'}
         </span>
       </span>
     );

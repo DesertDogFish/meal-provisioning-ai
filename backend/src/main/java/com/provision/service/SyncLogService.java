@@ -15,7 +15,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.transaction.annotation.Transactional;
+
+import jakarta.persistence.criteria.Predicate;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -56,7 +59,7 @@ public class SyncLogService {
             LocalDateTime from,
             LocalDateTime to
     ) {
-        return syncLogRepository.findByFilters(provider, type, status, from, to).stream()
+        return syncLogRepository.findAll(filtersSpec(provider, type, status, from, to)).stream()
                 .map(this::toResponse)
                 .toList();
     }
@@ -150,11 +153,45 @@ public class SyncLogService {
         }
     }
 
+    /**
+     * Fix-12: фильтрация журнала синков через JPA Specification вместо JPQL
+     * «(:param IS NULL OR col = :param)» — тот паттерн на Hibernate 6 +
+     * PostgreSQL ронял оба эндпоинта (/admin/sync-logs и /kpi) в рантайме
+     * (нетипизированные NULL-параметры). Здесь предикаты создаются только для
+     * непустых фильтров — NULL-параметров в SQL не попадает вовсе.
+     * Сортировка: свежие запуски сверху (startedAt DESC).
+     */
+    private static Specification<SyncLog> filtersSpec(String provider, String type, String status,
+                                                      java.time.LocalDateTime from, java.time.LocalDateTime to) {
+        return (root, query, cb) -> {
+            List<Predicate> ps = new java.util.ArrayList<>();
+            if (provider != null && !provider.isBlank()) {
+                ps.add(cb.equal(root.get("provider"), provider));
+            }
+            if (type != null && !type.isBlank()) {
+                ps.add(cb.equal(root.get("type"), type));
+            }
+            if (status != null && !status.isBlank()) {
+                ps.add(cb.equal(root.get("status"), status));
+            }
+            if (from != null) {
+                ps.add(cb.greaterThanOrEqualTo(root.get("startedAt"), from));
+            }
+            if (to != null) {
+                ps.add(cb.lessThanOrEqualTo(root.get("startedAt"), to));
+            }
+            if (query != null) {
+                query.orderBy(cb.desc(root.get("startedAt")));
+            }
+            return ps.isEmpty() ? cb.conjunction() : cb.and(ps.toArray(new Predicate[0]));
+        };
+    }
+
     @Transactional(readOnly = true)
     public SyncKpiResponse getKpi(String provider, Integer days) {
         LocalDateTime since = LocalDateTime.now().minusDays(days != null ? days : 7);
         
-        List<SyncLog> logs = syncLogRepository.findByFilters(provider, null, null, since, null);
+        List<SyncLog> logs = syncLogRepository.findAll(filtersSpec(provider, null, null, since, null));
         
         long totalRuns = logs.size();
         long successfulRuns = logs.stream().filter(l -> "SUCCESS".equals(l.getStatus())).count();

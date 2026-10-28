@@ -27,9 +27,10 @@ import static org.mockito.Mockito.*;
 
 /**
  * Регрессия на баг "No enum constant com.provision.entity.RecipeSource.OFF".
- * Провайдер OpenFoodFactsProvider.code() == "IntegrationService" передаёт код "OFF"
- * в RecipeSource.valueOf(...) — OFF должен присутствовать в enum и корректно
- * обрабатываться во всех местах (маппинги, синхронизация цен).
+ * Код провайдера (исторически "OFF", с Fix-13 — "ROSSTAT") передаётся в
+ * RecipeSource.valueOf(...) — значение обязано присутствовать в enum и
+ * корректно обрабатываться во всех местах (маппинги, синхронизация цен).
+ * OFF сохранён в enum для legacy-строк БД (провайдер демонтирован в Fix-13).
  */
 @DisplayName("OFF: enum RecipeSource + интеграция без падений")
 class OffRecipeSourceTest {
@@ -63,9 +64,12 @@ class OffRecipeSourceTest {
     }
 
     @Test
-    @DisplayName("enum RecipeSource содержит OFF (прямая проверка корня бага)")
+    @DisplayName("enum RecipeSource содержит OFF (legacy) и ROSSTAT (Fix-13)")
     void enumContainsOff() {
         assertThat(RecipeSource.valueOf("OFF")).isEqualTo(RecipeSource.OFF);
+        // Fix-13: провайдер Росстата — code() "ROSSTAT" → parseMappingSource
+        // не должен возвращать null (иначе синхронизация цен синхронизирует 0).
+        assertThat(RecipeSource.valueOf("ROSSTAT")).isEqualTo(RecipeSource.ROSSTAT);
     }
 
     @Test

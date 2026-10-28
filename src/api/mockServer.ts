@@ -20,22 +20,44 @@ const prices: IngredientPrice[] = [...mockPrices];
 // CONTRACT-P1: состояние синхронизации интеграций для SYNC_ALREADY_RUNNING
 let syncRunning = false;
 
-// U11 mock-parity: состояние /admin/integrations* (как IntegrationController +
-// IntegrationService). По умолчанию интеграция подключена — в демо-режиме
-// «Обновить цены» работает сразу. errorMessage='Connected successfully' —
-// как у реального бэкенда (фронт не должен трактовать его как ошибку).
+// Fix-14: mock-хранилище привязок ингредиентов (повторяет upsert
+// IntegrationService.createMapping + список GET /mappings + DELETE).
+interface MockBinding {
+  mappingId: number; ingredientId: number; ingredientName: string;
+  externalCode: string; externalName: string | null;
+  packAmount: number | null; packUnit: string | null; createdAt: string;
+}
+let mockBindings: MockBinding[] = [];
+let mockBindingSeq = 1;
+
+// U11 mock-parity (Fix-13: Росстат/ЕМИСС вместо OFF): состояние
+// /admin/integrations* (как IntegrationController + IntegrationService).
+// По умолчанию интеграция подключена — в демо-режиме «Обновить цены» работает
+// сразу. errorMessage='Connected successfully' — как у реального бэкенда
+// (фронт не должен трактовать его как ошибку).
 let integrationState: {
   id: number; provider: string; status: string; baseUrl: string;
   lastConnectedAt: string | null; lastSyncAt: string | null; errorMessage: string | null;
 } = {
   id: 1,
-  provider: 'OFF',
+  provider: 'ROSSTAT',
   status: 'CONNECTED',
-  baseUrl: 'https://world.openfoodfacts.org',
+  baseUrl: 'https://www.fedstat.ru',
   lastConnectedAt: new Date().toISOString(),
   lastSyncAt: null,
   errorMessage: 'Connected successfully',
 };
+
+// Fix-13: демо-каталог категорий Росстата (форма ExternalProductDto).
+// packUnit обязателен: бэкенд отбрасывает цены без единицы фасовки.
+// Fix-14: добавлены price/priceDate — поиск сразу показывает свежую цену категории.
+const ROSSTAT_CATALOG = [
+  { code: '101', name: 'Гречневая крупа', packAmount: 1, packUnit: 'KG', price: 89.1, priceDate: '2026-09-01' },
+  { code: '102', name: 'Молоко питьевое', packAmount: 1, packUnit: 'L', price: 91.5, priceDate: '2026-09-01' },
+  { code: '103', name: 'Яйца куриные', packAmount: 10, packUnit: 'PCS', price: 12.4, priceDate: '2026-09-01' },
+  { code: '104', name: 'Сахар-песок', packAmount: 1, packUnit: 'KG', price: 17.3, priceDate: '2026-09-01' },
+  { code: '105', name: 'Говядина (кроме бескостного мяса)', packAmount: 1, packUnit: 'KG', price: 612.8, priceDate: '2026-09-01' },
+];
 
 // Журнал синхронизаций (SyncLogDto), свежие записи первыми
 const integrationSyncLogs: Array<{
@@ -401,7 +423,7 @@ export const mockServer = {
     if (pathWithoutQuery.startsWith('/integrations/')) {
       return this.handleIntegrations(method, pathWithoutQuery) as T;
     }
-    // ЗАДАЧА 2 (SyncLogsPage на api-клиент): mock-роуты журнала синков и OFF sync/prices
+    // ЗАДАЧА 2 (SyncLogsPage на api-клиент): mock-роуты журнала синков и sync/prices
     if (pathWithoutQuery === '/admin/sync-logs/kpi' && method === 'GET') {
       return { totalRuns: 0, successRate: 0, totalUpdated: 0, totalErrors: 0 } as T;
     }
@@ -435,19 +457,55 @@ export const mockServer = {
     const integSearch = pathWithoutQuery.match(/^\/admin\/integrations\/([^/]+)\/products\/search$/);
     if (integSearch && method === 'GET') {
       const url = new URL(`http://localhost${path}`);
-      const query = (url.searchParams.get('query') || '').trim();
-      // Демо-результат в форме ExternalProductDto (code/name/brand/packAmount/packUnit/imageUrl)
-      return [{
-        code: '3017620422003',
-        name: query ? `${query} — Nutella Hazelnut Spread` : 'Nutella Hazelnut Spread',
-        brand: 'Ferrero',
-        packAmount: 0.35,
-        packUnit: 'KG',
-        imageUrl: null,
-      }] as T;
+      const query = (url.searchParams.get('query') || '').trim().toLowerCase();
+      // Fix-13: категории Росстата в форме ExternalProductDto
+      return ROSSTAT_CATALOG
+        .filter(p => !query || p.name.toLowerCase().includes(query))
+        .map(p => ({ ...p, brand: 'Росстат', imageUrl: null })) as T;
     }
-    // U11 mock-parity: создание связи ингредиента с внешним товаром (200 void, как реальный)
-    if (/^\/admin\/integrations\/ingredients\/[^/]+\/mapping$/.test(pathWithoutQuery) && method === 'POST') {
+    // Fix-14: список текущих привязок — GET /admin/integrations/:provider/mappings
+    const integMappings = pathWithoutQuery.match(/^\/admin\/integrations\/([^/]+)\/mappings$/);
+    if (integMappings && method === 'GET') {
+      return mockBindings.map(b => ({ ...b })) as T;
+    }
+    // U11 mock-parity + Fix-14: привязка ингредиента к внешнему товару.
+    // Реальный бэкенд делает upsert (повторная привязка = замена товара, не ошибка)
+    // и отвечает 200 void.
+    const mappingPost = pathWithoutQuery.match(/^\/admin\/integrations\/ingredients\/([^/]+)\/mapping$/);
+    if (mappingPost && method === 'POST') {
+      const ingredientId = Number(mappingPost[1]);
+      const ing = products.find(p => Number(p.id) === ingredientId);
+      const code = String(body?.externalCode ?? '');
+      const cat = ROSSTAT_CATALOG.find(c => c.code === code);
+      const existing = mockBindings.find(b => b.ingredientId === ingredientId);
+      if (existing) {
+        existing.externalCode = code;
+        existing.externalName = cat?.name ?? existing.externalName;
+        existing.packAmount = body?.packAmount ?? existing.packAmount;
+        existing.packUnit = body?.packUnit ?? existing.packUnit;
+      } else {
+        mockBindings.push({
+          mappingId: mockBindingSeq++,
+          ingredientId,
+          ingredientName: ing?.name ?? `#${ingredientId}`,
+          externalCode: code,
+          externalName: cat?.name ?? null,
+          packAmount: body?.packAmount ?? null,
+          packUnit: body?.packUnit ?? null,
+          createdAt: new Date().toISOString(),
+        });
+      }
+      return null as T;
+    }
+    // Fix-14: отвязка — DELETE /admin/integrations/ingredients/:id/mapping/:provider
+    const mappingDel = pathWithoutQuery.match(/^\/admin\/integrations\/ingredients\/([^/]+)\/mapping\/([^/]+)$/);
+    if (mappingDel && method === 'DELETE') {
+      const ingredientId = Number(mappingDel[1]);
+      const before = mockBindings.length;
+      mockBindings = mockBindings.filter(b => b.ingredientId !== ingredientId);
+      if (mockBindings.length === before) {
+        throw { status: 404, message: 'Mapping not found', detail: 'Mapping not found' } as any;
+      }
       return null as T;
     }
     // U11 mock-parity: синхронизация цен — POST /admin/integrations/:provider/sync/prices.
