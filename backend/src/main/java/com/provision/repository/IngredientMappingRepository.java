@@ -24,4 +24,30 @@ public interface IngredientMappingRepository extends JpaRepository<IngredientMap
     /** FIX P2 (аудит): то же с фильтром по источнику. */
     @Query("SELECT DISTINCT m FROM IngredientMapping m JOIN FETCH m.internalIngredient WHERE m.source = :source")
     List<IngredientMapping> findBySourceWithIngredients(@Param("source") RecipeSource source);
+
+    /**
+     * Fix-16: маппинги источника вместе с ингредиентом И карточкой внешнего продукта
+     * для фоновой синхронизации цен.
+     *
+     * <p>Зачем: фоновый синк ({@code PriceSyncService.runPriceSync}) выполняется БЕЗ
+     * БД-сессии (внешний HTTP не должен держать транзакцию, {@code open-in-view: false}),
+     * а {@code internalIngredient}/{@code externalProduct} — LAZY. Обычный
+     * {@link #findBySource} возвращал detached-прокси, и первое же
+     * {@code ingredient.getName()} падало с
+     * {@code LazyInitializationException: … no Session} (журнал: «Постатейных данных нет»,
+     * синк — FAILED на первом маппинге). JOIN FETCH инициализирует обе ассоциации одним
+     * запросом (заодно снимает N+1), а {@code externalCode IS NOT NULL} повторяет прежний
+     * фильтр синка в SQL.</p>
+     *
+     * <p>LEFT JOIN — чтобы маппинг без карточки внешнего продукта не исчезал из выдачи:
+     * синк обязан показать его в деталях строкой SKIPPED («Нет карточки внешнего продукта»),
+     * а не молча потерять.</p>
+     */
+    @Query("""
+            SELECT m FROM IngredientMapping m
+            LEFT JOIN FETCH m.internalIngredient
+            LEFT JOIN FETCH m.externalProduct
+            WHERE m.source = :source AND m.externalCode IS NOT NULL
+            """)
+    List<IngredientMapping> findBySourceWithIngredientAndProduct(@Param("source") RecipeSource source);
 }

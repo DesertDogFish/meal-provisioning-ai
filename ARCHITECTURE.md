@@ -137,10 +137,42 @@ DTO-рассинхрон имён/единиц закрыт нормализац
 «средняя цена по больнице» в рублях, ежемесячно, по ~сотне базовых категорий
 («Гречневая крупа», «Молоко питьевое»…), без ключей и лимитов по IP.
 Пайплайн синхронизации общий (`POST /admin/integrations/{provider}/sync/prices`
-→ 202 `{logId}` → фоновый `IntegrationService.executePriceSync`): маппинги
-ингредиент↔внешняя категория (`IngredientMapping`, source `ROSSTAT`), цены —
-`applyMappingPricesInTx` (upsert `IngredientPrice` по датам, `source=MANUAL`
-никогда не перезаписывается).
+→ 202 `{logId}` → `IntegrationService.executePriceSync` (`@Async`-граница) →
+`PriceSyncService.runPriceSync`): маппинги ингредиент↔внешняя категория
+(`IngredientMapping`, source `ROSSTAT`), цены — `applyMappingPricesInTx`
+(upsert `IngredientPrice` по датам, `source=MANUAL` никогда не перезаписывается).
+
+**Транзакционная модель фонового синка (Fix-16)** — фон работает БЕЗ БД-сессии
+(`open-in-view: false`, внешний HTTP не должен держать транзакцию и соединение пула),
+отсюда два жёстких правила для любого нового кода в этом пайплайне:
+
+1. **Никаких JPA-сущностей между транзакциями.** Маппинги читаются одним
+   `JOIN FETCH`-запросом (`IngredientMappingRepository.findBySourceWithIngredientAndProduct`:
+   `LEFT JOIN FETCH internalIngredient`, `LEFT JOIN FETCH externalProduct`,
+   `externalCode IS NOT NULL`) в короткой read-only транзакции
+   `PriceSyncService.loadPriceSyncTargets` и сразу превращаются в plain-record
+   `PriceSyncTarget(mappingId, ingredientId, ingredientName, ingredientUnit,
+   externalCode, productId, packAmount, packUnit)`. `LEFT JOIN` — чтобы маппинг без
+   карточки внешнего продукта не исчезал, а показывался в деталях строкой `SKIPPED`
+   («Нет карточки внешнего продукта»); две `@ManyToOne`-ассоциации в одном fetch не
+   дают `MultipleBagFetchException` (не коллекция). Нарушение этого правила и было
+   багом: LAZY-прокси `IngredientMapping` читались в фоновом потоке после закрытия
+   сессии → `LazyInitializationException: could not initialize proxy [Ingredient#…] -
+   no Session` на первом маппинге, синк финишировал фаталом с пустыми items.
+2. **Короткие транзакции — только через self-прокси.** `REQUIRES_NEW`-методы
+   (`applyMappingPricesInTx`, `ExternalProductCardService.refresh`, `finalizeSyncLog`)
+   вызываются через `self()` (`ObjectProvider<…>`): internal call через `this.` обходит
+   прокси Spring, и аннотация молча игнорируется (запись шла на auto-commit отдельных
+   `save()`). Внутри транзакции ингредиент и карточка **перезагружаются по id**
+   (`findById`) — detached-объекты в сессию не передаются: managed-сущность нужна для
+   dirty-checking ручной цены и для связи новой `IngredientPrice`.
+
+Слои синка цен (Fix-16, R8/R9): `PriceSyncService` — оркестрация, запись цен,
+финализация журнала, парсинг кода провайдера (`mappingSourceOrNull` — единая точка
+для синка и «Текущих привязок»); `ExternalProductCardService` — освежение карточки
+внешнего продукта (U11); `UnitPriceConverter` — пересчёт фасовки в цену за единицу;
+`SyncDetailsBuilder` — сборка `SyncLog.details`; `IntegrationService` — подключения,
+поиск, привязки и `@Async`-граница.
 
 **Протокол** (порт CRAN-пакета fedstatAPIr — референсная реализация, активно
 поддерживается; прямая «ссылка на CSV» у ЕМИСС отсутствует):
@@ -216,8 +248,8 @@ DTO-рассинхрон имён/единиц закрыт нормализац
 поиска (`ExternalProductDto.price/priceDate`) — последняя точка категории из
 кэшируемой выгрузки; см. `searchProducts` выше.
 
-**Результат синхронизации (Fix-15)**: `executePriceSync` пишет в
-`SyncLog.details` (jsonb) полный процесс: `requestCount` (число обращений к
+**Результат синхронизации (Fix-15, с Fix-16 — `PriceSyncService.runPriceSync`)**:
+синк пишет в `SyncLog.details` (jsonb) полный процесс: `requestCount` (число обращений к
 провайдеру), `items[]` — постатейно на каждый маппинг (продукт, внешний код,
 дата/старая→новая цена самой свежей точки, `action`
 `CREATED/UPDATED/SKIPPED_MANUAL/SKIPPED/ERROR`, `reason` — счётчики точек или

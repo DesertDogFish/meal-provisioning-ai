@@ -50,10 +50,20 @@ class IntegrationServiceMappingTest {
     @Mock IngredientRepository ingredientRepository;
     @Mock SyncLogRepository syncLogRepository;
     @Mock UserRepository userRepository;
+    @Mock ExternalProductCardService cardService;
 
+    /**
+     * Fix-16: фоновый синк цен переехал в {@link PriceSyncService}, но
+     * {@code getMappings} по-прежнему парсит код провайдера через него
+     * ({@code mappingSourceOrNull}) — поэтому в тесте сервис реальный, на тех же моках.
+     */
     private IntegrationService service() {
+        PriceSyncService priceSyncService = new PriceSyncService(
+                List.of(), mappingRepository, ingredientRepository, externalProductRepository,
+                priceRepository, syncLogRepository, integrationRepository, cardService);
         return new IntegrationService(List.of(), integrationRepository, externalProductRepository,
-                mappingRepository, priceRepository, ingredientRepository, syncLogRepository, userRepository);
+                mappingRepository, ingredientRepository, syncLogRepository, userRepository,
+                priceSyncService);
     }
 
     private static IngredientMappingRequest req(String code) {

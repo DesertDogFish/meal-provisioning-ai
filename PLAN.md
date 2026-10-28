@@ -2,7 +2,7 @@
 
 Живой статус проекта. Формулы и контракты — `ARCHITECTURE.md`, правила агентов — `AGENTS.md`, дизайн — `DESIGN_MIGRATION.md`/`provisions/design-pack` (ведётся владельцем отдельно, агентами не трогается). Факт = коммит + зелёный гейт; записей «в рабочем дереве» не бывает.
 
-**Обновлено:** 2026-10-28 · свежие разделы: «Fix-15» (честная синхронизация: детали/ошибки в журнале, PARTIAL-статус, live-обновление UI, mapping без пустого тела), «Fix-14» (привязка товара к ЕМИСС: upsert вместо «Mapping already exists», блок «Текущие привязки» + отвязка, цена категории прямо в поиске), «Fix-13» (интеграция Росстат/ЕМИСС вместо OFF: протокол fedstatAPIr, SDMX, кэш, graceful degradation), «Fix-12» (журнал синков: JPA Specification вместо JPQL с NULL-параметрами) — статусы и тесты в соответствующих разделах.
+**Обновлено:** 2026-10-28 · свежие разделы: «Fix-16» (фоновый синк цен падал с `LazyInitializationException: no Session` — слепок маппингов вместо ленивых проксей, честные `REQUIRES_NEW`, декомпозиция `IntegrationService` → `PriceSyncService`), «Fix-15» (честная синхронизация: детали/ошибки в журнале, PARTIAL-статус, live-обновление UI, mapping без пустого тела), «Fix-14» (привязка товара к ЕМИСС: upsert вместо «Mapping already exists», блок «Текущие привязки» + отвязка, цена категории прямо в поиске), «Fix-13» (интеграция Росстат/ЕМИСС вместо OFF: протокол fedstatAPIr, SDMX, кэш, graceful degradation), «Fix-12» (журнал синков: JPA Specification вместо JPQL с NULL-параметрами) — статусы и тесты в соответствующих разделах.
 
 ## Release 1.0 — критерии функционального прорыва
 
@@ -167,6 +167,93 @@ shoppingExclusions ≥80%). Backend — `mvn compile`/`test-compile` зелён�
 primary/ghost дизайн-системы), `RecipesPage.test.tsx` (+«В меню» nowrap/shrink-0).
 Backend не менялся (все пункты клиентские). Fix-7 п.17 в ARCHITECTURE §«Свежесть фактов»
 помечен как superseded (Fix-8 п.6).
+
+### Fix-16 — фоновый синк цен: `LazyInitializationException: no Session` + фиктивные `REQUIRES_NEW` (28.10)
+
+Контекст: владелец нажал «Обновить цены» после Fix-15 и получил **Запуск #10 · PRICES**
+(28.10.2026 08:49:40, `admin@provision.app`, 0.0 с, запросов к источнику: 0,
+«Постатейных данных нет», ошибка `could not initialize proxy
+[com.provision.entity.Ingredient#160] - no Session`). Fix-15 добавил детали/статусы, но
+не трогал доступ к сущностям — поэтому «ничего не починилось»: синк умирал ДО цикла
+маппингов, в фатальном `catch`, и в журнал писались только `fatalError` + пустые items.
+План задачи: `plans/2026-10-28-price-sync-lazy-session.md`.
+
+**Симптомы → первопричины:**
+
+| # | Симптом | Первопричина |
+|---|---|---|
+| 1 | `LazyInitializationException … Ingredient#160 - no Session` в `executePriceSync:333`, синк 0.0 с, 0 запросов | Фоновый поток (`@Async`, `open-in-view: false`) читал `mappingRepository.findBySource(...)`: сессия закрылась вместе с методом репозитория, а `IngredientMapping.internalIngredient`/`externalProduct` — `@ManyToOne(LAZY)`. Первое же `ingredient.getName()` (и `getExternalProduct()` следом) — обращение к неинициализированной прокси вне сессии. Ошибка возникала на первом маппинге, вне внутреннего `try`, поэтому весь запуск → фатал, цены не писались вовсе |
+| 2 | «Постатейных данных нет» при живом Fix-15 | Следствие №1: `items` заполняются внутри цикла, до которого синк не доходил |
+| 3 | `REQUIRES_NEW`-методы (`applyMappingPricesInTx`, `updateExternalProductInTx`, `finalizeSyncLog`) не открывали транзакцию | Internal call через `this.` в том же бине обходит Spring-прокси → аннотации игнорируются. Запись цен держалась на auto-commit отдельных `save()`: «короткая транзакция на маппинг» не откатывалась, `last_sync_at` и журнал писались вне транзакции. (Тот же приём self-injection уже был применён для `@Async`, но не для `REQUIRES_NEW`.) |
+| 4 | `IntegrationService` = 727 строк (R8: ≤500) | В одном бине смешаны: подключения, поиск, привязки, оркестрация синка, запись цен, освежение карточек, финализация журнала, пересчёт единиц и сборка jsonb |
+
+**Изменения по слоям:**
+
+1. **Backend, слепок вместо проксей (ядро фикса):** `IngredientMappingRepository
+   .findBySourceWithIngredientAndProduct(source)` — `LEFT JOIN FETCH` ингредиента И карточки
+   продукта + `externalCode IS NOT NULL` (фильтр переехал из стрима в SQL; LEFT — чтобы
+   маппинг без карточки не терялся, а показывался строкой `SKIPPED`).
+   `PriceSyncService.loadPriceSyncTargets` (`@Transactional(readOnly=true)`) превращает
+   маппинги в plain-record `PriceSyncTarget(mappingId, ingredientId, ingredientName,
+   ingredientUnit, externalCode, productId, packAmount, packUnit)` — дальше фон работает
+   только со значениями. `LEFT JOIN` двух `@ManyToOne` не даёт MultipleBagFetchException.
+2. **Backend, честные транзакции:** все `REQUIRES_NEW`/read-only вызовы идут через
+   `self()` (`ObjectProvider<PriceSyncService>`). Внутри `applyMappingPricesInTx` ингредиент
+   и карточка перезагружаются `findById` **в своей транзакции** (managed-сущность нужна для
+   dirty-checking ручной цены и для связи новой `IngredientPrice`); исчезли между снимком и
+   записью → `SKIPPED` с причиной, а не NPE/фатал.
+3. **Backend, декомпозиция (R8/R9):** `PriceSyncService` (458) — оркестрация синка, запись
+   цен, финализация журнала; `ExternalProductCardService` (91) — освежение карточки (U11);
+   `UnitPriceConverter` (81) — математика фасовка→единица (правила не менялись);
+   `SyncDetailsBuilder` (79) — сборка `SyncLog.details` (структура jsonb прежняя).
+   `IntegrationService` (351, было 727) оставил подключения/поиск/привязки и тонкую
+   `@Async`-границу `executePriceSync → priceSyncService.runPriceSync`;
+   `mappingSourceOrNull` — единая точка парсинга кода провайдера для обеих выборок маппингов.
+4. **Backend, явная причина вместо NPE:** нет провайдера с таким кодом →
+   `IllegalStateException("Нет провайдера цен с кодом X (доступны: […])")` в `fatalError`
+   (раньше — голый NPE из `provider.fetchPrices`).
+5. **R10 (логирование):** старт (`provider`, `syncLogId`, `triggeredBy`), число загруженных
+   маппингов, на каждый маппинг — `mappingId`, внешний код, ингредиент, `action` и `reason`,
+   на сбой — `mappingId/externalCode/ingredientId` + текст, финал — счётчики и `requestCount`.
+6. **Контракты не менялись:** `POST /admin/integrations/{provider}/sync/prices` → 202 `{logId}`;
+   `SyncLog.details` (`requestCount/items[]/errors[]/fatalError`) и правила статусов
+   SUCCESS/PARTIAL/FAILED — как в Fix-15. Mock-паритет и фронт не затронуты → contract/e2e не нужны.
+
+**Тесты (red-green, unit-слой по решению владельца):**
+
+- `PriceSyncServiceTest` **17/17** — ядро: SYNC-01 воспроизводит прод-сценарий
+  (маппинг #3, ингредиент #160 «Апельсины», карточка 1 KG, 89.90 ₽): «ленивые прокси»
+  (`LazyIngredient`/`LazyExternalProduct`) бросают настоящий `org.hibernate.LazyInitializationException`
+  с прод-текстом, а «сессия» открыта только внутри `@Transactional`-методов (spy на self-прокси).
+  Далее: SKIPPED без карточки, FAILED + текст ошибки ЕМИСС, PARTIAL при смешанном исходе,
+  0 маппингов у провайдера-не-источника, `fatalError` при неизвестном коде, защита MANUAL-цены,
+  отбрасывание не-RUB/несовместимых единиц, пропавший SyncLog/ингредиент, U11-карточка,
+  сбой карточки не роняет синк, 900 г → 99.89 ₽/KG, UPDATED со старой ценой, `mappingSourceOrNull`.
+- **Red-проверка проведена**: мутация «читать маппинги вне транзакции и дёргать LAZY в цикле»
+  (прежнее поведение) → 11 падений с ровно тем же `could not initialize proxy
+  [com.provision.entity.Ingredient#160] - no Session`; после возврата фикса — 46/46 зелёные.
+- `OffRecipeSourceTest` **8/8** (перезаточен на новую границу: RUNNING-лог + делегирование в фон,
+  `INTEGRATION_DISCONNECTED`, `SYNC_ALREADY_RUNNING`, createMapping/enum, `getMappings` через
+  `mappingSourceOrNull`), `IntegrationServiceMappingTest` **5/5**,
+  `ExternalProductCardServiceTest` **5/5** (U11: изменения/идентичность/пустые поля/нет карточки/null),
+  `UnitPriceConverterTest` **11/11** (эталон округлений ARCHITECTURE).
+- Unit-батч: **143 теста, 1 падение** — `OffConfigBindingTest.userIdAndPasswordBindThroughYmlPlaceholderFromEnv`
+  = **baseline-красный**: проверено на чистом HEAD (`git stash` → тот же 1 failure). Причина —
+  Fix-13 демонтировал OFF и ключей `integration.off.*` в `application.yml` больше нет, а тест
+  Fix-9 всё ещё требует плейсхолдер `${OFF_USER_ID:}`. По AGENTS §8 в чужом тикете не чинится
+  и не маскируется → задача в Backlog.
+- Интеграционные (Spring-контекст + `LocalPgFallback`, Docker-демона в песочнице нет):
+  `MetaControllerTest` 1/1 (контекст поднимается с новыми бинами), далее — см. отчёт.
+  Ограничение: песочница Arena = 1 ГБ RAM/2 CPU, полный `mvn test` одним запуском
+  получает OOM-kill форка (exit 137) — прогон по классам с `-Xmx448m`.
+
+**Что осталось (Backlog):** интеграционный red-green на реальном Hibernate
+(`@ContainerSuite` + стаб-провайдер: вне транзакции → SUCCESS + items + записи в
+`ingredient_prices`) — владелец выбрал unit-only, поэтому дефект ленивой инициализации
+охраняется контрактом «слепок + findById внутри tx», а не живой сессией; живая проверка
+цикла «ЕМИСС → привязка → Обновить цены» в сети владельца; `OffConfigBindingTest` (baseline);
+устаревшие комментарии-ссылки на `IntegrationService` в `AsyncConfig`/`ProductInfoProvider`/
+`OpenFoodFactsProvider`; проверка, что один синк = одна SDMX-выгрузка (кэш `cache-hours`).
 
 ### Fix-15 — честная синхронизация: детали/ошибки в журнале, PARTIAL-статус, live-обновление UI, пустой ответ mapping (28.10)
 
