@@ -296,6 +296,16 @@ export class ApiClient {
       return null as T;
     }
 
+    // Fix-15 (баг «Failed to execute 'json' on 'Response': Unexpected end of
+    // JSON input»): эндпоинты, отвечающие 200 с ПУСТЫМ телом (таким был
+    // POST …/ingredients/:id/mapping до фикса), роняли парсинг — вызывающий
+    // код получал исключение при фактически успешной операции. Пустой текст →
+    // null. Ответы-фейки в тестах могут не иметь text() — фолбэк на .json().
+    if (typeof response.text === 'function') {
+      const text = await response.text();
+      if (!text.trim()) return null as T;
+      return JSON.parse(text) as T;
+    }
     return response.json();
   }
 

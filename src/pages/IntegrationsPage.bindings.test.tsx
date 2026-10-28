@@ -4,7 +4,7 @@
 //  2) «хрен знает что там есть» — виден список текущих привязок + можно отвязать;
 //  3) «в результате даже цена не высвечивается» — поиск сразу показывает цену.
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import React from 'react';
 

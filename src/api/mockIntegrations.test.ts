@@ -77,7 +77,7 @@ describe('MOCK-INTEGRATIONS: /admin/integrations* (U11 parity)', () => {
     expect(err2.status).toBe(404);
   });
 
-  it('products/search отдаёт ExternalProductDto, mapping возвращает 200 (null-тело)', () => {
+  it('products/search отдаёт ExternalProductDto, mapping возвращает 200 + тело привязки (Fix-15)', () => {
     // Fix-13: каталог — категории Росстата (ЕМИСС), поиск по подстроке
     const found = call('GET', '/admin/integrations/ROSSTAT/products/search?query=греч&limit=20', null);
     expect(found.length).toBe(1);
@@ -93,7 +93,8 @@ describe('MOCK-INTEGRATIONS: /admin/integrations* (U11 parity)', () => {
       packAmount: 1,
       packUnit: 'KG',
     });
-    expect(mapped).toBeNull();
+    // Fix-15: бэкенд больше не отвечает пустым телом — возвращает IngredientBindingDto
+    expect(mapped).toMatchObject({ ingredientId: 1, externalCode: '101' });
   });
 
   it('Fix-14: products/search отдаёт цену категории (price/priceDate)', () => {
@@ -104,11 +105,12 @@ describe('MOCK-INTEGRATIONS: /admin/integrations* (U11 parity)', () => {
   });
 
   it('Fix-14: привязки — upsert (POST), список (GET), отвязка (DELETE)', () => {
-    // Первая привязка ингредиента 2 → появляется в списке
+    // Первая привязка ингредиента 2 → появляется в списке (Fix-15: ответ — тело привязки)
     expect(call('POST', '/admin/integrations/ingredients/2/mapping',
-      { provider: 'ROSSTAT', externalCode: '102', packAmount: 1, packUnit: 'L' })).toBeNull();
+      { provider: 'ROSSTAT', externalCode: '102', packAmount: 1, packUnit: 'L' }))
+      .toMatchObject({ ingredientId: 2, externalCode: '102' });
     let list = call('GET', '/admin/integrations/ROSSTAT/mappings', null);
-    let b2 = list.find((b: any) => b.ingredientId === 2);
+    const b2 = list.find((b: any) => b.ingredientId === 2);
     expect(b2).toBeTruthy();
     expect(b2.externalCode).toBe('102');
 

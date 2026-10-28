@@ -24,7 +24,19 @@ interface SyncLog {
     requestCount: number;
     items: SyncItem[];
     errors: SyncError[];
+    // Fix-15: фатальная ошибка запуска (вне цикла маппингов) — бэкенд пишет её
+    // в details.fatalError; drawer обязан её показывать.
+    fatalError?: string | null;
   } | null;
+}
+
+// Fix-15: карточка провайдера — реальные данные интеграции вместо фейка
+interface IntegrationInfo {
+  provider: string;
+  status: string;
+  lastConnectedAt: string | null;
+  lastSyncAt: string | null;
+  errorMessage: string | null;
 }
 
 interface SyncItem {
@@ -58,6 +70,8 @@ export default function SyncLogsPage() {
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [selectedLog, setSelectedLog] = useState<SyncLog | null>(null);
+  // Fix-15: интеграция Росстата для карточки провайдера (статус/даты — живые)
+  const [integration, setIntegration] = useState<IntegrationInfo | null>(null);
   
   // Filters
   const [filterType, setFilterType] = useState('');
@@ -68,15 +82,18 @@ export default function SyncLogsPage() {
   useEffect(() => {
     loadSyncLogs();
     loadKpi();
+    loadIntegration();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filterType, filterStatus, filterFrom, filterTo]);
 
-  // Polling for RUNNING status
+  // Polling for RUNNING status (Fix-15: заодно обновляем карточку провайдера —
+  // lastSyncAt оживает без F5)
   useEffect(() => {
     const hasRunning = syncLogs.some(log => log.status === 'RUNNING');
     if (hasRunning) {
       const interval = setInterval(() => {
         loadSyncLogs();
+        loadIntegration();
       }, 2000);
       return () => clearInterval(interval);
     }
@@ -122,16 +139,36 @@ export default function SyncLogsPage() {
     }
   };
 
+  // Fix-15: карточка провайдера — живой статус Росстата из /admin/integrations
+  const loadIntegration = async () => {
+    try {
+      const data = await api.get<IntegrationInfo[]>('/admin/integrations');
+      setIntegration(Array.isArray(data) ? data.find(i => i.provider === 'ROSSTAT') ?? null : null);
+    } catch (error) {
+      console.error('Failed to load integration info:', error);
+      setIntegration(null);
+    }
+  };
+
   const startSync = async () => {
     setSyncing(true);
     try {
-      await api.post('/admin/integrations/OFF/sync/prices');
+      // Fix-15: OFF демонтирован (V24 удалила строку интеграции) — кнопка
+      // стучалась в /OFF/sync/prices и всегда получала 404 «мы не туда стучимся».
+      await api.post('/admin/integrations/ROSSTAT/sync/prices');
       showSuccess('Синк запущен');
       await loadSyncLogs();
+      await loadIntegration();
     } catch (error) {
       console.error('Failed to start sync:', error);
       if (error instanceof ApiClientError && error.error.status === 409) {
-        showError('Синхронизация уже запущена, подожди завершения');
+        // Оба конфликта — 409; различаем по коду в сообщении бэкенда
+        const detail = `${error.error.detail || ''} ${error.error.title || ''}`;
+        if (detail.includes('SYNC_ALREADY_RUNNING')) {
+          showError('Синхронизация уже запущена, подожди завершения');
+        } else {
+          showError('Интеграция не подключена — сначала подключите её на странице «Интеграции»');
+        }
       } else if (error instanceof ApiClientError && error.error.status === 403) {
         showError('Нет прав для запуска синхронизации');
       } else {
@@ -161,6 +198,8 @@ export default function SyncLogsPage() {
   const getStatusChip = (status: string) => {
     const styles = {
       SUCCESS: { background: 'var(--success-soft)', color: 'var(--wave-300)' },
+      // Fix-15: PARTIAL — запуск с ошибками, но часть работы выполнена (янтарный)
+      PARTIAL: { background: 'color-mix(in srgb, var(--amber-500) 14%, transparent)', color: 'var(--amber-300)' },
       FAILED: { background: 'var(--danger-soft)', color: 'var(--danger)' },
       RUNNING: { background: 'color-mix(in srgb, var(--wave-400) 14%, transparent)', color: 'var(--wave-300)' }
     };
@@ -177,6 +216,8 @@ export default function SyncLogsPage() {
       CREATED: { background: 'var(--success-soft)', color: 'var(--wave-300)' },
       SKIPPED_MANUAL: { background: 'color-mix(in srgb, var(--wave-400) 14%, transparent)', color: 'var(--wave-300)' },
       SKIPPED_CURRENCY: { background: 'color-mix(in srgb, var(--line-strong) 28%, transparent)', color: 'var(--muted)' },
+      // Fix-15: SKIPPED — у категории нет ценовых данных в выгрузке (не ошибка)
+      SKIPPED: { background: 'color-mix(in srgb, var(--line-strong) 28%, transparent)', color: 'var(--muted)' },
       ERROR: { background: 'var(--danger-soft)', color: 'var(--danger)' }
     };
     return (
@@ -198,21 +239,30 @@ export default function SyncLogsPage() {
         </p>
       </div>
 
-      {/* Provider Card */}
+      {/* Provider Card — Fix-15: живые данные интеграции вместо захардкоженных дат */}
       <div className="rounded-xl p-4" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
         <div className="flex items-center gap-4 flex-wrap">
           <div className="flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full" style={{ background: 'var(--ok)' }}></div>
+            <div className="w-2 h-2 rounded-full" style={{
+              background: integration?.status === 'CONNECTED' ? 'var(--ok)'
+                : integration?.status === 'ERROR' ? 'var(--fire)' : 'var(--muted)'
+            }}></div>
             <b style={{ color: 'var(--text)' }}>Росстат (ЕМИСС)</b>
           </div>
           <span style={{ color: 'var(--muted)', fontSize: '12px' }}>
-            подключён 20.10.2026 18:04 · последний синк 21.10.2026 06:00
+            {integration?.status === 'CONNECTED'
+              ? `подключён ${integration.lastConnectedAt ? formatDate(integration.lastConnectedAt) : '—'}`
+                + ` · последний синк ${integration.lastSyncAt ? formatDate(integration.lastSyncAt) : '—'}`
+              : integration?.status === 'ERROR'
+                ? `ошибка подключения${integration.errorMessage ? `: ${integration.errorMessage}` : ''}`
+                : 'не подключён — включите интеграцию на странице «Интеграции»'}
           </span>
           <div style={{ flex: 1 }}></div>
           <Button
             variant="primary"
             onClick={startSync}
             loading={syncing}
+            disabled={integration?.status !== 'CONNECTED'}
             icon={<RefreshCw size={16} />}
           >
             {syncing ? 'Синк идёт...' : 'Обновить цены'}
@@ -260,6 +310,7 @@ export default function SyncLogsPage() {
           <option value="">Статус: все</option>
           <option value="RUNNING">RUNNING</option>
           <option value="SUCCESS">SUCCESS</option>
+          <option value="PARTIAL">PARTIAL</option>
           <option value="FAILED">FAILED</option>
         </select>
 
@@ -376,8 +427,20 @@ export default function SyncLogsPage() {
             </div>
 
             <p style={{ color: 'var(--muted)', fontSize: '12px', marginBottom: '14px' }}>
-              {formatDate(selectedLog.startedAt)} · {selectedLog.triggeredBy === 'MANUAL' ? `вручную: ${selectedLog.triggeredUserEmail}` : 'планово'} · {formatDuration(selectedLog.durationSeconds)} · запросов к OFF: {selectedLog.details?.requestCount || '—'}
+              {formatDate(selectedLog.startedAt)} · {selectedLog.triggeredBy === 'MANUAL' ? `вручную: ${selectedLog.triggeredUserEmail}` : 'планово'} · {formatDuration(selectedLog.durationSeconds)} · запросов к источнику: {selectedLog.details?.requestCount ?? '—'}
             </p>
+
+            {/* Fix-15: фатальная ошибка запуска — первым блоком, чтобы причина
+                сбоя была видна сразу («где детали ошибок?») */}
+            {selectedLog.details?.fatalError && (
+              <div
+                className="chip-delta fire"
+                style={{ display: 'block', marginBottom: '12px' }}
+                title={selectedLog.details.fatalError}
+              >
+                <b>Фатальная ошибка:</b> {selectedLog.details.fatalError}
+              </div>
+            )}
 
             {/* Items */}
             {selectedLog.details?.items && selectedLog.details.items.length > 0 ? (

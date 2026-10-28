@@ -114,6 +114,9 @@ export default function IntegrationsPage() {
   // Fix-14: текущие привязки (что уже связано) — снимают неопределённость
   // «якобы маппинг уже есть, хотя хрен знает что там есть».
   const [bindings, setBindings] = useState<Binding[]>([]);
+  // Fix-15: id запуска, за которым следим после «Обновить цены» — поллинг
+  // доживает его до терминального статуса и показывает честный итог.
+  const [watchedLogId, setWatchedLogId] = useState<number | null>(null);
 
   useEffect(() => {
     loadIntegrations();
@@ -173,12 +176,13 @@ export default function IntegrationsPage() {
   // Fix-13: единственная интеграция — Росстат (ЕМИСС); OFF демонтирован
   const rosstatIntegration = integrations.find(i => i.provider === 'ROSSTAT');
   const rosstatConnected = rosstatIntegration?.status === 'CONNECTED';
+  // Fix-15: пока фон не завершился — кнопку «Обновить цены» держим занятой
+  const hasRunningSync = syncLogs.some(l => l.status === 'RUNNING');
 
   // Fix-14: как только интеграция подключена — показываем, что уже привязано.
   useEffect(() => {
     if (rosstatConnected) loadBindings();
     else setBindings([]);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rosstatConnected]);
 
   const handleConnect = async (provider: string) => {
@@ -242,30 +246,67 @@ export default function IntegrationsPage() {
       const result = await api.post<any>(`/admin/integrations/${provider}/sync/prices`);
       if (isFailureEnvelope(result)) {
         showError(extractErrorMessage(result));
-      } else {
-        // Бэкенд отвечает 202 Accepted с телом { logId: N } — счётчики created/updated
-        // лежат в sync-логе, поэтому перечитываем логи и показываем свежий результат.
-        await loadSyncLogs();
-        const latest = syncLogs.find(l => l.provider === provider); // до перезагрузки — предыдущий снимок
-        await loadIntegrations();
-        if (latest && latest.status === 'FAILED') {
-          showError('Синхронизация завершилась с ошибкой, детали в журнале');
-        } else {
-          showSuccess(
-            `Запрошена синхронизация цен${result?.logId != null ? ` (задача #${result.logId})` : ''}. ` +
-            'Результат появится в журнале после завершения.'
-          );
-        }
+        setSyncing(false);
+        return;
       }
-      await loadIntegrations();
+      // Fix-15: бэкенд отвечает 202 Accepted + { logId } — синк идёт в фоне.
+      // Запоминаем запуск и поллим журнал (эффект ниже), пока он не финиширует;
+      // итоговый тост — с реальными счётчиками и честным статусом. Раньше запись
+      // перечитывалась один раз и оставалась RUNNING до ручного F5
+      // (боль: «она статичная и не меняется, пока не обновишь страницу»).
+      showSuccess(
+        `Синхронизация цен запущена${result?.logId != null ? ` (задача #${result.logId})` : ''}`
+      );
       await loadSyncLogs();
+      // Важно: watch ставим ПОСЛЕ перечитывания журнала — иначе эффект
+      // завершения увидит устаревший список без нового запуска и сбросит слежение.
+      if (result?.logId != null) setWatchedLogId(result.logId);
+      await loadIntegrations();
     } catch (error: any) {
       console.error('Failed to sync prices:', error);
       handleApiError(error, 'Не удалось обновить цены');
-    } finally {
       setSyncing(false);
     }
   };
+
+  // Fix-15: поллинг журнала и интеграций, пока есть RUNNING-записи
+  // (фоновая часть синка обновляет их в БД; UI должен оживать без F5).
+  useEffect(() => {
+    if (watchedLogId == null && !syncLogs.some(l => l.status === 'RUNNING')) return;
+    const t = setInterval(() => {
+      loadSyncLogs();
+      loadIntegrations();
+    }, 2000);
+    return () => clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [syncLogs, watchedLogId]);
+
+  // Fix-15: наблюдаемый запуск достиг терминального статуса — честный итог:
+  // SUCCESS (зелёный) / PARTIAL / FAILED (красные), со счётчиками.
+  useEffect(() => {
+    if (watchedLogId == null) return;
+    const log = syncLogs.find(l => l.id === watchedLogId);
+    if (!log) {
+      // запуск не найден в журнале и RUNNING нет — считаем завершённым (страховка)
+      if (!syncLogs.some(l => l.status === 'RUNNING')) {
+        setWatchedLogId(null);
+        setSyncing(false);
+      }
+      return;
+    }
+    if (log.status === 'RUNNING') return;
+    setWatchedLogId(null);
+    setSyncing(false);
+    const counts = `создано: ${log.createdCount}, обновлено: ${log.updatedCount}, ошибок: ${log.errorCount}`;
+    if (log.status === 'SUCCESS') {
+      showSuccess(`Синхронизация цен завершена (${counts})`);
+    } else if (log.status === 'PARTIAL') {
+      showError(`Синхронизация завершилась с ошибками (${counts}) — детали в журнале синков`);
+    } else {
+      showError(`Синхронизация не удалась (${counts}) — детали в журнале синков`);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [syncLogs, watchedLogId]);
 
   const handleSearchProducts = async () => {
     if (!searchQuery.trim() || !selectedIngredient) return;
@@ -410,9 +451,9 @@ export default function IntegrationsPage() {
                         </Button>
           ) : (
             <>
-              <Button variant="primary" size="sm" onClick={() => handleSyncPrices('ROSSTAT')} disabled={syncing} aria-label="Синхронизировать цены">
-                              <RefreshCw size={16} className={syncing ? 'animate-spin' : ''} />
-                              {syncing ? 'Синхронизация...' : 'Обновить цены'}
+              <Button variant="primary" size="sm" onClick={() => handleSyncPrices('ROSSTAT')} disabled={syncing || hasRunningSync} aria-label="Синхронизировать цены">
+                              <RefreshCw size={16} className={syncing || hasRunningSync ? 'animate-spin' : ''} />
+                              {syncing || hasRunningSync ? 'Синхронизация...' : 'Обновить цены'}
                             </Button>
               <Button variant="danger" size="sm" onClick={() => handleDisconnect('ROSSTAT')} disabled={loading} aria-label="Отключить интеграцию">
                               <Unlink size={16} />
@@ -511,7 +552,12 @@ export default function IntegrationsPage() {
                           </p>
                         ) : (
                           <p className="text-xs mt-0.5" style={{ color: 'var(--muted)' }}>
-                            Цена появится после синхронизации
+                            {/* Fix-15: честная подпись — цена приходит из той же
+                                SDMX-выгрузки ЕМИСС, что и синк; «появится после
+                                синхронизации» было обещанием, которое не сбывалось,
+                                когда выгрузка недоступна. */}
+                            Цена недоступна: выгрузка ЕМИСС не удалась или у категории
+                            нет ценовых данных (подробности — в журнале синков)
                           </p>
                         )}
                       </div>
@@ -582,6 +628,9 @@ export default function IntegrationsPage() {
                     <CheckCircle size={20} style={{ color: 'var(--ok)' }} />
                   ) : log.status === 'FAILED' ? (
                     <XCircle size={20} style={{ color: 'var(--fire)' }} />
+                  ) : log.status === 'PARTIAL' ? (
+                    /* Fix-15: завершено с ошибками, но часть работы выполнена */
+                    <AlertCircle size={20} style={{ color: 'var(--amber-300, var(--fire))' }} />
                   ) : (
                     <AlertCircle size={20} style={{ color: 'var(--muted)' }} />
                   )}

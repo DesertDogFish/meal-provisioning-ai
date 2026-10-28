@@ -216,6 +216,27 @@ DTO-рассинхрон имён/единиц закрыт нормализац
 поиска (`ExternalProductDto.price/priceDate`) — последняя точка категории из
 кэшируемой выгрузки; см. `searchProducts` выше.
 
+**Результат синхронизации (Fix-15)**: `executePriceSync` пишет в
+`SyncLog.details` (jsonb) полный процесс: `requestCount` (число обращений к
+провайдеру), `items[]` — постатейно на каждый маппинг (продукт, внешний код,
+дата/старая→новая цена самой свежей точки, `action`
+`CREATED/UPDATED/SKIPPED_MANUAL/SKIPPED/ERROR`, `reason` — счётчики точек или
+текст ошибки), `errors[]` — человекочитаемые сообщения сбоев, `fatalError` —
+фатальная ошибка вне цикла маппингов. Статус ВЫВОДИТСЯ из счётчиков (раньше
+хардкодился `SUCCESS` при любых ошибках): `errors==0 → SUCCESS`;
+`errors>0 && created+updated==0 → FAILED`; `errors>0 && работа выполнена →
+PARTIAL` (миграция V25 расширяет CHECK `sync_logs.status`). Фронтенд: drawer
+журнала показывает fatalError/items/errors («запросов к источнику» вместо
+«к OFF»), чип и фильтр `PARTIAL` — янтарные; `IntegrationsPage` поллит журнал
+каждые 2 с, пока есть `RUNNING`, и показывает итоговый тост со счётчиками,
+когда запущенный запуск финишировал (записи больше не «статичные до F5»);
+`SyncLogsPage` стартует синк через `ROSSTAT` (кнопка OFF-эры стучалась в
+удалённого провайдера), карточка провайдера — живые данные
+`GET /admin/integrations`. Контракт маппинга: `POST …/ingredients/{id}/mapping`
+отвечает **200 + `IngredientBindingDto`** (пустое тело ломало `response.json()`
+фронтенда — «Unexpected end of JSON input»); `client.ts` дополнительно терпит
+пустое тело любого 2xx (защитный слой).
+
 **Ограничения (честно)**: ЕМИСС блокирует зарубежные дата-центры (403 анти-бот —
 из песочницы CI live-проверка невозможна, работает из сети пользователя РФ);
 портал нестабилен («бесконечно падающий ЕМИСС» — README fedstatAPIr), поэтому
@@ -237,7 +258,8 @@ ROSSTAT (список интеграций читается из БД), DELETE �
 Mock-сервер повторяет контракт роутов `/admin/integrations*` (список
 IntegrationDto, connect/disconnect, sync-logs, sync → `{logId}` с фоновым
 переходом лога в SUCCESS со счётчиками, products/search → ExternalProductDto —
-каталог категорий Росстата, ingredients/:id/mapping), включая коды 409
+каталог категорий Росстата, ingredients/:id/mapping → 200 + тело привязки
+(Fix-15, паритет с бэкендом)), включая коды 409
 `INTEGRATION_DISCONNECTED` / `SYNC_ALREADY_RUNNING` и 404 для неизвестного
 провайдера (`mockIntegrations.test.ts`).
 

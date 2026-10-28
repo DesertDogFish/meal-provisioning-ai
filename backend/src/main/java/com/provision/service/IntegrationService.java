@@ -18,7 +18,9 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -145,7 +147,7 @@ public class IntegrationService {
     }
 
     @Transactional
-    public void createMapping(Long ingredientId, IngredientMappingRequest request) {
+    public IngredientBindingDto createMapping(Long ingredientId, IngredientMappingRequest request) {
         Ingredient ingredient = ingredientRepository.findById(ingredientId)
                 .orElseThrow(() -> new NotFoundException("Ingredient not found: " + ingredientId));
 
@@ -185,9 +187,17 @@ public class IntegrationService {
         mapping.setExternalCode(request.externalCode());
         mapping.setExternalProduct(externalProduct);
 
+        // Fix-15: save() без переприсваивания — JPA (IDENTITY) проставляет id и
+        // createdAt (@PrePersist) на том же экземпляре, а мок-repository в тестах
+        // возвращает null (переприсваивание роняло toBindingDto NPE).
         mappingRepository.save(mapping);
         log.info("{} mapping for ingredient {} to external product {}",
                 isNew ? "Created" : "Updated", ingredientId, request.externalCode());
+        // Fix-15: отвечаем готовой привязкой (200 + тело). Раньше контроллер
+        // возвращал ПУСТОЙ 200 — фронтенд response.json() падал с
+        // «Failed to execute 'json' … Unexpected end of JSON input», хотя
+        // маппинг фактически создавался (боль п.1/п.4 сообщения владельца).
+        return toBindingDto(mapping);
     }
 
     /**
@@ -200,19 +210,22 @@ public class IntegrationService {
         RecipeSource source = parseMappingSource(providerCode);
         if (source == null) return List.of();
         return mappingRepository.findBySourceWithIngredients(source).stream()
-                .map(m -> {
-                    ExternalProduct ep = m.getExternalProduct();
-                    return new IngredientBindingDto(
-                            m.getId(),
-                            m.getInternalIngredient().getId(),
-                            m.getInternalIngredient().getName(),
-                            m.getExternalCode(),
-                            m.getExternalName(),
-                            ep != null ? ep.getPackAmount() : null,
-                            ep != null ? ep.getPackUnit() : null,
-                            m.getCreatedAt());
-                })
+                .map(this::toBindingDto)
                 .toList();
+    }
+
+    /** Fix-15: единая сборка DTO привязки (список «Текущие привязки» и ответ createMapping). */
+    private IngredientBindingDto toBindingDto(IngredientMapping m) {
+        ExternalProduct ep = m.getExternalProduct();
+        return new IngredientBindingDto(
+                m.getId(),
+                m.getInternalIngredient().getId(),
+                m.getInternalIngredient().getName(),
+                m.getExternalCode(),
+                m.getExternalName(),
+                ep != null ? ep.getPackAmount() : null,
+                ep != null ? ep.getPackUnit() : null,
+                m.getCreatedAt());
     }
 
     @Transactional
@@ -288,15 +301,23 @@ public class IntegrationService {
         int created = 0;
         int updated = 0;
         int errors = 0;
+        int requestCount = 0;
+        // Fix-15: детали запуска — раньше ошибки уходили только в серверный лог,
+        // а журнал показывал голый счётчик «Ошибки: N» при статусе SUCCESS
+        // (боль: «какой же это успех, когда Ошибки 2», «где детали ошибок?»,
+        // «где вообще детали процесса?»). Теперь на каждый маппинг пишется
+        // постатейная строка items (действие + причина/текст ошибки), на каждый
+        // сбой — errors-запись с человекочитаемым сообщением; всё сохраняется в
+        // SyncLog.details (jsonb) и отображается в drawer'е журнала синков.
+        List<Map<String, Object>> items = new ArrayList<>();
+        List<Map<String, Object>> errorEntries = new ArrayList<>();
 
         try {
             PriceProvider provider = providers.get(providerCode);
 
             // Получаем все маппинги для этого провайдера с внешним кодом.
-            // FIX (P0): RecipeSource.valueOf("OFF") падал с
-            // "No enum constant com.provision.entity.RecipeSource.OFF" —
-            // значение OFF теперь есть в enum, но парсим безопасно на случай
-            // провайдеров, не являющихся источниками рецептов.
+            // FIX (P0): RecipeSource.valueOf падал с "No enum constant" —
+            // парсим безопасно на случай провайдеров, не являющихся источниками рецептов.
             RecipeSource mappingSource = parseMappingSource(providerCode);
             List<IngredientMapping> mappings = mappingSource == null
                     ? List.of()
@@ -306,19 +327,29 @@ public class IntegrationService {
                             .toList();
 
             for (IngredientMapping mapping : mappings) {
+                String externalCode = mapping.getExternalCode();
+                Ingredient ingredient = mapping.getInternalIngredient();
+                Long ingredientId = ingredient != null ? ingredient.getId() : null;
+                String ingredientName = ingredient != null ? ingredient.getName() : null;
                 try {
                     ExternalProduct product = mapping.getExternalProduct();
                     if (product == null) {
+                        items.add(syncItem(ingredientId, ingredientName, externalCode,
+                                null, null, null, "SKIPPED", "Нет карточки внешнего продукта"));
                         continue;
                     }
 
-                    // Внешний HTTP — ВНЕ транзакции БД (главная цель фикса)
-                    List<ExternalPriceDto> prices = provider.fetchPrices(mapping.getExternalCode(), null);
+                    // Внешний HTTP — ВНЕ транзакции БД (главная цель P1-фикса)
+                    requestCount++;
+                    List<ExternalPriceDto> prices = provider.fetchPrices(externalCode, null);
 
                     // Запись цен — короткая отдельная транзакция на маппинг
-                    int[] counts = applyMappingPricesInTx(mapping, product, prices, providerCode);
-                    created += counts[0];
-                    updated += counts[1];
+                    MappingSyncOutcome outcome = applyMappingPricesInTx(mapping, product, prices, providerCode);
+                    created += outcome.created();
+                    updated += outcome.updated();
+                    items.add(syncItem(ingredientId, ingredientName, externalCode,
+                            outcome.lastDate(), outcome.oldPrice(), outcome.newPrice(),
+                            outcome.action(), outcome.reason()));
 
                     // FIX (U11): обновление карточки внешнего продукта
                     // (название/бренд/фасовка/фото) — только для провайдеров,
@@ -327,41 +358,79 @@ public class IntegrationService {
                     if (provider instanceof ProductInfoProvider infoProvider) {
                         try {
                             Optional<ExternalProductDto> info =
-                                    infoProvider.fetchProductInfo(mapping.getExternalCode());
+                                    infoProvider.fetchProductInfo(externalCode);
                             if (info.isPresent()) {
                                 updated += updateExternalProductInTx(product, info.get());
                             }
                         } catch (Exception e) {
                             log.warn("Product card update failed for external code {}: {}",
-                                    mapping.getExternalCode(), e.getMessage());
+                                    externalCode, e.getMessage());
                         }
                     }
                 } catch (Exception e) {
-                    log.error("Failed to sync prices for mapping {}: {}", mapping.getId(), e.getMessage());
+                    log.error("Failed to sync prices for mapping {}: {}", mapping.getId(), e.getMessage(), e);
                     errors++;
+                    String message = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
+                    errorEntries.add(syncError(externalCode, message));
+                    items.add(syncItem(ingredientId, ingredientName, externalCode,
+                            null, null, null, "ERROR", message));
                 }
             }
 
-            finalizeSyncLog(syncLog.getId(), "SUCCESS", created, updated, errors);
+            finalizeSyncLog(syncLogId, created, updated, errors,
+                    syncDetails(requestCount, items, errorEntries, null));
             log.info("Sync completed for provider {}: created={}, updated={}, errors={}",
                     providerCode, created, updated, errors);
 
         } catch (Exception e) {
-            finalizeSyncLog(syncLog.getId(), "FAILED", created, updated, errors + 1);
-            log.error("Sync failed for provider {}: {}", providerCode, e.getMessage());
+            String message = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
+            // Fix-15: фатальный сбой (вне цикла маппингов) — текст виден в drawer'е
+            // (fatalError) и первой записью в errors (баннер «Последний запуск упал»).
+            errorEntries.add(0, syncError("—", message));
+            finalizeSyncLog(syncLogId, created, updated, errors + 1,
+                    syncDetails(requestCount, items, errorEntries, message));
+            log.error("Sync failed for provider {}: {}", providerCode, message, e);
         }
     }
 
+    /**
+     * Fix-15: результат синхронизации цен одного маппинга — счётчики + данные
+     * самой свежей ценовой точки (дата, старая→новая цена, действие, пояснение).
+     * Идёт в SyncLog.details.items, чтобы drawer журнала показывал процесс
+     * постатейно («Постатейных данных нет» — больше не пустой экран).
+     */
+    public record MappingSyncOutcome(int created, int updated, LocalDate lastDate,
+                                     BigDecimal oldPrice, BigDecimal newPrice,
+                                     String action, String reason) {}
+
     /** Короткая транзакция на один маппинг: внешний HTTP к этому моменту уже выполнен. */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public int[] applyMappingPricesInTx(IngredientMapping mapping, ExternalProduct product,
-                                        List<ExternalPriceDto> prices, String providerCode) {
+    public MappingSyncOutcome applyMappingPricesInTx(IngredientMapping mapping, ExternalProduct product,
+                                                     List<ExternalPriceDto> prices, String providerCode) {
         int created = 0;
         int updated = 0;
+        int skippedManual = 0;
+        int skippedInvalid = 0;
+
+        if (prices == null || prices.isEmpty()) {
+            return new MappingSyncOutcome(0, 0, null, null, null, "SKIPPED",
+                    "У категории нет данных о ценах в выгрузке");
+        }
+
+        // Самая свежая точка — её видно в журнале (старая → новая, действие)
+        LocalDate maxDate = null;
+        for (ExternalPriceDto p : prices) {
+            if (maxDate == null || p.date().isAfter(maxDate)) maxDate = p.date();
+        }
+        LocalDate lastDate = null;
+        BigDecimal lastOld = null;
+        BigDecimal lastNew = null;
+        String lastAction = null;
 
         for (ExternalPriceDto externalPrice : prices) {
             // Фильтруем только RUB
             if (!"RUB".equals(externalPrice.currency())) {
+                skippedInvalid++;
                 continue;
             }
 
@@ -374,6 +443,7 @@ public class IntegrationService {
             );
 
             if (unitPrice == null || unitPrice.compareTo(BigDecimal.ZERO) <= 0) {
+                skippedInvalid++;
                 continue;
             }
 
@@ -384,14 +454,21 @@ public class IntegrationService {
                             externalPrice.date()
                     );
 
+            BigDecimal oldPrice = null;
+            String action;
             if (existingPrice.isPresent()) {
                 IngredientPrice price = existingPrice.get();
+                oldPrice = price.getPricePerUnit();
                 // Не перезаписываем ручные цены
-                if (!"MANUAL".equals(price.getSource())) {
+                if ("MANUAL".equals(price.getSource())) {
+                    skippedManual++;
+                    action = "SKIPPED_MANUAL";
+                } else {
                     price.setPricePerUnit(unitPrice);
                     price.setSource(providerCode);
                     priceRepository.save(price);
                     updated++;
+                    action = "UPDATED";
                 }
             } else {
                 // Создаём новую цену
@@ -404,9 +481,26 @@ public class IntegrationService {
                         .build();
                 priceRepository.save(newPrice);
                 created++;
+                action = "CREATED";
+            }
+
+            if (externalPrice.date().equals(maxDate)) {
+                lastDate = maxDate;
+                lastOld = oldPrice;
+                lastNew = "SKIPPED_MANUAL".equals(action) ? null : unitPrice;
+                lastAction = action;
             }
         }
-        return new int[]{created, updated};
+
+        StringBuilder reason = new StringBuilder();
+        reason.append("Точек цен: ").append(prices.size())
+              .append(", создано: ").append(created)
+              .append(", обновлено: ").append(updated);
+        if (skippedManual > 0) reason.append(", защищено ручных цен: ").append(skippedManual);
+        if (skippedInvalid > 0) reason.append(", отброшено (валюта/единицы): ").append(skippedInvalid);
+
+        return new MappingSyncOutcome(created, updated, lastDate, lastOld, lastNew,
+                lastAction == null ? "SKIPPED" : lastAction, reason.toString());
     }
 
     /**
@@ -451,22 +545,28 @@ public class IntegrationService {
         return s != null && !s.isBlank();
     }
 
-    /** Финализация лога и last_sync_at в отдельной короткой транзакции (фон без TX). */
+    /**
+     * Финализация лога и last_sync_at в отдельной короткой транзакции (фон без TX).
+     * Fix-15: статус ВЫВОДИТСЯ из счётчиков — раньше хардкодился «SUCCESS» даже
+     * когда все маппинги упали (боль: «какой же это успех, когда Ошибки 2»):
+     * errors==0 → SUCCESS; errors>0 и ничего не записано → FAILED;
+     * errors>0, но работа выполнена → PARTIAL (V25 расширяет CHECK-констрейнт).
+     * details (jsonb) — постатейные итоги и тексты ошибок для drawer'а журнала.
+     */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void finalizeSyncLog(Long syncLogId, String status, int created, int updated, int errors) {
+    public void finalizeSyncLog(Long syncLogId, int created, int updated, int errors,
+                                Map<String, Object> details) {
         SyncLog syncLog = syncLogRepository.findById(syncLogId).orElse(null);
         if (syncLog == null) {
             return;
         }
+        String status = errors == 0 ? "SUCCESS" : (created + updated == 0 ? "FAILED" : "PARTIAL");
         syncLog.setStatus(status);
         syncLog.setFinishedAt(LocalDateTime.now());
-        if ("SUCCESS".equals(status)) {
-            syncLog.setCreatedCount(created);
-            syncLog.setUpdatedCount(updated);
-            syncLog.setErrorCount(errors);
-        } else {
-            syncLog.setErrorCount(syncLog.getErrorCount() + 1);
-        }
+        syncLog.setCreatedCount(created);
+        syncLog.setUpdatedCount(updated);
+        syncLog.setErrorCount(errors);
+        syncLog.setDetails(details);
         syncLogRepository.save(syncLog);
 
         // Обновляем last_sync_at в интеграции
@@ -475,6 +575,42 @@ public class IntegrationService {
             integrationRepository.save(integration);
         });
     }
+
+    // ---- Fix-15: сборка details (jsonb-структура повторяет SyncLogResponse.SyncDetails) ----
+
+    private static Map<String, Object> syncItem(Long productId, String productName, String externalCode,
+                                                LocalDate priceDate, BigDecimal oldPrice, BigDecimal newPrice,
+                                                String action, String reason) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("productId", productId);
+        m.put("productName", productName);
+        m.put("externalCode", externalCode);
+        m.put("priceDate", priceDate == null ? null : priceDate.toString());
+        m.put("oldPrice", oldPrice == null ? null : oldPrice.doubleValue());
+        m.put("newPrice", newPrice == null ? null : newPrice.doubleValue());
+        m.put("action", action);
+        m.put("reason", reason);
+        m.put("anomaly", false);
+        return m;
+    }
+
+    private static Map<String, Object> syncError(String externalCode, String message) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("externalCode", externalCode);
+        m.put("message", message);
+        return m;
+    }
+
+    private static Map<String, Object> syncDetails(int requestCount, List<Map<String, Object>> items,
+                                                   List<Map<String, Object>> errors, String fatalError) {
+        Map<String, Object> d = new LinkedHashMap<>();
+        d.put("requestCount", requestCount);
+        d.put("items", items);
+        d.put("errors", errors);
+        if (fatalError != null) d.put("fatalError", fatalError);
+        return d;
+    }
+
     @Transactional(readOnly = true)
     public List<SyncLogDto> getSyncLogs(String providerCode) {
         List<SyncLog> logs = providerCode != null

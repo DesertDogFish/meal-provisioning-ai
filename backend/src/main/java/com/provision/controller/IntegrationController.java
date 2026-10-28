@@ -54,11 +54,14 @@ public class IntegrationController {
     }
 
     @PostMapping("/ingredients/{ingredientId}/mapping")
-    public ResponseEntity<Void> createMapping(
+    public IngredientBindingDto createMapping(
             @PathVariable Long ingredientId,
             @Valid @RequestBody IngredientMappingRequest request) {
-        integrationService.createMapping(ingredientId, request);
-        return ResponseEntity.ok().build();
+        // Fix-15: 200 + тело привязки. Раньше — ResponseEntity.ok().build()
+        // (пустое тело), из-за чего фронтенд response.json() падал с
+        // «Failed to execute 'json' on 'Response': Unexpected end of JSON input»,
+        // хотя маппинг фактически создавался.
+        return integrationService.createMapping(ingredientId, request);
     }
 
     @DeleteMapping("/ingredients/{ingredientId}/mapping/{provider}")

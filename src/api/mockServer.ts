@@ -470,21 +470,21 @@ export const mockServer = {
     }
     // U11 mock-parity + Fix-14: привязка ингредиента к внешнему товару.
     // Реальный бэкенд делает upsert (повторная привязка = замена товара, не ошибка)
-    // и отвечает 200 void.
+    // и отвечает 200 + тело привязки (IngredientBindingDto, Fix-15).
     const mappingPost = pathWithoutQuery.match(/^\/admin\/integrations\/ingredients\/([^/]+)\/mapping$/);
     if (mappingPost && method === 'POST') {
       const ingredientId = Number(mappingPost[1]);
       const ing = products.find(p => Number(p.id) === ingredientId);
       const code = String(body?.externalCode ?? '');
       const cat = ROSSTAT_CATALOG.find(c => c.code === code);
-      const existing = mockBindings.find(b => b.ingredientId === ingredientId);
-      if (existing) {
-        existing.externalCode = code;
-        existing.externalName = cat?.name ?? existing.externalName;
-        existing.packAmount = body?.packAmount ?? existing.packAmount;
-        existing.packUnit = body?.packUnit ?? existing.packUnit;
+      let binding = mockBindings.find(b => b.ingredientId === ingredientId);
+      if (binding) {
+        binding.externalCode = code;
+        binding.externalName = cat?.name ?? binding.externalName;
+        binding.packAmount = body?.packAmount ?? binding.packAmount;
+        binding.packUnit = body?.packUnit ?? binding.packUnit;
       } else {
-        mockBindings.push({
+        binding = {
           mappingId: mockBindingSeq++,
           ingredientId,
           ingredientName: ing?.name ?? `#${ingredientId}`,
@@ -493,9 +493,12 @@ export const mockServer = {
           packAmount: body?.packAmount ?? null,
           packUnit: body?.packUnit ?? null,
           createdAt: new Date().toISOString(),
-        });
+        };
+        mockBindings.push(binding);
       }
-      return null as T;
+      // Fix-15: паритет с бэкендом — 200 + тело привязки (пустой ответ ронял
+      // фронтенд: «Failed to execute 'json' … Unexpected end of JSON input»).
+      return { ...binding } as T;
     }
     // Fix-14: отвязка — DELETE /admin/integrations/ingredients/:id/mapping/:provider
     const mappingDel = pathWithoutQuery.match(/^\/admin\/integrations\/ingredients\/([^/]+)\/mapping\/([^/]+)$/);
