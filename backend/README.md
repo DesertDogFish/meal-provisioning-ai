@@ -7,7 +7,7 @@
 - Java 17 (target — `pom.xml <java.version>`), Spring Boot 3.2.5
 - Spring Data JPA + Hibernate (`ddl-auto=validate`), PostgreSQL 15
 - Spring Security: stateless JWT (access 1 ч / refresh 7 д с ротацией, хэш refresh в БД), CORS из ENV, fail-fast `JWT_SECRET`
-- Flyway V1–V28 (apply at startup)
+- Flyway V1–V29 (apply at startup)
 - springdoc-openapi (Swagger в profile `dev`)
 - Lombok; маппинг DTO ручной (record'ы); зависимость MapStruct присутствует, но не используется — к удалению (PLAN P1)
 - Тесты: JUnit 5 + AssertJ + Mockito + MockMvc; Testcontainers ИЛИ LocalPgFallback (initdb локального PostgreSQL, работает в CI без Docker)
@@ -31,7 +31,7 @@ backend/
 │   │                    # Emis* (MirrorService/CatalogService/PriceApplier/Unit), PriceSyncService...
 │   └── specification/   # ProductSpecifications (фильтры продуктов, isGlobal)
 ├── src/main/resources/
-│   ├── db/migration/    # Flyway V1–V28 (применённые не правим!)
+│   ├── db/migration/    # Flyway V1–V29 (применённые не правим!)
 │   ├── application.yml  # базовый (INFO)
 │   ├── application-dev.yml / application-prod.yml
 └── src/test/            # unit + integration (@ContainerSuite / LocalPgFallback) + smoke
@@ -119,7 +119,7 @@ mvn test -Dtest=SnapshotIsolationIntegrationTest      # изоляция сне�
 
 ## Миграции
 
-Flyway, `src/main/resources/db/migration`, нумерация V1–V28 без ретроспективных правок:
+Flyway, `src/main/resources/db/migration`, нумерация V1–V29 без ретроспективных правок:
 
 - пропуски номеров осознанные: V9 не создавалась; V14/V15 (сид демо-юзеров) удалены из дерева **до** широкого применения и заменены `DevDataInitializer`/`DevTripsInitializer` (profile `dev` + `SEED_DEMO_USERS`); в старых БД могли остаться демо-юзеры — cleanup-запрос в корне README;
 - V17/V18 — сид-каталог (204 продукта / 201 блюдо) с ценами и 24-месячной историей;
@@ -130,5 +130,6 @@ Flyway, `src/main/resources/db/migration`, нумерация V1–V28 без р
 - V26 — локальная копия ЕМИСС: `emis_products`, `emis_prices`, `ingredients.emis_code` (без FK — привязка «софт»);
 - V27 — сид из реальной выгрузки владельца: 885 позиций справочника и 2260 ценовых точек (регион `643004.АГ`, 2026); `ON CONFLICT DO NOTHING`, повторный прогон безопасен;
 - V28 — привязка 187 продуктов к позициям ЕМИСС, 7 переименований под номенклатуру, демонтаж legacy: `ingredient_mappings`/`external_products` дропнуты, `source='OFF'` вычищен из CHECK-ов и данных (рецепты → `MANUAL`, цены → `API`).
+- V29 — решения владельца по единицам и фасовке: «Туалетная бумага, 4 рулона» → «Бумага туалетная, рулон» (÷4), «Влажные салфетки, упаковка 100 шт» → «Салфетки влажные, упаковка 20 шт.» (÷5), «Спички влагозащищённые (20 шт)» → «Спички, коробок» (÷20) с пересчётом `piece_weight_g` и истории цен; новые привязки `antiseptic`→8016, `sunscreen`→5311, `toilet_paper`→6502, `wipes_wet`→6505; `gas_canister`/`soy_sauce`/`vinegar` явно без привязки. Правило «плотность ≈ 1» (MASS↔VOLUME, `piece_weight_g` как мл) — в `EmisUnit.pricePerUnit`, не в схеме.
 
 Правила для новых миграций — `AGENTS.md` раздел 8.

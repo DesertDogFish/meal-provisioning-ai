@@ -7,11 +7,12 @@
 
 ## Активные
 
-- [Локальная копия ЕМИСС, софт-привязка в продуктах, демонтаж OFF и ручных маппингов](plans/2026-10-28-emis-local-copy-and-product-linking.md) — IN_PROGRESS
+- [Запрет переноса смысловых связок и адаптация интерфейса под смартфон](plans/2026-10-29-ui-nowrap-and-mobile.md) — IN_PROGRESS (план разобран, реализация не начата)
 - [ЕМИСС: «CSRF блокировка» вместо SDMX, отсутствие `id=` и неограниченный объём выгрузки](plans/2026-10-28-emis-download-csrf-and-volume.md) — IN_PROGRESS
 
 ## Архив
 
+- [Локальная копия ЕМИСС, софт-привязка в продуктах, демонтаж OFF и ручных маппингов](plans/2026-10-28-emis-local-copy-and-product-linking.md) — DONE (V26–V29; решения владельца по плотности, единицам и фасовке — в разделе «Решения владельца 29.10.2026 (V29)», задачи на тесты T1–T8 — в Backlog)
 - [Фоновая синхронизация цен — LazyInitializationException «no Session» и фиктивные REQUIRES_NEW](plans/2026-10-28-price-sync-lazy-session.md) — DONE
 
 ## История до появления `plans/`

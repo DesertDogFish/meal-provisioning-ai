@@ -33,7 +33,7 @@ class RosstatEmisProviderTest {
     /** Фикстура страницы показателя: токен + JS-словарь фильтров + оси.
      *
      *  <p>Форма разметки сверена с живым fedstat.ru/indicator/31448 (curl-зонд владельца,
-     *  28.10.2026, см. plans/2026-10-28-emis-download-csrf-and-volume.md):</p>
+     *  28.10.2026, см. plans/done/2026-10-28-emis-download-csrf-and-volume.md):</p>
      *  <ul>
      *    <li>значение {@code struts.token.name} на портале — <b>{@code token}</b>, а не
      *        «struts.token». Прежняя фикстура выдумала «struts.token», из-за чего
@@ -417,7 +417,7 @@ class RosstatEmisProviderTest {
     }
 
     /**
-     * Дефект №7 (plans/2026-10-28-emis-download-csrf-and-volume): синтетическая фикстура
+     * Дефект №7 (plans/done/2026-10-28-emis-download-csrf-and-volume): синтетическая фикстура
      * {@link #SDMX_XML} описывает SDMX 2.1, где время — это {@code ObsDimension value="2025-08"}.
      * Боевой fedstat.ru отдаёт SDMX <b>1.0</b> другой формы: год лежит в {@code Obs/generic:Time},
      * а месяц — в {@code Series/Attributes/Value[@concept="PERIOD"]} русским названием

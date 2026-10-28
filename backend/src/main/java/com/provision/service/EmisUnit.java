@@ -110,14 +110,27 @@ public record EmisUnit(String kind, BigDecimal amount, String scale, String labe
     /**
      * Цена за единицу нашего продукта из цены позиции ЕМИСС.
      *
-     * <p>Правила (совпадают с ARCHITECTURE, секция цен): вес/объём приводятся парами, для
-     * штучного продукта нужен его вес {@code pieceWeightG}; несовместимые единицы дают
+     * <p>Правила (совпадают с ARCHITECTURE, секция цен): вес и объём приводятся парами, для
+     * штучного продукта нужен его {@code pieceWeightG}; несовместимые единицы дают
      * {@code null} — точка отбрасывается и попадает в детали синка как «отброшено»,
      * а не молча искажает цену.</p>
      *
+     * <p><b>Плотность ≈ 1</b> (решение владельца 29.10.2026): масса и объём пересчитываются
+     * один к одному — 1 кг ≈ 1 л, поэтому {@code MASS→L} и {@code VOLUME→KG} разрешены,
+     * а {@code piece_weight_g} штучного продукта трактуется как миллилитры, если цена ряда
+     * указана за объём («Антисептик для рук, 100 мл» → наша штука 100 мл = цена ряда).
+     * Правило пригодно для пищевых жидкостей и бытовой химии; для сжиженного газа,
+     * аэрозолей и прочих «далеко не единичных» сред оно неверно физически — такие позиции
+     * не привязываются вовсе (решение по «Газовому баллону», см. V29 и файл плана).</p>
+     *
+     * <p>По-прежнему НЕ приводятся пары, где не хватает данных: {@code COUNT→KG/L}
+     * (нужен вес штуки, которого в классификаторе нет: «Яйца куриные, 10 шт.» против
+     * яичного порошка в кг) и {@code OTHER} (услуга либо нераспознанная единица).</p>
+     *
      * @param emisPrice      цена ряда ЕМИСС (за {@link #amount} × {@link #scale})
      * @param ingredientUnit единица продукта: KG | L | PCS | PACK
-     * @param pieceWeightG   вес штуки в граммах (нужен для PCS при цене ЕМИСС за вес)
+     * @param pieceWeightG   вес штуки в граммах (для PCS при цене ЕМИСС за вес; при цене
+     *                       за объём то же число трактуется как миллилитры — плотность ≈ 1)
      * @return цена за единицу продукта либо null, если пересчёт невозможен
      */
     public BigDecimal pricePerUnit(BigDecimal emisPrice, String ingredientUnit, BigDecimal pieceWeightG) {
@@ -131,7 +144,8 @@ public record EmisUnit(String kind, BigDecimal amount, String scale, String labe
                 BigDecimal grams = "KG".equals(scale) ? amount.multiply(THOUSAND) : amount;
                 BigDecimal perGram = emisPrice.divide(grams, 8, RoundingMode.HALF_UP);
                 yield switch (unit) {
-                    case "KG" -> perGram.multiply(THOUSAND);
+                    // Плотность ≈ 1: цена за кг переносится и в литр (1 кг ≈ 1 л).
+                    case "KG", "L" -> perGram.multiply(THOUSAND);
                     case "PCS", "PACK" -> pieceWeightG == null ? null : perGram.multiply(pieceWeightG);
                     default -> null;
                 };
@@ -139,8 +153,15 @@ public record EmisUnit(String kind, BigDecimal amount, String scale, String labe
             case "VOLUME" -> {
                 BigDecimal millis = "L".equals(scale) ? amount.multiply(THOUSAND) : amount;
                 BigDecimal perMl = emisPrice.divide(millis, 8, RoundingMode.HALF_UP);
-                // Штучному продукту объём не восстановить: piece_weight_g — граммы, не миллилитры.
-                yield "L".equals(unit) ? perMl.multiply(THOUSAND) : null;
+                yield switch (unit) {
+                    // Плотность ≈ 1: цена за литр переносится и в килограмм (1 л ≈ 1 кг).
+                    case "L", "KG" -> perMl.multiply(THOUSAND);
+                    // Штучному продукту цена ряда за объём приводится через piece_weight_g,
+                    // прочитанный как миллилитры: «Антисептик для рук, 100 мл» (VOLUME, 100)
+                    // и наша штука piece_weight_g=100 → цена ряда и есть цена штуки.
+                    case "PCS", "PACK" -> pieceWeightG == null ? null : perMl.multiply(pieceWeightG);
+                    default -> null;
+                };
             }
             case "COUNT" -> ("PCS".equals(unit) || "PACK".equals(unit))
                     ? emisPrice.divide(amount, 2, RoundingMode.HALF_UP)
