@@ -1,5 +1,5 @@
 /**
- * Подзадача 24 (план plans/2026-10-29-full-audit.md): unit-тесты problemDetailParser —
+ * Подзадача 24 (план plans/done/2026-10-29-full-audit.md): unit-тесты problemDetailParser —
  * ProblemDetail → ApiClientError, 204/пустое тело → null, фикс-фолбэки (Fix-15).
  */
 import { describe, expect, it } from 'vitest';

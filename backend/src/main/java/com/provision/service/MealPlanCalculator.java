@@ -8,7 +8,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 
 /**
- * Подзадача 12 (план plans/2026-10-29-full-audit.md): чистая математика плана питания —
+ * Подзадача 12 (план plans/done/2026-10-29-full-audit.md): чистая математика плана питания —
  * эффективное число людей, масштабирование amount/baseServings×people, округление итогов
  * до рублей. Без БД и состояния (выделено из SummaryService, логика сохранена дословно).
  */

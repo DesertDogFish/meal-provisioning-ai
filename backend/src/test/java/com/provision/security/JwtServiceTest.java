@@ -19,7 +19,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * Unit-тесты JwtService по итогам аудита (plans/2026-10-29-full-audit.md):
+ * Unit-тесты JwtService по итогам аудита (plans/done/2026-10-29-full-audit.md):
  * подзадача 5 (iss/aud/typ + clock skew) и подзадача 6 (fail-fast на коротком
  * секрете вместо silent SHA-256 fallback).
  */

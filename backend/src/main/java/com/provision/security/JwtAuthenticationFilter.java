@@ -44,7 +44,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         final String jwt = authHeader.substring(7);
 
-        // FIX (подзадача 7 аудита, plans/2026-10-29-full-audit.md): раньше любой сбой
+        // FIX (подзадача 7 аудита, plans/done/2026-10-29-full-audit.md): раньше любой сбой
         // разбора глотался одним catch(Exception)+log.warn и запрос шёл дальше как
         // anonymous. Теперь SecurityContext явно очищается, а причина отказа логируется
         // (R10) с уровнем по типу ошибки; защищённые эндпоинты отвечают 401 через

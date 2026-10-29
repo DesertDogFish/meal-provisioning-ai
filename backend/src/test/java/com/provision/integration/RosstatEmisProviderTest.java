@@ -4,13 +4,17 @@ import com.provision.exception.IntegrationUnavailableException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.io.ByteArrayInputStream;
+import java.io.FilterInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.math.BigDecimal;
 import java.net.ConnectException;
 import java.net.UnknownHostException;
 import java.net.http.HttpTimeoutException;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
@@ -712,6 +716,83 @@ class RosstatEmisProviderTest {
                 .parseSnapshot(xml.getBytes(StandardCharsets.UTF_8), "no-data.xml"))
                 .isInstanceOf(IntegrationUnavailableException.class)
                 .hasMessageContaining("нет ни позиций справочника, ни ценовых рядов");
+    }
+
+    // ============ AU-05: потоковый контракт parseSnapshot(InputStream, size, name) ============
+    //
+    // Байтовый делегат (тесты выше) проверяет СООБЩЕНИЯ и распознавание формата. Здесь —
+    // только то, что байтами в принципе не проверяется: что файл не материализуется в heap.
+    // Дублировать 6 тестов формата на потоке смысла нет (делегат идёт в тот же код).
+
+    /** Поток, который считает обращения к read(): отказ по declared-размеру не должен читать. */
+    private static final class CountingStream extends FilterInputStream {
+        final AtomicInteger reads = new AtomicInteger();
+        boolean failOnRead;
+
+        CountingStream(byte[] data) {
+            super(new ByteArrayInputStream(data));
+        }
+
+        @Override
+        public int read() throws IOException {
+            reads.incrementAndGet();
+            if (failOnRead) throw new IOException("Connection reset");
+            return super.read();
+        }
+
+        @Override
+        public int read(byte[] b, int off, int len) throws IOException {
+            reads.incrementAndGet();
+            if (failOnRead) throw new IOException("Connection reset");
+            return super.read(b, off, len);
+        }
+    }
+
+    @Test
+    @DisplayName("AU-05 parseSnapshot(InputStream): переразмер виден по declared-размеру — поток не читается вовсе")
+    void rejectsOversizedStreamBeforeReadingIt() {
+        var p = new RosstatEmisProvider("https://www.fedstat.ru", "31448",
+                "Российская Федерация", 2, 1024L, new FakeTransport());
+        CountingStream payload = new CountingStream(new byte[4096]);
+
+        assertThatThrownBy(() -> p.parseSnapshot(payload, 2048L, "big.xml"))
+                .isInstanceOf(IntegrationUnavailableException.class)
+                .hasMessageContaining("2048 байт")
+                .hasMessageContaining("превышает предел max-response-bytes=1024");
+        // Собственно защита от OOM: отказ случился до первого read(), ни байта не прочитано.
+        assertThat(payload.reads).hasValue(0);
+    }
+
+    @Test
+    @DisplayName("AU-05 parseSnapshot(InputStream): declared-размер врёт — разбор обрывается на пределе, а не съедает файл")
+    void abortsRunawayStreamThatIsLargerThanDeclared() throws IOException {
+        // Multipart-заголовок и фактический размер могут расходиться (обрыв сети, подделанный
+        // запрос). Предел по declared-размеру в этом случае не срабатывает, поэтому второй
+        // рубеж — LimitedInputStream внутри SdmxStreamParser: читаем не больше max-response-bytes.
+        var p = new RosstatEmisProvider("https://www.fedstat.ru", "31448",
+                "Российская Федерация", 2, 1024L, new FakeTransport());
+        byte[] real = resourceBytes("emis/data-31448-real.xml");
+        assertThat(real.length).isGreaterThan(1024);
+
+        assertThatThrownBy(() -> p.parseSnapshot(
+                new ByteArrayInputStream(real), 10L, "lies-about-size.xml"))
+                .isInstanceOf(IntegrationUnavailableException.class)
+                .hasMessageContaining("больше 1024 байт")
+                .hasMessageContaining("чтение оборвано");
+    }
+
+    @Test
+    @DisplayName("AU-05 parseSnapshot(InputStream): обрыв потока — IntegrationUnavailable, а не стектрейс StAX")
+    void reportsBrokenStreamAsIntegrationUnavailable() {
+        CountingStream payload = new CountingStream(new byte[8192]);
+        payload.failOnRead = true;
+
+        assertThatThrownBy(() -> provider(new FakeTransport())
+                .parseSnapshot(payload, 8192L, "truncated.xml"))
+                .isInstanceOf(IntegrationUnavailableException.class)
+                .hasMessageContaining("truncated.xml")
+                .hasMessageContaining("не удалось прочитать")
+                .hasMessageContaining("Connection reset");
     }
 
     // ==================== Диагностика сетевых отказов (R10) ====================

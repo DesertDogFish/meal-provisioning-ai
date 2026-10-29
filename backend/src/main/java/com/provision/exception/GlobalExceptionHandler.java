@@ -3,12 +3,16 @@ package com.provision.exception;
 import com.provision.dto.error.ErrorResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -16,6 +20,14 @@ import java.util.List;
 @RestControllerAdvice
 @Slf4j
 public class GlobalExceptionHandler {
+
+    /**
+     * Предел размера загружаемого файла — для текста 413 (AU-14). Берём из той же
+     * настройки, которой ограничивает загрузку Spring, чтобы сообщение не расходилось
+     * с фактическим лимитом после правки {@code EMIS_UPLOAD_MAX_FILE_SIZE}.
+     */
+    @Value("${spring.servlet.multipart.max-file-size:96MB}")
+    private String maxFileSize;
 
     @ExceptionHandler(NotFoundException.class)
     public ResponseEntity<ErrorResponse> handleNotFound(
@@ -322,6 +334,92 @@ public class GlobalExceptionHandler {
                 null
         );
         return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED).body(error);
+    }
+
+    /**
+     * Файл больше {@code spring.servlet.multipart.max-file-size} — 413, а не 500 (AU-14,
+     * внешний аудит 30.10.2026). Штатный сценарий для этого пути: полная выгрузка ЕМИСС
+     * весит ~65 МБ при лимите 96 МБ, поэтому админ реально может прислать файл больше
+     * лимита и должен увидеть причину, а не «An unexpected error occurred».
+     *
+     * <p>{@code ex.getMessage()} наружу не отдаём: у Tomcat там внутренние детали
+     * разбора multipart. Лимит берём из конфигурации.</p>
+     */
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<ErrorResponse> handleMaxUploadSize(
+            MaxUploadSizeExceededException ex,
+            HttpServletRequest request
+    ) {
+        long actual = ex.getMaxUploadSize();
+        log.warn("Upload too large for {}: limit={} (configured {}), actual={} bytes",
+                request.getRequestURI(), maxFileSize, maxFileSize, actual > 0 ? actual : "unknown");
+        return build(HttpStatus.PAYLOAD_TOO_LARGE, "Payload Too Large",
+                "FILE_TOO_LARGE: Файл больше допустимого размера (" + maxFileSize
+                        + "). Выгрузка ЕМИСС целиком весит около 65 МБ — проверьте, что загружаете "
+                        + "SDMX-ответ портала, а не архив или выгрузку за все годы.",
+                request);
+    }
+
+    /**
+     * Нарушение ограничения целостности БД — 409, а не 500 (AU-14).
+     *
+     * <p>Типовой источник: check-then-act в {@code AuthService.register}
+     * ({@code existsByEmail} → {@code save}) — при двух одновременных регистрациях одного
+     * email вторая упирается в {@code users_email_key}. После AU-03 сюда же попадает
+     * частичный уникальный индекс {@code uq_sync_logs_running} (два параллельных синка).</p>
+     *
+     * <p>ВАЖНО: {@code ex.getMessage()} наружу НЕ отдаём — там имена таблиц, колонок,
+     * значения уникальных ключей и фрагменты SQL. Клиенту уходит стабильный код,
+     * подробности остаются в логе с traceId (R10).</p>
+     */
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ErrorResponse> handleDataIntegrityViolation(
+            DataIntegrityViolationException ex,
+            HttpServletRequest request
+    ) {
+        // Логируем полную причину: без неё расследовать конфликт уникальности невозможно.
+        log.error("Data integrity violation on {}: {}", request.getRequestURI(), ex.getMostSpecificCause().getMessage());
+        return build(HttpStatus.CONFLICT, "Conflict",
+                "DATA_CONFLICT: Запись конфликтует с существующими данными. Если это регистрация — "
+                        + "такой email уже занят; если запуск синхронизации — она уже выполняется.",
+                request);
+    }
+
+    /**
+     * Конфликт оптимистичной блокировки — 409 (AU-14, готовится под AU-13: {@code @Version}
+     * на изменяемых агрегатах). Без обработчика потерянное обновление выглядело бы как 500.
+     */
+    @ExceptionHandler(OptimisticLockingFailureException.class)
+    public ResponseEntity<ErrorResponse> handleOptimisticLock(
+            OptimisticLockingFailureException ex,
+            HttpServletRequest request
+    ) {
+        log.warn("Concurrent modification on {}: {}", request.getRequestURI(), ex.getMessage());
+        return build(HttpStatus.CONFLICT, "Conflict",
+                "CONCURRENT_MODIFICATION: Данные изменились, пока вы их редактировали. "
+                        + "Обновите страницу и повторите правку.",
+                request);
+    }
+
+    /**
+     * Сборка ответа об ошибке без 9-позиционного конструктора (AU-14; полная миграция
+     * остальных 14 обработчиков на эту фабрику — задача AU-15).
+     */
+    private ResponseEntity<ErrorResponse> build(
+            HttpStatus status, String title, String detail, HttpServletRequest request
+    ) {
+        ErrorResponse error = new ErrorResponse(
+                "about:blank",
+                title,
+                status.value(),
+                detail,
+                request.getRequestURI(),
+                LocalDateTime.now(),
+                null,
+                null,
+                null
+        );
+        return ResponseEntity.status(status).body(error);
     }
 
     @ExceptionHandler(Exception.class)

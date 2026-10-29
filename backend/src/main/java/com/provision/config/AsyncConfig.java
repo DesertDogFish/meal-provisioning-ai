@@ -23,7 +23,7 @@ import java.util.concurrent.ThreadPoolExecutor;
  * {@code IntegrationService#launchPriceSync} вела на несуществующий метод (KB-3 плана
  * {@code plans/done/2026-10-28-price-sync-lazy-session.md}) — исправлено 29.10.2026.
  *
- * FIX (аудит 29.10.2026, подзадача 15, plans/2026-10-29-full-audit.md):
+ * FIX (аудит 29.10.2026, подзадача 15, plans/done/2026-10-29-full-audit.md):
  * <ul>
  *   <li>явная rejection-политика {@code AbortPolicy}: при полном пуле и очереди задача
  *       отклоняется сразу (RejectedExecutionException), а не копится невидимо.
@@ -48,7 +48,13 @@ public class AsyncConfig implements AsyncConfigurer {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
         executor.setCorePoolSize(2);
         executor.setMaxPoolSize(5);
-        executor.setQueueCapacity(100);
+        // AU-05 (внешний аудит 30.10.2026): было 100. Очередь такой глубины для пула ТЯЖЁЛЫХ
+        // синхронизаций бессмысленна и опасна: задача ждёт минуты, админ не видит причины
+        // (в журнале уже RUNNING), а каждая отложенная задача удерживает временный файл
+        // выгрузки (~65 МБ на диске) и запись журнала. При отказе AbortPolicy даёт честный
+        // 409 EXECUTOR_SATURATED («повторите позже»), поэтому глубина 2 — это «сейчас + один
+        // следующий», а не склад.
+        executor.setQueueCapacity(2);
         // "off-sync-" — наследие демонтированного провайдера Open Food Facts (V28);
         // имя потока попадает в логи, поэтому приведено к фактическому источнику.
         executor.setThreadNamePrefix("emis-sync-");

@@ -46,7 +46,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 /**
- * Unit-тесты AuthService по итогам аудита (plans/2026-10-29-full-audit.md):
+ * Unit-тесты AuthService по итогам аудита (plans/done/2026-10-29-full-audit.md):
  * подзадача 2 (сид/регистрация только через BCrypt), 3 (HMAC-хэш refresh-токенов),
  * 4 (атомарная ротация refresh — race), 8 (единый ответ login без.enumeration).
  *

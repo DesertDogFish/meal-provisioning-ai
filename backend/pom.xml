@@ -50,7 +50,7 @@
             <artifactId>spring-boot-starter-validation</artifactId>
         </dependency>
 
-        <!-- Аудит 29.10.2026, подзадача 18 (plans/2026-10-29-full-audit.md): health/metrics.
+        <!-- Аудит 29.10.2026, подзадача 18 (plans/done/2026-10-29-full-audit.md): health/metrics.
              Список публичных эндпоинтов ограничен в application.yml (management.endpoints.web.exposure),
              остальное — за ролью ADMIN (SecurityConfig). Prometheus-скрейп для мониторинга синков. -->
         <dependency>

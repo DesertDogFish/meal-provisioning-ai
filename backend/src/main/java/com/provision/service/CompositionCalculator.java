@@ -6,7 +6,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 
 /**
- * Подзадача 11 (план plans/2026-10-29-full-audit.md): чистая математика состава блюда —
+ * Подзадача 11 (план plans/done/2026-10-29-full-audit.md): чистая математика состава блюда —
  * вес в граммах, ккал, план-стоимость. Без репозиториев и Spring-зависимостей;
  * конвертация единиц — через {@link UnitOfMeasure} (подзадача 21).
  *

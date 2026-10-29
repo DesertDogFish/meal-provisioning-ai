@@ -21,7 +21,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * Аудит 29.10.2026, подзадача 14 (plans/2026-10-29-full-audit.md): N+1 на странице
+ * Аудит 29.10.2026, подзадача 14 (plans/done/2026-10-29-full-audit.md): N+1 на странице
  * справочника продуктов. Ключевой признак N+1 — число запросов РАСТЁТ с числом строк
  * страницы; здесь оно должно быть константным (O(1) на страницу): стоимость, usage-count,
  * ЕМИСС-имена, synced-значок и shared-count грузятся пакетными запросами (FIX P1 в

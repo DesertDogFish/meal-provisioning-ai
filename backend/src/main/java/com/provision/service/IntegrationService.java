@@ -16,10 +16,14 @@ import com.provision.repository.UserRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
@@ -168,24 +172,83 @@ public class IntegrationService {
      * план Б на случай, когда портал недоступен (403 анти-бота, 503 троттлинга), и требовать
      * для него успешного подключения — значит оставить админа без единственного рабочего пути.</p>
      *
-     * @param payload  байты файла (предел размера проверяет провайдер: {@code max-response-bytes})
-     * @param fileName исходное имя файла — уходит в журнал синка
+     * <p>AU-05 (внешний аудит 30.10.2026): файл приходит {@link Path}, а не {@code byte[]},
+     * и guard «уже бежит» вызывается ДО чтения тела (см. {@link #assertUploadCanStart}).
+     * Раньше контроллер материализовывал все 96 МБ в heap и только потом узнавал, что синк
+     * уже идёт, — память потрачена, а ответ всё равно 409.</p>
+     *
+     * <p>Владение временным файлом: после успешного входа в метод его удаляет
+     * {@link PriceSyncService#runPriceSyncFromFile} (в {@code finally} фонового задания).
+     * Если старт не состоялся (пустой файл, провайдер не найден, уже бежит, пул насыщен) —
+     * файл удаляет этот метод, иначе временные копии копились бы на диске.</p>
+     *
+     * @param payloadFile путь к файлу во временном каталоге (содержимое уже на диске)
+     * @param sizeBytes   размер файла — для журнала и проверки «пуст»
+     * @param fileName    исходное имя файла — уходит в журнал синка
      */
-    public SyncLog uploadSnapshot(String providerCode, Long userId, byte[] payload, String fileName) {
+    public SyncLog uploadSnapshot(String providerCode, Long userId,
+                                  Path payloadFile, long sizeBytes, String fileName) {
         if (!providers.containsKey(providerCode)) {
+            deletePayload(payloadFile, "провайдер не найден");
             throw new NotFoundException("Provider not found: " + providerCode);
         }
-        if (payload == null || payload.length == 0) {
+        if (payloadFile == null || sizeBytes <= 0) {
+            deletePayload(payloadFile, "файл пуст");
             throw new ValidationException("EMPTY_FILE: Файл выгрузки пуст");
         }
 
-        SyncLog syncLog = startSyncLog(providerCode, userId);
+        SyncLog syncLog;
+        try {
+            syncLog = startSyncLog(providerCode, userId);
+        } catch (RuntimeException e) {
+            deletePayload(payloadFile, "синк не стартовал: " + e.getMessage());
+            throw e;
+        }
         log.info("ЕМИСС: загрузка файла «{}» ({} байт) запущена как синк {} провайдера {}",
-                fileName, payload.length, syncLog.getId(), providerCode);
-        dispatch(() -> self().executeUploadSync(providerCode, syncLog.getId(), payload, fileName),
-                syncLog.getId(), providerCode);
+                fileName, sizeBytes, syncLog.getId(), providerCode);
+        try {
+            dispatch(() -> self().executeUploadSync(providerCode, syncLog.getId(), payloadFile, fileName),
+                    syncLog.getId(), providerCode);
+        } catch (RuntimeException e) {
+            // Пул насыщен (AbortPolicy → 409): фоновое задание не стартовало, значит файл
+            // удалять некому, кроме нас.
+            deletePayload(payloadFile, "executor отклонил задачу");
+            throw e;
+        }
 
         return syncLog;
+    }
+
+    /**
+     * Проверка «загрузку можно начинать» БЕЗ чтения тела файла (AU-05).
+     *
+     * <p>Вызывается контроллером до {@code MultipartFile.transferTo}, чтобы отказ
+     * «провайдер не найден» / «синк уже бежит» не стоил 96 МБ на диске и в heap.
+     * Проверка совещательная: источником истины остаётся частичный уникальный индекс
+     * {@code uq_sync_logs_running} (V31), который ловит гонку в {@link #startSyncLog}.</p>
+     */
+    public void assertUploadCanStart(String providerCode) {
+        if (!providers.containsKey(providerCode)) {
+            throw new NotFoundException("Provider not found: " + providerCode);
+        }
+        Optional<SyncLog> running = syncLogRepository.findRunningByProvider(providerCode);
+        if (running.isPresent()) {
+            throw new ConflictException(
+                    "SYNC_ALREADY_RUNNING: Sync is already running for provider " + providerCode);
+        }
+    }
+
+    /** Удалить временный файл при отказе старта; причина отказа уже в логе вызывающего. */
+    private void deletePayload(Path payloadFile, String reason) {
+        if (payloadFile == null) {
+            return;
+        }
+        try {
+            Files.deleteIfExists(payloadFile);
+            log.debug("ЕМИСС: временный файл {} удалён ({})", payloadFile, reason);
+        } catch (IOException | RuntimeException e) {
+            log.warn("ЕМИСС: не удалось удалить временный файл {} ({}): {}", payloadFile, reason, e.getMessage());
+        }
     }
 
     /**
@@ -208,6 +271,22 @@ public class IntegrationService {
      * Общая часть запуска: проверка «уже бежит» + запись журнала в статусе RUNNING.
      * Выполняется в потоке запроса (до {@code @Async}), чтобы конкурентный запуск получил
      * 409 сразу, а не «где-то в фоне».
+     *
+     * <p><b>FIX (внешний аудит 30.10.2026, AU-03).</b> Прежняя пара
+     * «SELECT status='RUNNING' → INSERT» была гонкой check-then-act: между запросами
+     * второй поток успевал пройти ту же проверку, и два одновременных запуска давали
+     * два SyncLog(RUNNING) плюс два параллельных {@code PriceSyncService.runPriceSync}
+     * (гонка записи в {@code emis_prices}/{@code ingredient_prices} и недетерминированные
+     * счётчики журнала). В схеме были только неуникальные индексы, поэтому БД конфликт
+     * не ловила.</p>
+     *
+     * <p>Теперь источник истины — частичный уникальный индекс
+     * {@code uq_sync_logs_running ON sync_logs(provider) WHERE status='RUNNING'}
+     * (миграция V31). SELECT оставлен как быстрый путь: он даёт внятный 409 в штатном
+     * случае и не тратит INSERT на очевидный отказ. Если же гонка всё-таки случилась,
+     * проигравший поток упирается в индекс, и мы приводим {@code DataIntegrityViolationException}
+     * к тому же 409 {@code SYNC_ALREADY_RUNNING} — контракт для клиента не меняется,
+     * а второй параллельный синк становится невозможен на уровне БД.</p>
      */
     private SyncLog startSyncLog(String providerCode, Long userId) {
         Optional<SyncLog> runningSync = syncLogRepository.findRunningByProvider(providerCode);
@@ -219,17 +298,26 @@ public class IntegrationService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new NotFoundException("User not found"));
 
-        return syncLogRepository.save(SyncLog.builder()
-                .provider(providerCode)
-                .type("PRICES")
-                .status("RUNNING")
-                .triggeredBy("MANUAL")
-                .triggeredUser(user)
-                .startedAt(LocalDateTime.now())
-                .createdCount(0)
-                .updatedCount(0)
-                .errorCount(0)
-                .build());
+        try {
+            return syncLogRepository.save(SyncLog.builder()
+                    .provider(providerCode)
+                    .type("PRICES")
+                    .status("RUNNING")
+                    .triggeredBy("MANUAL")
+                    .triggeredUser(user)
+                    .startedAt(LocalDateTime.now())
+                    .createdCount(0)
+                    .updatedCount(0)
+                    .errorCount(0)
+                    .build());
+        } catch (DataIntegrityViolationException e) {
+            // Единственная уникальность на sync_logs — uq_sync_logs_running (V31),
+            // поэтому причина однозначна: конкурент успел создать RUNNING раньше нас.
+            log.warn("Sync start lost the race for provider {}: unique RUNNING index rejected "
+                    + "the insert ({})", providerCode, e.getMostSpecificCause().getMessage());
+            throw new ConflictException(
+                    "SYNC_ALREADY_RUNNING: Sync is already running for provider " + providerCode);
+        }
     }
 
     /** Прокси Spring для {@code @Async}-методов (internal call обошёл бы прокси). */
@@ -246,10 +334,14 @@ public class IntegrationService {
         priceSyncService.runPriceSync(providerCode, syncLogId);
     }
 
-    /** Фоновая часть загрузки файла: тот же конвейер, только слепок разбирается из байтов. */
+    /**
+     * Фоновая часть загрузки файла: тот же конвейер, только слепок разбирается с диска
+     * потоком (AU-05 — файл не копируется в heap).
+     */
     @Async("taskExecutor")
-    public void executeUploadSync(String providerCode, Long syncLogId, byte[] payload, String fileName) {
-        priceSyncService.runPriceSyncFromFile(providerCode, syncLogId, payload, fileName);
+    public void executeUploadSync(String providerCode, Long syncLogId,
+                                  Path payloadFile, String fileName) {
+        priceSyncService.runPriceSyncFromFile(providerCode, syncLogId, payloadFile, fileName);
     }
 
     @Transactional(readOnly = true)

@@ -20,7 +20,7 @@ import java.util.function.Function;
 /**
  * Выпуск и разбор access-токенов (HS256).
  *
- * FIX (аудит 29.10.2026, plans/2026-10-29-full-audit.md):
+ * FIX (аудит 29.10.2026, plans/done/2026-10-29-full-audit.md):
  * - подзадача 5: каждый токен несёт iss/aud/typ=access и header typ=JWT; парсер
  *   требует совпадения issuer/audience и допускает clock skew 60 c;
  * - подзадача 6: убран silent-fallback «SHA-256 для короткого секрета» — короткий

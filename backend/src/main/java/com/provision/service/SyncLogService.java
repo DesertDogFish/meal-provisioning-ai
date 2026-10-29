@@ -63,7 +63,7 @@ public class SyncLogService {
         return toResponse(syncLog);
     }
 
-    // FIX (аудит 29.10.2026, подзадача 13, plans/2026-10-29-full-audit.md):
+    // FIX (аудит 29.10.2026, подзадача 13, plans/done/2026-10-29-full-audit.md):
     // были удалены мёртвые startSync/completeSync/failSync — дубли жизненного цикла синка:
     //   • старт (проверка «уже бежит» + запись RUNNING) — единственная точка входа:
     //     IntegrationService.startSyncLog (в потоке запроса, 409 при конкурентном запуске);

@@ -1,5 +1,5 @@
 /**
- * Подзадача 24 (план plans/2026-10-29-full-audit.md): покрытие оставшихся путей
+ * Подзадача 24 (план plans/done/2026-10-29-full-audit.md): покрытие оставшихся путей
  * client.ts после выделения authInterceptor/modeResolver/problemDetailParser —
  * mock-ветки (failMode, postFile, del), обёртки загрузки/нормализации и
  * форматтеры (humanize/packHint/humanizeWeight).

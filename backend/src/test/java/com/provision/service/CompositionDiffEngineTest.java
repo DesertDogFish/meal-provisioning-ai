@@ -32,7 +32,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * Подзадача 11 (план plans/2026-10-29-full-audit.md): unit-тесты CompositionDiffEngine —
+ * Подзадача 11 (план plans/done/2026-10-29-full-audit.md): unit-тесты CompositionDiffEngine —
  * диф-коммит SCALE/EXTRA/EXCLUDE/SUBST (FORM-meal-composition-spec §3), идемпотентность
  * повтора того же тела, удаление устаревших правок.
  */

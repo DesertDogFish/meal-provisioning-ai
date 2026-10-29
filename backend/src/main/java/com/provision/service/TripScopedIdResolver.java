@@ -10,7 +10,7 @@ import org.springframework.stereotype.Component;
 import java.util.Map;
 
 /**
- * Подзадачи 11/22 (план plans/2026-10-29-full-audit.md): резолвер входящих id
+ * Подзадачи 11/22 (план plans/done/2026-10-29-full-audit.md): резолвер входящих id
  * в trip-scope похода — отдельный модуль с явной семантикой (V20-привязка).
  *
  * <p>Правила {@link #resolveTripScopedId} (исчерпывающие, по порядку):

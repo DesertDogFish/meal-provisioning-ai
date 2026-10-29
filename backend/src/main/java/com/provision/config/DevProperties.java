@@ -7,7 +7,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 /**
  * Настройки dev-профиля (сид демо-данных).
  *
- * FIX (аудит 29.10.2026, plans/2026-10-29-full-audit.md подзадача 1, CRITICAL):
+ * FIX (аудит 29.10.2026, plans/done/2026-10-29-full-audit.md подзадача 1, CRITICAL):
  * пароли демо-пользователей больше НЕ хардкодятся в исходниках. Значения читаются
  * из переменных окружения (ADMIN_PASSWORD / DEMO_USER_PASSWORD, см. application.yml);
  * пустое значение — сигнал сгенерировать случайный пароль при старте

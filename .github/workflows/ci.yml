@@ -68,6 +68,169 @@ jobs:
           name: backend-surefire
           path: backend/target/surefire-reports/
 
+  # AGENTS R6: миграции обязаны поднимать СУЩЕСТВУЮЩУЮ БД, а не только пустую.
+  # AU-02 (внешний аудит 30.10.2026): ни один workflow этого не проверял, поэтому сломанный
+  # remedy для удалённых V14/V15 («Detected applied migration not resolved locally: 14» —
+  # backend не стартует на БД старше 28.10.2026) прожил незамеченным.
+  #
+  # Схема прогона:
+  #   1) БД поднимается миграциями ПРЕДЫДУЩЕЙ версии (тег, либо base PR, либо HEAD^) —
+  #      это «volume владельца до git pull»;
+  #   2) поверх неё стартует ТЕКУЩИЙ backend (jar): Flyway migrate+validate и
+  #      hibernate ddl-auto=validate проходят по уже существующей схеме;
+  #   3) /api/v1/meta отвечает 200, flyway validate зелёный, максимальная версия текущего
+  #      дерева записана в flyway_schema_history.
+  # Миграции на шаге 1 гоняет официальный образ flyway/flyway версии из pom предыдущего
+  # дерева (flyway-maven-plugin в pom не объявлен: для Flyway 10 ему нужна зависимость
+  # flyway-database-postgresql в classpath плагина, а в старом дереве её не добавить).
+  migration-upgrade:
+    name: Migration Upgrade (existing DB)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: provision
+          POSTGRES_USER: provision
+          POSTGRES_PASSWORD: upgrade-ci-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U provision"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      PG_CI_PASSWORD: upgrade-ci-password
+      PG_CI_URL: jdbc:postgresql://localhost:5432/provision
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # нужны теги и история, чтобы достать предыдущую версию дерева
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'   # синхронно с backend/pom.xml
+          cache: maven
+
+      - name: Resolve base ref (previous version of the tree)
+        id: base
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE="${{ github.event.pull_request.base.sha }}"
+          else
+            # последний тег до HEAD, иначе предыдущий коммит ветки
+            BASE="$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || true)"
+            if [ -z "$BASE" ]; then
+              BASE="$(git rev-parse HEAD^ 2>/dev/null || true)"
+            fi
+          fi
+          if [ -z "$BASE" ]; then
+            echo "::error::Не удалось определить предыдущую версию дерева (нет тегов и одного коммита недостаточно)"
+            exit 1
+          fi
+          echo "ref=$BASE" >> "$GITHUB_OUTPUT"
+          echo "base ref: $BASE"
+
+      - name: Migrate DB with the PREVIOUS version (creates the «owner volume» state)
+        run: |
+          set -euo pipefail
+          git worktree add --detach /tmp/base-ref "${{ steps.base.outputs.ref }}"
+          BASE_FLYWAY="$(sed -n 's:.*<flyway.version>\([^<]*\)</flyway.version>.*:\1:p' \
+              /tmp/base-ref/backend/pom.xml | head -1)"
+          BASE_FLYWAY="${BASE_FLYWAY:-10.10.0}"
+          echo "previous tree: ${{ steps.base.outputs.ref }}, flyway $BASE_FLYWAY"
+          ls /tmp/base-ref/backend/src/main/resources/db/migration | sort -V | tail -3
+          docker run --rm --network host \
+            -v /tmp/base-ref/backend/src/main/resources/db/migration:/flyway/sql:ro \
+            "flyway/flyway:${BASE_FLYWAY}" \
+            -url="$PG_CI_URL" -user=provision -password="$PG_CI_PASSWORD" \
+            -baselineOnMigrate=true -connectRetries=30 \
+            migrate
+
+      - name: Build current backend
+        working-directory: backend
+        run: mvn -B -ntp -DskipTests package
+
+      - name: Start CURRENT backend against the already-migrated DB
+        working-directory: backend
+        env:
+          SPRING_PROFILES_ACTIVE: prod
+          SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/provision
+          SPRING_DATASOURCE_USERNAME: provision
+          SPRING_DATASOURCE_PASSWORD: upgrade-ci-password
+          # compose требует непустой секрет (fail-fast JwtProperties) — CI-only значение.
+          JWT_SECRET: ci-upgrade-secret-key-must-be-at-least-256-bits-long-hs256-okay
+        run: |
+          set -euo pipefail
+          nohup java -jar target/provision-*.jar > ../backend-upgrade.log 2>&1 &
+          echo $! > ../backend-upgrade.pid
+          for attempt in $(seq 1 60); do
+            if curl -fsS http://localhost:8080/api/v1/meta > /tmp/meta.json 2>/dev/null; then
+              echo "backend поднялся на существующей БД за ~$((attempt * 5)) c"
+              cat /tmp/meta.json
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "::error::backend не стартовал на БД предыдущей версии за 300 c"
+          tail -n 120 ../backend-upgrade.log
+          exit 1
+
+      - name: Flyway validate + info (current tree)
+        run: |
+          set -euo pipefail
+          CUR_FLYWAY="$(sed -n 's:.*<flyway.version>\([^<]*\)</flyway.version>.*:\1:p' \
+              backend/pom.xml | head -1)"
+          CUR_FLYWAY="${CUR_FLYWAY:-10.10.0}"
+          # Тот же набор ignore-паттернов, что в application.yml (AU-02): гейт обязан
+          # проверять ровно тот контракт, с которым стартует приложение.
+          docker run --rm --network host \
+            -v "$PWD/backend/src/main/resources/db/migration:/flyway/sql:ro" \
+            "flyway/flyway:${CUR_FLYWAY}" \
+            -url="$PG_CI_URL" -user=provision -password="$PG_CI_PASSWORD" \
+            -ignoreMigrationPatterns='*:missing' \
+            validate | tee flyway-validate.log
+          docker run --rm --network host \
+            -v "$PWD/backend/src/main/resources/db/migration:/flyway/sql:ro" \
+            "flyway/flyway:${CUR_FLYWAY}" \
+            -url="$PG_CI_URL" -user=provision -password="$PG_CI_PASSWORD" \
+            -ignoreMigrationPatterns='*:missing' \
+            info | tee flyway-info.log
+          # Апгрейд действительно состоялся: максимальная версия текущего дерева — в истории.
+          MAX_VERSION="$(ls backend/src/main/resources/db/migration \
+              | sed -n 's/^V\([0-9]*\)__.*/\1/p' | sort -n | tail -1)"
+          echo "ожидаем версию $MAX_VERSION в flyway_schema_history"
+          grep -qE "(^|[^0-9])${MAX_VERSION}([^0-9]|$)" flyway-info.log \
+            || { echo "::error::миграция V${MAX_VERSION} не применена при апгрейде"; exit 1; }
+
+      - name: Backend startup log
+        if: always()
+        run: tail -n 200 backend-upgrade.log || true
+
+      - name: Stop backend
+        if: always()
+        run: |
+          if [ -f backend-upgrade.pid ]; then
+            kill "$(cat backend-upgrade.pid)" 2>/dev/null || true
+          fi
+
+      - name: Upload upgrade artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: migration-upgrade-logs
+          path: |
+            backend-upgrade.log
+            flyway-validate.log
+            flyway-info.log
+
   frontend:
     name: Frontend Tests
     runs-on: ubuntu-latest

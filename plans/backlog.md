@@ -31,13 +31,13 @@
   `amount ≤ 0`, `pieceWeightG = null`, `ingredientUnit = null`. Округление `rounded` —
   копейки, HALF_UP. Фикстуры — реальные цены выгрузки (8016 = 198,32; 5311 = 702,38;
   6502 = 26,49; 6505 = 42,90; 5701 = 4,18; 1501 = 113,85 за десяток). Закрывает KB-9.
-- **BL-2. `EmisPriceApplierTest`** (unit + Mockito, без Spring-контекста) — ГОТОВО 29.10.2026 (commit 2cbb37a2, план plans/2026-10-29-full-audit.md подзадача 27; 8/8 зелёные): `apply` создаёт
+- **BL-2. `EmisPriceApplierTest`** (unit + Mockito, без Spring-контекста) — ГОТОВО 29.10.2026 (commit 2cbb37a2, план plans/done/2026-10-29-full-audit.md подзадача 27; 8/8 зелёные): `apply` создаёт
   точку (`CREATED`), перезаписывает существующую (`UPDATED`), отбрасывает несовместимую
   (`skipped` + причина в `ProductOutcome.reason`); пустой список точек → `SKIPPED` с причиной
   «нет цен позиции»; позиция отсутствует в справочнике → `EmisUnit.OTHER` и `SKIPPED`;
   `deleteManualByIngredientId` вызывается ТОЛЬКО если хоть одна точка применена;
   `loadLinkedProducts` не тянет trip-копии (`trip_id IS NULL`). Закрывает KB-9.
-- **BL-3. `EmisMirrorServiceTest`** — ГОТОВО 29.10.2026 (commit 2cbb37a2, план plans/2026-10-29-full-audit.md подзадача 27; 6/6 зелёные): upsert справочника и цен, идемпотентность повторного
+- **BL-3. `EmisMirrorServiceTest`** — ГОТОВО 29.10.2026 (commit 2cbb37a2, план plans/done/2026-10-29-full-audit.md подзадача 27; 6/6 зелёные): upsert справочника и цен, идемпотентность повторного
   `store`, обрезка окна `period-years`, счётчики `products/prices/deleted`. Закрывает KB-9.
 - **BL-4. `EmisCatalogServiceTest` + `EmisControllerTest`** (`@WebMvcTest`): поиск по подстроке
   имени и по коду, лимит, сортировка по имени (ru-коллация), `describe`/`exists`, неизвестный
@@ -182,7 +182,7 @@
   затронутые файлы ≤ 500 строк, поведение вкладок не изменилось (`e2e/main-flow.spec.ts`
   зелёные), новые компоненты в `coverage.include` с lines ≥ 80 %. Закрывает KB-14.
   Источник: `plans/done/2026-10-29-ui-nowrap-and-mobile.md`.
-  **ГОТОВО** (29.10.2026, подзадача 26 аудита `plans/2026-10-29-full-audit.md`,
+  **ГОТОВО** (29.10.2026, подзадача 26 аудита `plans/done/2026-10-29-full-audit.md`,
   коммиты 849707d7/409bc52d/6727182e): страница 1310 → 240 строк; состояние — хук
   `pages/useTripDetail.tsx`, производные — `utils/tripDerived.ts`, вкладки — компоненты
   `Trip*` + `ExclusionCheckbox` (все ≤300); vitest 590/590, новые файлы в
@@ -278,3 +278,254 @@
   запуском chromium. Критерий приёмки: workflow run с e2e-джобой зелёный, при падении
   публикуется артефакт `playwright-report/`. Закрывает KB-16.
   Источник: подзадача 10 плана `plans/done/2026-10-29-ui-nowrap-and-mobile.md`.
+
+## Внешний аудит 30.10.2026 (P1/P2/P3)
+
+Задачи внешнего аудита, не вошедшие в P0-блок (он закрыт планом
+`plans/done/2026-10-30-external-audit-p0-block.md`). Приоритет и оценка — из аудита:
+**S** ≤ 0.5 дня · **M** 1–2 дня · **L** 3–5 дней · **XL** > 5 дней. Задачи XL (BL-40, BL-42)
+и задачи, требующие решения владельца (BL-52), при взятии в работу уходят в отдельный файл
+плана (`AGENTS.md` §3). Порядок внутри раздела — по приоритету аудита.
+
+### P1
+
+- **BL-33. Починить E2E-nightly и отделить real-mode от mock-прогона** (M). Что сделать:
+  разделить `e2e-nightly.yml` на два независимых job'а (`e2e-mock` и `e2e-real` со своим
+  compose-стеком), чтобы падение одного не скипало другой; `retries: process.env.CI ? 2 : 0`
+  и `workers: 1` в `playwright.config.ts`; `trace: 'on'` на nightly + артефакт с трейсами;
+  длинный комментарий про песочницу агента из `playwright.config.ts` перенести в KB-16;
+  уведомление о красном nightly (`workflow_run` → issue); после починки снять
+  `continue-on-error` для PR. Критерий приёмки: два nightly подряд зелёные, в логе видно
+  выполнение `real-mode.spec.ts`; намеренно сломанный `data-testid` валит `e2e-mock`.
+  Закрывает KB-18 (частично KB-16 — вместе с BL-32). Источник: внешний аудит 30.10.2026, AU-06 (сводка 30 задач — `plans/done/2026-10-30-external-audit-p0-block.md`).
+- **BL-34. Включить coverage-гейт R5 в CI и расширить whitelist** (M). Что сделать: шаг
+  `npm run test:coverage` в `ci.yml` — сначала non-blocking с публикацией числа в summary,
+  через 1–2 недели blocking (приём уже заявлен в шаге «Check MD files»); публиковать ДВЕ цифры
+  («по whitelist'у» и «по всему `src/`»); пополнять `coverage.include` по мере декомпозиции
+  страниц (BL-53); автоматизировать R5 проверкой «новый файл в `src/utils|api|components`
+  обязан попасть в `include`»; рассмотреть `thresholds.branches` (сейчас только `lines`).
+  Критерий приёмки: coverage-шаг виден в job summary с обоими числами; добавление
+  `src/utils/foo.ts` без внесения в `include` валит проверку. Закрывает KB-25. Источник: внешний аудит 30.10.2026, AU-07 (сводка 30 задач — `plans/done/2026-10-30-external-audit-p0-block.md`).
+- **BL-35. Снять `continue-on-error` с security-сканов, починив compose и nginx** (M).
+  Что сделать: в `docker-compose.yml` для всех сервисов — `security_opt:
+  ["no-new-privileges:true"]`, `cap_drop: [ALL]` (+ явный `cap_add` для nginx при необходимости),
+  `read_only: true` с `tmpfs` для `/var/cache/nginx`, `/var/run`, `/tmp`, `pids_limit`,
+  `logging` с `max-size: 10m, max-file: 3`; проверить, что `-XX:HeapDumpPath` backend указывает
+  на writable-том; `Dockerfile.frontend` → non-root (`nginxinc/nginx-unprivileged` или `USER 101`
+  + порт 8080); убрать из nginx `Upgrade`/`Connection`-заголовки и `proxy_cache_bypass`
+  (WebSocket нет — это и есть «H2C»-находка Semgrep); Trivy на релизный тег + `.trivyignore`
+  с обоснованием каждой строки; Semgrep — локальный прогон и baseline-файл; Dependency Review —
+  включить dependency graph в настройках репозитория. Критерий приёмки: в job'е `Security Scans`
+  есть хотя бы один блокирующий шаг; `docker compose up` поднимается с `read_only: true` и
+  зелёными healthcheck; `docker exec provision-frontend id` → не-root. Закрывает KB-19. Источник: внешний аудит 30.10.2026, AU-09 (сводка 30 задач — `plans/done/2026-10-30-external-audit-p0-block.md`).
+- **BL-36. Dependabot + `npm audit` в CI + фикс текущих CVE** (S). Что сделать:
+  `.github/dependabot.yml` для экосистем `npm`, `maven`, `github-actions` (`schedule: weekly`,
+  `open-pull-requests-limit: 10`, группы для минорных/патчей); блокирующий шаг
+  `npm audit --omit=dev --audit-level=high` (moderate — сначала non-blocking в summary);
+  поднять `react-router-dom` до исправленной версии и проверить все `<Link to>` на
+  пользовательские данные; удалить неиспользуемый `uuid` (CVE уходит вместе с пакетом,
+  см. BL-43); ночной job `mvn versions:display-dependency-updates` /
+  `display-plugin-updates` без блокировки. Критерий приёмки: Dependabot открыл первые PR;
+  `npm audit --omit=dev --audit-level=high` чистый и блокирует CI; `uuid` нет в `package.json`.
+  Закрывает KB-21. Источник: внешний аудит 30.10.2026, AU-10 (сводка 30 задач — `plans/done/2026-10-30-external-audit-p0-block.md`).
+- **BL-37. Одна версия Java в pom, CI, nightly и Dockerfile** (S). Что сделать: выбрать одну
+  версию (рекомендация аудита — 21 LTS: образ уже на 21, а BL-40 всё равно ведёт к линии,
+  где 17 не оптимален); привести в соответствие `backend/pom.xml` (`java.version` и
+  `maven.compiler.release` вместо устаревших `source`/`target`), `ci.yml`,
+  `contract-nightly.yml`, `backend/Dockerfile`, `README.md`, `backend/README.md`; запинить
+  базовые образы по digest (BL-50); добавить CI-страховку — шаг, сравнивающий `java-version`
+  в workflow, `maven.compiler.release` в pom и `FROM` в Dockerfile. Критерий приёмки: все
+  четыре источника говорят одно число; `mvn test` и `docker compose build` зелёные;
+  проверка-страховка валится при рассинхроне. Источник: внешний аудит 30.10.2026, AU-11 (сводка 30 задач — `plans/done/2026-10-30-external-audit-p0-block.md`).
+- **BL-38. nginx: CSP и security-заголовки, XFF, gzip, кэш ассетов, таймауты** (M).
+  Что сделать: заголовки `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY` (или CSP
+  `frame-ancestors 'none'`), `Referrer-Policy: strict-origin-when-cross-origin`,
+  `Permissions-Policy: geolocation=(), camera=(), microphone=()`, `server_tokens off`; CSP
+  начать с `Content-Security-Policy-Report-Only` и только затем enforcing (учесть инлайн-SVG
+  в `BrandMark.tsx` и boot-лоадер в `index.html` — понадобится `'unsafe-inline'` либо вынос
+  скрипта в файл с nonce; Google Fonts — явный `font-src`/`style-src`);
+  `proxy_set_header X-Forwarded-For/X-Forwarded-Proto/X-Real-IP` + в бэкенде
+  `server.forward-headers-strategy: framework` (без этого Spring заголовкам не доверяет —
+  только тогда возможна блокировка по IP как второй эшелон к rate limiting); gzip для
+  css/js/json/svg; `expires 1y` + `Cache-Control: public, immutable` для `/assets/` и
+  `no-store` для `index.html`; `proxy_read_timeout/proxy_send_timeout 300s` и
+  `proxy_request_buffering off` для `/api`; `limit_req_zone`/`limit_req` на
+  `/api/v1/auth/login`; smoke-шаг в `docker-stack.yml`, проверяющий заголовки через `curl -I`.
+  Критерий приёмки: `curl -I` на `/` и `/assets/index-*.js` возвращает ожидаемые заголовки;
+  CSP не ломает boot-лоадер, шрифты, SVG-брендмарк и печать `/trips/:id/print`; в логе
+  бэкенда виден реальный IP клиента; шаг проверки заголовков есть в CI. Закрывает KB-20. Источник: внешний аудит 30.10.2026, AU-12 (сводка 30 задач — `plans/done/2026-10-30-external-audit-p0-block.md`).
+- **BL-39. Branch protection + conventional commits + запрет push в основную ветку** (S).
+  Что сделать: branch protection на `main` (required PR, required status checks —
+  `Backend Tests`, `Frontend Tests`, `Docker Build`; запрет force-push и удаления; linear
+  history); вернуться к PR-флоу; Conventional Commits + `commitlint` (husky/lefthook или
+  CI-проверка заголовка, минимальный набор типов `feat|fix|refactor|test|docs|chore|ci|perf`);
+  в `AGENTS.md` §9/§10 заменить «consist fix»-стиль требованием осмысленного заголовка и
+  добавить правило «агент не пушит в основную ветку напрямую»; squash-merge.
+  Критерий приёмки: прямой push в `main` отклоняется GitHub'ом; последние 20 коммитов проходят
+  `commitlint`; после внедрения на основной ветке нет красного CI. Закрывает KB-22. Источник: внешний аудит 30.10.2026, AU-28 (сводка 30 задач — `plans/done/2026-10-30-external-audit-p0-block.md`).
+- **BL-40. Обновить Spring Boot 3.2.5 → актуальную поддерживаемую линию** (XL — при взятии
+  в работу нужен отдельный файл плана, `AGENTS.md` §3). Что сделать: выбрать целевую линию
+  (на 30.10.2026 вся 3.x вне поддержки, актуальна 4.x — KB-17), пройти
+  `spring-boot-properties-migrator`, поднять связанные зависимости (Hibernate, Flyway,
+  Testcontainers, MapStruct, jjwt), сверить конфигурационные свойства (`application.yml`,
+  профили `dev`/`prod`), убрать `spring-boot-properties-migrator` из зависимостей после
+  перехода; согласовать версию Java с BL-37. Критерий приёмки: `mvn test` зелёный на целевой
+  версии; `ProductPageQueryCountTest` не показал роста числа запросов; docker-стек поднимается
+  и проходит `docker-stack.yml`; экономические инварианты (`EconomicConsistencyTest`,
+  `SummaryService*Test`) зелёные; версия задокументирована в `ARCHITECTURE.md`.
+  Закрывает KB-17. Источник: внешний аудит 30.10.2026, AU-01 (сводка 30 задач — `plans/done/2026-10-30-external-audit-p0-block.md`).
+
+### P2
+
+- **BL-41. `@Version` на изменяемых агрегатах + UX конфликта на фронте** (L). Что сделать:
+  `@Version` на `Trip`, сущностях правок состава и `trip_price_overrides` (+ миграция
+  `ADD COLUMN version bigint NOT NULL DEFAULT 0`, только новый номер — §8); обработчик
+  `OptimisticLockingFailureException` → 409 уже есть (AU-14, 30.10.2026); на фронте — диалог
+  «данные изменились, обновите» с повторной загрузкой; mock-паритет (R3); тест по R1 на
+  конкурентный batch-PUT. Критерий приёмки: вторая конкурентная запись получает 409, а не молча
+  перезаписывает; UI показывает внятный диалог; миграция применена на существующей БД
+  (гейт — job `migration-upgrade`). Закрывает KB-24. Источник: внешний аудит 30.10.2026, AU-13 (сводка 30 задач — `plans/done/2026-10-30-external-audit-p0-block.md`).
+- **BL-42. JaCoCo-гейт на backend + unit-тесты на сервисы без покрытия** (XL — отдельный файл
+  плана). Что сделать: JaCoCo `prepare-agent` + `report` + `check` (порог начать с 50% lines
+  non-blocking, постепенно до 70%); приоритетный порядок тестов: `ShoppingListCalculator` →
+  `TripService` → `SubstitutionService` → `MealCompositionService` → `TripCatalogSnapshotService`
+  → `PriceSyncService` → `IntegrationService`; слой — unit/Mockito без Spring-контекста (R2),
+  образец — `EmisPriceApplierTest`, `EmisMirrorServiceTest`, `PriceSyncPayloadTest`,
+  `IntegrationUploadTest`. Критерий приёмки: `mvn verify` публикует отчёт и валится ниже порога;
+  у приоритетных сервисов есть свои тест-классы; покрытие `service/**` ≥ 70% lines. Источник: внешний аудит 30.10.2026, AU-08 (сводка 30 задач — `plans/done/2026-10-30-external-audit-p0-block.md`).
+- **BL-43. Удалить неиспользуемые зависимости и навести порядок в `package.json`** (S).
+  Что сделать: удалить 8 неиспользуемых пакетов и `@types/canvas-confetti`; `happy-dom` →
+  `devDependencies`; выбрать один DOM-эмулятор (в `vitest.config.ts` активен `happy-dom` →
+  `jsdom` можно убрать); задать `name: "meal-provisioning-frontend"`, `version`,
+  `engines: { node: ">=22" }` и поднять Node в CI до 22 (BL-51); добавить `depcheck`
+  non-blocking. Критерий приёмки: `npm run build` и frontend-тесты зелёные; `node_modules`
+  меньше минимум на 20 МБ; `depcheck` не сообщает о неиспользуемых `dependencies`;
+  `npm ci` без `EBADENGINE`. Источник: внешний аудит 30.10.2026, AU-24 (сводка 30 задач — `plans/done/2026-10-30-external-audit-p0-block.md`).
+- **BL-44. Включить e2e и конфиги в typecheck** (S). Что сделать: `tsconfig.e2e.json`
+  (extends базового, `include: ["e2e", "playwright.config.ts"]`,
+  `types: ["node", "@playwright/test"]`) и `tsconfig.node.json` для `vitest.config.ts`/
+  `vite.config.*`; скрипт `typecheck:all`, включающий все три; заменить `vite.config.js` на
+  `.ts`; добавить шаг в `ci.yml`. Критерий приёмки: `npm run typecheck:all` покрывает `e2e/**`
+  (`--listFiles | grep -c e2e/` > 0) и падает на намеренно внесённой ошибке типа в спеке. Источник: внешний аудит 30.10.2026, AU-17 (сводка 30 задач — `plans/done/2026-10-30-external-audit-p0-block.md`).
+- **BL-45. Заменить гейт «Check MD files» проверкой белого списка `AGENTS.md` §1** (S).
+  Что сделать: переписать шаг «Check MD files (non-blocking)» в job'е `frontend`
+  (`.github/workflows/ci.yml`) — сопоставлять `git ls-files '*.md'` с шаблонами белого списка
+  §1 (`README.md`, `ARCHITECTURE.md`, `PLAN.md`, `AGENTS.md`, `DESIGN_MIGRATION.md`,
+  `backend/README.md`, `plans/**`, `provisions/design-pack/**.md`) и падать на любом файле
+  вне списка; решить судьбу `FORM-meal-composition-spec.md` (в белый список или в `plans/`);
+  сделать шаг блокирующим. Критерий приёмки: шаг блокирующий и зелёный; добавление
+  `FINAL_REPORT.md` в корень валит CI; белый список в `AGENTS.md` §1 совпадает с regex'ом CI
+  (один источник истины). Закрывает остаток KB-11 (проверка вместо подсчёта). Источник: внешний аудит 30.10.2026, AU-22 (сводка 30 задач — `plans/done/2026-10-30-external-audit-p0-block.md`).
+- **BL-46. Убрать BOM из пяти файлов и добавить гейт в CI** (S). Что сделать: снять BOM
+  (`sed -i '1s/^\xEF\xBB\xBF//'`, в том числе в `docker-compose.yml` — он стоит перед
+  `services:`); добавить блокирующий CI-шаг `! git grep -Il $'\xEF\xBB\xBF' -- .`; удалить
+  `fix-encoding.ps1` (BL-56) — гейт заменяет его полностью; если PowerShell-скрипты останутся,
+  добавить `*.ps1 text eol=crlf` в `.gitattributes`. Критерий приёмки: `git grep` по BOM пуст;
+  намеренно добавленный BOM валит сборку. Закрывает KB-26. Источник: внешний аудит 30.10.2026, AU-26 (сводка 30 задач — `plans/done/2026-10-30-external-audit-p0-block.md`).
+- **BL-47. Заменить `react-datepicker` и добавить бюджет-гейт размера бандла** (L).
+  Что сделать: заменить `react-datepicker` на `<input type="date">` с прогрессивным улучшением
+  (обёртка и `parseDate`-логика в `DatePicker.tsx` уже есть; e2e покрывает спаренные даты —
+  CR-3) либо на лёгкую альтернативу; `rollup-plugin-visualizer` как артефакт CI;
+  `build.rollupOptions.output.manualChunks` для явного разделения vendor; бюджет-гейт
+  (`size-limit` или bash-проверка суммарного gzip ≤ N КБ, старт — текущее значение + 5%).
+  Критерий приёмки: чанк DatePicker ≤ 40 КБ raw; суммарный JS-бандл меньше минимум на 150 КБ
+  raw; бюджет-гейт блокирует рост; e2e «поход со спаренными датами (CR-3)» зелёный; мобильные
+  viewport 360×640 и 390×844 без регрессий (`mobile.spec.ts`). Источник: внешний аудит 30.10.2026, AU-20 (сводка 30 задач — `plans/done/2026-10-30-external-audit-p0-block.md`).
+- **BL-48. ESLint 9 flat config + jsx-a11y + реализация правила hex-токенов** (M).
+  Что сделать: миграция на flat config (`eslint.config.js`, ESLint 9); добавить `jsx-a11y`
+  (recommended) и `import` (order, no-cycle); `no-console: ['warn', { allow: ['warn','error'] }]`
+  и вычистить 27 вызовов (заменить на существующий логгер/тосты); `no-explicit-any: 'warn'`
+  с постепенным вычищением; реализовать правило дизайн-токенов через `no-restricted-syntax`
+  на Literal с regex `^#[0-9a-fA-F]{3,8}$` и явным allow-list для print-CSS `TripPrintPage.tsx`
+  (36 из 46 литералов — там, для печати оправдано); сузить `excludedFiles` до конкретных файлов
+  вместо всего `src/api/**`. Критерий приёмки: `npm run lint` зелёный на ESLint 9; 0
+  `console.log` в прод-коде; новый hex-литерал в компоненте валит lint; `jsx-a11y` ловит
+  намеренно добавленный `<div onClick>` без роли. Источник: внешний аудит 30.10.2026, AU-16 (сводка 30 задач — `plans/done/2026-10-30-external-audit-p0-block.md`).
+- **BL-49. Профиль-зависимая санитизация `detail` в ответах об ошибках** (M). Что сделать:
+  инжектить `Environment`/`@Profile`-флаг в `GlobalExceptionHandler` (или вынести в
+  `ErrorResponseFactory` — BL-54) и в prod отдавать стабильный код ошибки вместо сообщения для
+  «внутренних» исключений (`IllegalArgumentException`, `IllegalStateException`); доменные
+  (`ValidationException`, `NotFoundException`, `ConflictException`) оставить как есть — они
+  пишутся для пользователя; добавить `traceId` в `extensions` (BL-54); тесты по R1:
+  `@SpringBootTest` с профилем `prod` — `detail` без внутренних сообщений, с `dev` — прежнее
+  поведение. Критерий приёмки: в prod 500/400 от `IllegalArgumentException` возвращают
+  стабильный код без внутреннего текста; README соответствует реализации; тесты на оба профиля.
+  Закрывает KB-27. Источник: внешний аудит 30.10.2026, AU-27 (сводка 30 задач — `plans/done/2026-10-30-external-audit-p0-block.md`).
+- **BL-50. Docker/compose hardening** (M, пересекается с BL-35). Что сделать: запинить все
+  `FROM`/`image` по digest (`@sha256:…`) с комментарием о версии и обновлять пин через
+  Dependabot (BL-36); `HEALTHCHECK` в оба Dockerfile; `restart: unless-stopped` и `logging`
+  с `max-size: 10m, max-file: 3` для всех сервисов; `mem_limit` для postgres и frontend
+  (для backend уже есть — BL-18); non-root в frontend-образе; `-XX:HeapDumpPath` на
+  writable-том при `read_only: true`. Критерий приёмки: `docker compose config` и
+  `docker-stack.yml` зелёные; `docker exec provision-frontend id` → не-root;
+  `up && down && up` воспроизводим на другом хосте; плавающих тегов в образах нет.
+  Закрывает часть KB-19. Источник: внешний аудит 30.10.2026, AU-25 (сводка 30 задач — `plans/done/2026-10-30-external-audit-p0-block.md`).
+- **BL-51. Обновить GitHub Actions и запинить runner-образ** (S). Что сделать: поднять actions
+  до v5 (`checkout`, `setup-node`, `setup-java`, `upload-artifact` — сейчас warning про
+  deprecated Node 20); заменить `runs-on: ubuntu-latest` явным `ubuntu-24.04` (миграцию на
+  26.04 планировать отдельно, прогнав `ci.yml` через `workflow_dispatch` до переключения);
+  `trivy-action@master` → релизный тег; Node 20 → 22 LTS в `setup-node` (согласуется с
+  `engines` из BL-43); `postgres:15-alpine` в `contract-nightly.yml` — тот же пин-подход,
+  что в BL-50. Критерий приёмки: в логах нет deprecation-предупреждений про Node 20;
+  `runs-on` указан явно; все workflow зелёные; `trivy-action` ссылается на тег. Источник: внешний аудит 30.10.2026, AU-29 (сводка 30 задач — `plans/done/2026-10-30-external-audit-p0-block.md`).
+- **BL-52. Решение по мок-слою: вырезать из прод-сборки или сделать явным демо-режимом**
+  (L, нужно решение владельца → отдельный план). Что сделать: выбрать вариант —
+  (A) демо-режим как фича: явное переключение с подтверждением, постоянный баннер «демо-данные»,
+  запрет в prod-сборке по умолчанию, build-флаг `VITE_ENABLE_MOCK`; или (B) вырезать мок-слой
+  и `contract-nightly.yml` из прод-артефакта, оставив моки тестам (отдельный entry/условная
+  сборка). В обоих вариантах — `import.meta.env.PROD` + `VITE_ENABLE_MOCK` в `resolveMode`,
+  чтобы в prod переключение было невозможно без флага сборки. Критерий приёмки: решение
+  зафиксировано в `ARCHITECTURE.md`; в prod-сборке чанк `mockServer` отсутствует ЛИБО режим
+  защищён баннером и подтверждением; e2e-сценарии E2E-06/07/08 (фолбэк, смена режима, очистка
+  кеша) обновлены и зелёные. Закрывает KB-23. Источник: внешний аудит 30.10.2026, AU-18 (сводка 30 задач — `plans/done/2026-10-30-external-audit-p0-block.md`).
+- **BL-53. Закрыть пять неотслеживаемых нарушений R8 (> 500 строк)** (L, расширяет KB-14).
+  Что сделать: повторить приём декомпозиции `TripDetailPage.tsx` (1300 → 240 строк +
+  `useTripDetail.tsx` + презентационные компоненты + чистые `utils/tripDerived.ts`) для
+  `MealCompositionModal.tsx` (состояние/логика → хук, разметка → подкомпоненты) и
+  `SyncLogsPage.tsx`; `mockTrips.ts`/`mockData.ts` решаются в рамках BL-52; из
+  `TripPrintPage.tsx` вынести print-CSS и 36 hex-литералов (BL-48) в отдельный модуль;
+  `ShoppingListCalculator.java` (520 строк) внести в реестры как accepted-исключение
+  с обоснованием (логика перенесена байт-в-байт ради инвариантов сумм); добавить CI-проверку
+  R8: warn при > 500 строк, error при > 800 (с allow-list). Критерий приёмки: файлов > 500 строк
+  не больше четырёх (с задокументированными исключениями); новый файл > 500 строк валит CI;
+  поведение не изменилось (frontend-тесты и e2e зелёные). Источник: внешний аудит 30.10.2026, AU-19 (сводка 30 задач — `plans/done/2026-10-30-external-audit-p0-block.md`).
+- **BL-54. Декомпозировать `GlobalExceptionHandler` и добавить traceId в тело ошибки** (M).
+  Что сделать: ввести `ErrorResponseFactory`/builder
+  (`ErrorResponse.of(HttpStatus, code).detail(...).fieldErrors(...).usedIn(...).build()`) —
+  один ответственный модуль вместо 17 копий тела ответа (14 прежних обработчиков + 3 добавленных
+  AU-14, которые уже пользуют хелпер `build(...)`); разнести обработчики по доменам
+  (`AuthExceptionsHandler`, `CatalogExceptionsHandler`, `IntegrationExceptionsHandler`,
+  `WebExceptionsHandler`) по 3–5 на класс; автоматически добавлять `MDC.get("traceId")`
+  в `extensions.traceId` во все ответы; отобразить traceId в UI (`problemDetailParser.ts` →
+  тост/диалог). Критерий приёмки: ни один класс не превышает 200 строк (R8); `extensions.traceId`
+  присутствует во всех ошибочных ответах (проверено contract-тестами mock↔real — R3);
+  UI показывает id; `SecurityIntegrationTest`/`ConflictIntegrationTest`/
+  `GlobalExceptionHandlerErrorCodeTest` зелёные без правок ожиданий. Источник: внешний аудит 30.10.2026, AU-15 (сводка 30 задач — `plans/done/2026-10-30-external-audit-p0-block.md`).
+- **BL-55. Doc-consistency pass и проверка ссылок в CI** (M). Что сделать: убрать дублирующиеся
+  «источники правды» — версию Flyway, версию Java и список миграций не указывать числом в прозе,
+  а ссылаться на каталог `db/migration` и `pom.xml`; сверить утверждения README/ARCHITECTURE
+  с кодом по чек-листу; убрать устаревшее про «baseline-красный `EconomicConsistencyTest`»
+  (`README.md`, раздел «Гейты перед пушем»): в прогонах 30.10.2026 он зелёный 10/10 дважды;
+  добавить CI-шаг с `lychee`/`markdown-link-check` для внутренних ссылок и grep-проверку
+  «в каждом MD, упоминающем V\d+, число совпадает с фактическим максимумом в `db/migration`».
+  Критерий приёмки: ни одного противоречия по версиям Flyway/Java; все внутренние MD-ссылки
+  резолвятся (шаг блокирующий); README не утверждает ложного. Источник: внешний аудит 30.10.2026, AU-21 (сводка 30 задач — `plans/done/2026-10-30-external-audit-p0-block.md`).
+
+### P3
+
+- **BL-56. Вычистить мусор и мёртвый код из репозитория** (S). Что сделать: `git rm`
+  перечисленного в аудите (для `provisions/logo` и `provisions/site` сначала решение владельца —
+  `AGENTS.md` §1 защищает только `design-pack`); `ErrorsDemoPage.tsx` либо удалить, либо
+  маршрутизировать под `adminOnly` + флагом dev-сборки; рассмотреть `git filter-repo` для
+  удаления крупных PNG из истории (только с согласия владельца и отдельным анонсом —
+  переписывание истории ломает существующие клоны); удалить `fix-encoding.ps1` (BL-46);
+  добавить CI-шаг `npx depcheck` и проверку «нет файлов в `scripts/`, не упомянутых в
+  документации». Критерий приёмки: в корне нет неиспользуемых скриптов; `provisions/` содержит
+  только `design-pack` (или решение владельца зафиксировано в §1); `.git` уменьшен либо принято
+  и зафиксировано решение историю не переписывать; CI-шаг ловит новый мусор. Источник: внешний аудит 30.10.2026, AU-23 (сводка 30 задач — `plans/done/2026-10-30-external-audit-p0-block.md`).
+- **BL-57. Согласовать порт dev-сервера (3000 vs 5173)** (S). Что сделать: вернуть в
+  `vite.config.js` `port: 5173` (соответствует документации и CORS-дефолту) и убрать CLI-флаг
+  из `playwright.config.ts` как избыточный, ЛИБО — если 3000 выбран намеренно — согласованно
+  поменять README, CORS-дефолт и playwright-конфиг. Критерий приёмки: `npm run dev` поднимает
+  сервер на порту, который обещает README; `npm run test:e2e` работает без CLI-переопределения
+  порта; dev-сервер и docker-стек поднимаются одновременно без конфликта. Источник: внешний аудит 30.10.2026, AU-30 (сводка 30 задач — `plans/done/2026-10-30-external-audit-p0-block.md`).

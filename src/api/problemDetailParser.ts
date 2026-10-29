@@ -1,5 +1,5 @@
 /**
- * Подзадача 24 (план plans/2026-10-29-full-audit.md): разбор ответов бэкенда.
+ * Подзадача 24 (план plans/done/2026-10-29-full-audit.md): разбор ответов бэкенда.
  *
  * 4xx/5xx → ApiClientError (RFC7807 ProblemDetail: status/type/title/detail/instance/
  * field-errors/usedIn), 204 и 200 с пустым телом → null, иначе JSON.

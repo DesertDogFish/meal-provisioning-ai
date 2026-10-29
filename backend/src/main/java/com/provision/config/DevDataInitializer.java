@@ -18,7 +18,7 @@ import java.security.SecureRandom;
  * Сид демо-пользователей: только dev-профиль и только при dev.seed-demo-users=true
  * (env SEED_DEMO_USERS).
  *
- * FIX (аудит 29.10.2026, plans/2026-10-29-full-audit.md подзадача 1, CRITICAL):
+ * FIX (аудит 29.10.2026, plans/done/2026-10-29-full-audit.md подзадача 1, CRITICAL):
  * прежний статический демо-пароль больше не хардкодится. Пароли читаются из
  * {@link DevProperties} (env ADMIN_PASSWORD / DEMO_USER_PASSWORD); если переменная
  * не задана — при старте генерируется криптографически случайный пароль

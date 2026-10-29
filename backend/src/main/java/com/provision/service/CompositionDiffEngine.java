@@ -20,7 +20,7 @@ import static com.provision.service.MealCompositionService.STATE_EXTRA;
 import static com.provision.service.MealCompositionService.STATE_SCALED;
 
 /**
- * Подзадача 11 (план plans/2026-10-29-full-audit.md): диф-коммит правок состава —
+ * Подзадача 11 (план plans/done/2026-10-29-full-audit.md): диф-коммит правок состава —
  * SCALE / EXTRA / EXCLUDE / SUBST (FORM-meal-composition-spec §3).
  *
  * <p>Сервер сравнивает желаемое состояние (PUT-тело) с текущими записями правок и

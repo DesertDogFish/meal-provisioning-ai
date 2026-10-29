@@ -14,7 +14,7 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Подзадача 12 (план plans/2026-10-29-full-audit.md): PerUserSummaryCalculator —
+ * Подзадача 12 (план plans/done/2026-10-29-full-audit.md): PerUserSummaryCalculator —
  * сводка «на человека»: деление итогов на defaultPeople и человеко-приёмы,
  * округление итогов до целых рублей (Фаза 14).
  */

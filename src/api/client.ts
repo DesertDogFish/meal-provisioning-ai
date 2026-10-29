@@ -3,7 +3,7 @@
  * Два адаптера: mock (in-memory + localStorage) и real (fetch + VITE_API_URL)
  * Выбор режима: localStorage → VITE_API_MODE → auto-пинг GET /api/v1/meta
  *
- * Подзадача 24 (план plans/2026-10-29-full-audit.md): ApiClient — только оркестрация;
+ * Подзадача 24 (план plans/done/2026-10-29-full-audit.md): ApiClient — только оркестрация;
  * составные части вынесены в отдельные модули (поведение сохранено дословно):
  *  - `modeResolver.ts` — резолв режима (localStorage → VITE_API_MODE → auto-пинг /meta, Fix-11);
  *  - `authInterceptor.ts` — токены, single-flight refresh на 401 (P0.5#1), 401-retry,

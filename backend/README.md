@@ -144,9 +144,10 @@ mvn test -Dtest=EmisSharedCountIntegrationTest        # emisSharedCount на р�
 
 ## Миграции
 
-Flyway, `src/main/resources/db/migration`, нумерация V1–V29 без ретроспективных правок:
+Flyway, `src/main/resources/db/migration`, нумерация V1–V31 без ретроспективных правок:
 
 - пропуски номеров осознанные: V9 не создавалась; V14/V15 (сид демо-юзеров) удалены из дерева **до** широкого применения и заменены `DevDataInitializer`/`DevTripsInitializer` (profile `dev` + `SEED_DEMO_USERS`); в старых БД могли остаться демо-юзеры — cleanup-запрос в корне README;
+- БД, где V14/V15 уже записаны в `flyway_schema_history`, стартует без ручных действий: `spring.flyway.ignore-migration-patterns: "*:missing"` (AU-02, аудит 30.10.2026) — без неё валидация при старте падала `Detected applied migration not resolved locally: 14`. `*:future` и `*:pending` намеренно НЕ игнорируются (откат образа на новую схему и незапущенные миграции должны падать громко); регресс-гейт — `FlywayUpgradeIntegrationTest` и CI-job `migration-upgrade`;
 - V17/V18 — сид-каталог (204 продукта / 201 блюдо) с ценами и 24-месячной историей;
 - V19 — правки состава приёма (`added/removed/amount_per_serving`) и `trip_shopping_exclusions`;
 - V20 — снепшоты каталога (`trip_id`, `snapshot_of`, partial-unique имён продуктов) + бэкфил существующих походов; повторный прогон безопасен;
@@ -155,6 +156,8 @@ Flyway, `src/main/resources/db/migration`, нумерация V1–V29 без р
 - V26 — локальная копия ЕМИСС: `emis_products`, `emis_prices`, `ingredients.emis_code` (без FK — привязка «софт»);
 - V27 — сид из реальной выгрузки владельца: 885 позиций справочника и 2260 ценовых точек (регион `643004.АГ`, 2026); `ON CONFLICT DO NOTHING`, повторный прогон безопасен;
 - V28 — привязка 187 продуктов к позициям ЕМИСС, 7 переименований под номенклатуру, демонтаж legacy: `ingredient_mappings`/`external_products` дропнуты, `source='OFF'` вычищен из CHECK-ов и данных (рецепты → `MANUAL`, цены → `API`).
+- V30 — композитный индекс `ingredient_prices(ingredient_id, effective_from DESC)` под DISTINCT ON-срезы «последняя цена» (аудит 29.10.2026);
+- V31 — частичный уникальный индекс `uq_sync_logs_running ON sync_logs(provider) WHERE status='RUNNING'` + дедуп залипших RUNNING перед созданием индекса: источник истины для проверки «синк уже бежит» (AU-03, аудит 30.10.2026). Прежняя пара SELECT→INSERT была гонкой check-then-act — два одновременных запуска давали два RUNNING и два параллельных синка цен;
 - V29 — решения владельца по единицам и фасовке: «Туалетная бумага, 4 рулона» → «Бумага туалетная, рулон» (÷4), «Влажные салфетки, упаковка 100 шт» → «Салфетки влажные, упаковка 20 шт.» (÷5), «Спички влагозащищённые (20 шт)» → «Спички, коробок» (÷20) с пересчётом `piece_weight_g` и истории цен; новые привязки `antiseptic`→8016, `sunscreen`→5311, `toilet_paper`→6502, `wipes_wet`→6505; `gas_canister`/`soy_sauce`/`vinegar` явно без привязки. Правило «плотность ≈ 1» (MASS↔VOLUME, `piece_weight_g` как мл) — в `EmisUnit.pricePerUnit`, не в схеме.
 
 Правила для новых миграций — `AGENTS.md` раздел 8.

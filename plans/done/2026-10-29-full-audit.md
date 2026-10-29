@@ -1,8 +1,8 @@
 # Plan: Полное ревью приложения meal-provisioning-ai
 
-Status: IN_PROGRESS
+Status: DONE
 Created: 2026-10-29
-Closed: _не заполнено_
+Closed: 2026-10-30
 
 ## Цель
 
@@ -348,11 +348,72 @@ Closed: _не заполнено_
 - BL-20 (боевой прогон синка к ЕМИСС): долг.
 - BL-24 (документация SDMX): частично.
 - BL-25…BL-32 (хвосты мобильной задачи, e2e).
-- R8/R2/R2-долг: localStorage-хранилища правок (не расширять).
+- localStorage-хранилища правок (чеклист/«взято») — не расширять: → KB-15, закроет BL-27.
 
 ## Результаты
 
-_Заполняется при закрытии._
+**Итог: 30/30 подзадач `[x]`** (29.10.2026, исполнитель dev-coder; план закрыт 30.10.2026 при
+переоформлении задач внешнего аудита — `plans/done/2026-10-30-external-audit-p0-block.md`).
+
+Что сделано по направлениям:
+
+- **Security (1–10, 30).** Демо-пароли сидов только из env (`DevProperties`, случайный пароль
+  при пустом значении); refresh-хэши — HMAC-SHA256 ключом `JWT_SECRET`; ротация refresh
+  DELETE-first (предел гонки — 401); в JWT обязательные `iss`/`aud`/`typ` + clock skew 60 c;
+  SHA-256-fallback для короткого секрета удалён (fail-fast < 32 байт); фильтр перестал молча
+  глотать исключения (`SecurityContext.clearContext()` + уровни логов); анти-энумерация на
+  login (BCrypt против dummy-хэша, единое сообщение); `allowCredentials(false)` задокументирован
+  как осознанное решение; swagger/api-docs публичны только при включённом `springdoc.api-docs`
+  (+ найден и исправлен баг whitelist для `springdoc.api-docs.path`); `/meta` без деталей
+  DB-ошибок; rate limiting `/auth/*` — `LoginAttemptService` (5/15 мин → 429 + Retry-After);
+  SQL-инъекций нет (Criteria API + :param-биндинги, `ProductSearchInjectionTest` 4/4).
+- **SOLID / R8–R9 (11–13, 21–23).** `MealCompositionService` 573 → 377 +
+  `CompositionCalculator`/`CompositionDiffEngine`/`TripScopedIdResolver`; `SummaryService`
+  864 → 280 + `MealPlanCalculator`/`DailySummaryCalculator`/`PerUserSummaryCalculator`/
+  `ShoppingListCalculator` + `TripCalculationContext`; мёртвые `startSync`/`completeSync`/
+  `failSync` удалены из `SyncLogService`, контракт статуса один (`statusOf`); magic numbers
+  уехали в `UnitOfMeasure`; self-injection признан уже единым (извлечение хелпера отклонено
+  как over-abstraction, R9).
+- **Scalability (14–17).** Горячие пути уже пакетные — добавлен измеримый гейт N+1
+  (`ProductPageQueryCountTest`: дельта size=5/size=20 ≤ 2, потолок ≤ 15); пул `@Async` —
+  `AbortPolicy` + 409 `EXECUTOR_SATURATED` + `markRejected`, keepAlive 60 c, MDC-декоратор
+  и `TraceIdFilter`; V30 — композитный индекс под DISTINCT ON-срез «последняя цена»; аудит
+  Flyway V1→V30 (применённые миграции не правились, бэкфилы идемпотентны).
+- **Best practices (18–20).** Actuator + Micrometer/Prometheus (exposure осознанно не `*`:
+  health/info публичны, прочее — ADMIN), метрики синка `emis.sync.*`; rate limiting; аудит
+  валидации (11/11 контроллеров с телом под `@Valid`, 74 constraint-аннотации) + экранирование
+  LIKE-wildcards (`SearchEscape`) и clamp page/size.
+- **Frontend (24–26).** `client.ts` 567 → 353 + `authInterceptor`/`modeResolver`/
+  `problemDetailParser`; `mockServer.ts` 2583 → 143 (фасад) + 9 ресурсов;
+  `TripDetailPage.tsx` 1310 → 240 + хук `useTripDetail` + 10 компонентов + `utils/tripDerived`.
+- **Testing / docs (27–29).** `EmisPriceApplierTest` 8/8, `EmisMirrorServiceTest` 6/6
+  (остаток KB-9 сокращён); `EconomicConsistencyTest` прогнан после декомпозиции — 10/10;
+  `ARCHITECTURE.md` приведён в соответствие с кодом.
+
+**Чем проверено.** Прогоны в песочнице агента (батчами, KB-10): backend — юнит-сьюты и
+интеграционные классы по отдельности (в т.ч. `CatalogIntegrationTest` 7/7,
+`EconomicConsistencyTest` 10/10, `ProductPageQueryCountTest` 2/2, `ProductSearchInjectionTest`
+4/4, `SecurityIntegrationTest`, `MetaControllerTest`); frontend — vitest 590/590, `tsc`
+и `eslint` чистые, R5-покрытие новых файлов 100% statements (подзадачи 24/26).
+
+**Что НЕ проверено (риски на момент закрытия, R6).**
+
+1. E2E в песочнице не стартует (KB-16) — проверки делались библиотечным запуском chromium;
+   прогон обычным runner'ом в CI — BL-32.
+2. Полный `mvn test` одним процессом в песочнице не проходит по памяти (KB-10, поправка 3:
+   PostgreSQL падает в 53200 на сиде V27) — состояние «весь сьют зелёный одним прогоном»
+   подтверждалось побатчно.
+3. SQL-профиль и EXPLAIN на боевых объёмах (5k+ строк) в песочнице не воспроизводятся —
+   индекс V30 рассчитан на боевые объёмы, planner подключит его сам.
+4. Прогон миграций на СУЩЕСТВУЮЩЕЙ БД (риск подзадачи 17) на момент закрытия проверен не был.
+   **Снят 30.10.2026** внешним аудитом: AU-02 (подзадача 5 плана
+   `plans/done/2026-10-30-external-audit-p0-block.md`) — `FlywayUpgradeIntegrationTest` 4/4
+   и CI-job `migration-upgrade`; заодно закрыт дефект remedy для удалённых V14/V15 (KB →
+   решение в `ARCHITECTURE.md §Database`).
+5. Боевой прогон синка к порталу ЕМИСС не выполнялся (сеть песочницы, ЕМИСС блокирует
+   зарубежные ЦОД) — KB-10, BL-20/BL-21.
+6. `LoginAttemptService` при N инстансах считает попытки per-node (Redis в стеке нет) —
+   ограничение задокументировано в javadoc.
 
 ---
 

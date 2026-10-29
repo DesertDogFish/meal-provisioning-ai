@@ -1,5 +1,5 @@
 /**
- * Подзадача 24 (план plans/2026-10-29-full-audit.md): unit-тесты authInterceptor —
+ * Подзадача 24 (план plans/done/2026-10-29-full-audit.md): unit-тесты authInterceptor —
  * single-flight refresh (P0.5#1), 401-retry, исключение /auth/*, очистка сессии
  * и событие auth:session-lost.
  */

@@ -8,7 +8,7 @@ import java.math.BigDecimal;
 import java.util.List;
 
 /**
- * Подзадача 12 (план plans/2026-10-29-full-audit.md): меню по дням — дневная сводка
+ * Подзадача 12 (план plans/done/2026-10-29-full-audit.md): меню по дням — дневная сводка
  * (день → люди → блюда → ингредиенты с масштабированными количествами).
  * Граф похода и гидратация рецептов — на стороне SummaryService (loadCalculationContext).
  */

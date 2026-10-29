@@ -28,7 +28,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 /**
- * Подзадачи 11/22 (план plans/2026-10-29-full-audit.md): unit-тесты TripScopedIdResolver —
+ * Подзадачи 11/22 (план plans/done/2026-10-29-full-audit.md): unit-тесты TripScopedIdResolver —
  * граничные случаи V20-резолва (null, строка рецепта, глобальный id со снепшотом,
  * свой/чужой trip-scope, отсутствующий id) и кэш resolveIngredient.
  */

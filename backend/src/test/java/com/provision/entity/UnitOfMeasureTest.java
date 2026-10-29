@@ -8,7 +8,7 @@ import java.math.BigDecimal;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Подзадача 21 (план plans/2026-10-29-full-audit.md): конвертация единиц живёт
+ * Подзадача 21 (план plans/done/2026-10-29-full-audit.md): конвертация единиц живёт
  * в enum UnitOfMeasure — граничные случаи gramsPerOne/toGrams.
  */
 class UnitOfMeasureTest {

@@ -1,5 +1,5 @@
 /**
- * Подзадача 24 (план plans/2026-10-29-full-audit.md): резолвер режима API.
+ * Подзадача 24 (план plans/done/2026-10-29-full-audit.md): резолвер режима API.
  *
  * Приоритет: localStorage(`apiMode`) → VITE_API_MODE → auto-пинг GET {baseUrl}/meta
  * (Fix-11: «real» только для настоящего JSON-API). Выделено из client.ts без

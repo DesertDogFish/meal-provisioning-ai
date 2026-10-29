@@ -1,5 +1,5 @@
 /**
- * Подзадача 24 (план plans/2026-10-29-full-audit.md): auth-интерсептор.
+ * Подзадача 24 (план plans/done/2026-10-29-full-audit.md): auth-интерсептор.
  *
  * Хранение access/refresh-токенов (localStorage), single-flight обновление
  * access-токена по refresh (P0.5#1), 401-retry незащищённых вызовов, очистка

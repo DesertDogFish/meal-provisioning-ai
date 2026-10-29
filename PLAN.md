@@ -14,9 +14,13 @@
 
 ## Активные
 
-- [Полное ревью application meal-provisioning-ai](plans/2026-10-29-full-audit.md) — IN_PROGRESS 29.10.2026 (30 подзадач: security 30 findings, SOLID/SRP R8, scalability N+1/async/indexing, best practices metrics/rate-limit/validation, code smells, frontend decomp, testing KB-9; >10 подзадач сознательно по просьбе владельца)
+_Активных планов нет (30.10.2026). Следующая задача берётся из
+[Backlog](plans/backlog.md) (`BL-n`); при старте создаётся новый файл плана — `AGENTS.md` §2–3._
 
 ## Архив
+
+- [Внешний аудит 30.10.2026 — P0-блок (5 фиксов) и переоформление 30 задач](plans/done/2026-10-30-external-audit-p0-block.md) — DONE 30.10.2026 (7/7 подзадач: **AU-04** потолок `LoginAttemptService` 50 000 ключей + эвакуация без снятия блокировок, **AU-14** обработчики 413/409/409-lock без утечки внутренностей, **AU-03** миграция V31 — частичный уникальный индекс `uq_sync_logs_running` и 409 `SYNC_ALREADY_RUNNING` на гонку, **AU-05** загрузка выгрузки ЕМИСС потоком (`Path` вместо `byte[]`, guard до чтения тела, удаление временного файла в `finally`, очередь пула 100 → 2), **AU-02** remedy `spring.flyway.ignore-migration-patterns: "*:missing"` + `FlywayUpgradeIntegrationTest` 4/4 + CI-job `migration-upgrade`; 30 задач аудита переоформлены в `BL-33…BL-57` и `KB-17…KB-27`; проверено 219 unit-тестов и 75 Spring-тестов (батчами, KB-10), job `migration-upgrade` в CI не запускался — из песочницы нет доступа к GitHub Actions)
+- [Полное ревью application meal-provisioning-ai](plans/done/2026-10-29-full-audit.md) — DONE 30.10.2026 (30/30 подзадач: security 30 findings, SOLID/SRP R8, scalability N+1/async/indexing, best practices metrics/rate-limit/validation, code smells, frontend decomp, testing KB-9; >10 подзадач сознательно по просьбе владельца; закрыт 30.10.2026 при переоформлении внешнего аудита — риск «миграция на существующей БД не проверена» снят AU-02)
 
 - [Запрет переноса смысловых связок и адаптация интерфейса под смартфон](plans/done/2026-10-29-ui-nowrap-and-mobile.md) — DONE 29.10.2026 (10/10 подзадач: `.keep-pair`/`.keep-num` против переноса смысловых связок + `DESIGN_MIGRATION.md` §10, `InfoTip`-поповер вместо нативного `title`, модалки по центру и в пределах экрана (flex-оверлей, `86dvh`, липкие шапка/футер), типографика `--fs-*` и поля ввода ≥ 16px, чеклист вынесен в `ChecklistTab.tsx` с подтверждением «Отметить всё»/«Снять всё», карточные таблицы `.table-cards`, мобильный drawer/липкая шапка/`min-w-0`; vitest 516/516, R5 проходит, lint/build/tsc зелёные; мобильный viewport проверен библиотечным запуском chromium — 360×640 28/28, 390×844 3/3, 1440×900 4/4, `/products` 2/2; `npm run test:e2e` в песочнице не стартует — KB-16, прогон в CI — BL-32; хвосты — KB-14/KB-15, BL-25…BL-32)
 

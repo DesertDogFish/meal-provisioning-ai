@@ -31,7 +31,7 @@ import static org.mockito.Mockito.when;
 
 /**
  * Unit-тесты EmisMirrorService (BL-3, KB-9-долг; аудит 29.10.2026, подзадача 27,
- * plans/2026-10-29-full-audit.md): upsert справочника и цен локальной копии,
+ * plans/done/2026-10-29-full-audit.md): upsert справочника и цен локальной копии,
  * окно хранения period-years, дедупликация внутри выгрузки, счётчики outcome,
  * идемпотентность (ON CONFLICT в SQL upsert'ов).
  *

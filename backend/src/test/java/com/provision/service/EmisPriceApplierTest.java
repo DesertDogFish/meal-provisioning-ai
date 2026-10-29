@@ -37,7 +37,7 @@ import static org.mockito.Mockito.when;
 
 /**
  * Unit-тесты EmisPriceApplier (BL-2, KB-9-долг; аудит 29.10.2026, подзадача 27,
- * plans/2026-10-29-full-audit.md): перенос цен локальной копии ЕМИСС в
+ * plans/done/2026-10-29-full-audit.md): перенос цен локальной копии ЕМИСС в
  * {@code ingredient_prices} — CREATED/UPDATED/SKIPPED, стирание ручных цен,
  * отброс несовместимых единиц, trip-копии не участвуют.
  *

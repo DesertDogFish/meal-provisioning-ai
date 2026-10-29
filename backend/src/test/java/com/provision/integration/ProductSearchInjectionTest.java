@@ -22,7 +22,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * Аудит 29.10.2026, подзадачи 20/30 (plans/2026-10-29-full-audit.md): поиск по справочнику
+ * Аудит 29.10.2026, подзадачи 20/30 (plans/done/2026-10-29-full-audit.md): поиск по справочнику
  * продуктов не подвержен SQL-injection (все предикаты параметризованы) и экранирует
  * LIKE-wildcards («%» и «_» ищутся буквально), а page/size зажаты в sane-диапазон.
  *

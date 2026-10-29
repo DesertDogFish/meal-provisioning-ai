@@ -1,5 +1,5 @@
 /**
- * Подзадача 24 (план plans/2026-10-29-full-audit.md): unit-тесты modeResolver —
+ * Подзадача 24 (план plans/done/2026-10-29-full-audit.md): unit-тесты modeResolver —
  * приоритет localStorage → VITE_API_MODE (window.meta-канал) → auto-пинг /meta
  * (Fix-11: real только для JSON-API), single-flight резолва, персист и сид-версия.
  */

@@ -10,7 +10,7 @@ import java.math.RoundingMode;
 import java.util.List;
 
 /**
- * Подзадача 12 (план plans/2026-10-29-full-audit.md): сводка «на человека» —
+ * Подзадача 12 (план plans/done/2026-10-29-full-audit.md): сводка «на человека» —
  * деление итогов закупки на defaultPeople и на число человеко-приёмов, сборка
  * PersonSummaryResponse/TripSummaryResponse. Расчёт закупки не повторяется:
  * вход — готовый ShoppingComputation из ShoppingListCalculator.

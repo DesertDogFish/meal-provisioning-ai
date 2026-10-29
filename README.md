@@ -154,7 +154,8 @@ npm run test:e2e     # Playwright, mock-режим (real-режим: E2E_BASE_UR
 | фронт отдаёт страницу, но данные не грузятся | `curl localhost:8080/api/v1/meta`, затем `docker compose logs frontend` |
 | порт 3000/5432/8080 занят | поменяйте хостовую часть в `ports:` docker-compose.yml |
 | нужна чистая БД после сбоя миграций | `docker compose down -v && docker compose up --build` (данные удаляются!) |
-| после апгрейда со старых версий в БД остались демо-юзеры V14/V15 | удалите вручную: `DELETE FROM users WHERE email IN ('admin@provision.app','user@provision.app')` — либо используйте демо-сид (`SEED_DEMO_USERS=true`) |
+| после `git pull` backend не стартует: `Detected applied migration not resolved locally: 14` (или `15`) | начиная с аудита 30.10.2026 (AU-02) это лечится конфигом — `spring.flyway.ignore-migration-patterns: "*:missing"`, вручную делать ничего не нужно. Если образ старше правки: `docker compose exec postgres psql -U provision -d provision -c "DELETE FROM flyway_schema_history WHERE version IN ('14','15')"` либо `mvn org.flywaydb:flyway-maven-plugin:10.10.0:repair -Dflyway.url=... -Dflyway.user=... -Dflyway.password=...` |
+| после апгрейда со старых версий в БД остались демо-юзеры V14/V15 | на старт приложения это больше не влияет (строки в `flyway_schema_history` игнорируются, см. строку выше); самих пользователей удалите вручную: `DELETE FROM users WHERE email IN ('admin@provision.app','user@provision.app')` — либо используйте демо-сид (`SEED_DEMO_USERS=true`) |
 
 ## Остановка и очистка
 
@@ -165,4 +166,4 @@ docker compose down -v   # полностью, включая БД
 
 ## Лицензия
 
-MIT (файл LICENSE в процессе добавления — см. PLAN.md, P1).
+нет

@@ -16,6 +16,11 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.io.BufferedInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -131,14 +136,40 @@ public class PriceSyncService {
      * шагом «разобрать файл»; всё остальное (локальная копия → цены привязанных продуктов →
      * журнал) идентично, поэтому путь один и отчётность одна.
      *
-     * @param payload  байты SDMX-файла
-     * @param fileName имя файла — попадает в {@code details.mirror.snapshotSource}
+     * <p>AU-05 (внешний аудит 30.10.2026): файл передаётся {@link Path}, а не {@code byte[]}.
+     * Полная выгрузка ЕМИСС ~65 МБ при лимите 96 МБ, и байты жили в heap всё время фонового
+     * синка (плюс в очереди executor'а), — при heap ~700 МБ несколько одновременных загрузок
+     * давали OOM. Теперь файл остаётся на диске, а в память уходит только потоковый разбор
+     * StAX (KB-1). Временный файл удаляется здесь же в {@code finally}: владеет им этот метод,
+     * а не вызывающий, потому что только он знает, когда разбор завершился.</p>
+     *
+     * @param payloadFile путь к файлу SDMX во временном каталоге; удаляется по завершении
+     * @param fileName    исходное имя файла — попадает в {@code details.mirror.snapshotSource}
      */
-    public void runPriceSyncFromFile(String providerCode, Long syncLogId, byte[] payload, String fileName) {
-        runSync(providerCode, syncLogId, payload, fileName);
+    public void runPriceSyncFromFile(String providerCode, Long syncLogId, Path payloadFile, String fileName) {
+        try {
+            runSync(providerCode, syncLogId, payloadFile, fileName);
+        } finally {
+            deletePayloadQuietly(payloadFile, fileName);
+        }
     }
 
-    private void runSync(String providerCode, Long syncLogId, byte[] payload, String fileName) {
+    /** Временный файл не должен пережить синк; отказ удаления — не повод ронять отчётность. */
+    private void deletePayloadQuietly(Path payloadFile, String fileName) {
+        if (payloadFile == null) {
+            return;
+        }
+        try {
+            boolean deleted = Files.deleteIfExists(payloadFile);
+            log.debug("ЕМИСС: временный файл загрузки {} ({} байт) — {}",
+                    payloadFile, deleted ? "удалён" : "не найден", fileName);
+        } catch (IOException | RuntimeException e) {
+            log.warn("ЕМИСС: не удалось удалить временный файл {} ({}): {}",
+                    payloadFile, fileName, e.getMessage());
+        }
+    }
+
+    private void runSync(String providerCode, Long syncLogId, Path payloadFile, String fileName) {
         long startedAtNanos = System.nanoTime();
         SyncLog syncLog = syncLogRepository.findById(syncLogId).orElse(null);
         if (syncLog == null) {
@@ -167,11 +198,18 @@ public class PriceSyncService {
             }
 
             // 1) Слепок: либо внешний HTTP (ВНЕ транзакции БД), либо разбор файла админа.
-            boolean fromFile = payload != null;
+            boolean fromFile = payloadFile != null;
             requestCount = fromFile ? 0 : 1;
-            EmisSnapshot snapshot = fromFile
-                    ? source.parseSnapshot(payload, fileName)
-                    : source.downloadSnapshot();
+            EmisSnapshot snapshot;
+            if (fromFile) {
+                // AU-05: читаем потоком с диска, в heap файл не копируется.
+                long size = Files.size(payloadFile);
+                try (InputStream in = new BufferedInputStream(Files.newInputStream(payloadFile))) {
+                    snapshot = source.parseSnapshot(in, size, fileName);
+                }
+            } else {
+                snapshot = source.downloadSnapshot();
+            }
 
             // 2) Локальная копия: справочник + цены за окно «два последних года».
             EmisMirrorService.MirrorOutcome mirror =

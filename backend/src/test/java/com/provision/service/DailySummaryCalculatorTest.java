@@ -20,7 +20,7 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Подзадача 12 (план plans/2026-10-29-full-audit.md): DailySummaryCalculator —
+ * Подзадача 12 (план plans/done/2026-10-29-full-audit.md): DailySummaryCalculator —
  * меню по дням (effectivePeople override-цепочка, масштабирование количеств).
  */
 @DisplayName("DailySummaryCalculator (меню по дням)")

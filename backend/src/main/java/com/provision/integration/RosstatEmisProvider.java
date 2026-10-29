@@ -197,33 +197,47 @@ public class RosstatEmisProvider implements PriceProvider, EmisDataSource {
      * портала: размер (тот же предел {@code max-response-bytes}, что и для HTTP-ответа) и
      * признак SDMX в теле — иначе админ получил бы «синк успешен, 0 точек» на произвольном
      * XML/HTML (портал на ошибку отдаёт HTML-страницу, а не выгрузку).</p>
+     *
+     * <p>AU-05: сигнатура потоковая ({@link InputStream} + declared-размер), файл не
+     * копируется в heap. Предел размера проверяется по declared-размеру ДО чтения, а
+     * {@code parseSdmx} дополнительно обрывает runaway-поток — поэтому защита от
+     * превышения лимита не ослабла.</p>
      */
     @Override
-    public EmisSnapshot parseSnapshot(byte[] payload, String fileName) {
+    public EmisSnapshot parseSnapshot(InputStream payload, long sizeBytes, String fileName) {
         String name = fileName == null || fileName.isBlank() ? "без имени" : fileName;
-        if (payload == null || payload.length == 0) {
+        if (payload == null || sizeBytes <= 0) {
             throw new IntegrationUnavailableException("ЕМИСС: файл «" + name + "» пуст");
         }
-        if (maxResponseBytes > 0 && payload.length > maxResponseBytes) {
+        if (maxResponseBytes > 0 && sizeBytes > maxResponseBytes) {
             throw new IntegrationUnavailableException("ЕМИСС: файл «" + name + "» равен "
-                    + payload.length + " байт и превышает предел max-response-bytes="
+                    + sizeBytes + " байт и превышает предел max-response-bytes="
                     + maxResponseBytes);
         }
-        // KB-1: файл НЕ превращаем в String (65 МБ → ~130 МБ heap) — признак SDMX ищем
-        // в начале файла, а разбор идёт потоком (StAX).
-        String head = new String(payload, 0, Math.min(payload.length, SNIFF_BYTES), StandardCharsets.UTF_8);
-        if (!head.contains("GenericData") && !head.contains("generic:Series")) {
-            throw new IntegrationUnavailableException("ЕМИСС: файл «" + name + "» не похож на "
-                    + "SDMX-выгрузку (нет GenericData/generic:Series). Нужен ответ портала "
-                    + "downloadData.do?format=sdmx, а не HTML-страница или XLS");
+        // AU-05: файл больше НЕ материализуется в byte[]. Признак SDMX ищем в первых
+        // SNIFF_BYTES, возвращая прочитанное обратно в поток (PushbackInputStream.unread),
+        // после чего разбор идёт тем же потоковым парсером, что и ответ портала (KB-1).
+        PushbackInputStream in = new PushbackInputStream(payload, SNIFF_BYTES);
+        EmisSnapshot parsed;
+        try {
+            byte[] head = EmisTransport.readHead(in, SNIFF_BYTES);
+            String headText = new String(head, StandardCharsets.UTF_8);
+            if (!headText.contains("GenericData") && !headText.contains("generic:Series")) {
+                throw new IntegrationUnavailableException("ЕМИСС: файл «" + name + "» не похож на "
+                        + "SDMX-выгрузку (нет GenericData/generic:Series). Нужен ответ портала "
+                        + "downloadData.do?format=sdmx, а не HTML-страница или XLS");
+            }
+            parsed = parseSdmx(in, regionTitle, maxResponseBytes);
+        } catch (IOException e) {
+            throw new IntegrationUnavailableException("ЕМИСС: файл «" + name + "» не удалось "
+                    + "прочитать: " + EmisTransport.friendlyIo(e));
         }
-        EmisSnapshot parsed = parseSdmx(new ByteArrayInputStream(payload), regionTitle, maxResponseBytes);
         if (parsed.catalog().isEmpty() && parsed.prices().isEmpty()) {
             throw new IntegrationUnavailableException("ЕМИСС: в файле «" + name + "» нет ни "
                     + "позиций справочника, ни ценовых рядов — возможно, выгрузка пустая");
         }
         log.info("ЕМИСС: файл «{}» ({} байт) разобран — позиций справочника {}, рядов цен {}, регион {}",
-                name, payload.length, parsed.catalog().size(), parsed.prices().size(),
+                name, sizeBytes, parsed.catalog().size(), parsed.prices().size(),
                 parsed.regionCode());
         return parsed;
     }
