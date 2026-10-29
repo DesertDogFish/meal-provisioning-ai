@@ -23,6 +23,10 @@
       context: ./backend
       dockerfile: Dockerfile
     container_name: provision-backend
+    # BL-18: лимит памяти виден в compose, а не в комментарии. Heap считается от него
+    # (Dockerfile: -XX:MaxRAMPercentage=70.0). Потоковый разбор SDMX (KB-1) разбирает ответ
+    # 66 МБ в 128 МБ heap, поэтому 1 ГБ покрывает и выгрузку, и применение цен в БД.
+    mem_limit: ${BACKEND_MEM_LIMIT:-1g}
     depends_on:
       postgres:
         condition: service_healthy
@@ -43,15 +47,18 @@
       ROSSTAT_INDICATOR_ID: ${ROSSTAT_INDICATOR_ID:-31448}
       ROSSTAT_REGION: ${ROSSTAT_REGION:-Российская Федерация без учета новых субъектов (с 01.01.2023)}
       ROSSTAT_REGION_CODE: ${ROSSTAT_REGION_CODE:-643004.АГ}
-      # Сколько последних месяцев выгружать из поля «Период». Полный ряд ЕМИСС даёт
-      # ответ ~65 МБ и DOM-парсинг на 600–700 МБ heap; 1 месяц ≈ 5,6 МБ, 2 ≈ 11 МБ.
-      # 0 или меньше — все 12 месяцев (только с явно заданным -Xmx ≥ 2 ГБ).
-      # Сужать поле «Год» нельзя — портал отвечает 302 (см. ARCHITECTURE.md).
+      # Сколько последних месяцев выгружать из поля «Период». Полный ряд ЕМИСС даёт ответ
+      # ~65 МБ; с 29.10.2026 разбор ПОТОКОВЫЙ (StAX, KB-1): 66 МБ разбираются в 128 МБ heap,
+      # поэтому 0 (все 12 месяцев) больше не требует гигантского -Xmx. 1 месяц ≈ 5,6 МБ,
+      # 2 ≈ 11 МБ. Сужать поле «Год» нельзя — портал отвечает 302 (см. ARCHITECTURE.md).
       ROSSTAT_PERIOD_MONTHS: ${ROSSTAT_PERIOD_MONTHS:-0}
       ROSSTAT_PERIOD_YEARS: ${ROSSTAT_PERIOD_YEARS:-2}
-      ROSSTAT_MAX_RESPONSE_BYTES: ${ROSSTAT_MAX_RESPONSE_BYTES:-33554432}
+      # Предохранитель от runaway-ответа: при превышении ЧТЕНИЕ обрывается (раньше отказ
+      # случался уже после полной загрузки ответа в память). 96 МБ — с запасом над полным
+      # рядом 65 МБ, чтобы окно выгрузки можно было расширять.
+      ROSSTAT_MAX_RESPONSE_BYTES: ${ROSSTAT_MAX_RESPONSE_BYTES:-100663296}
       # Лимит ручной загрузки выгрузки ЕМИСС (multipart) — см. также client_max_body_size в nginx.conf
-      EMIS_UPLOAD_MAX_FILE_SIZE: ${EMIS_UPLOAD_MAX_FILE_SIZE:-32MB}
+      EMIS_UPLOAD_MAX_FILE_SIZE: ${EMIS_UPLOAD_MAX_FILE_SIZE:-96MB}
       INTEGRATION_CONTACT_EMAIL: ${INTEGRATION_CONTACT_EMAIL:-}
     ports:
       - "8080:8080"

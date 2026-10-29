@@ -126,10 +126,14 @@ public class ProductService {
         Set<Long> syncedIds = ids.isEmpty() ? Set.of()
                 : new HashSet<>(priceRepository.findIngredientIdsWithSource(
                         RecipeSource.ROSSTAT.name(), ids));
+        // KB-8: сколько продуктов сидит на каждой позиции ЕМИСС — значок «привязка уже
+        // используется» в таблице. Тот же принцип, что и выше: один запрос на страницу.
+        Map<String, Integer> emisTotalByCode = countByEmisCodes(emisCodes);
 
         return ingredients.map(i -> toProductResponse(i, priceByIngredient.get(i.getId()),
                 usageCountByIngredient.getOrDefault(i.getId(), 0),
-                emisByCode.get(i.getEmisCode()), syncedIds.contains(i.getId())));
+                emisByCode.get(i.getEmisCode()), syncedIds.contains(i.getId()),
+                emisSharedWithOthers(i.getEmisCode(), emisTotalByCode)));
     }
 
     @Transactional
@@ -282,15 +286,49 @@ public class ProductService {
                         .get(ingredient.getEmisCode());
         boolean synced = priceRepository.existsByIngredientIdAndSource(
                 ingredient.getId(), RecipeSource.ROSSTAT.name());
-        return toProductResponse(ingredient, currentPrice.orElse(null), usageCount, emis, synced);
+        // KB-8: точечный путь (create/update/get-by-id) — один запрос на продукт допустим.
+        String code = ingredient.getEmisCode();
+        int sharedWithOthers = emisSharedWithOthers(code,
+                code == null || code.isBlank() ? Map.of() : countByEmisCodes(List.of(code)));
+        return toProductResponse(ingredient, currentPrice.orElse(null), usageCount, emis, synced,
+                sharedWithOthers);
     }
 
     /**
-     * @param emis   позиция локального справочника ЕМИСС (null — не привязан или кода нет в копии)
-     * @param synced есть ли у продукта цена, записанная синхронизацией из ЕМИСС
+     * Сколько ГЛОБАЛЬНЫХ продуктов привязано к каждому из кодов (KB-8); коды без привязок
+     * в карту не попадают.
+     */
+    private Map<String, Integer> countByEmisCodes(List<String> emisCodes) {
+        Map<String, Integer> total = new HashMap<>();
+        if (emisCodes == null || emisCodes.isEmpty()) {
+            return total;
+        }
+        for (Object[] row : ingredientRepository.countByEmisCodes(emisCodes)) {
+            total.put((String) row[0], ((Number) row[1]).intValue());
+        }
+        return total;
+    }
+
+    /**
+     * Сколько ЕЩЁ продуктов (кроме этого) привязано к той же позиции ЕМИСС (KB-8):
+     * 0 — позиция только у него, значок в таблице продуктов не показывается.
+     */
+    private static int emisSharedWithOthers(String emisCode, Map<String, Integer> totalByCode) {
+        if (emisCode == null || emisCode.isBlank()) {
+            return 0;
+        }
+        return Math.max(0, totalByCode.getOrDefault(emisCode, 0) - 1);
+    }
+
+    /**
+     * @param emis             позиция локального справочника ЕМИСС (null — не привязан или кода
+     *                         нет в копии)
+     * @param synced           есть ли у продукта цена, записанная синхронизацией из ЕМИСС
+     * @param emisSharedCount  сколько ЕЩЁ продуктов привязано к той же позиции (KB-8)
      */
     private ProductResponse toProductResponse(Ingredient ingredient, IngredientPrice currentPrice,
-                                              int usageCount, EmisProductDto emis, boolean synced) {
+                                              int usageCount, EmisProductDto emis, boolean synced,
+                                              int emisSharedCount) {
         // FIX P1 (аудит): N+1-версия этого метода делала findEffectivePrice +
         // findRecipeIdsByIngredientId на каждый элемент страницы. Теперь цена, usageCount,
         // описание ЕМИСС и признак синхронизации приходят параметрами (пакетная загрузка).
@@ -336,6 +374,7 @@ public class ProductService {
                 emisCode,
                 emis == null ? null : emis.name(),
                 status,
+                emisSharedCount,
                 ingredient.getUpdatedAt()
         );
     }

@@ -296,6 +296,14 @@ export default function ProductsPage() {
 
 
 
+  // KB-5: пикеру привязки нужен контекст продукта, чтобы сервер вернул цену, пересчитанную
+  // на нашу единицу, и предупреждение о сомнительной паре. Текущая цена — из формы, если её
+  // ввели, иначе действующая цена редактируемого продукта.
+  const formPriceNumber = Number(String(formPrice).replace(',', '.'));
+  const emisCurrentPrice = Number.isFinite(formPriceNumber) && formPriceNumber > 0
+    ? formPriceNumber
+    : (editingProduct?.currentPrice?.value ?? null);
+
   if (loading) {
     return (
       <div className="space-y-6">
@@ -556,6 +564,9 @@ export default function ProductsPage() {
               <EmisLinkPicker
                 value={formEmisCode}
                 linkedName={formEmisName}
+                unit={formUnit}
+                pieceWeightG={formPieceWeightG}
+                currentPrice={emisCurrentPrice}
                 onChange={(code, name) => {
                   setFormEmisCode(code);
                   setFormEmisName(name);

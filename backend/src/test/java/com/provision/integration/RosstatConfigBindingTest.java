@@ -77,9 +77,14 @@ class RosstatConfigBindingTest {
             assertEquals("643004.АГ", p.regionCode);
             assertEquals(2, p.periodYears);
             assertEquals(0, p.periodMonths);
-            assertEquals(33_554_432L, p.maxResponseBytes);
-            // spring.application.name из yml = "provision", app.version дефолтный 0.0.0
-            assertTrue(p.userAgent.contains("provision/0.0.0"), "UA: " + p.userAgent);
+            // 96 МБ: с потоковым разбором (KB-1) лимит больше не спасает heap — он держит
+            // runaway-ответ, а полный ряд ЕМИСС (65 МБ) обязан проходить.
+            assertEquals(100_663_296L, p.maxResponseBytes);
+            // spring.application.name из yml = «provision», версия — из pom.xml: Maven-фильтрация
+            // ресурсов подставляет @project.version@ в app.version (KB-4: раньше свойства не было
+            // и UA всегда говорил «0.0.0»). Проверяем форму, а не конкретную цифру, чтобы bump
+            // версии в pom не требовал правки теста.
+            assertTrue(p.userAgent.matches("(?s).*provision/\\d+\\.\\d+\\.\\d+.*"), "UA: " + p.userAgent);
             assertTrue(p.userAgent.contains("dev@provision.app"), "UA должен содержать контакт: " + p.userAgent);
         }
     }

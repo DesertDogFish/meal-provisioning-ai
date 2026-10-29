@@ -19,6 +19,10 @@ import java.util.Map;
  *       (или они ещё не применены) — нужна синхронизация;</li>
  *   <li>{@link #SYNCED} — привязан, и действующая цена получена из ЕМИСС.</li>
  * </ul>
+ *
+ * <p>{@link #emisSharedCount} (KB-8) — сколько ЕЩЁ глобальных продуктов привязано к той же
+ * позиции ЕМИСС. Несколько продуктов на одном коде законны, но цена синхронизации придёт
+ * одна на всех, поэтому в таблице продуктов у таких строк стоит значок.</p>
  */
 public record ProductResponse(
     Long id,
@@ -36,6 +40,7 @@ public record ProductResponse(
     String emisCode,
     String emisName,
     String priceSyncStatus,
+    Integer emisSharedCount,
     LocalDateTime updatedAt
 ) {
     public record CurrentPriceDto(

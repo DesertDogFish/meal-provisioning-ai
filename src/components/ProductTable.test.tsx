@@ -195,3 +195,71 @@ describe('ProductTable (рендер и взаимодействия)', () => {
     expect(baseProps.onDelete.mock.calls[0][0].id).toBe('c'); // Тушёнка при сортировке name asc: а,d,b,c
   });
 });
+
+describe('ProductTable: значок общей привязки ЕМИСС (KB-8 + счётчик, BL-23)', () => {
+  const baseProps = {
+    filters: filters(),
+    onEdit: vi.fn(),
+    onDelete: vi.fn(),
+    onResetFilters: vi.fn(),
+  };
+  const renderTable = (rows: ProductRow[]) =>
+    render(<ProductTable products={rows} {...baseProps} />);
+
+  it('значка нет, если позиция ЕМИСС у продукта одна (0, null и undefined равнозначны)', () => {
+    renderTable([
+      mk({ id: 'solo', name: 'Гречка', emisCode: '101', emisSharedCount: 0 }),
+      mk({ id: 'nul', name: 'Соль', emisCode: '102', emisSharedCount: null }),
+      mk({ id: 'undef', name: 'Сахар', emisCode: '103' }),
+      mk({ id: 'unbound', name: 'Вода' }),
+    ]);
+    expect(screen.queryAllByTestId('emis-shared-badge')).toHaveLength(0);
+    expect(screen.queryAllByTestId('emis-shared-count')).toHaveLength(0);
+  });
+
+  it('счётчик показывает СКОЛЬКО ВСЕГО продуктов на позиции: emisSharedCount + 1', () => {
+    renderTable([
+      // бэкенд отдаёт число ДРУГИХ продуктов: 2 → на позиции всего 3 (включая этот)
+      mk({ id: 'milk', name: 'Молоко сухое', emisCode: '1115', emisSharedCount: 2, priceSyncStatus: 'SYNCED' }),
+      mk({ id: 'cream', name: 'Сливки сухие', emisCode: '1115', emisSharedCount: 2, priceSyncStatus: 'SYNCED' }),
+      mk({ id: 'one', name: 'Спички', emisCode: '5701', emisSharedCount: 1, priceSyncStatus: 'NO_DATA' }),
+    ]);
+    const badges = screen.getAllByTestId('emis-shared-badge');
+    expect(badges).toHaveLength(3);
+    expect(screen.getAllByTestId('emis-shared-count').map(el => el.textContent)).toEqual(['3', '3', '2']);
+  });
+
+  it('подсказка и aria-label объясняют, что цена синхронизации придёт одна на всех', () => {
+    renderTable([
+      mk({ id: 'milk', name: 'Молоко сухое', emisCode: '1115', emisSharedCount: 16, priceSyncStatus: 'SYNCED' }),
+    ]);
+    const badge = screen.getByTestId('emis-shared-badge');
+    expect(badge.getAttribute('title')).toContain('Позицию ЕМИСС используют 17 продуктов');
+    expect(badge.getAttribute('title')).toContain('цена синхронизации придёт одна на всех');
+    expect(badge.getAttribute('aria-label')).toBe('Позицию ЕМИСС используют 17 продуктов');
+    expect(screen.getByTestId('emis-shared-count').textContent).toBe('17');
+  });
+
+  it('склонение счётчика: 2–4 → «продукта», 5+ → «продуктов» («1 продукт» не бывает: значок рисуется только при ≥2)', () => {
+    renderTable([
+      mk({ id: 'two', name: 'Бумага', emisCode: '6502', emisSharedCount: 1 }),   // всего 2
+      mk({ id: 'four', name: 'Салфетки', emisCode: '6505', emisSharedCount: 3 }), // всего 4
+      mk({ id: 'many', name: 'Крем', emisCode: '5311', emisSharedCount: 4 }),     // всего 5
+    ]);
+    // дефолтная сортировка — по имени asc: Бумага, Крем, Салфетки
+    const titles = screen.getAllByTestId('emis-shared-badge').map(el => el.getAttribute('title') ?? '');
+    expect(titles[0]).toContain('используют 2 продукта');
+    expect(titles[1]).toContain('используют 5 продуктов');
+    expect(titles[2]).toContain('используют 4 продукта');
+    expect(screen.getAllByTestId('emis-shared-count').map(el => el.textContent)).toEqual(['2', '5', '4']);
+  });
+
+  it('значок живёт рядом с чипом статуса синхронизации и не подменяет его', () => {
+    renderTable([
+      mk({ id: 'milk', name: 'Молоко сухое', emisCode: '1115', emisName: 'Молоко сухое, кг',
+        emisSharedCount: 1, priceSyncStatus: 'NO_DATA' }),
+    ]);
+    expect(screen.getByTestId('price-sync-status').textContent).toBe('нет данных');
+    expect(screen.getByTestId('emis-shared-badge')).toBeTruthy();
+  });
+});

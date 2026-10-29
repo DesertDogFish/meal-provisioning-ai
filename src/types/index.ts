@@ -31,6 +31,17 @@ export interface EmisProduct {
   latestPrice: number | null;
   /** Первый день месяца самой свежей цены (yyyy-MM-dd); null — цен нет. */
   latestPriceDate: string | null;
+  /**
+   * KB-5: {@code latestPrice}, пересчитанная на единицу продукта (бэкенд, EmisUnit.pricePerUnit).
+   * Заполняется, только если поиск шёл с контекстом продукта (unit/pieceWeightG/price);
+   * null — пересчёт невозможен, синхронизация такую точку отбросит.
+   */
+  pricePerUnit?: number | null;
+  /**
+   * KB-5: предупреждение о сомнительной паре (единицы не приводятся, масштаб не сопоставим,
+   * цена уехала на порядок). Привязку НЕ блокирует — решение за админом.
+   */
+  warning?: string | null;
 }
 
 export interface User {

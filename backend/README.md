@@ -22,8 +22,12 @@ backend/
 │   ├── dto/             # request/response-контракты (в т.ч. summary/*, error/*)
 │   ├── entity/          # JPA-сущности (recipes/ingredients c trip_id/snapshot_of — V20)
 │   ├── exception/       # доменные исключения + GlobalExceptionHandler (RFC7807-подобные ответы)
-│   ├── integration/     # RosstatEmisProvider (ЕМИСС/fedstat.ru: Struts-токен, SDMX-парсер,
-│   │                    #   диагностика 302/403/503), EmisDataSource, EmisSnapshot
+│   ├── integration/     # ЕМИСС/fedstat.ru, модули (BL-15): RosstatEmisProvider (протокол),
+│   │                    #   SdmxStreamParser (StAX вместо DOM — память O(один ряд), KB-1),
+│   │                    #   EmisPortalPage (Struts-токен, словари фильтров), EmisRequestForm
+│   │                    #   (тело POST downloadData.do), EmisTransport/JdkEmisTransport
+│   │                    #   (транспорт + диагностика 302/403/503), EmisValues, EmisDataSource,
+│   │                    #   EmisSnapshot
 │   ├── repository/      # Spring Data JPA (@Query JOIN FETCH / DISTINCT ON) + Specifications
 │   ├── security/        # JwtService, JwtAuthenticationFilter
 │   ├── service/         # SummaryService.computeShopping, TripCatalogSnapshotService,
@@ -43,6 +47,13 @@ backend/
 
 Compose-файл — в корне репозитория: `docker compose up --build` (postgres + backend + frontend). Бэкенд отдельно из корня: `docker compose up --build backend`.
 
+Память и объём выгрузки ЕМИСС (BL-18/KB-1): `mem_limit: ${BACKEND_MEM_LIMIT:-1g}` +
+`JAVA_OPTS="-XX:MaxRAMPercentage=70.0 …"` в `Dockerfile` (без явной настройки JVM взяла бы 25 %
+лимита). Разбор SDMX потоковый (StAX), поэтому 66 МБ ответа разбираются в 128 МБ heap; объём входа
+ограничен тремя согласованными значениями по 96 МБ — `integration.rosstat.max-response-bytes`
+(`ROSSTAT_MAX_RESPONSE_BYTES`, 100 663 296), `EMIS_UPLOAD_MAX_FILE_SIZE` (multipart) и
+`client_max_body_size` в `nginx.conf`.
+
 ### Локально (без Docker)
 
 1. PostgreSQL 15: создайте БД `provision` (или используйте любую, поправив ENV).
@@ -55,10 +66,17 @@ export SPRING_DATASOURCE_USERNAME=provision
 export SPRING_DATASOURCE_PASSWORD=provision123
 export SPRING_PROFILES_ACTIVE=dev                     # dev: DEBUG-логи + Swagger + демо-сид
 export SEED_DEMO_USERS=true                           # демо-пользователи и демо-походы (dev only)
+# export APP_VERSION=1.0.2                            # необязательно: переопределить версию без пересборки
 mvn spring-boot:run
 ```
 
 Swagger: http://localhost:8080/swagger-ui.html (dev). Health: `GET /api/v1/meta`.
+
+**Версия приложения** (KB-4): единственный источник — `<version>` в `pom.xml` (сейчас `1.0.1`).
+`app.version` в `application.yml` берётся из `@project.version@` (фильтрация ресурсов
+`spring-boot-starter-parent`), `APP_VERSION` переопределяет значение без пересборки. Версия
+уходит в User-Agent запросов к порталу ЕМИСС (`provision/1.0.1 (dev@provision.app)`) и в
+`META-INF/build-info.properties` внутри jar (`spring-boot-maven-plugin`, goal `build-info`).
 
 ## API Endpoints (основные)
 
@@ -88,7 +106,7 @@ Swagger: http://localhost:8080/swagger-ui.html (dev). Health: `GET /api/v1/meta`
 - Цены: `GET /api/v1/admin/ingredient-prices/ingredient/{id}`, `POST /api/v1/admin/ingredient-prices`
 - Блюда: `POST|PUT|DELETE /api/v1/admin/recipes[/{id}]` (состав — в теле запроса)
 - Интеграции (единственный провайдер — `ROSSTAT`): `GET /api/v1/admin/integrations`, `POST .../{provider}/connect|disconnect`, `POST .../{provider}/sync/prices` (202 `{logId}`), `POST .../{provider}/upload` (multipart-поле `file` — ручная загрузка SDMX-выгрузки ЕМИСС, 202 `{logId}`), `GET .../sync-logs`
-- ЕМИСС (локальная копия): `GET /api/v1/admin/emis/products?query=&limit=` — поиск позиций справочника для привязки продукта (`EmisProductDto` с последней ценой и периодом)
+- ЕМИСС (локальная копия): `GET /api/v1/admin/emis/products?query=&limit=[&unit=&pieceWeightG=&price=]` — поиск позиций справочника для привязки продукта (`EmisProductDto` с последней ценой и периодом). Необязательные `unit`/`pieceWeightG`/`price` — контекст продукта: с ним ответ дополнительно несёт `pricePerUnit` (цена позиции, пересчитанная на нашу единицу) и `warning` (предупреждение о сомнительной паре — пересчёт невозможен, масштаб не сопоставим ≥ 100×, цена уехала ≥ 10×). Привязку предупреждение НЕ блокирует (решение владельца 29.10.2026, KB-5)
 - Staging: `GET|POST /api/v1/admin/staging`, `POST .../{id}/approve|reject`
 - `GET /api/v1/admin/sync-logs`, `GET /api/v1/admin/sync-logs/kpi`
 
@@ -98,9 +116,16 @@ Swagger: http://localhost:8080/swagger-ui.html (dev). Health: `GET /api/v1/meta`
 JWT_SECRET=<32+ символов> mvn -B test                 # весь сьют
 mvn test -Dtest='*IntegrationTest'                    # интеграционные
 mvn test -Dtest=SnapshotIsolationIntegrationTest      # изоляция снепшотов (V20)
+# ЕМИСС (BL-23 + потоковый разбор SDMX): по классам, не всем сьютом (KB-10 — лимит памяти)
+mvn test -Dtest='SdmxStreamParserTest,RosstatEmisProviderTest,RosstatConfigBindingTest'
+mvn test -Dtest='EmisUnitTest,EmisCatalogServiceTest,EmisControllerTest'
+mvn test -Dtest=EmisSharedCountIntegrationTest        # emisSharedCount на реальной БД
 ```
 
 - Интеграционные сьюты помечены `@ContainerSuite`: при наличии Docker — Testcontainers, иначе LocalPgFallback (initdb системного PostgreSQL 15; в CI ставится пакет postgresql-15/PGDG).
+- `SdmxStreamParserTest` разбирает боевую фикстуру `src/test/resources/emis/data-31448-real.xml` (SDMX 1.0, регион 643) и большой синтетический документ (1200 позиций × 2 региона × 12 месяцев); фикстуры — golden, результат разбора менять нельзя (`AGENTS.md` R1).
+- `EmisControllerTest` — срез `@WebMvcTest`: `JwtAuthenticationFilter` исключён через `excludeFilters` (иначе контекст требует `JwtService` и `UserRepository`).
+- Покрытие пакета `integration` (jacoco): 84,7 % инструкций / 70,9 % ветвей; `JdkEmisTransport` — 0 % (живая сеть к порталу, KB-10).
 - TestDataIsolation пересоздаёт схему каждого сьюта (drop + flyway migrate) — миграции обязаны быть повторо-безопасными.
 - **Baseline-красный:** `EconomicConsistencyTest` (несовместим с контрактом ProductRequest и ходит в голый localhost:5432) — задача CI-1 в PLAN.md; не «чинится» попутно и не маскируется.
 

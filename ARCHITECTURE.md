@@ -30,7 +30,7 @@ Services (Transactional; ownership-проверки trip.user == principal)
    ▼
 Spring Data JPA repositories (@Query JOIN FETCH / DISTINCT ON; Specifications для продуктов)
    ▼
-PostgreSQL 15 + Flyway V1–VXXX (без.hand-right схем: ddl-auto=validate)
+PostgreSQL 15 + Flyway V1–V20 (без.hand-right схем: ddl-auto=validate)
 ```
 
 Правки состава похода (V19) и снепшоты (V20) применяются в расчётном конвейере `SummaryService.computeShopping` (единая @Transactional-точка для shopping / by-days / person / kcal, без self-invocation и N+1).
@@ -189,6 +189,24 @@ P·1000/n, а `piece_weight_g` штучного продукта при цене
 нераспознанный суффикс). Никаких эвристик «молоко → литр» больше нет: единица берётся из
 названия позиции, а не из догадки.
 
+**Предупреждение о сомнительной паре (KB-5, решение владельца 29.10.2026: «нужно
+предупреждение, остальное на откуп админа»).** `EmisUnit.convertsTo(unit, pieceWeightG)`
+отвечает, приводится ли цена позиции к единице продукта в принципе (то же правило, что и
+`pricePerUnit`, но БЕЗ требования иметь цену — у позиции 9453 цен в копии нет, а привязывать
+к ней баллон всё равно нельзя), а `EmisUnit.linkWarning(emisPrice, unit, pieceWeightG,
+currentPrice)` собирает текст предупреждения по трём признакам:
+
+1. пересчёт невозможен (OTHER/услуга, COUNT против кг/л, у штучного продукта не задан
+   `piece_weight_g`) — синхронизация такую точку отбросит, цена останется ручной;
+2. **масштаб не сопоставим**: единица наблюдения позиции крупнее штуки продукта в ≥ 100 раз
+   («Газ сжиженный в баллонах, 50 л» против баллона 220 г = 227 раз) — правило «плотность ≈ 1»
+   на такой паре физически неверно, цена была бы занижена на порядки;
+3. **цена уехала**: после пересчёта цена отличается от текущей цены продукта в ≥ 10 раз.
+
+Пороги выбраны по фактическим данным каталога: принятые владельцем привязки «цена категории»
+(×0,18–4,7: кофе «3 в 1», сублиматы, сушёные овощи) предупреждений не дают. Привязка
+**не блокируется** ни в UI, ни в `ProductService` — предупреждение только информирует.
+
 **Фасовка продукта приводится к номенклатуре ЕМИСС** там, где единица наблюдения не
 совпадала (V29): «Туалетная бумага, 4 рулона» → «Бумага туалетная, рулон» (6502),
 «Влажные салфетки, упаковка 100 шт» → «Салфетки влажные, упаковка 20 шт.» (6505),
@@ -236,21 +254,33 @@ P·1000/n, а `piece_weight_g` штучного продукта при цене
   409 `SYNC_ALREADY_RUNNING`, ошибка чтения → 400 `FILE_READ_ERROR`, пустой/слишком
   большой/не-SDMX файл → `IntegrationUnavailableException` с причиной;
 - лимит: `spring.servlet.multipart.max-file-size`/`max-request-size` =
-  `${EMIS_UPLOAD_MAX_FILE_SIZE:32MB}` — согласован с `max-response-bytes`;
+  `${EMIS_UPLOAD_MAX_FILE_SIZE:96MB}` — согласован с `max-response-bytes` и с
+  `client_max_body_size 96m` в `nginx.conf`;
 - фронтенд: блок «Загрузить выгрузку ЕМИСС вручную» в разделе «Интеграции»
   (`api.postFile`), дальше тот же поллинг журнала, что и для обычного синка.
 
 ### Привязка продукта к позиции ЕМИСС («софт»)
 
 - `ingredients.emis_code` (V26) — единственный след привязки: никаких внешних сущностей;
-- `GET /admin/emis/products?query=&limit=` (`EmisController` → `EmisCatalogService`) —
-  поиск по локальной копии, `EmisProductDto(code, name, unitLabel, latestPrice,
-  latestPriceDate)`: цена и период видны сразу, до выбора позиции;
+- `GET /admin/emis/products?query=&limit=[&unit=&pieceWeightG=&price=]` (`EmisController` →
+  `EmisCatalogService`) — поиск по локальной копии, `EmisProductDto(code, name, unitLabel,
+  latestPrice, latestPriceDate, pricePerUnit, warning)`: цена и период видны сразу, до выбора
+  позиции. Необязательные параметры — контекст продукта (`EmisCatalogService.LinkContext`):
+  с ним каждая строка результата приходит сразу с ценой, пересчитанной на НАШУ единицу, и
+  предупреждением `EmisUnit.linkWarning` о сомнительной паре (KB-5). Пересчёт живёт только
+  на сервере: деньги на клиенте не считаются (§12 `AGENTS.md`). Без контекста (и в пакетной
+  выдаче `describe()`) оба поля null;
 - `ProductRequest.emisCode`: пусто/null = отвязать, неизвестный код =
   `VALIDATION_ERROR` (опечатка не должна молча ломать синхронизацию);
 - `ProductResponse`: `emisCode`, `emisName`, `priceSyncStatus` =
   `NOT_LINKED` (источник не выбран) / `NO_DATA` (привязан, но цен в копии нет) /
-  `SYNCED` (действующая цена получена из ЕМИСС); считается пакетно, без N+1;
+  `SYNCED` (действующая цена получена из ЕМИСС), `emisSharedCount` — сколько ЕЩЁ глобальных
+  продуктов привязано к той же позиции (`IngredientRepository.countByEmisCodes`, KB-8);
+  всё считается пакетно, без N+1 (один запрос на страницу списка);
+- несколько продуктов на одном коде — законная ситуация (на боевой копии 140 из 204 продуктов
+  сидят на 30 общих позициях, рекорд — 2007 «Сухие супы в пакетах, кг» у 17 продуктов), но
+  цена синхронизации приходит одна на всех, поэтому в колонке «Цена синхронизирована» стоит
+  значок `Share2` с подсказкой;
 - фронтенд: `EmisLinkPicker` в модалке продукта (debounce-поиск, цена и период в списке,
   «Отвязать»), колонка «Цена синхронизирована» в `ProductTable`, фильтр «привязаны к ЕМИСС»;
 - ручная привязка из раздела «Интеграции» удалена, таблицы `ingredient_mappings` и
@@ -280,11 +310,46 @@ P·1000/n, а `piece_weight_g` штучного продукта при цене
    означает, что портал **отклонил набор фильтров**;
 5. ответ — SDMX **1.0** GenericData: `CodeLists` (словари; всегда полные — 885 товаров и
    450 ОКАТО независимо от выбранных фильтров, поэтому одна выгрузка обновляет весь
-   справочник) + `Series/Obs`. Парсер namespace-agnostic (localName), DOCTYPE запрещён (XXE).
+   справочник) + `Series/Obs`. Разбор ПОТОКОВЫЙ (StAX, `SdmxStreamParser` — см. ниже),
+   namespace-agnostic (localName), DOCTYPE запрещён (XXE).
    Год — в `Obs/generic:Time`, месяц — в атрибуте РЯДА
    `Series/Attributes/Value[@concept="PERIOD"]` русским названием («январь»), регион —
    `s_OKATO`, товар — `s_grtov` (код классификатора, НЕ id значения фильтра со страницы),
    цена — `Obs/ObsValue/@value` с запятой как десятичным разделителем.
+
+**Потоковый разбор SDMX (StAX)** — 29.10.2026, план `plans/done/2026-10-29-sdmx-stax-streaming.md`
+(KB-1/BL-17). DOM целиком заменён одним проходом по событиям: `SdmxStreamParser.parse(InputStream,
+regionTitle, maxBytes)` захватывает поддерево `CodeList`/`Series` в момент его закрытия, поэтому
+в heap живёт ОДИН ряд, а не документ. Память не растёт с объёмом выгрузки: 66,2 МБ
+(286 740 ценовых точек, 885 позиций) разбираются за ~4 с при `-Xmx128m`, тогда как DOM на том же
+файле требовал 600–700 МБ. Следствия и детали:
+
+- `XMLInputFactory` создаётся с `SUPPORT_DTD=false` и `IS_SUPPORTING_EXTERNAL_ENTITIES=false`:
+  DOCTYPE и внешние сущности отклоняются ошибкой, а не разбираются (XXE);
+- ряды, пришедшие РАНЬШЕ словаря товаров, буферизуются (в боевом ответе `CodeLists` всегда идут
+  до `DataSet`); буфер ограничен 10 000 рядов — превышение прерывает разбор внятной ошибкой
+  вместо тихого роста heap;
+- `LimitedInputStream` обрывает само ЧТЕНИЕ на `integration.rosstat.max-response-bytes` (96 МБ):
+  сообщение называет лимит и способ его поднять, вместо OOM на runaway-ответе;
+- транспорт отдаёт тело потоком: `EmisTransport.Session.postFormStream` → `StreamResult(status,
+  body: InputStream, contentType, location)`. Дефолтная реализация метода сохраняет совместимость
+  с тестовыми фейками (тело строкой), `JdkEmisTransport` переопределяет её настоящим потоком;
+- диагностика отказа портала собирается по «голове» ответа (4 КБ, `PushbackInputStream` +
+  `EmisTransport.readHead`): HTML-заглушка «CSRF блокировка», `text/html` вместо SDMX, `302`
+  и `503` различимы без чтения всего тела (R10);
+- ручная загрузка файла админом идёт тем же парсером; `EmisDataSource.parseSnapshot(byte[],
+  fileName)` остаётся на `byte[]` — это граница `@Async` в `PriceSyncService`, multipart-поток
+  к моменту разбора уже закрыт, а 96 МБ (`EMIS_UPLOAD_MAX_FILE_SIZE` = `client_max_body_size`
+  nginx = `max-response-bytes`) — общий потолок объёма.
+
+**Модули интеграции** (`com.provision.integration`, декомпозиция BL-15 — каждый файл ≤ 500 строк,
+R8/R9): `RosstatEmisProvider` (355) — протокол выгрузки и сборка слепка; `EmisPortalPage` (272) —
+разбор HTML страницы показателя (Struts-токен, словари фильтров, диагностика страницы);
+`EmisRequestForm` (172) — тело POST `downloadData.do` и счётчики полей для лога;
+`JdkEmisTransport` (163) — транспорт на `java.net.http` (cookie-сессия, `Redirect.NEVER`);
+`EmisTransport` (130) — seam `Session`/`Transport`, `PageResult`/`StreamResult`, тексты
+диагностики; `EmisValues` (103) — извлечение объекта `filters:` из встроенного JS;
+`SdmxStreamParser` (464) — StAX-разбор SDMX 1.0/2.1 в `EmisSnapshot`.
 
 **Выбор фильтров**: регион — один (из конфига); товары, годы и единицы — ВСЕ значения;
 ось «Период» — `period-months` последних месяцев (дефолт 0 = все 12, окно хранения режет
@@ -297,10 +362,12 @@ P·1000/n, а `piece_weight_g` штучного продукта при цене
 - **ось «Год» сужать НЕЛЬЗЯ**: `302` на любое сужение (проверено на 2026+2025 и 2023+2024),
   тогда как сужение «Периода» (1 месяц → `200`, 5 649 772 байта) и «Товаров»
   (2 товара → `200`, 499 770 байт) принимается;
-- **объём надо ограничивать**: полный ряд (2000…текущий год × 885 товаров × 12 месяцев) —
-  927 `selectedFilterIds` и **65 076 787 байт** (~130 МБ в `String`, пик 600–700 МБ heap
-  на DOM). Один регион + `max-response-bytes: 32MB` — предохранитель от OOM: ответ больше
-  лимита не парсим;
+- **объём больше не ограничивает**: полный ряд (2000…текущий год × 885 товаров × 12 месяцев) —
+  927 `selectedFilterIds` и **65 076 787 байт**. До 29.10.2026 это было ~130 МБ `String` и пик
+  600–700 МБ heap на DOM, поэтому `max-response-bytes: 32MB` отказывал в разборе полного ряда;
+  теперь разбор потоковый (StAX): 66 МБ разбираются в 128 МБ heap. `max-response-bytes: 96MB`
+  остался предохранителем от runaway-ответа — при превышении чтение обрывается, а не ждёт
+  полной загрузки;
 - портал троттлит: после ~12 быстрых POST — `503` от nginx.
 
 **Конфигурация**: `integration.rosstat.{base-url, indicator-id (31448 — «Средние
@@ -311,6 +378,13 @@ max-response-bytes}`; `integration.contact-email` — контакт для UA;
 входа — кнопка синхронизации (или загруженный файл), и её смысл — положить в БД свежие
 данные, а не отдать вчерашние. Страж биндинга — `RosstatConfigBindingTest`
 (реальный yml → `@Value`).
+
+**Версия приложения в User-Agent** (KB-4): единственный источник версии — `backend/pom.xml`
+(сейчас `1.0.1`). `app.version: ${APP_VERSION:@project.version@}` в `application.yml` —
+фильтрация ресурсов `spring-boot-starter-parent` подставляет версию pom при сборке,
+`APP_VERSION` переопределяет её без пересборки; `spring-boot-maven-plugin` (goal `build-info`)
+дополнительно кладёт в jar `META-INF/build-info.properties` (`build.version`, `build.time`) —
+по нему видно, какая сборка отвечает. UA запросов к порталу: `provision/1.0.1 (dev@provision.app)`.
 
 **Ограничения (честно)**: ЕМИСС блокирует зарубежные дата-центры (403 анти-бот — из
 песочницы CI live-проверка невозможна, работает из сети пользователя РФ); портал
@@ -333,9 +407,12 @@ Mock-сервер повторяет контракт (`mockIntegrations.test.ts
 `POST …/{provider}/sync/prices` и `POST …/{provider}/upload` → `{logId}` с фоновым
 переходом лога в SUCCESS со счётчиками, коды 409 `INTEGRATION_DISCONNECTED` /
 `SYNC_ALREADY_RUNNING`, 400 `EMPTY_FILE`, 404 для неизвестного провайдера;
-`GET /admin/emis/products` — `EmisProductDto` с реальными позициями справочника;
-`/admin/products` — `emisCode`/`emisName`/`priceSyncStatus`/`currentPrice` как в
-`ProductResponse`. Роутов ручной привязки (`products/search`, `ingredients/:id/mapping`)
+`GET /admin/emis/products` — `EmisProductDto` с реальными позициями справочника
+(`unitKind`/`unitAmount`/`unitScale` в моке служебные и наружу не отдаются), включая
+контекстные параметры `unit`/`pieceWeightG`/`price` и пересчёт `pricePerUnit`/`warning`
+(`emisPricePerUnit`/`emisLinkWarning` — тексты предупреждений один в один с
+`EmisUnit.linkWarning`); `/admin/products` — `emisCode`/`emisName`/`priceSyncStatus`/
+`emisSharedCount`/`currentPrice` как в `ProductResponse`. Роутов ручной привязки (`products/search`, `ingredients/:id/mapping`)
 в моке больше нет — как и в бэкенде.
 
 ## Правки состава приёма (V19 + composition API)
@@ -374,6 +451,9 @@ API: `GET/PUT /api/v1/trips/{tripId}/meals/{mealId}/composition` (GET — сер
 - `ShoppingItemResponse`: план/факт пары + `packSize/packsToBuy/buyAmount/leftoverAmount/substitutedFrom`.
 - V20-поля: `tripId`, `snapshotOf` у рецептов/продуктов (копии не попадают в каталожные списки).
 - Пагинация продуктов: Spring Page (`content/page/size/totalElements/...`); mock повторяет форму.
+- `EmisProductDto`: `code/name/unitLabel/latestPrice/latestPriceDate` + `pricePerUnit`/`warning`
+  (заполняются только в поиске с контекстом продукта — KB-5). `ProductResponse.emisSharedCount`
+  — сколько ещё продуктов на той же позиции ЕМИСС (KB-8). Поля аддитивные, mock повторяет.
 
 ### Формат дат
 
@@ -408,7 +488,7 @@ GET  /api/v1/trips/{id}/summary/{menu|shopping|shopping/by-days|person}
 - `PriceResolutionService` — actual = override ?: planned.
 - `SecurityConfig` + `JwtService`/`JwtAuthenticationFilter` — stateless JWT, CORS из ENV, fail-fast секрета (`JwtProperties.validate`).
 - `DevDataInitializer` / `DevTripsInitializer` — демо-пользователи и демо-походы (profile `dev` + `SEED_DEMO_USERS=true`), демо-походы создаются через снепшот-сервис.
-- `RosstatEmisProvider` (`PriceProvider` + `EmisDataSource`) — транспорт ЕМИСС: Struts-токен → POST `downloadData.do?format=sdmx` → SDMX-парсер (`downloadSnapshot` / `parseSnapshot` для загруженного файла); кэша нет — выгрузка сразу уходит в БД.
+- `RosstatEmisProvider` (`PriceProvider` + `EmisDataSource`) — оркестрация протокола ЕМИСС: Struts-токен → POST `downloadData.do?format=sdmx` → потоковый разбор SDMX (`downloadSnapshot` / `parseSnapshot` для загруженного файла); кэша нет — выгрузка сразу уходит в БД. Рядом в `integration/`: `SdmxStreamParser` (StAX вместо DOM — память O(один ряд), KB-1), `EmisPortalPage` (HTML страницы показателя), `EmisRequestForm` (тело POST), `EmisTransport`/`JdkEmisTransport` (транспорт и диагностика ответов), `EmisValues` (словари фильтров из JS).
 - `EmisMirrorService` — локальная копия справочника и цен (`emis_products`/`emis_prices`), окно `period-years`; `EmisCatalogService` — поиск позиций для привязки (`GET /admin/emis/products`).
 - `PriceSyncService` — оркестрация синка (портал или файл), `EmisPriceApplier` + `EmisUnit` — пересчёт цены ряда в единицу продукта и запись `ingredient_prices`, `SyncDetailsBuilder` — `SyncLog.details`.
 - `GlobalExceptionHandler` — коды конфликтов и field-errors.
@@ -453,9 +533,34 @@ GET  /api/v1/trips/{id}/summary/{menu|shopping|shopping/by-days|person}
 
 Правила: red-green для каждого фикса (R1), тест того слоя, где изменение (R2), фича без теста не готова (R3), `@Disabled` только с TODO и ссылкой (R4).
 
+**ЕМИСС-зона (29.10.2026: BL-23 + план `plans/done/2026-10-29-sdmx-stax-streaming.md`)**:
+`SdmxStreamParserTest` (16 — golden-фикстура боевого ответа `src/test/resources/emis/data-31448-real.xml`,
+формы SDMX 1.0/2.1, фильтр региона и вида показателя, мусорные точки, обрыв по `maxBytes`,
+XXE/DTD, буфер рядов до словарей и его потолок, большой документ 1200 позиций × 2 региона × 12 месяцев),
+`RosstatEmisProviderTest` (34 — протокол и диагностика отказов на фейковом транспорте),
+`RosstatConfigBindingTest` (3 — реальный `application.yml` → `@Value`), `EmisUnitTest`
+(20 — разбор суффикса единицы, `convertsTo`/`pricePerUnit`/`linkWarning` по всем ветвям),
+`EmisCatalogServiceTest` (16 — `LinkContext`, «свежая» цена, лимиты выдачи, форма DTO),
+`EmisControllerTest` (5 — срез `@WebMvcTest`: параметры `unit`/`pieceWeightG`/`price`, дробный вес
+с запятой, форма `EmisProductDto`), `EmisSharedCountIntegrationTest` (5 — `emisSharedCount` в
+`ProductResponse` на реальной БД: общая позиция, отвязка соседа, снимки похода не считаются).
+Покрытие пакета `com.provision.integration` (jacoco 0.8.12): 84,7 % инструкций / 70,9 % ветвей,
+`SdmxStreamParser` — 91,4 % инструкций; `JdkEmisTransport` — 0 % (живая сеть к порталу, KB-10).
+Frontend: `ProductTable.test.tsx` (значок общей привязки со счётчиком) и `src/api/contractEmis.test.ts`
+(21 — форма `EmisProductDto`, контекстные параметры, тексты предупреждений, `emisSharedCount`;
+входит в `npm run test:contract`).
+
 ## Deployment (Docker Compose)
 
 `docker compose up --build`: postgres (healthcheck pg_isready, порт только 127.0.0.1) → backend (healthcheck wget /meta, JWT_SECRET обязателен, profile по умолчанию `dev`) → frontend (nginx: SPA + прокси `/api`). Прод-сценарий: `SPRING_PROFILES_ACTIVE=prod`, `SEED_DEMO_USERS=false`, свой `POSTGRES_PASSWORD`, образы за реестром (задача P1: публикация в ghcr + стенд).
+
+**Память backend (BL-18, 29.10.2026)**: `mem_limit: ${BACKEND_MEM_LIMIT:-1g}` в `docker-compose.yml`
++ `-XX:MaxRAMPercentage=70.0` в `backend/Dockerfile` (без явной настройки JVM взяла бы 25 % лимита —
+~256 МБ heap); `JAVA_OPTS` переопределяется без пересборки образа, `HeapDumpOnOutOfMemoryError`
+оставлен. Потоковый разбор SDMX укладывается в 128 МБ heap даже на ответе 66 МБ, поэтому 1 ГБ
+покрывает и выгрузку, и применение цен в БД с запасом. Объём входа ограничен тремя согласованными
+значениями по 96 МБ: `integration.rosstat.max-response-bytes` (100 663 296),
+`EMIS_UPLOAD_MAX_FILE_SIZE` (multipart) и `client_max_body_size` в `nginx.conf`.
 
 
 ## Патч «Fix-6» (UX-список 26.10, шестая итерация) — контракты

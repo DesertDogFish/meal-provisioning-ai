@@ -6,6 +6,11 @@ import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.math.BigDecimal;
+import java.net.ConnectException;
+import java.net.UnknownHostException;
+import java.net.http.HttpTimeoutException;
+import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
@@ -127,7 +132,7 @@ class RosstatEmisProviderTest {
             """;
 
     /** Фейковый транспорт: страница + SDMX, счётчики вызовов, режим отказа. */
-    static class FakeTransport implements RosstatEmisProvider.Transport {
+    static class FakeTransport implements Transport {
         int gets;
         int posts;
         String lastFormBody;
@@ -140,21 +145,21 @@ class RosstatEmisProviderTest {
         boolean ioFailure;
 
         @Override
-        public RosstatEmisProvider.Session open() {
-            return new RosstatEmisProvider.Session() {
+        public Session open() {
+            return new Session() {
                 @Override
-                public RosstatEmisProvider.PageResult get(String url) throws IOException {
+                public PageResult get(String url) throws IOException {
                     gets++;
                     if (ioFailure) throw new IOException("connection reset");
-                    return new RosstatEmisProvider.PageResult(pageStatus, pageBody);
+                    return new PageResult(pageStatus, pageBody);
                 }
 
                 @Override
-                public RosstatEmisProvider.PageResult postForm(String url, String formBody) throws IOException {
+                public PageResult postForm(String url, String formBody) throws IOException {
                     posts++;
                     lastFormBody = formBody;
                     if (ioFailure) throw new IOException("connection reset");
-                    return new RosstatEmisProvider.PageResult(dataStatus, dataBody,
+                    return new PageResult(dataStatus, dataBody,
                             dataContentType, dataLocation);
                 }
 
@@ -175,7 +180,7 @@ class RosstatEmisProviderTest {
     @Test
     @DisplayName("extractStrutsToken: одноразовый CSRF из div#downloadTokenHolder")
     void extractsStrutsToken() {
-        var token = RosstatEmisProvider.extractStrutsToken(PAGE_HTML);
+        var token = EmisPortalPage.extractStrutsToken(PAGE_HTML);
         assertThat(token).isNotNull();
         assertThat(token.name()).isEqualTo("token");
         assertThat(token.value()).isEqualTo("TOKEN123");
@@ -184,7 +189,7 @@ class RosstatEmisProviderTest {
     @Test
     @DisplayName("extractStrutsToken: нет holder'а и токенов → null (страница изменилась/анти-бот)")
     void noTokenHolder() {
-        assertThat(RosstatEmisProvider.extractStrutsToken("<html><body>403</body></html>")).isNull();
+        assertThat(EmisPortalPage.extractStrutsToken("<html><body>403</body></html>")).isNull();
     }
 
     @Test
@@ -199,7 +204,7 @@ class RosstatEmisProviderTest {
                 </form>
                 </body></html>
                 """;
-        var token = RosstatEmisProvider.extractStrutsToken(html);
+        var token = EmisPortalPage.extractStrutsToken(html);
         assertThat(token).isNotNull();
         assertThat(token.name()).isEqualTo("token");
         assertThat(token.value()).isEqualTo("TOKEN-NOHOLDER");
@@ -209,7 +214,7 @@ class RosstatEmisProviderTest {
     @DisplayName("extractStrutsToken: одиночный input name=struts.token (без поля имени), одинарные кавычки")
     void tokenSoloInput() {
         String html = "<html><body><input type='hidden' name='struts.token' value='SOLO42'></body></html>";
-        var token = RosstatEmisProvider.extractStrutsToken(html);
+        var token = EmisPortalPage.extractStrutsToken(html);
         assertThat(token).isNotNull();
         assertThat(token.name()).isEqualTo("struts.token");
         assertThat(token.value()).isEqualTo("SOLO42");
@@ -218,13 +223,13 @@ class RosstatEmisProviderTest {
     @Test
     @DisplayName("pageDiagnostics: title, размер, маркеры и видимый текст — для отладки живой разметки")
     void diagnostics() {
-        String d1 = RosstatEmisProvider.pageDiagnostics(PAGE_HTML);
+        String d1 = EmisPortalPage.pageDiagnostics(PAGE_HTML);
         assertThat(d1).contains("Средние потребительские цены")
                 .contains("downloadTokenHolder").contains("filters:");
 
         String stub = "<html><head><title>ЕМИСС</title></head><body>"
                 + "<script>var x=1;</script><h1>Показатель не найден</h1></body></html>";
-        String d2 = RosstatEmisProvider.pageDiagnostics(stub);
+        String d2 = EmisPortalPage.pageDiagnostics(stub);
         assertThat(d2).contains("Показатель не найден")
                 .contains("ни одного")
                 .doesNotContain("var x=1"); // script не попадает в видимый текст
@@ -233,16 +238,16 @@ class RosstatEmisProviderTest {
     @Test
     @DisplayName("parseFiltersFromPage: JS-словарь (одинарные кавычки, нецитированные ключи)")
     void parsesFiltersDictionary() {
-        var filters = RosstatEmisProvider.parseFiltersFromPage(PAGE_HTML);
+        var filters = EmisPortalPage.parseFiltersFromPage(PAGE_HTML);
         assertThat(filters).isNotNull();
         assertThat(filters.fields()).containsKeys("0", "30", "32", "33");
 
         var okato = filters.fields().get("30");
         assertThat(okato.title()).contains("ОКАТО");
         assertThat(okato.values()).containsEntry("1", "Российская Федерация");
-        assertThat(RosstatEmisProvider.isRegionField(okato)).isTrue();
+        assertThat(EmisRequestForm.isRegionField(okato)).isTrue();
 
-        var goods = RosstatEmisProvider.findGoodsField(filters);
+        var goods = EmisPortalPage.findGoodsField(filters);
         assertThat(goods).isNotNull();
         assertThat(goods.id()).isEqualTo("32");
         assertThat(goods.values()).hasSize(3)
@@ -253,7 +258,7 @@ class RosstatEmisProviderTest {
     @Test
     @DisplayName("extractObjectIds: left_columns+groups → line, top_columns → column")
     void extractsAxisObjectIds() {
-        var objects = RosstatEmisProvider.extractObjectIds(PAGE_HTML);
+        var objects = EmisPortalPage.extractObjectIds(PAGE_HTML);
         assertThat(objects.line()).containsExactly("30", "32");
         // обе оси колонок, как на живом портале: top_columns [3 «Год», 33560 «Период»]
         assertThat(objects.column()).containsExactly("33", "33560");
@@ -262,10 +267,10 @@ class RosstatEmisProviderTest {
     @Test
     @DisplayName("buildFormBody: CSRF-поле под именем со страницы, id=, регион РФ (не все), товары и ГОД ЦЕЛИКОМ, период — последние N месяцев, filterObjectIds=0")
     void buildsFormBody() {
-        var filters = RosstatEmisProvider.parseFiltersFromPage(PAGE_HTML);
-        var objects = RosstatEmisProvider.extractObjectIds(PAGE_HTML);
-        var token = RosstatEmisProvider.extractStrutsToken(PAGE_HTML);
-        String body = RosstatEmisProvider.buildFormBody("Средние потребительские цены на товары и услуги",
+        var filters = EmisPortalPage.parseFiltersFromPage(PAGE_HTML);
+        var objects = EmisPortalPage.extractObjectIds(PAGE_HTML);
+        var token = EmisPortalPage.extractStrutsToken(PAGE_HTML);
+        String body = EmisRequestForm.buildFormBody("Средние потребительские цены на товары и услуги",
                 token, objects, filters, "Российская Федерация", "31448", 2, TODAY);
 
         // ДЕФЕКТ №1: имя CSRF-поля — то, что портал сам положил в struts.token.name
@@ -325,50 +330,50 @@ class RosstatEmisProviderTest {
     @Test
     @DisplayName("buildFormBody: period-months<=0 — все 12 месяцев (прежнее поведение)")
     void buildsFormBodyWithoutPeriodNarrowing() {
-        var filters = RosstatEmisProvider.parseFiltersFromPage(PAGE_HTML);
-        var objects = RosstatEmisProvider.extractObjectIds(PAGE_HTML);
-        var token = RosstatEmisProvider.extractStrutsToken(PAGE_HTML);
-        String body = RosstatEmisProvider.buildFormBody("Средние потребительские цены на товары и услуги",
+        var filters = EmisPortalPage.parseFiltersFromPage(PAGE_HTML);
+        var objects = EmisPortalPage.extractObjectIds(PAGE_HTML);
+        var token = EmisPortalPage.extractStrutsToken(PAGE_HTML);
+        String body = EmisRequestForm.buildFormBody("Средние потребительские цены на товары и услуги",
                 token, objects, filters, "Российская Федерация", "31448", 0, TODAY);
 
         assertThat(body).contains("selectedFilterIds=33560_1540283"); // январь
         assertThat(body).contains("selectedFilterIds=33560_1540230"); // декабрь
-        assertThat(RosstatEmisProvider.countParts(body, "selectedFilterIds=33560_")).isEqualTo(12);
+        assertThat(EmisRequestForm.countParts(body, "selectedFilterIds=33560_")).isEqualTo(12);
     }
 
     @Test
     @DisplayName("isPeriodField: «Период» — да; «Год», «ОКАТО», «Виды товаров» — нет")
     void detectsPeriodField() {
-        var filters = RosstatEmisProvider.parseFiltersFromPage(PAGE_HTML);
-        assertThat(RosstatEmisProvider.isPeriodField(filters.fields().get("33560"))).isTrue();
-        assertThat(RosstatEmisProvider.isPeriodField(filters.fields().get("33"))).isFalse();
-        assertThat(RosstatEmisProvider.isPeriodField(filters.fields().get("30"))).isFalse();
-        assertThat(RosstatEmisProvider.isPeriodField(filters.fields().get("32"))).isFalse();
-        assertThat(RosstatEmisProvider.isPeriodField(new RosstatEmisProvider.EmisField(
+        var filters = EmisPortalPage.parseFiltersFromPage(PAGE_HTML);
+        assertThat(EmisRequestForm.isPeriodField(filters.fields().get("33560"))).isTrue();
+        assertThat(EmisRequestForm.isPeriodField(filters.fields().get("33"))).isFalse();
+        assertThat(EmisRequestForm.isPeriodField(filters.fields().get("30"))).isFalse();
+        assertThat(EmisRequestForm.isPeriodField(filters.fields().get("32"))).isFalse();
+        assertThat(EmisRequestForm.isPeriodField(new EmisField(
                 "33560", "Период (месяц)", new java.util.LinkedHashMap<>()))).isTrue();
-        assertThat(RosstatEmisProvider.isPeriodField(new RosstatEmisProvider.EmisField(
+        assertThat(EmisRequestForm.isPeriodField(new EmisField(
                 "3", "Годы", new java.util.LinkedHashMap<>()))).isFalse();
-        assertThat(RosstatEmisProvider.isPeriodField(null)).isFalse();
+        assertThat(EmisRequestForm.isPeriodField(null)).isFalse();
     }
 
     @Test
     @DisplayName("recentMonths: окно заканчивается ПРОШЛЫМ месяцем (данные за текущий ещё не вышли)")
     void recentMonthsEndsWithPreviousMonth() {
-        assertThat(RosstatEmisProvider.recentMonths(2, LocalDate.of(2026, 10, 28)))
+        assertThat(EmisRequestForm.recentMonths(2, LocalDate.of(2026, 10, 28)))
                 .containsExactly(9, 8);
-        assertThat(RosstatEmisProvider.recentMonths(3, LocalDate.of(2026, 1, 15)))
+        assertThat(EmisRequestForm.recentMonths(3, LocalDate.of(2026, 1, 15)))
                 .containsExactly(12, 11, 10); // переход через границу года
-        assertThat(RosstatEmisProvider.recentMonths(0, LocalDate.of(2026, 10, 28))).isEmpty();
-        assertThat(RosstatEmisProvider.recentMonths(50, LocalDate.of(2026, 10, 28))).hasSize(12);
+        assertThat(EmisRequestForm.recentMonths(0, LocalDate.of(2026, 10, 28))).isEmpty();
+        assertThat(EmisRequestForm.recentMonths(50, LocalDate.of(2026, 10, 28))).hasSize(12);
     }
 
     @Test
     @DisplayName("countParts: счётчики для лога считаются по телу, а не по осям страницы (30611 добавляется fallback-ом)")
     void countsFormPartsFromBuiltBody() {
-        var filters = RosstatEmisProvider.parseFiltersFromPage(PAGE_HTML);
-        var objects = RosstatEmisProvider.extractObjectIds(PAGE_HTML);
-        var token = RosstatEmisProvider.extractStrutsToken(PAGE_HTML);
-        String body = RosstatEmisProvider.buildFormBody("Средние потребительские цены на товары и услуги",
+        var filters = EmisPortalPage.parseFiltersFromPage(PAGE_HTML);
+        var objects = EmisPortalPage.extractObjectIds(PAGE_HTML);
+        var token = EmisPortalPage.extractStrutsToken(PAGE_HTML);
+        String body = EmisRequestForm.buildFormBody("Средние потребительские цены на товары и услуги",
                 token, objects, filters, "Российская Федерация", "31448", 2, TODAY);
 
         // Оси со страницы: left_columns ['30'] + groups ['32'] = 2 строки,
@@ -377,22 +382,22 @@ class RosstatEmisProviderTest {
         assertThat(objects.column()).containsExactly("33", "33560");
         // В теле строк БОЛЬШЕ: 30611 не упомянут в осях и добавлен fallback-ом.
         // Именно поэтому лог обязан считать по телу — иначе в журнале lineObjectIds=2 при трёх в запросе.
-        assertThat(RosstatEmisProvider.countParts(body, "lineObjectIds=")).isEqualTo(3);
-        assertThat(RosstatEmisProvider.countParts(body, "columnObjectIds=")).isEqualTo(2);
+        assertThat(EmisRequestForm.countParts(body, "lineObjectIds=")).isEqualTo(3);
+        assertThat(EmisRequestForm.countParts(body, "columnObjectIds=")).isEqualTo(2);
         // 0_31448 + 30_1 (только РФ) + 32_101/102/103 + 33_2000…2026 (все 5 лет)
         // + 33560 (2 месяца) + 30611_950351 = 13
-        assertThat(RosstatEmisProvider.countParts(body, "selectedFilterIds=")).isEqualTo(13);
-        assertThat(RosstatEmisProvider.countParts(body, "filterObjectIds=")).isEqualTo(1);
+        assertThat(EmisRequestForm.countParts(body, "selectedFilterIds=")).isEqualTo(13);
+        assertThat(EmisRequestForm.countParts(body, "filterObjectIds=")).isEqualTo(1);
     }
 
     @Test
     @DisplayName("pickRegionValue: точное → вхождение → «российская…» → первое")
     void picksRegionValue() {
-        var filters = RosstatEmisProvider.parseFiltersFromPage(PAGE_HTML);
+        var filters = EmisPortalPage.parseFiltersFromPage(PAGE_HTML);
         var okato = filters.fields().get("30");
-        assertThat(RosstatEmisProvider.pickRegionValue(okato, "Российская Федерация")).isEqualTo("1");
-        assertThat(RosstatEmisProvider.pickRegionValue(okato, "Белгородская")).isEqualTo("2");
-        assertThat(RosstatEmisProvider.pickRegionValue(okato, "Несуществующий регион")).isEqualTo("1"); // «российск…»
+        assertThat(EmisValues.pickRegionValue(okato, "Российская Федерация")).isEqualTo("1");
+        assertThat(EmisValues.pickRegionValue(okato, "Белгородская")).isEqualTo("2");
+        assertThat(EmisValues.pickRegionValue(okato, "Несуществующий регион")).isEqualTo("1"); // «российск…»
     }
 
     @Test
@@ -455,12 +460,12 @@ class RosstatEmisProviderTest {
     @Test
     @DisplayName("monthFromRuName: русские названия месяцев SDMX-атрибута PERIOD")
     void parsesRussianMonthNames() {
-        assertThat(RosstatEmisProvider.monthFromRuName("январь")).isEqualTo(1);
-        assertThat(RosstatEmisProvider.monthFromRuName("Февраль")).isEqualTo(2);
-        assertThat(RosstatEmisProvider.monthFromRuName("декабря")).isEqualTo(12);
-        assertThat(RosstatEmisProvider.monthFromRuName("  МАРТ ")).isEqualTo(3);
-        assertThat(RosstatEmisProvider.monthFromRuName("I квартал")).isNull();
-        assertThat(RosstatEmisProvider.monthFromRuName(null)).isNull();
+        assertThat(EmisValues.monthFromRuName("январь")).isEqualTo(1);
+        assertThat(EmisValues.monthFromRuName("Февраль")).isEqualTo(2);
+        assertThat(EmisValues.monthFromRuName("декабря")).isEqualTo(12);
+        assertThat(EmisValues.monthFromRuName("  МАРТ ")).isEqualTo(3);
+        assertThat(EmisValues.monthFromRuName("I квартал")).isNull();
+        assertThat(EmisValues.monthFromRuName(null)).isNull();
     }
 
     private static String resource(String path) throws IOException {
@@ -473,12 +478,12 @@ class RosstatEmisProviderTest {
     @Test
     @DisplayName("parsePeriod: YYYY-MM / YYYY-MM-DD / YYYY-MMM / YYYY / мусор")
     void parsesPeriods() {
-        assertThat(RosstatEmisProvider.parsePeriod("2025-09")).isEqualTo(LocalDate.of(2025, 9, 1));
-        assertThat(RosstatEmisProvider.parsePeriod("2025-09-15")).isEqualTo(LocalDate.of(2025, 9, 15));
-        assertThat(RosstatEmisProvider.parsePeriod("2025M09")).isEqualTo(LocalDate.of(2025, 9, 1));
-        assertThat(RosstatEmisProvider.parsePeriod("2025")).isEqualTo(LocalDate.of(2025, 1, 1));
-        assertThat(RosstatEmisProvider.parsePeriod("не период")).isNull();
-        assertThat(RosstatEmisProvider.parsePeriod(null)).isNull();
+        assertThat(EmisValues.parsePeriod("2025-09")).isEqualTo(LocalDate.of(2025, 9, 1));
+        assertThat(EmisValues.parsePeriod("2025-09-15")).isEqualTo(LocalDate.of(2025, 9, 15));
+        assertThat(EmisValues.parsePeriod("2025M09")).isEqualTo(LocalDate.of(2025, 9, 1));
+        assertThat(EmisValues.parsePeriod("2025")).isEqualTo(LocalDate.of(2025, 1, 1));
+        assertThat(EmisValues.parsePeriod("не период")).isNull();
+        assertThat(EmisValues.parsePeriod(null)).isNull();
     }
 
     // ==================== Поведение провайдера (fake transport) ====================
@@ -595,16 +600,165 @@ class RosstatEmisProviderTest {
     @Test
     @DisplayName("looksLikeHtml: распознаёт HTML-ошибку, не трогает XML")
     void detectsHtmlPayload() {
-        assertThat(RosstatEmisProvider.looksLikeHtml("<!DOCTYPE html><html>")).isTrue();
-        assertThat(RosstatEmisProvider.looksLikeHtml("  <html lang='ru'>")).isTrue();
-        assertThat(RosstatEmisProvider.looksLikeHtml(SDMX_XML)).isFalse();
+        assertThat(EmisTransport.looksLikeHtml("<!DOCTYPE html><html>")).isTrue();
+        assertThat(EmisTransport.looksLikeHtml("  <html lang='ru'>")).isTrue();
+        assertThat(EmisTransport.looksLikeHtml(SDMX_XML)).isFalse();
     }
 
     @Test
     @DisplayName("extractBalanced: строки со скобками внутри не ломают балансировку")
     void balancedExtractionWithStrings() {
         String text = "filters: { 'a': { title: 'Виды {не поле}', values: {} } } хвост";
-        String block = RosstatEmisProvider.extractBalanced(text, "filters:", '{');
+        String block = EmisPortalPage.extractBalanced(text, "filters:", '{');
         assertThat(block).isEqualTo("{ 'a': { title: 'Виды {не поле}', values: {} } }");
+    }
+
+    // ==================== Загрузка выгрузки файлом (parseSnapshot, KB-1) ====================
+
+    /** Байты тестового ресурса — путь ручной загрузки выгрузки админом. */
+    private static byte[] resourceBytes(String path) throws IOException {
+        try (var in = RosstatEmisProviderTest.class.getClassLoader().getResourceAsStream(path)) {
+            if (in == null) throw new IOException("нет тестового ресурса: " + path);
+            return in.readAllBytes();
+        }
+    }
+
+    @Test
+    @DisplayName("parseSnapshot: боевая выгрузка файлом разбирается тем же потоковым парсером")
+    void parsesUploadedSnapshotFile() throws IOException {
+        byte[] payload = resourceBytes("emis/data-31448-real.xml");
+
+        EmisSnapshot snap = provider(new FakeTransport()).parseSnapshot(payload, "data-31448.xml");
+
+        assertThat(snap.regionCode()).isEqualTo("643");
+        assertThat(snap.catalog()).containsEntry("105", "Фарш мясной, кг");
+        assertThat(snap.prices()).containsOnlyKeys("105");
+        assertThat(snap.prices().get("105")).hasSize(8);
+        assertThat(snap.prices().get("105").get(0).price()).isEqualByComparingTo("502.55");
+    }
+
+    @Test
+    @DisplayName("parseSnapshot: пустой файл и null вместо имени — причина называет файл")
+    void rejectsEmptyUpload() {
+        var p = provider(new FakeTransport());
+
+        assertThatThrownBy(() -> p.parseSnapshot(new byte[0], "empty.xml"))
+                .isInstanceOf(IntegrationUnavailableException.class)
+                .hasMessageContaining("empty.xml")
+                .hasMessageContaining("пуст");
+        assertThatThrownBy(() -> p.parseSnapshot(null, null))
+                .isInstanceOf(IntegrationUnavailableException.class)
+                .hasMessageContaining("без имени");
+    }
+
+    @Test
+    @DisplayName("parseSnapshot: файл больше max-response-bytes отклоняется до разбора")
+    void rejectsUploadOverByteLimit() {
+        var p = new RosstatEmisProvider("https://www.fedstat.ru", "31448",
+                "Российская Федерация", 2, 1024L, new FakeTransport());
+        byte[] payload = new byte[2048];
+        Arrays.fill(payload, (byte) '<');
+
+        assertThatThrownBy(() -> p.parseSnapshot(payload, "big.xml"))
+                .isInstanceOf(IntegrationUnavailableException.class)
+                .hasMessageContaining("2048 байт")
+                .hasMessageContaining("превышает предел max-response-bytes=1024");
+    }
+
+    @Test
+    @DisplayName("parseSnapshot: HTML вместо выгрузки — причина называет нужный ответ портала")
+    void rejectsHtmlUpload() {
+        byte[] html = "<!DOCTYPE html><html><body>CSRF блокировка</body></html>"
+                .getBytes(StandardCharsets.UTF_8);
+
+        assertThatThrownBy(() -> provider(new FakeTransport()).parseSnapshot(html, "page.html"))
+                .isInstanceOf(IntegrationUnavailableException.class)
+                .hasMessageContaining("не похож на SDMX-выгрузку")
+                .hasMessageContaining("downloadData.do?format=sdmx");
+    }
+
+    @Test
+    @DisplayName("parseSnapshot: признак SDMX ищется в первых 64 КБ — глубже не заглядываем")
+    void sniffsSdmxMarkerOnlyInFileHead() {
+        // Намеренное ограничение KB-1: файл НЕ превращается в String, поэтому маркер ищется
+        // только в начале. В реальном ответе портала GenericData — корневой элемент и виден
+        // сразу; здесь проверяем границу поведения, чтобы её изменение было осознанным.
+        String padded = "<?xml version=\"1.0\"?><!--" + "x".repeat(70_000) + "-->"
+                + SDMX_XML.substring(SDMX_XML.indexOf("<GenericData"));
+
+        assertThatThrownBy(() -> provider(new FakeTransport())
+                .parseSnapshot(padded.getBytes(StandardCharsets.UTF_8), "padded.xml"))
+                .isInstanceOf(IntegrationUnavailableException.class)
+                .hasMessageContaining("не похож на SDMX-выгрузку");
+    }
+
+    @Test
+    @DisplayName("parseSnapshot: SDMX без позиций и рядов — «выгрузка пустая», а не «синк успешен, 0»")
+    void rejectsSdmxWithoutAnyData() {
+        String xml = """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <GenericData xmlns="http://www.SDMX.org/resources/SDMXML/schemas/v1_0/message"
+                             xmlns:generic="http://www.SDMX.org/resources/SDMXML/schemas/v1_0/generic"
+                             xmlns:structure="http://www.SDMX.org/resources/SDMXML/schemas/v1_0/structure">
+                 <CodeLists>
+                  <structure:CodeList id="32"><structure:Name>Виды товаров и услуг</structure:Name>
+                  </structure:CodeList>
+                 </CodeLists>
+                 <DataSet/>
+                </GenericData>
+                """;
+
+        assertThatThrownBy(() -> provider(new FakeTransport())
+                .parseSnapshot(xml.getBytes(StandardCharsets.UTF_8), "no-data.xml"))
+                .isInstanceOf(IntegrationUnavailableException.class)
+                .hasMessageContaining("нет ни позиций справочника, ни ценовых рядов");
+    }
+
+    // ==================== Диагностика сетевых отказов (R10) ====================
+
+    /** Провайдер, у которого сессия бросает заданное исключение на любом запросе. */
+    private static RosstatEmisProvider providerFailingWith(IOException e) {
+        return new RosstatEmisProvider("https://www.fedstat.ru", "31448",
+                "Российская Федерация", 2, 33_554_432L, () -> new Session() {
+                    @Override
+                    public PageResult get(String url) throws IOException {
+                        throw e;
+                    }
+
+                    @Override
+                    public PageResult postForm(String url, String formBody) throws IOException {
+                        throw e;
+                    }
+
+                    @Override
+                    public void close() { }
+                });
+    }
+
+    @Test
+    @DisplayName("Сетевой отказ: DNS, таймаут и connect объясняются по-человечески, прочее — как есть")
+    void explainsIoFailures() {
+        assertThatThrownBy(providerFailingWith(new UnknownHostException("www.fedstat.ru"))::downloadSnapshot)
+                .isInstanceOf(IntegrationUnavailableException.class)
+                .hasMessageContaining("не удалось определить адрес fedstat.ru");
+        assertThatThrownBy(providerFailingWith(new HttpTimeoutException("request timed out"))::downloadSnapshot)
+                .isInstanceOf(IntegrationUnavailableException.class)
+                .hasMessageContaining("превышен таймаут");
+        assertThatThrownBy(providerFailingWith(new ConnectException("Connection refused"))::downloadSnapshot)
+                .isInstanceOf(IntegrationUnavailableException.class)
+                .hasMessageContaining("не удалось установить соединение с fedstat.ru");
+        assertThatThrownBy(providerFailingWith(new IOException("connection reset"))::downloadSnapshot)
+                .isInstanceOf(IntegrationUnavailableException.class)
+                .hasMessageContaining("connection reset");
+    }
+
+    @Test
+    @DisplayName("testConnection: сетевой отказ — статус ошибки, а не исключение (UI не блокируется)")
+    void testConnectionReportsIoFailureAsStatus() {
+        var status = providerFailingWith(new UnknownHostException("www.fedstat.ru")).testConnection();
+
+        assertThat(status.available()).isFalse();
+        assertThat(status.message()).contains("ЕМИСС недоступен")
+                .contains("не удалось определить адрес fedstat.ru");
     }
 }

@@ -13,7 +13,10 @@
 
     <groupId>com.provision</groupId>
     <artifactId>provision</artifactId>
-    <version>0.0.1-SNAPSHOT</version>
+    <!-- Единственный источник версии приложения (KB-4): Maven-фильтрация ресурсов подставляет
+         @project.version@ в app.version (application.yml), оттуда она уходит в User-Agent
+         запросов к порталу ЕМИСС. Сборка также кладёт META-INF/build-info.properties в jar. -->
+    <version>1.0.1</version>
     <name>provision</name>
     <description>Meal planning service for hiking and yachts</description>
 
@@ -144,6 +147,16 @@
                         </exclude>
                     </excludes>
                 </configuration>
+                <executions>
+                    <!-- META-INF/build-info.properties (build.version/build.time) — по нему
+                         поддержка портала и админ на проде определяют, какая сборка отвечает. -->
+                    <execution>
+                        <id>build-info</id>
+                        <goals>
+                            <goal>build-info</goal>
+                        </goals>
+                    </execution>
+                </executions>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>

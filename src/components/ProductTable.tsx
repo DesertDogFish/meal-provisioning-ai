@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
-import { Edit2, Trash2 } from 'lucide-react';
+import { Edit2, Trash2, Share2 } from 'lucide-react';
 import type { PriceSyncStatus, UnitOfMeasure } from '../types';
-import { humanizeUnit } from '../utils/text';
+import { humanizeUnit, productsWord } from '../utils/text';
 import { Button } from './Button';
 
 export interface ProductRow {
@@ -31,6 +31,12 @@ export interface ProductRow {
   emisName?: string | null;
   /** Синхронизирована ли цена из ЕМИСС: NOT_LINKED / NO_DATA / SYNCED. */
   priceSyncStatus?: PriceSyncStatus | string;
+  /**
+   * KB-8: сколько ЕЩЁ глобальных продуктов привязано к той же позиции ЕМИСС
+   * (ProductResponse.emisSharedCount = всего − 1). 0/null/undefined — позиция только у этого
+   * продукта, значок не показываем; иначе значок рисуется со счётчиком «всего продуктов».
+   */
+  emisSharedCount?: number | null;
 }
 
 /**
@@ -203,9 +209,41 @@ export function ProductTable({ products, filters, onEdit, onDelete, onResetFilte
     const title = product.emisName
       ? `ЕМИСС: ${product.emisName}${product.currentPrice?.effectiveFrom ? ` · цена от ${product.currentPrice.effectiveFrom}` : ''}`
       : 'Источник цены не выбран — цену ведёт человек';
+    // KB-8: значок «привязка уже используется» — одна и та же позиция ЕМИСС у нескольких
+    // продуктов законна (сухое молоко и сухие сливки → 1115), но цена синхронизации придёт
+    // одна на всех, и админ должен это видеть, а не узнавать из цифр в походе.
+    // Решение владельца 29.10.2026: значок НЕ сужаем (показываем на всех продуктах с общей
+    // позицией), но добавляем СЧЁТЧИК — сколько всего продуктов сидит на этой позиции.
+    // Бэкенд отдаёт число ДРУГИХ продуктов (ProductService.emisSharedWithOthers = всего − 1),
+    // поэтому здесь +1: админу важно «нас тут трое», а не «кроме меня ещё двое».
+    const shared = product.emisSharedCount ?? 0;
+    const linkedTotal = shared + 1;
     return (
-      <span className="chip-delta" style={tone} title={title} data-testid="price-sync-status">
-        {meta.label}
+      <span className="inline-flex items-center gap-1.5">
+        <span className="chip-delta" style={tone} title={title} data-testid="price-sync-status">
+          {meta.label}
+        </span>
+        {shared > 0 && (
+          <span
+            title={`Позицию ЕМИСС используют ${linkedTotal} ${productsWord(linkedTotal)} (включая этот): цена синхронизации придёт одна на всех`}
+            aria-label={`Позицию ЕМИСС используют ${linkedTotal} ${productsWord(linkedTotal)}`}
+            data-testid="emis-shared-badge"
+            style={{
+              color: 'var(--amber-300, var(--muted))',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 2,
+            }}
+          >
+            <Share2 size={14} />
+            <span
+              data-testid="emis-shared-count"
+              style={{ fontSize: 11, lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}
+            >
+              {linkedTotal}
+            </span>
+          </span>
+        )}
       </span>
     );
   };

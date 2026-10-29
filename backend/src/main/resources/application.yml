@@ -34,13 +34,14 @@ spring:
       fail-on-unknown-properties: false
 
   # Загрузка выгрузки ЕМИСС файлом («Интеграции → Загрузить файл выгрузки», Запуск №17).
-  # Полная SDMX-выгрузка показателя — десятки мегабайт, поэтому транспортный лимит совпадает
-  # по смыслу с integration.rosstat.max-response-bytes (32 МБ); содержимое файла дополнительно
-  # проверяет провайдер (размер + признак SDMX).
+  # Полная SDMX-выгрузка показателя — 65 МБ, поэтому лимит совпадает по смыслу с
+  # integration.rosstat.max-response-bytes (96 МБ); содержимое файла дополнительно проверяет
+  # провайдер (размер + признак SDMX). Согласовано также с client_max_body_size в nginx.conf
+  # и с MAX_UPLOAD_BYTES в src/pages/IntegrationsPage.tsx.
   servlet:
     multipart:
-      max-file-size: ${EMIS_UPLOAD_MAX_FILE_SIZE:32MB}
-      max-request-size: ${EMIS_UPLOAD_MAX_FILE_SIZE:32MB}
+      max-file-size: ${EMIS_UPLOAD_MAX_FILE_SIZE:96MB}
+      max-request-size: ${EMIS_UPLOAD_MAX_FILE_SIZE:96MB}
 
 server:
   port: 8080
@@ -57,6 +58,14 @@ jwt:
 # В docker-сценарии фронт идёт через nginx same-origin и CORS не задействован.
 cors:
   allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://localhost:3000}
+
+# Версия приложения (дефект KB-4: свойства не было, и User-Agent всегда говорил «0.0.0»).
+# Единственный источник истины — backend/pom.xml (<version>): spring-boot-starter-parent
+# включает фильтрацию ресурсов, поэтому @project.version@ в собранном application.yml
+# заменяется на версию pom (сейчас 1.0.1). APP_VERSION переопределяет её без пересборки.
+# Ту же версию spring-boot-maven-plugin кладёт в META-INF/build-info.properties внутри jar.
+app:
+  version: ${APP_VERSION:@project.version@}
 
 integration:
   # Контактный email для User-Agent внешних интеграций (вежливость публичных API).
@@ -94,7 +103,8 @@ integration:
     # Код того же региона (ОКАТО). Под ним точки ложатся в emis_prices и по нему же читаются;
     # используется как fallback, если в ответе портала нет измерения территорий.
     region-code: ${ROSSTAT_REGION_CODE:643004.АГ}
-    user-agent: ${ROSSTAT_USER_AGENT:${spring.application.name:ProvisionApp}/${app.version:0.0.0} (${integration.contact-email:dev@provision.app})}
+    # Версия — из app.version (pom.xml), иначе портал видит «provision/unknown» (KB-4).
+    user-agent: ${ROSSTAT_USER_AGENT:${spring.application.name:ProvisionApp}/${app.version:unknown} (${integration.contact-email:dev@provision.app})}
     # Сколько последних ЛЕТ храним в локальной копии (решение владельца: два года, не больше).
     # Точки вне окна отбрасываются при записи, устаревшие — удаляются из таблицы.
     period-years: ${ROSSTAT_PERIOD_YEARS:2}
@@ -106,9 +116,11 @@ integration:
     # Дефолт 0 (все месяцы): для окна «два года» нужна полная история месяцев, а объём
     # ответа ограничен одним регионом и предохранителем max-response-bytes.
     period-months: ${ROSSTAT_PERIOD_MONTHS:0}
-    # Предохранитель от OOM (дефект №6): ответ больше этого размера не парсим —
-    # 65 МБ XML это ~130 МБ String и пик 600–700 МБ heap на DOM.
-    max-response-bytes: ${ROSSTAT_MAX_RESPONSE_BYTES:33554432}
+    # Предохранитель от runaway-ответа (дефект №6). С 29.10.2026 разбор ПОТОКОВЫЙ (StAX,
+    # KB-1): ответ больше лимита не «отказывается», а ОБРЫВАЕТСЯ при чтении с внятной причиной.
+    # Память от объёма ответа больше не зависит — 66 МБ разбирались в 128 МБ heap (проверено),
+    # поэтому лимит держит полный ряд (65 МБ) с запасом и окно выгрузки можно расширять.
+    max-response-bytes: ${ROSSTAT_MAX_RESPONSE_BYTES:100663296}
 
 springdoc:
   api-docs:

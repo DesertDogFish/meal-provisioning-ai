@@ -1,13 +1,24 @@
 import { useEffect, useRef, useState } from 'react';
-import { Search, X, Link2, Link2Off } from 'lucide-react';
+import { Search, X, Link2, Link2Off, AlertTriangle } from 'lucide-react';
 import { api } from '../api/client';
-import type { EmisProduct } from '../types';
+import type { EmisProduct, UnitOfMeasure } from '../types';
+import { UNIT_LABELS } from '../types';
 
 interface EmisLinkPickerProps {
   /** Выбранный код позиции ЕМИСС; '' — продукт не привязан (цену ведёт человек). */
   value: string;
   /** Название позиции текущей привязки (ProductResponse.emisName) — до первого поиска. */
   linkedName?: string | null;
+  /**
+   * KB-5: единица продукта. С ней сервер возвращает в результатах цену, пересчитанную на нашу
+   * единицу ({@code pricePerUnit}), и предупреждение о сомнительной паре ({@code warning}).
+   * Пересчёт живёт на сервере: деньги на клиенте не считаются (AGENTS §12).
+   */
+  unit?: UnitOfMeasure | string;
+  /** KB-5: вес одной штуки/упаковки, г — нужен, когда позиция ЕМИСС указана за вес или объём. */
+  pieceWeightG?: number | null;
+  /** KB-5: текущая цена продукта за ту же единицу — по ней ловим «цена уехала на порядок». */
+  currentPrice?: number | null;
   onChange: (code: string, name: string | null) => void;
   disabled?: boolean;
 }
@@ -32,13 +43,25 @@ function formatPeriod(iso: string | null): string {
  *
  * <p>В списке сразу видны цена и период (боль запусков №14–17: «в результате поиска
  * даже цена не высвечивается» — выбирать позицию вслепую невозможно).</p>
+ *
+ * <p>KB-5: если передан контекст продукта ({@code unit}/{@code pieceWeightG}/{@code currentPrice}),
+ * каждая строка результата показывает, сколько получится ЗА НАШУ ЕДИНИЦУ после привязки, и
+ * предупреждение, если пара сомнительная. Привязка при этом не блокируется — по решению
+ * владельца 29.10.2026 «нужно предупреждение, остальное на откуп админа».</p>
  */
-export function EmisLinkPicker({ value, linkedName, onChange, disabled }: EmisLinkPickerProps) {
+export function EmisLinkPicker({
+  value, linkedName, unit, pieceWeightG, currentPrice, onChange, disabled,
+}: EmisLinkPickerProps) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<EmisProduct[]>([]);
   const [searching, setSearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
+  /**
+   * Предупреждение выбранной позиции вместе с её кодом: список после выбора закрывается,
+   * а админ должен видеть, на что согласился, вплоть до сохранения формы.
+   */
+  const [picked, setPicked] = useState<{ code: string; warning: string | null } | null>(null);
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
   const seq = useRef(0);
 
@@ -46,9 +69,16 @@ export function EmisLinkPicker({ value, linkedName, onChange, disabled }: EmisLi
     const my = ++seq.current;
     setSearching(true);
     try {
-      const data = await api.get<EmisProduct[]>('/admin/emis/products', {
-        params: { query: q, limit: '20' },
-      });
+      const params: Record<string, string> = { query: q, limit: '20' };
+      // KB-5: контекст продукта — сервер вернёт pricePerUnit и warning для каждой позиции.
+      if (unit) params.unit = String(unit);
+      if (pieceWeightG != null && Number.isFinite(pieceWeightG) && pieceWeightG > 0) {
+        params.pieceWeightG = String(pieceWeightG);
+      }
+      if (currentPrice != null && Number.isFinite(currentPrice) && currentPrice > 0) {
+        params.price = String(currentPrice);
+      }
+      const data = await api.get<EmisProduct[]>('/admin/emis/products', { params });
       if (my !== seq.current) return; // ответ устарел — уже идёт более новый поиск
       setResults(Array.isArray(data) ? data : []);
       setError(null);
@@ -69,10 +99,11 @@ export function EmisLinkPicker({ value, linkedName, onChange, disabled }: EmisLi
     return () => {
       if (debounce.current) clearTimeout(debounce.current);
     };
-  }, [query, open]);
+  }, [query, open, unit, pieceWeightG, currentPrice]);
 
   const select = (product: EmisProduct) => {
     onChange(product.code, product.name);
+    setPicked({ code: product.code, warning: product.warning ?? null });
     setQuery('');
     setResults([]);
     setOpen(false);
@@ -80,10 +111,14 @@ export function EmisLinkPicker({ value, linkedName, onChange, disabled }: EmisLi
 
   const unlink = () => {
     onChange('', null);
+    setPicked(null);
     setQuery('');
     setResults([]);
     setOpen(false);
   };
+
+  /** Предупреждение показываем только для той позиции, которая сейчас выбрана. */
+  const pickedWarning = picked && picked.code === value ? picked.warning : null;
 
   return (
     <div>
@@ -191,13 +226,42 @@ export function EmisLinkPicker({ value, linkedName, onChange, disabled }: EmisLi
                       ) : (
                         ' · цен в копии пока нет'
                       )}
+                      {/* KB-5: сколько получится за нашу единицу после привязки. */}
+                      {item.pricePerUnit != null && (
+                        <>
+                          {' · после привязки '}
+                          <b style={{ color: 'var(--wave-300)' }}>{formatPrice(item.pricePerUnit)} ₽</b>
+                          {unit ? ` за ${UNIT_LABELS[unit as UnitOfMeasure] ?? unit}` : ''}
+                        </>
+                      )}
                     </span>
+                    {item.warning && (
+                      <span
+                        className="flex items-start gap-1.5 text-xs mt-1"
+                        style={{ color: 'var(--amber-300, var(--muted))' }}
+                        data-testid="emis-link-warning"
+                      >
+                        <AlertTriangle size={13} style={{ marginTop: 1, flexShrink: 0 }} />
+                        <span>{item.warning}</span>
+                      </span>
+                    )}
                   </button>
                 </li>
               ))}
             </ul>
           )}
         </div>
+      )}
+
+      {pickedWarning && (
+        <p
+          className="text-xs mt-1 flex items-start gap-1.5"
+          style={{ color: 'var(--amber-300, var(--muted))' }}
+          data-testid="emis-link-warning-picked"
+        >
+          <AlertTriangle size={13} style={{ marginTop: 1, flexShrink: 0 }} />
+          <span>{pickedWarning}</span>
+        </p>
       )}
 
       {!value && !open && (

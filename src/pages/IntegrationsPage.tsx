@@ -15,8 +15,9 @@ interface Integration {
   errorMessage: string | null;
 }
 
-/** Лимит совпадает с бэкендом: spring.servlet.multipart.max-file-size (EMIS_UPLOAD_MAX_FILE_SIZE). */
-const MAX_UPLOAD_BYTES = 32 * 1024 * 1024;
+/** Лимит совпадает с бэкендом: spring.servlet.multipart.max-file-size (EMIS_UPLOAD_MAX_FILE_SIZE)
+ * и с client_max_body_size в nginx.conf — полная SDMX-выгрузка весит ~65 МБ. */
+const MAX_UPLOAD_BYTES = 96 * 1024 * 1024;
 
 function formatSize(bytes: number): string {
   if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} МБ`;

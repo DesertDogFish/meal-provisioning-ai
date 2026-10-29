@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 /**
@@ -26,11 +27,22 @@ public class EmisController {
 
     private final EmisCatalogService catalogService;
 
-    /** Поиск по названию; пустой {@code query} — первые {@code limit} позиций по алфавиту. */
+    /**
+     * Поиск по названию; пустой {@code query} — первые {@code limit} позиций по алфавиту.
+     *
+     * <p>Необязательные {@code unit}/{@code pieceWeightG}/{@code price} — контекст продукта,
+     * к которому подбирается позиция (дефект KB-5). С ним каждый результат приходит сразу
+     * с ценой, пересчитанной на единицу продукта, и предупреждением о сомнительной паре;
+     * привязку это НЕ блокирует — решение за админом.</p>
+     */
     @GetMapping("/products")
     public List<EmisProductDto> searchProducts(
             @RequestParam(required = false) String query,
-            @RequestParam(defaultValue = "20") int limit) {
-        return catalogService.search(query, limit);
+            @RequestParam(defaultValue = "20") int limit,
+            @RequestParam(required = false) String unit,
+            @RequestParam(required = false) BigDecimal pieceWeightG,
+            @RequestParam(required = false) BigDecimal price) {
+        return catalogService.search(query, limit,
+                new EmisCatalogService.LinkContext(unit, pieceWeightG, price));
     }
 }
