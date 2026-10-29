@@ -131,13 +131,13 @@ export default function AddMealModal({
   return (
     <Modal onClose={onClose}>
       <div
-        className="rounded-2xl shadow-xl w-full max-w-lg p-6 my-8"
+        className="modal-sheet rounded-2xl shadow-xl w-full max-w-lg p-6 my-8"
         style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
         role="dialog"
         aria-label="Добавить приём пищи"
       >
         {/* Шапка + контекст дня (§2.1, проблема №6 макета); U21: крестик закрытия */}
-        <div className="flex items-start justify-between gap-3">
+        <div className="modal-head flex items-start justify-between gap-3">
           <h2 className="text-xl font-bold" style={{ color: 'var(--text)' }}>Добавить приём пищи</h2>
           <button
             type="button"
@@ -287,7 +287,7 @@ export default function AddMealModal({
         </div>
 
         {/* Одна commit-кнопка + шорткат → Модалка B */}
-        <div className="flex items-center justify-end gap-3 mt-6">
+        <div className="modal-foot flex items-center justify-end gap-3 mt-6">
           <Button variant="ghost" onClick={onClose} aria-label="Отмена">Отмена</Button>
           <Button variant="primary" onClick={submit} disabled={!selected || submitting} aria-label="Добавить">
             {submitting ? 'Добавляем…' : 'Добавить'}

@@ -72,11 +72,16 @@ export default function Modal({
   return createPortal(
     <div
       className="modal-overlay"
-      style={{ overflowY: 'auto' }}
+      data-testid="modal-overlay"
       onClick={onClose}
     >
-      {/* Клик по самой карточке не должен закрывать окно (прежнее поведение). */}
-      <div onClick={(e) => e.stopPropagation()}>{children}</div>
+      {/* Клик по самой карточке не должен закрывать окно (прежнее поведение).
+          Подзадача 4 (plans/done/2026-10-29-ui-nowrap-and-mobile.md): обёртка
+          .modal-wrap держит ограничение высоты по dvh — лист модалки
+          скроллится ВНУТРИ и целиком влезает в экран телефона, а оверлей
+          больше не скроллится (overflow-y:auto убран: он и был причиной
+          «модалка не по центру, а где-то сбоку/снизу»). */}
+      <div className="modal-wrap" onClick={(e) => e.stopPropagation()}>{children}</div>
     </div>,
     document.body,
   );

@@ -490,7 +490,7 @@ input[type=number]::-webkit-outer-spin-button {
 .nf-sm .nf-btn {
   width: 20px;
   height: 20px;
-  font: 800 11px/1 Manrope;
+  font: 800 var(--fs-caption)/1 var(--font-body);
 }
 
 .nf-sm {
@@ -529,7 +529,7 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   display: inline-block;
   border-radius: var(--r-pill);
   padding: var(--sp-1) var(--sp-2);
-  font: 700 10px Manrope;
+  font: 700 var(--fs-caption) var(--font-body);
   background: color-mix(in srgb, var(--amber-500) 14%, transparent);
   border: 1px solid color-mix(in srgb, var(--amber-500) 34%, transparent);
   color: var(--amber-300);
@@ -550,7 +550,7 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   display: inline-block;
   border-radius: var(--r-pill);
   padding: var(--sp-1) var(--sp-2);
-  font: 700 10px Manrope;
+  font: 700 var(--fs-caption) var(--font-body);
 }
 
 .chip-delta.dim {
@@ -589,8 +589,13 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   inset: 0;
   background: color-mix(in srgb, var(--bg-0) 66%, transparent);
   backdrop-filter: blur(6px);
-  display: grid;
-  place-items: center;
+  /* flex, а не `display: grid; place-items: center`: у сетки авто-дорожка
+     растягивается до max-content содержимого, поэтому лист шириной 512px на
+     вьюпорте 360px ВЫЛЕЗАЛ за экран и не центрировался. Во flex процент ширины
+     .modal-wrap разрешается против самого оверлея (за вычетом --modal-pad). */
+  display: flex;
+  align-items: center;
+  justify-content: center;
   z-index: var(--z-modal);
 }
 
@@ -1017,4 +1022,441 @@ input.compact-input {
   .mob-scroll > table { min-width: 560px; }
   /* шапки KPI в одну колонку не ломаются: grid-cols-2 уже есть — уменьшаем зазоры */
   .stat { padding-left: 10px; padding-right: 10px; }
+}
+
+/* ============================================================
+   Plan plans/done/2026-10-29-ui-nowrap-and-mobile.md
+   Подзадача 1 — «смысловая связка не переносится».
+
+   Правило: значение и его подпись/единица/иконка подсказки — ОДНА
+   неделимая единица. Разрешено переносить ЦЕЛУЮ связку на следующую
+   строку (flex-wrap у родителя), запрещено разрывать её внутри.
+   Подробности и перечень типов связок — DESIGN_MIGRATION.md §10.
+   ============================================================ */
+:root {
+  /* Подзадача 5 — токены типографики: минимум читаемости без зума.
+     В design-pack/tokens.css размеров шрифта нет, поэтому они живут здесь
+     (как --r-input/--h-control) и ссылаются только на себя. */
+  --fs-body: 14px;         /* основной текст */
+  --fs-small: 13px;        /* второстепенный текст, тела поповеров */
+  --fs-caption: 12px;      /* подписи, шапки таблиц — минимум для экрана */
+  --fs-input: 14px;        /* поля ввода на десктопе */
+  --fs-input-touch: 16px;  /* поля ввода на телефоне: <16px заставляет iOS зумить страницу */
+  --touch-target: 44px;    /* минимальный размер тач-таргета (WCAG 2.5.5) */
+  --modal-pad: var(--sp-3);/* отступ оверлея модалки от краёв экрана */
+}
+
+/* Связка «подпись + её иконка/значение»: инлайн-флекс, не разрывается.
+   `max-width: 100%` + `min-width: 0` у родителя позволяют ЦЕЛОЙ связке
+   уехать на следующую строку, но не ломают её пополам. */
+.keep-pair {
+  display: inline-flex;
+  /* center, не baseline: у иконки-кнопки (InfoTip) базовая линия — низ её
+     контент-бокса, поэтому baseline поднимал бы «?» над строкой подписи. */
+  align-items: center;
+  gap: var(--sp-1);
+  white-space: nowrap;
+  max-width: 100%;
+}
+/* явный алиас для связок с чекбоксом/иконкой (поведение то же, читается в разметке) */
+.keep-pair-center,
+.keep-pair.keep-pair-center { align-items: center; }
+
+/* Число с символом/единицей («10 938 ₽», «1,25 кг», «8 шт») — неразрывно
+   и моноширинными цифрами, чтобы колонки не «плясали». */
+.keep-num {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Контейнер нескольких связок: переносятся ЦЕЛИКОМ, по одной. */
+.keep-pairs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sp-1) var(--sp-3);
+  min-width: 0;
+}
+
+/* ============================================================
+   Подзадача 5 — читаемость основного текста (без зума).
+   Классы вместо инлайн-fontSize 9–11px; печать (.print-doc) не трогаем.
+   ============================================================ */
+.cap {
+  font-size: var(--fs-caption);
+  line-height: 1.35;
+}
+.cap-muted { color: var(--text-2); }
+
+/* Шапки таблиц: подписи колонок — 12px, неразрывные пары с InfoTip */
+.table-head th {
+  font-size: var(--fs-caption);
+  font-weight: 700;
+  color: var(--text-2);
+}
+
+/* Поля ввода: 14px на десктопе, 16px на тач-экране (iOS не зумит при фокусе) */
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="hidden"]):not([type="submit"]):not([type="button"]),
+select,
+textarea {
+  font-size: var(--fs-input);
+}
+@media (pointer: coarse) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="hidden"]):not([type="submit"]):not([type="button"]),
+  select,
+  textarea {
+    font-size: var(--fs-input-touch);
+  }
+}
+
+/* ============================================================
+   Подзадача 3 — InfoTip: управляемый поповер вместо нативного title
+   (на тач-устройстве ховера нет, подсказка была недоступна вовсе).
+   ============================================================ */
+.infotip-trigger {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: transparent;
+  /* --text-2, не --text-3: контраст пары text-2/bg-1 заявлен в tokens.json → a11y.contrast */
+  color: var(--text-2);
+  cursor: help;
+  vertical-align: middle;
+  transition: color var(--t-fast) var(--ease), background var(--t-fast) var(--ease);
+}
+.infotip-trigger:hover,
+.infotip-trigger[aria-expanded="true"] {
+  color: var(--amber-300);
+  background: color-mix(in srgb, var(--amber-500) 14%, transparent);
+}
+.infotip-trigger:focus-visible {
+  outline: 2px solid var(--amber-500);
+  outline-offset: 2px;
+}
+/* Тач-таргет ≥44×44px без изменения вёрстки: прозрачная «перчаточная» зона
+   псевдоэлементом (иконка остаётся 13px, как в брендбуке). */
+@media (pointer: coarse) {
+  .infotip-trigger::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: var(--touch-target);
+    height: var(--touch-target);
+    transform: translate(-50%, -50%);
+  }
+}
+
+.infotip-pop {
+  position: fixed;
+  z-index: var(--z-pop);
+  box-sizing: border-box;
+  max-width: min(320px, 90vw);
+  padding: var(--sp-3);
+  background: var(--bg-2);
+  color: var(--text-1);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  box-shadow: var(--shadow-1);
+  font: 400 var(--fs-small)/1.45 var(--font-body);
+  text-align: left;
+  white-space: normal;
+  animation: infotip-in var(--t-fast) var(--ease) both;
+}
+@keyframes infotip-in {
+  from { opacity: 0; transform: translateY(-2px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* ============================================================
+   Подзадача 4 — модалки и попапы: всегда по центру и в пределах экрана.
+   .modal-overlay — грид с центрированием (уже был); добавляем отступ от
+   краёв, а лист модалки ограничиваем по высоте dvh (на телефоне 100vh
+   включает динамический тулбар браузера — лист «уезжал» под него).
+   ============================================================ */
+.modal-overlay {
+  padding: var(--modal-pad);
+  padding-bottom: calc(var(--modal-pad) + env(safe-area-inset-bottom, 0px));
+}
+/* Обёртка, которую рендерит <Modal> (портал в body): именно она держит
+   ограничение по высоте, чтобы лист скроллился ВНУТРИ, а не уезжал за экран. */
+.modal-wrap {
+  display: flex;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  justify-content: center;
+  align-items: flex-start;
+}
+.modal-wrap > * {
+  width: 100%;
+  max-width: 100%;
+  /* my-8 у листов больше не нужен: оверлей не скроллится, скроллится лист */
+  margin-top: 0;
+  margin-bottom: 0;
+  /* ВАЖНО: без процентов. `min(86dvh, 100%)` НЕ работал: высота .modal-wrap —
+     auto, процент против auto-высоты не разрешается и max-height схлопывался
+     в none (лист на 360×640 вырастал до 820px). dvh учитывает динамический
+     тулбар телефона; vh — фолбэк для браузеров без dvh. */
+  max-height: 86vh;
+  max-height: 86dvh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+@supports not (height: 100dvh) {
+  .modal-wrap > * { max-height: 86vh; }
+}
+/* ВНИМАНИЕ, специфичность: у `.modal-wrap > *` она ТАКАЯ ЖЕ (0,1,0) —
+   универсальный `*` не добавляет веса, — поэтому ширина листа берётся отсюда
+   (правило позже по файлу), а не из `width: 100%` выше. Это желаемое
+   поведение: лист не шире 560px на десктопе и равен доступной ширине
+   (оверлей минус --modal-pad) на телефоне. Все 10 потребителей <Modal>
+   рендерят лист с классом .modal-sheet, исключений нет. */
+.modal-sheet {
+  width: min(560px, 100%);
+  max-height: 86vh;
+  max-height: 86dvh;
+}
+
+/* Липкие шапка/футер листа: тело скроллится, заголовок и кнопки видны всегда.
+   Отрицательные поля компенсируют p-6 листа, фон — из токена (непрозрачный). */
+.modal-head,
+.modal-foot {
+  position: sticky;
+  z-index: 2;
+  margin-left: calc(-1 * var(--sp-6));
+  margin-right: calc(-1 * var(--sp-6));
+  padding-left: var(--sp-6);
+  padding-right: var(--sp-6);
+  background: var(--bg-1);
+}
+.modal-head {
+  top: calc(-1 * var(--sp-6));
+  margin-top: calc(-1 * var(--sp-6));
+  padding-top: var(--sp-5);
+  padding-bottom: var(--sp-3);
+  border-bottom: 1px solid var(--line);
+}
+.modal-foot {
+  bottom: calc(-1 * var(--sp-6));
+  margin-bottom: calc(-1 * var(--sp-6));
+  padding-top: var(--sp-3);
+  padding-bottom: var(--sp-5);
+  border-top: 1px solid var(--line);
+}
+
+/* ============================================================
+   Подзадача 9 — каркас и навигация на мобильном.
+   ============================================================ */
+.app-drawer { max-width: 85vw; }
+/* Вкладки: горизонтальный скролл, подписи не рвутся на две строки */
+.seg { flex-wrap: nowrap; }
+.seg-btn { flex: none; white-space: nowrap; }
+.seg-scroll {
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.seg-scroll::-webkit-scrollbar { display: none; }
+
+/* Плавающая кнопка «наверх» и контент не прячутся под тулбар/«чёлку» */
+.scroll-top-btn {
+  right: calc(18px + env(safe-area-inset-right, 0px));
+  bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+}
+@media (pointer: coarse) {
+  .scroll-top-btn { width: var(--touch-target); height: var(--touch-target); }
+}
+
+/* ============================================================
+   Подзадача 6/7 — чеклист как мобильный сценарий (магазин, одной рукой).
+   ============================================================ */
+.checklist-row input[type="checkbox"] {
+  width: 22px;
+  height: 22px;
+  flex: none;
+}
+@media (pointer: coarse) {
+  /* «перчаточная» зона чекбокса без сдвига вёрстки */
+  .checklist-check { position: relative; }
+  .checklist-check::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: var(--touch-target);
+    height: var(--touch-target);
+    transform: translate(-50%, -50%);
+  }
+  .checklist-row { padding-top: var(--sp-3); padding-bottom: var(--sp-3); }
+}
+/* Липкая шапка чеклиста: прогресс «Взято N из M» и массовые действия видны всегда */
+.checklist-sticky {
+  position: sticky;
+  top: 0;
+  z-index: calc(var(--z-nav) - 20);
+  background: var(--bg-1);
+}
+.checklist-group-toggle {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--bg-2);
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  color: var(--text-1);
+  font: 700 var(--fs-body)/1.2 var(--font-body);
+  cursor: pointer;
+  text-align: left;
+}
+.checklist-group-toggle:focus-visible { outline: 2px solid var(--amber-500); outline-offset: -2px; }
+
+/* ============================================================
+   Подзадача 8 — адаптивные таблицы: на телефоне строка таблицы
+   превращается в карточку «подпись: значение» (вместо горизонтального
+   скролла всей таблицы). Подписи берутся из data-label ячейки.
+   ============================================================ */
+@media (max-width: 767px) {
+  .table-cards { overflow-x: visible !important; }
+  .table-cards > table,
+  .table-cards table {
+    min-width: 0 !important;
+    table-layout: auto !important;
+    width: 100% !important;
+  }
+  .table-cards colgroup { display: none; }
+  /* Шапка остаётся в a11y-дереве, но визуально скрыта: подписи колонок
+     дублируются через data-label в каждой карточке-строке. */
+  .table-cards thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+  }
+  .table-cards tbody { display: block; width: auto; }
+  /* Строка — карточка: чекбокс/иконка в левой колонке, название и все значения —
+     в правой. Подписи значений берутся из data-label (::before). */
+  .table-cards tbody tr {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    column-gap: var(--sp-3);
+    width: auto;
+    padding: var(--sp-3) var(--sp-4);
+    border-top: 1px solid var(--line) !important;
+  }
+  .table-cards tbody tr:first-child { border-top: 0 !important; }
+  .table-cards tbody td {
+    display: flex;
+    grid-column: 2;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--sp-3);
+    width: auto;
+    padding: 2px 0 !important;
+    border: 0 !important;
+    text-align: right;
+  }
+  /* ячейка-чекбокс — в левую колонку, на одну строку с названием */
+  .table-cards tbody td.cell-check {
+    grid-column: 1;
+    grid-row: 1;
+    align-self: center;
+    justify-content: flex-start;
+    padding: 0 !important;
+  }
+  .table-cards tbody td.cell-check::before { content: none; }
+  /* строка-заголовок группы (colSpan) — во всю ширину карточки */
+  .table-cards tbody td.cell-group {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+    text-align: left;
+  }
+  .table-cards tbody td.cell-group::before { content: none; }
+  .table-cards tbody td::before {
+    content: attr(data-label);
+    flex: 0 1 auto;
+    min-width: 0;
+    text-align: left;
+    color: var(--text-2);
+    font-size: var(--fs-caption);
+    font-weight: 700;
+  }
+  /* ячейка без подписи (чекбокс, действия) — во всю ширину, без ::before */
+  .table-cards tbody td[data-label=""]::before,
+  .table-cards tbody td.no-label::before { content: none; }
+  .table-cards tbody td.no-label { justify-content: flex-start; }
+  /* «название позиции» в карточке — крупнее и слева, на одной строке с чекбоксом */
+  .table-cards tbody td.row-title {
+    grid-row: 1;
+    justify-content: flex-start;
+    text-align: left;
+    font-weight: 700;
+    font-size: var(--fs-body);
+    color: var(--text-1);
+    padding-bottom: var(--sp-1) !important;
+  }
+  .table-cards tbody td.row-title::before { content: none; }
+  .table-cards .sticky-thead thead th { position: static; }
+}
+
+/* Чеклист на телефоне: блок «беру N» переезжает на отдельную строку во всю
+   ширину — палец не промахивается, строка остаётся тач-таргетом отметки. */
+@media (max-width: 767px) {
+  .checklist-amount {
+    flex-basis: 100%;
+    justify-content: flex-end;
+    margin-left: auto;
+  }
+  .checklist-row { gap: var(--sp-3); }
+}
+
+/* ============================================================
+   Подзадача 9 — мобильный drawer: закрытая панель НЕ доступна
+   с клавиатуры и скринридеру (visibility:hidden убирает её из
+   tab-order и a11y-дерева), но анимация выезда сохраняется
+   (visibility переключается с задержкой на время трансформации).
+   Только <lg: на десктопе панель sticky и видна всегда.
+   ============================================================ */
+@media (max-width: 1023px) {
+  .app-drawer {
+    visibility: hidden;
+    transition: transform var(--t-base) var(--ease), visibility 0s linear var(--t-base);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .app-drawer.app-drawer--open {
+    visibility: visible;
+    transition: transform var(--t-base) var(--ease), visibility 0s linear 0s;
+  }
+  /* Шапка телефона липкая: гамбургер и тема доступны при любом скролле */
+  .app-topbar {
+    position: sticky;
+    top: 0;
+    z-index: calc(var(--z-nav) - 10);
+    padding-top: calc(var(--sp-3) + env(safe-area-inset-top, 0px));
+  }
+  .app-main {
+    padding-bottom: calc(var(--sp-4) + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+/* Подзадача 5/6: компактный степпер NumberField на тач-устройстве — не 20px,
+   а 32px (минимум WCAG 2.5.8), иначе в «Заплатили» невозможно попасть пальцем. */
+@media (pointer: coarse) {
+  .nf-sm .nf-btn { width: 32px; height: 32px; }
+  .nf-sm { gap: var(--sp-1); }
 }

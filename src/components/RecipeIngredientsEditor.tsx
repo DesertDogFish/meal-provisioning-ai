@@ -223,7 +223,7 @@ export default function RecipeIngredientsEditor({ recipe, products, onChange, di
             className="hidden"
           />
         </div>
-        <p className="mt-1 flex items-center gap-1 text-[11px]" style={{ color: 'var(--muted)' }}>
+        <p className="mt-1 flex items-center gap-1 text-xs" style={{ color: 'var(--muted)' }}>
           <Plus size={12} /> Найдите продукт в списке и укажите количество — оно прибавится, если продукт уже в составе.
         </p>
       </div>

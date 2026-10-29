@@ -105,3 +105,18 @@ export function buildChecklist(
     rows: byCat.get(category)!.sort((x, y) => compareRu(x.name, y.name)),
   }));
 }
+
+/**
+ * Подзадача 6 (plans/done/2026-10-29-ui-nowrap-and-mobile.md): ключ отметки «взято»
+ * вынесен из `TripDetailPage.tsx` в утилиту — его считают и страница (прогресс,
+ * «взять всё»), и компонент чеклиста. Fix-5 (п.9): ключ включает потребность,
+ * поэтому изменение количества автоматически сбрасывает отметку.
+ */
+export function checklistRowKey(row: { ingredientId: string; needed: number }): string {
+  return `${row.ingredientId}@${Math.round(row.needed * 1000)}`;
+}
+
+/** Все ключи чеклиста — для прогресса «Взято N из M» и массовой отметки. */
+export function collectChecklistKeys(groups: ChecklistGroup[]): string[] {
+  return groups.flatMap(g => g.rows.map(checklistRowKey));
+}

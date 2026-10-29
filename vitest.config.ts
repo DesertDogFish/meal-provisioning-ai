@@ -74,6 +74,10 @@ export default defineConfig({
         // Fix-7 (список 26.10, итерация 7): портал-позиция дропдаунов, кнопка «наверх»
         'src/utils/dropdownPos.ts',
         'src/components/ScrollTopButton.tsx',
+        // plans/done/2026-10-29-ui-nowrap-and-mobile.md (R5): чеклист-компонент,
+        // поповер подсказки и единый оверлей модалок
+        'src/components/ChecklistTab.tsx',
+        'src/components/Modal.tsx',
       ],
     },
   },

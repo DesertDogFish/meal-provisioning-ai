@@ -423,7 +423,7 @@ export default function RecipesPage() {
           U4: «1 порция» не переносится на две строки (whitespace-nowrap). */}
       {selected && (
         <Modal onClose={() => setSelectedRecipe(null)}>
-          <div className="rounded-2xl shadow-xl w-full max-w-lg p-6 max-h-[80vh] overflow-y-auto" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }} role="dialog" aria-modal="true" aria-label={`Блюдо: ${selected.name}`}>
+          <div className="modal-sheet rounded-2xl shadow-xl w-full max-w-lg p-6" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }} role="dialog" aria-modal="true" aria-label={`Блюдо: ${selected.name}`}>
             <div className="flex items-start justify-between gap-3 mb-4">
               <div className="min-w-0">
                 <h2 className="text-xl font-bold" style={{ color: 'var(--text)' }}>{selected.name}</h2>

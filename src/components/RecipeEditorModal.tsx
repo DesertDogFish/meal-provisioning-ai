@@ -255,13 +255,13 @@ export default function RecipeEditorModal({ recipe, categories, onClose, onSaved
        скролл-контейнеру страницы и «уезжал» за экран. */
     <Modal onClose={onClose}>
       <div
-        className="rounded-2xl shadow-xl w-full max-w-2xl p-6 max-h-[85vh] overflow-y-auto"
+        className="modal-sheet rounded-2xl shadow-xl w-full max-w-2xl p-6"
         style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
         role="dialog"
         aria-modal="true"
         aria-label={recipe ? 'Редактирование блюда' : 'Новое блюдо'}
       >
-        <div className="flex items-start justify-between mb-4">
+        <div className="modal-head flex items-start justify-between mb-4">
           <h2 className="text-xl font-bold" style={{ color: 'var(--text)' }}>
             {recipe ? 'Редактирование блюда' : 'Новое блюдо'}
           </h2>
@@ -498,7 +498,7 @@ export default function RecipeEditorModal({ recipe, categories, onClose, onSaved
           )}
         </div>
 
-        <div className="flex justify-end gap-3 mt-6">
+        <div className="modal-foot flex justify-end gap-3 mt-6">
           <Button variant="ghost" onClick={onClose}>Отмена</Button>
           <Button variant="primary" onClick={handleSave} loading={saving}>
             {saving ? 'Сохранение…' : recipe ? 'Сохранить изменения' : 'Создать блюдо'}

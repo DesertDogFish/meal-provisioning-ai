@@ -357,15 +357,15 @@ export default function SyncLogsPage() {
           <table className="w-full text-sm">
             <thead>
               <tr style={{ background: 'var(--elev)' }}>
-                <th className="text-left px-4 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: '11px' }}>Старт</th>
-                <th className="text-left px-4 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: '11px' }}>Длит.</th>
-                <th className="text-left px-4 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: '11px' }}>Тип</th>
-                <th className="text-left px-4 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: '11px' }}>Триггер</th>
-                <th className="text-left px-4 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: '11px' }}>Статус</th>
-                <th className="text-right px-4 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: '11px' }}>Создано</th>
-                <th className="text-right px-4 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: '11px' }}>Обновлено</th>
-                <th className="text-right px-4 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: '11px' }}>Ошибки</th>
-                <th className="text-right px-4 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: '11px' }}>Действия</th>
+                <th className="text-left px-4 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: 'var(--fs-caption)' }}>Старт</th>
+                <th className="text-left px-4 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: 'var(--fs-caption)' }}>Длит.</th>
+                <th className="text-left px-4 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: 'var(--fs-caption)' }}>Тип</th>
+                <th className="text-left px-4 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: 'var(--fs-caption)' }}>Триггер</th>
+                <th className="text-left px-4 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: 'var(--fs-caption)' }}>Статус</th>
+                <th className="text-right px-4 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: 'var(--fs-caption)' }}>Создано</th>
+                <th className="text-right px-4 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: 'var(--fs-caption)' }}>Обновлено</th>
+                <th className="text-right px-4 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: 'var(--fs-caption)' }}>Ошибки</th>
+                <th className="text-right px-4 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: 'var(--fs-caption)' }}>Действия</th>
               </tr>
             </thead>
             <tbody>
@@ -420,8 +420,10 @@ export default function SyncLogsPage() {
       {selectedLog && (
         <Modal onClose={() => setSelectedLog(null)}>
           <div
-            className="w-full max-w-2xl h-full overflow-auto p-6"
-            style={{ background: 'var(--surface)', borderLeft: '1px solid var(--border)' }}
+            /* Подзадача 4: «drawer» журнала — тоже лист модалки: на телефоне он
+               центрирован и ограничен по высоте экрана (min(86dvh)), а не h-full. */
+            className="modal-sheet rounded-2xl w-full max-w-2xl overflow-auto p-6"
+            style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
           >
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl font-bold" style={{ color: 'var(--text)' }}>
@@ -453,10 +455,10 @@ export default function SyncLogsPage() {
               <table className="w-full text-sm mb-4">
                 <thead>
                   <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                    <th className="text-left py-2 font-bold" style={{ color: 'var(--muted)', fontSize: '11px' }}>Продукт</th>
-                    <th className="text-left py-2 font-bold" style={{ color: 'var(--muted)', fontSize: '11px' }}>Дата цены</th>
-                    <th className="text-left py-2 font-bold" style={{ color: 'var(--muted)', fontSize: '11px' }}>Старая → новая</th>
-                    <th className="text-left py-2 font-bold" style={{ color: 'var(--muted)', fontSize: '11px' }}>Действие</th>
+                    <th className="text-left py-2 font-bold" style={{ color: 'var(--muted)', fontSize: 'var(--fs-caption)' }}>Продукт</th>
+                    <th className="text-left py-2 font-bold" style={{ color: 'var(--muted)', fontSize: 'var(--fs-caption)' }}>Дата цены</th>
+                    <th className="text-left py-2 font-bold" style={{ color: 'var(--muted)', fontSize: 'var(--fs-caption)' }}>Старая → новая</th>
+                    <th className="text-left py-2 font-bold" style={{ color: 'var(--muted)', fontSize: 'var(--fs-caption)' }}>Действие</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -465,7 +467,7 @@ export default function SyncLogsPage() {
                       <td className="py-2">
                         <b style={{ color: 'var(--text)' }}>{item.productName}</b>
                         {item.anomaly && <span className="chip-delta fire" style={{ marginLeft: '8px' }}>⚑</span>}
-                        <div style={{ color: 'var(--muted)', fontSize: '11px' }}>{item.externalCode}</div>
+                        <div style={{ color: 'var(--muted)', fontSize: 'var(--fs-caption)' }}>{item.externalCode}</div>
                       </td>
                       <td className="py-2" style={{ color: 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}>
                         {item.priceDate}
@@ -486,7 +488,7 @@ export default function SyncLogsPage() {
                       <td className="py-2">
                         {getActionChip(item.action)}
                         {item.reason && (
-                          <div style={{ color: 'var(--muted)', fontSize: '11px', marginTop: '4px' }}>
+                          <div style={{ color: 'var(--muted)', fontSize: 'var(--fs-caption)', marginTop: '4px' }}>
                             {item.reason}
                           </div>
                         )}

@@ -461,7 +461,7 @@ export default function PriceOverridesTab({ tripId }: Props) {
 
       {/* Fix-6 (п.26) + Fix-7 (п.20): подтабы — компактная группа по контенту,
           не растягивается во всю ширину */}
-      <div className="seg max-w-full overflow-x-auto">
+      <div className="seg seg-scroll max-w-full overflow-x-auto">
         {segBtn('total', 'Закупка')}
         {segBtn('days', 'По дням')}
         {segBtn('person', 'На человека')}
@@ -469,7 +469,7 @@ export default function PriceOverridesTab({ tripId }: Props) {
 
       {/* Вкладка: Закупка (группы по категориям, как в чеклисте; без внутреннего скролла) */}
       {activeTab === 'total' && (
-        <div className="rounded-xl overflow-hidden max-w-5xl mob-scroll" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+        <div className="rounded-xl overflow-hidden max-w-5xl mob-scroll table-cards" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
           {/* Fix-7 (п.18): table-layout fixed + colgroup — заголовки колонок стоят
               ровно над полями ввода (единые ширины строк и шапки) */}
           <table className="w-full text-sm" style={{ tableLayout: 'fixed' }}>
@@ -485,26 +485,36 @@ export default function PriceOverridesTab({ tripId }: Props) {
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border)' }}>
                 <th className="px-2 py-3" title="Снять галочку, чтобы исключить продукт из расчёта (не удаляя его)"></th>
-                <th className="text-left px-2 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: '11px' }}>Продукт</th>
-                <th className="text-right px-2 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: '11px' }}>
-                  Нужно
-                  <InfoTip text="Сколько нужно по расчёту меню (с учётом правок состава, исключений и продуктов, добавленных к дню/походу)." />
+                <th className="text-left px-2 py-3 font-bold" data-label="Продукт" style={{ color: 'var(--muted)', fontSize: 'var(--fs-caption)' }}>Продукт</th>
+                <th className="text-right px-2 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: 'var(--fs-caption)' }}>
+                  <span className="keep-pair">
+                    Нужно
+                    <InfoTip text="Сколько нужно по расчёту меню (с учётом правок состава, исключений и продуктов, добавленных к дню/походу)." />
+                  </span>
                 </th>
-                <th className="text-right px-2 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: '11px' }}>
-                  Взяли
-                  <InfoTip text="Сколько реально куплено — в любых единицах (г, кг, шт, уп). Одно хранилище с чеклистом: ввели там — видно здесь, и наоборот. Попадает в отчёт." />
+                <th className="text-right px-2 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: 'var(--fs-caption)' }}>
+                  <span className="keep-pair">
+                    Взяли
+                    <InfoTip text="Сколько реально куплено — в любых единицах (г, кг, шт, уп). Одно хранилище с чеклистом: ввели там — видно здесь, и наоборот. Попадает в отчёт." />
+                  </span>
                 </th>
-                <th className="text-right px-2 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: '11px' }}>
-                  Думали ₽
-                  <InfoTip text="Плановая стоимость позиции: нужное количество × цена справочника на дату." />
+                <th className="text-right px-2 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: 'var(--fs-caption)' }}>
+                  <span className="keep-pair">
+                    Думали ₽
+                    <InfoTip text="Плановая стоимость позиции: нужное количество × цена справочника на дату." />
+                  </span>
                 </th>
-                <th className="text-right px-2 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: '11px' }}>
-                  Заплатили ₽
-                  <InfoTip text="Сумма из чека за позицию — сколько реально заплатили за купленное количество. Цена за единицу и распределение на всех посчитаются автоматически." />
+                <th className="text-right px-2 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: 'var(--fs-caption)' }}>
+                  <span className="keep-pair">
+                    Заплатили ₽
+                    <InfoTip text="Сумма из чека за позицию — сколько реально заплатили за купленное количество. Цена за единицу и распределение на всех посчитаются автоматически." />
+                  </span>
                 </th>
-                <th className="text-right px-2 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: '11px' }}>
-                  Отклонение
-                  <InfoTip text="(Заплатили − Думали) ÷ Думали × 100%." />
+                <th className="text-right px-2 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: 'var(--fs-caption)' }}>
+                  <span className="keep-pair">
+                    Отклонение
+                    <InfoTip text="(Заплатили − Думали) ÷ Думали × 100%." />
+                  </span>
                 </th>
               </tr>
             </thead>
@@ -532,20 +542,22 @@ export default function PriceOverridesTab({ tripId }: Props) {
 
           {/* Sticky итог — народный нейминг (Fix-6 п.21) */}
           <div className="sticky-totals">
-            <span style={{ color: 'var(--text)' }}>
-              Думали: <b style={{ fontVariantNumeric: 'tabular-nums' }}>{formatRub(totalPlanned)}</b>
+            <span className="keep-pair" style={{ color: 'var(--text)' }}>
+              Думали: <b className="keep-num">{formatRub(totalPlanned)}</b>
             </span>
-            <span style={{ color: 'var(--text)' }}>
-              Заплатили: <b style={{ fontVariantNumeric: 'tabular-nums', color: 'var(--w1)' }}>{formatRub(totalActual)}</b>
+            <span className="keep-pair" style={{ color: 'var(--text)' }}>
+              Заплатили: <b className="keep-num" style={{ color: 'var(--w1)' }}>{formatRub(totalActual)}</b>
             </span>
-            <span className={`chip-delta ${getDeltaChipClass(totalDelta)}`}>
+            <span className={`chip-delta keep-num ${getDeltaChipClass(totalDelta)}`}>
               {formatDelta(totalDelta)}
             </span>
-            <span style={{ color: 'var(--muted)', fontSize: '12px' }}>
-              разница: {formatRub(totalActual - totalPlanned)}
+            <span className="keep-pair cap" style={{ color: 'var(--muted)' }}>
+              разница: <span className="keep-num">{formatRub(totalActual - totalPlanned)}</span>
             </span>
             {shoppingExcluded.size > 0 && (
-              <span style={{ color: 'var(--muted)', fontSize: '12px' }}>без {shoppingExcluded.size} искл.</span>
+              <span className="keep-pair cap" style={{ color: 'var(--muted)' }}>
+                без <span className="keep-num">{shoppingExcluded.size} искл.</span>
+              </span>
             )}
           </div>
         </div>
@@ -553,14 +565,14 @@ export default function PriceOverridesTab({ tripId }: Props) {
 
       {/* Вкладка: По дням */}
       {activeTab === 'days' && (
-        <div className="rounded-xl overflow-hidden max-w-3xl mob-scroll" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+        <div className="rounded-xl overflow-hidden max-w-3xl mob-scroll table-cards" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
           <table className="w-full text-sm">
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                <th className="text-left px-4 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: '11px' }}>День</th>
-                <th className="text-right px-4 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: '11px' }}>Думали ₽</th>
-                <th className="text-right px-4 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: '11px' }}>Заплатили ₽</th>
-                <th className="text-right px-4 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: '11px' }}>Отклонение</th>
+                <th className="text-left px-4 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: 'var(--fs-caption)' }}>День</th>
+                <th className="text-right px-4 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: 'var(--fs-caption)' }}><span className="keep-pair">Думали ₽</span></th>
+                <th className="text-right px-4 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: 'var(--fs-caption)' }}><span className="keep-pair">Заплатили ₽</span></th>
+                <th className="text-right px-4 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: 'var(--fs-caption)' }}>Отклонение</th>
               </tr>
             </thead>
             <tbody>
@@ -568,19 +580,19 @@ export default function PriceOverridesTab({ tripId }: Props) {
                 const delta = calculateDelta(day.plannedCost, day.actualCost);
                 return (
                   <tr key={day.dayDate} style={{ borderBottom: '1px solid var(--border)' }}>
-                    <td className="px-4 py-3">
+                    <td className="row-title px-4 py-3" data-label="">
                       <b style={{ color: 'var(--text)' }}>
                         {new Date(day.dayDate).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })}
                       </b>
                     </td>
-                    <td className="px-4 py-3 text-right" style={{ color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>
+                    <td className="keep-num px-4 py-3 text-right" data-label="Думали ₽" style={{ color: 'var(--text)' }}>
                       {formatRub(day.plannedCost)}
                     </td>
-                    <td className="px-4 py-3 text-right" style={{ color: 'var(--w1)', fontVariantNumeric: 'tabular-nums' }}>
+                    <td className="keep-num px-4 py-3 text-right" data-label="Заплатили ₽" style={{ color: 'var(--w1)' }}>
                       {formatRub(day.actualCost)}
                     </td>
-                    <td className="px-4 py-3 text-right">
-                      <span className={`chip-delta ${getDeltaChipClass(delta)}`}>
+                    <td className="px-4 py-3 text-right" data-label="Отклонение">
+                      <span className={`chip-delta keep-num ${getDeltaChipClass(delta)}`}>
                         {formatDelta(delta)}
                       </span>
                     </td>
@@ -598,18 +610,20 @@ export default function PriceOverridesTab({ tripId }: Props) {
           <div className="rounded-xl p-4" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
             <b style={{ color: 'var(--text)' }}>На одного человека</b>
             <p style={{ color: 'var(--muted)', fontSize: '12px', marginTop: '4px' }}>
-              {realPeopleLabel} чел. в походе
-              <InfoTip text="Среднее число участников по дням (переопределения «людей на день» учитываются)." />
+              <span className="keep-pair">
+                {realPeopleLabel} чел. в походе
+                <InfoTip text="Среднее число участников по дням (переопределения «людей на день» учитываются)." />
+              </span>
             </p>
             <div className="flex justify-between py-2 mt-2" style={{ borderTop: '1px solid var(--border)' }}>
               <span style={{ color: 'var(--muted)' }}>Думали</span>
-              <b style={{ color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>
+              <b className="keep-num" style={{ color: 'var(--text)' }}>
                 {formatRub(totalPlanned / realPeople)}
               </b>
             </div>
             <div className="flex justify-between py-2" style={{ borderTop: '1px solid var(--border)' }}>
               <span style={{ color: 'var(--muted)' }}>Заплатили</span>
-              <b style={{ color: 'var(--w1)', fontVariantNumeric: 'tabular-nums' }}>
+              <b className="keep-num" style={{ color: 'var(--w1)' }}>
                 {formatRub(totalActual / realPeople)}
               </b>
             </div>
@@ -618,18 +632,20 @@ export default function PriceOverridesTab({ tripId }: Props) {
           <div className="rounded-xl p-4" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
             <b style={{ color: 'var(--text)' }}>На один приём пищи</b>
             <p style={{ color: 'var(--muted)', fontSize: '12px', marginTop: '4px' }}>
-              {totalPersonMeals} {mealsWord(totalPersonMeals)} за поход
-              <InfoTip text="Сумма по всем дням: приёмы пищи × число людей." />
+              <span className="keep-pair">
+                {totalPersonMeals} {mealsWord(totalPersonMeals)} за поход
+                <InfoTip text="Сумма по всем дням: приёмы пищи × число людей." />
+              </span>
             </p>
             <div className="flex justify-between py-2 mt-2" style={{ borderTop: '1px solid var(--border)' }}>
               <span style={{ color: 'var(--muted)' }}>Думали</span>
-              <b style={{ color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>
+              <b className="keep-num" style={{ color: 'var(--text)' }}>
                 {formatRub(totalPlanned / totalPersonMeals)}
               </b>
             </div>
             <div className="flex justify-between py-2" style={{ borderTop: '1px solid var(--border)' }}>
               <span style={{ color: 'var(--muted)' }}>Заплатили</span>
-              <b style={{ color: 'var(--w1)', fontVariantNumeric: 'tabular-nums' }}>
+              <b className="keep-num" style={{ color: 'var(--w1)' }}>
                 {formatRub(totalActual / totalPersonMeals)}
               </b>
             </div>
@@ -670,7 +686,7 @@ function GroupRows(props: GroupRowsProps) {
     <>
       {/* Fix-6 (п.25/23): категория — заметная плашкой-строкой, формат как в чеклисте */}
       <tr>
-        <td colSpan={7} className="px-3 py-1.5 text-xs font-extrabold uppercase tracking-wide"
+        <td colSpan={7} data-label="" className="cell-group px-3 py-1.5 text-xs font-extrabold uppercase tracking-wide"
             style={{ background: 'var(--elev)', color: 'var(--text)', borderTop: '1px solid var(--border)', borderBottom: '1px solid var(--border)' }}>
           {category}
         </td>
@@ -693,7 +709,7 @@ function GroupRows(props: GroupRowsProps) {
         const deltaChipClass = getDeltaChipClass(delta);
         return (
           <tr key={item.ingredientId} style={{ borderBottom: '1px solid var(--border)', opacity: excluded ? 0.45 : 1 }}>
-            <td className="px-2 py-2.5 text-center">
+            <td className="cell-check px-2 py-2.5 text-center" data-label="">
               <input
                 type="checkbox"
                 checked={!excluded}
@@ -704,7 +720,7 @@ function GroupRows(props: GroupRowsProps) {
                 style={{ accentColor: 'var(--w2)' }}
               />
             </td>
-            <td className="px-2 py-2.5">
+            <td className="row-title px-2 py-2.5" data-label="">
               <b style={{ color: 'var(--text)' }}>{item.ingredientName}</b>
               {item.manual && (
                 <span className="chip-delta dim" style={{ marginLeft: 6, fontSize: 10 }}>к походу</span>
@@ -713,10 +729,10 @@ function GroupRows(props: GroupRowsProps) {
                 <span className="chip-delta dim" style={{ marginLeft: 6, fontSize: 10 }}>искл.</span>
               )}
             </td>
-            <td className="px-2 py-2.5 text-right" style={{ color: 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}>
+            <td className="keep-num px-2 py-2.5 text-right" data-label="Нужно" style={{ color: 'var(--muted)' }}>
               {formatAmount(item.totalAmount, item.unit)}
             </td>
-            <td className="px-2 py-2.5 text-right">
+            <td className="px-2 py-2.5 text-right" data-label="Взяли">
               <FreeAmountInput
                 value={tookValue}
                 baseUnit={item.unit}
@@ -726,10 +742,10 @@ function GroupRows(props: GroupRowsProps) {
                 testId={`qty-input-${item.ingredientId}`}
               />
             </td>
-            <td className="px-2 py-2.5 text-right" style={{ color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>
+            <td className="keep-num px-2 py-2.5 text-right" data-label="Думали ₽" style={{ color: 'var(--text)' }}>
               {excluded ? '—' : formatRub(item.plannedCost)}
             </td>
-            <td className="px-2 py-2.5 text-right">
+            <td className="px-2 py-2.5 text-right" data-label="Заплатили ₽">
               {/* Fix-10 (п.3): sm — одной высоты с «Взяли» (FreeAmountInput) в этой строке */}
               <NumberField
                 value={actualTotal}
@@ -742,8 +758,8 @@ function GroupRows(props: GroupRowsProps) {
                 ariaLabel={`Сумма из чека (₽): ${item.ingredientName}, куплено ${formatAmount(item.totalAmount, item.unit)}`}
               />
             </td>
-            <td className="px-2 py-2.5 text-right">
-              <span className={`chip-delta ${deltaChipClass}`}>
+            <td className="px-2 py-2.5 text-right" data-label="Отклонение">
+              <span className={`chip-delta keep-num ${deltaChipClass}`}>
                 {formatDelta(delta)}
               </span>
             </td>

@@ -150,3 +150,29 @@ test('E2E-09 поход с сидами: открывается, имена бл
   await expect(page.locator('.modal-overlay')).toHaveCount(0, { timeout: 10_000 });
   await expect(page.locator('[aria-label="Состав приёма: Рис с рыбой"]')).toHaveCount(2, { timeout: 10_000 });
 });
+
+test('E2E-10 модалка на десктопе: по центру, ≤560px и целиком в экране', async ({ page }) => {
+  // Подзадачи 4/10 (plans/done/2026-10-29-ui-nowrap-and-mobile.md): .modal-overlay
+  // переведён с `display: grid; place-items: center` на flex. У сетки авто-дорожка
+  // растягивается до max-content содержимого, поэтому широкий лист вылезал за
+  // вьюпорт и терял центрирование (на 360px лист состава был 512px и прижат влево).
+  // Десктопный вид при этом не должен пострадать — фиксируем центровку и ширину.
+  await login(page, { email: 'user@provision.app', password: 'password123' });
+  await page.locator('[data-testid^="trip-card-"]', { hasText: 'Карельский' }).first().click();
+  await expect(page).toHaveURL(/\/trips\/trip1/, { timeout: 15_000 });
+  await page.getByText('5 приёмов пищи').first().click();
+  await page.locator('[aria-label="Состав приёма: Рис с рыбой"]').first().click();
+
+  const overlay = page.locator('.modal-overlay');
+  await expect(overlay).toBeVisible();
+  const box = await overlay.locator('.modal-wrap > *').first().boundingBox();
+  const vp = page.viewportSize()!;
+  expect(box!.width, 'лист шире .modal-sheet max (560px)').toBeLessThanOrEqual(560);
+  expect(box!.width).toBeLessThanOrEqual(vp.width);
+  expect(box!.height, 'лист выше экрана').toBeLessThanOrEqual(vp.height);
+  // по центру по обеим осям (допуск 4px на дробные координаты)
+  expect(Math.abs((box!.x + box!.width / 2) - vp.width / 2)).toBeLessThanOrEqual(4);
+  expect(Math.abs((box!.y + box!.height / 2) - vp.height / 2)).toBeLessThanOrEqual(4);
+  // липкий футер листа: главная кнопка видна без прокрутки страницы
+  await expect(page.getByRole('button', { name: 'Сохранить состав' })).toBeVisible();
+});

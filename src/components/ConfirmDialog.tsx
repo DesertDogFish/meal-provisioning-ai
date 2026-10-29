@@ -35,7 +35,7 @@ export function ConfirmDialog({ state, onClose }: { state: ConfirmState; onClose
   return (
     <Modal onClose={() => onClose(false)}>
       <div
-        className="rounded-2xl shadow-xl w-full max-w-md p-6"
+        className="modal-sheet rounded-2xl shadow-xl w-full max-w-md p-6"
         style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
         role="alertdialog"
         aria-modal="true"
@@ -60,15 +60,18 @@ export function ConfirmDialog({ state, onClose }: { state: ConfirmState; onClose
             </div>
           </div>
         </div>
-        <div className="flex gap-3 mt-5">
+        <div className="modal-foot flex gap-3 mt-5">
           <Button
             variant={tone === 'danger' ? 'danger' : 'primary'}
             className="flex-1"
+            data-testid="confirm-yes"
             onClick={() => onClose(true)}
           >
             {state.confirmLabel ?? 'Удалить'}
           </Button>
-          <Button variant="ghost" className="flex-1" onClick={() => onClose(false)}>
+          {/* Подзадача 7: фокус по умолчанию — на ОТМЕНЕ: Enter не подтверждает
+              опасное действие случайно (Esc/Enter симметричны и безопасны). */}
+          <Button variant="ghost" className="flex-1" autoFocus data-testid="confirm-cancel" onClick={() => onClose(false)}>
             {state.cancelLabel ?? 'Отмена'}
           </Button>
         </div>

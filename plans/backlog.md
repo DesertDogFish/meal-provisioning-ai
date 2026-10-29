@@ -22,7 +22,7 @@
 `coverage.include` vitest.config). Прогон в песочнице — по классам, не `mvn test` целиком
 (KB-10).
 
-- **BL-1. `EmisUnitTest`** — ГОТОВО 29.10.2026. Написан и зелёным прогоном проверен: 20/20.
+- **BL-1. `EmisUnitTest`** (unit, `backend/src/test/java/com/provision/service/`).
   Разбор суффикса: «кг», «350 г», «100 г (100 мл)», «100 мл», «л», «10 шт.», «25 пакетиков»,
   «упаковка 100 шт.», «упаковка 500 листов», «коробок», «рулон», «ампула 5 мл»,
   нераспознанный суффикс → `OTHER`. `pricePerUnit` по всем парам, включая плотность ≈ 1:
@@ -30,17 +30,15 @@
   COUNT(1)→PCS, COUNT(10)→PCS. Отрицательные: COUNT→KG/L, OTHER→*, `emisPrice ≤ 0`,
   `amount ≤ 0`, `pieceWeightG = null`, `ingredientUnit = null`. Округление `rounded` —
   копейки, HALF_UP. Фикстуры — реальные цены выгрузки (8016 = 198,32; 5311 = 702,38;
-  6502 = 26,49; 6505 = 42,90; 5701 = 4,18; 1501 = 113,85 за десяток). Тесты на единицы
-  частично закрывают KB-9 (остаток долга: BL-2…BL-7).
-- **BL-2. `EmisPriceApplierTest`** — в работе (долг KB-9). unit + Mockito, без Spring-контекста:
-  `apply` создаёт точку (`CREATED`), перезаписывает существующую (`UPDATED`), отбрасывает
-  несовместимую (`skipped` + причина в `ProductOutcome.reason`); пустой список точек →
-  `SKIPPED` с причиной «нет цен позиции»; позиция отсутствует в справочнике → `EmisUnit.OTHER`
-  и `SKIPPED`; `deleteManualByIngredientId` вызывается ТОЛЬКО если хоть одна точка применена;
-  `loadLinkedProducts` не тянет trip-копии (`trip_id IS NULL`).
-- **BL-3. `EmisMirrorServiceTest`** — в работе (долг KB-9): upsert справочника и цен,
-  идемпотентность повторного `store`, обрезка окна `period-years`, счётчики
-  `products/prices/deleted`.
+  6502 = 26,49; 6505 = 42,90; 5701 = 4,18; 1501 = 113,85 за десяток). Закрывает KB-9.
+- **BL-2. `EmisPriceApplierTest`** (unit + Mockito, без Spring-контекста): `apply` создаёт
+  точку (`CREATED`), перезаписывает существующую (`UPDATED`), отбрасывает несовместимую
+  (`skipped` + причина в `ProductOutcome.reason`); пустой список точек → `SKIPPED` с причиной
+  «нет цен позиции»; позиция отсутствует в справочнике → `EmisUnit.OTHER` и `SKIPPED`;
+  `deleteManualByIngredientId` вызывается ТОЛЬКО если хоть одна точка применена;
+  `loadLinkedProducts` не тянет trip-копии (`trip_id IS NULL`). Закрывает KB-9.
+- **BL-3. `EmisMirrorServiceTest`**: upsert справочника и цен, идемпотентность повторного
+  `store`, обрезка окна `period-years`, счётчики `products/prices/deleted`. Закрывает KB-9.
 - **BL-4. `EmisCatalogServiceTest` + `EmisControllerTest`** (`@WebMvcTest`): поиск по подстроке
   имени и по коду, лимит, сортировка по имени (ru-коллация), `describe`/`exists`, неизвестный
   код → 404/400, доступ только роли ADMIN (IDOR/403 по `AGENTS.md` §4). Закрывает KB-9.
@@ -177,6 +175,51 @@
   `data-31448-real.xml` и на полном ряде (885 позиций, 286 740 точек) харнесом; память не растёт
   с объёмом. Генератор большой фикстуры в дерево не перенесён → BL-24.
 
+- **BL-25. Декомпозиция `src/pages/TripDetailPage.tsx`** (1300 строк, R8) по вкладкам —
+  «Меню», «Закупка», «По дням», «На человека» — по образцу уже вынесенного чеклиста
+  (`src/components/ChecklistTab.tsx`). Файлы: `src/pages/TripDetailPage.tsx`, новые
+  `src/components/*Tab.tsx`, `vitest.config.ts` (`coverage.include`). Критерий приёмки: все
+  затронутые файлы ≤ 500 строк, поведение вкладок не изменилось (`e2e/main-flow.spec.ts`
+  зелёные), новые компоненты в `coverage.include` с lines ≥ 80 %. Закрывает KB-14.
+  Источник: `plans/done/2026-10-29-ui-nowrap-and-mobile.md`.
+- **BL-26. Декомпозиция `src/components/PriceOverridesTab.tsx`** (756 строк, R8): таблица
+  чеков, итоги и ввод факта — отдельные компоненты. Файлы: `src/components/PriceOverridesTab.tsx`,
+  новые `src/components/Checks*.tsx`, `vitest.config.ts`. Критерий приёмки: файлы ≤ 500 строк,
+  существующие тесты зелёные без правки ожидаемого поведения, новые компоненты в
+  `coverage.include`. Закрывает KB-14. Источник: `plans/done/2026-10-29-ui-nowrap-and-mobile.md`.
+
+## Мобильный UI и данные похода
+
+- **BL-27. Отметки чеклиста на сервер + офлайн-очередь.** Что сделать: перенести «взято» и
+  фактическое количество из `src/utils/tripStaging.ts` (localStorage) на сервер — миграция и
+  эндпоинт в `backend/`, клиент в `src/api/`, `src/utils/checklist.ts`,
+  `src/components/ChecklistTab.tsx`; плюс очередь локальных правок и синхронизация при
+  появлении сети (сценарий «в магазине нет связи»). Критерий приёмки: отметка, поставленная
+  на одном устройстве, видна на другом после синхронизации; офлайн-правки не теряются и
+  применяются при появлении сети; mock-паритет форм ответа соблюдён (`AGENTS.md` §14,
+  `CONTRACT_TARGET=mock npm run test:contract`). Закрывает KB-15.
+  Источник: `plans/done/2026-10-29-ui-nowrap-and-mobile.md`.
+- **BL-28. PWA-минимум для телефона.** Что сделать: `public/manifest.webmanifest`, иконки
+  (192/512), `theme-color` из токенов design-pack, предзагрузка/кэш шрифтов; service worker —
+  по желанию, офлайн-данные уже живут в localStorage (BL-27). Файлы: `public/*`, `index.html`.
+  Критерий приёмки: «Добавить на главный экран» на Android/iOS даёт иконку и полноэкранный
+  запуск в теме приложения, Lighthouse (PWA) не сообщает об отсутствующем manifest.
+- **BL-29. Контраст мобильного UI в обеих темах.** Что сделать: проверить поповер `InfoTip`,
+  липкие `.modal-head`/`.modal-foot`, карточный режим `.table-cards` и `.app-drawer` против
+  `provisions/design-pack/tokens.json → a11y.contrast` на 360/390px. Критерий приёмки: все пары
+  «текст/фон» не ниже норматива; найденные расхождения переданы владельцу design-pack
+  (агенты `provisions/design-pack/**` не правят).
+- **BL-30. Крупный режим текста (доступность).** Что сделать: проверить и при необходимости
+  поправить поведение при пользовательском `font-size`/браузерном зуме текста — nowrap-связки
+  `.keep-pair`, `.keep-num`, карточные таблицы, чеклист. Файлы: `src/index.css`,
+  `e2e/mobile.spec.ts`. Критерий приёмки: при 150 % масштаба текста на 360px нет
+  горизонтального скролла, связки не разрываются, кнопки чеклиста остаются ≥ 32px по высоте.
+- **BL-31. Правило «связки не разрывать» в печати.** Что сделать: перенести `.keep-pair`/
+  `.keep-num` на `.print-doc` (`src/pages/TripPrintPage.tsx`) — сейчас печать живёт отдельно,
+  а `.print-doc th` намеренно оставлен 11px. Критерий приёмки: в PDF подпись, значение и единица
+  на одной строке, колонки не «рвут» пары.
+  Источник: `plans/done/2026-10-29-ui-nowrap-and-mobile.md`.
+
 ## Инфраструктура и CI
 
 - **BL-18. Явный `-Xmx`/`mem_limit` для backend** в `Dockerfile`/`docker-compose.yml`
@@ -222,3 +265,10 @@
   — СНЯТО 29.10.2026 решением владельца: KB-3 закрыт (владелец прогрузил файл выгрузки
   достаточного объёма вручную, данные в локальной копии есть). Если живой прогон всё же
   понадобится — задача восстанавливается под новым номером.
+- **BL-32. Прогнать e2e в CI обычным test-runner'ом.** Что сделать: `npm run test:e2e`
+  (проекты `chromium`, `mobile-390`, `mobile-360` — `playwright.config.ts`) в workflow и
+  убедиться, что `e2e/mobile.spec.ts` (M-01…M-09) и `e2e/main-flow.spec.ts` (E2E-10) зелёные;
+  в песочнице агента test-runner не стартует из-за OOM (KB-16), проверки делались библиотечным
+  запуском chromium. Критерий приёмки: workflow run с e2e-джобой зелёный, при падении
+  публикуется артефакт `playwright-report/`. Закрывает KB-16.
+  Источник: подзадача 10 плана `plans/done/2026-10-29-ui-nowrap-and-mobile.md`.

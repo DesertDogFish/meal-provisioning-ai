@@ -1,6 +1,6 @@
 /// <reference types="vitest/globals" />
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import Layout from './Layout';
 import { ToastProvider } from './ToastProvider';
@@ -68,5 +68,53 @@ describe('Layout — единая центрированная оболочка 
     const nav = frame.querySelector('nav');
     expect(nav).toBeTruthy();
     expect(frame.contains(baseElement.querySelector('main'))).toBe(true);
+  });
+});
+
+/**
+ * Подзадачи 9/10 (plans/done/2026-10-29-ui-nowrap-and-mobile.md): мобильный drawer —
+ * открывается гамбургером, закрывается кликом по затемнению и по Esc, пока открыт —
+ * фон не скроллится, фокус возвращается на гамбургер.
+ */
+describe('Layout — мобильный drawer (подзадача 9)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    (api.get as any).mockResolvedValue({
+      id: 'u1', email: 'a@b.c', firstName: 'A', lastName: 'B', role: 'ADMIN',
+    });
+  });
+
+  it('гамбургер открывает drawer, затемнение закрывает', () => {
+    const { baseElement } = renderLayout();
+    const aside = baseElement.querySelector('aside.app-drawer') as HTMLElement;
+    expect(aside.className).not.toContain('app-drawer--open');
+    expect(screen.queryByTestId('drawer-overlay')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Открыть меню навигации' }));
+    expect(aside.className).toContain('app-drawer--open');
+    expect(screen.getByTestId('drawer-overlay')).toBeTruthy();
+    // фон заблокирован, пока drawer открыт
+    expect(document.body.style.overflow).toBe('hidden');
+
+    fireEvent.click(screen.getByTestId('drawer-overlay'));
+    expect(aside.className).not.toContain('app-drawer--open');
+    expect(document.body.style.overflow).not.toBe('hidden');
+  });
+
+  it('Esc закрывает drawer и возвращает фокус на гамбургер', () => {
+    renderLayout();
+    const burger = screen.getByRole('button', { name: 'Открыть меню навигации' });
+    fireEvent.click(burger);
+    expect(screen.getByTestId('drawer-overlay')).toBeTruthy();
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByTestId('drawer-overlay')).toBeNull();
+    expect(document.activeElement).toBe(burger);
+    expect(document.body.style.overflow).not.toBe('hidden');
+  });
+
+  it('у контента есть оболочка .app-shell и липкая шапка .app-topbar', () => {
+    const { baseElement } = renderLayout();
+    expect(baseElement.querySelector('.app-shell')).toBeTruthy();
+    expect(baseElement.querySelector('header.app-topbar')).toBeTruthy();
   });
 });

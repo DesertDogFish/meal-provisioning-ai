@@ -99,7 +99,7 @@ export default function ApiModeBadge() {
           zIndex: 'var(--z-nav)',
           background: 'var(--surface)',
           border: `2px solid ${getBadgeColor()}`,
-          fontSize: '11px',
+          fontSize: 'var(--fs-caption)',
           fontWeight: 600,
           boxShadow: 'var(--shadow-1)'
         }}
@@ -123,7 +123,7 @@ export default function ApiModeBadge() {
       {showModal && (
         <Modal onClose={() => setShowModal(false)}>
           <div
-            className="rounded-2xl shadow-2xl w-full max-w-md p-6"
+            className="modal-sheet rounded-2xl shadow-2xl w-full max-w-md p-6"
             style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
             role="dialog" aria-modal="true" aria-label="Режим API"
           >

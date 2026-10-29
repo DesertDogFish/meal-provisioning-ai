@@ -426,7 +426,7 @@ export default function ProductsPage() {
       {/* Modal */}
       {showModal && (
         <Modal onClose={() => setShowModal(false)}>
-          <div className="rounded-2xl shadow-xl w-full max-w-md p-6" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+          <div className="modal-sheet rounded-2xl shadow-xl w-full max-w-md p-6" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
             {/* U21: единый крестик в шапке модалки */}
             <div className="flex items-start justify-between gap-3 mb-4">
               <h2 className="text-xl font-bold" style={{ color: 'var(--text)' }}>

@@ -165,12 +165,12 @@ export default function ManualItemsModal({ tripId, dayId, dayLabel, items, produ
   return (
     <Modal onClose={onClose}>
       <div
-        className="rounded-2xl shadow-xl w-full max-w-lg p-6"
+        className="modal-sheet rounded-2xl shadow-xl w-full max-w-lg p-6"
         style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
         role="dialog"
         aria-label={title}
       >
-        <div className="flex items-start justify-between gap-3 mb-1">
+        <div className="modal-head flex items-start justify-between gap-3 mb-1">
           <h2 className="text-lg font-bold flex items-center gap-2" style={{ color: 'var(--text)' }}>
             <PackagePlus size={18} /> {title}
           </h2>
@@ -252,7 +252,7 @@ export default function ManualItemsModal({ tripId, dayId, dayLabel, items, produ
                 ) : (
                   <div className="flex flex-wrap items-end gap-2">
                     <div>
-                      <label className="block text-[11px] mb-1" style={{ color: 'var(--muted)' }}>Единица</label>
+                      <label className="block text-xs mb-1" style={{ color: 'var(--muted)' }}>Единица</label>
                       <CustomSelect
                         value={createUnit}
                         onChange={(v) => setCreateUnit(v as UnitOfMeasure)}
@@ -261,7 +261,7 @@ export default function ManualItemsModal({ tripId, dayId, dayLabel, items, produ
                       />
                     </div>
                     <div className="flex-1" style={{ minWidth: 140 }}>
-                      <label className="block text-[11px] mb-1" style={{ color: 'var(--muted)' }}>Категория</label>
+                      <label className="block text-xs mb-1" style={{ color: 'var(--muted)' }}>Категория</label>
                       <CustomSelect
                         value={createCategory}
                         onChange={setCreateCategory}
@@ -311,7 +311,7 @@ export default function ManualItemsModal({ tripId, dayId, dayLabel, items, produ
           </div>
         </div>
 
-        <div className="flex justify-end mt-5">
+        <div className="modal-foot flex justify-end mt-5">
           <Button variant="ghost" onClick={onClose}>Готово</Button>
         </div>
         {/* Fix-6 (п.7): брендовый диалог подтверждений */}

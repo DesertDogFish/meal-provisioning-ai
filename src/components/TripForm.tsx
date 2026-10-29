@@ -69,7 +69,7 @@ export function TripForm({ onSubmit, onCancel, externalErrors = [], submitLabel 
   return (
     <Modal onClose={onCancel}>
       <div
-        className="rounded-2xl shadow-xl w-full max-w-md p-6"
+        className="modal-sheet rounded-2xl shadow-xl w-full max-w-md p-6"
         style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
       >
         {/* U21 (список багов 25.10): крестик в шапке — единый способ закрытия

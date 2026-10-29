@@ -238,7 +238,7 @@ export function ProductTable({ products, filters, onEdit, onDelete, onResetFilte
             <Share2 size={14} />
             <span
               data-testid="emis-shared-count"
-              style={{ fontSize: 11, lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}
+              style={{ fontSize: 'var(--fs-caption)', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}
             >
               {linkedTotal}
             </span>
@@ -258,50 +258,52 @@ export function ProductTable({ products, filters, onEdit, onDelete, onResetFilte
   }
 
   return (
-    <div className="rounded-xl overflow-hidden" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+    /* Подзадача 8 (plans/done/2026-10-29-ui-nowrap-and-mobile.md): на телефоне каталог
+       продуктов — карточки «подпись: значение» вместо горизонтального скролла. */
+    <div className="rounded-xl overflow-hidden mob-scroll table-cards" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
       <table className="w-full text-sm">
         <thead>
           <tr style={{ background: 'var(--elev)' }}>
             <th
               className="text-left px-4 py-3 font-bold cursor-pointer"
-              style={{ color: 'var(--muted)', fontSize: '11px' }}
+              style={{ color: 'var(--muted)', fontSize: 'var(--fs-caption)' }}
               onClick={() => handleSort('name')}
             >
               Продукт{sortIndicator('name')}
             </th>
             <th
               className="text-left px-4 py-3 font-bold cursor-pointer"
-              style={{ color: 'var(--muted)', fontSize: '11px' }}
+              style={{ color: 'var(--muted)', fontSize: 'var(--fs-caption)' }}
               onClick={() => handleSort('category')}
             >
               Категория{sortIndicator('category')}
             </th>
-            <th className="text-left px-4 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: '11px' }}>Ед.</th>
-            <th className="text-left px-4 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: '11px' }}>Упаковка</th>
+            <th className="text-left px-4 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: 'var(--fs-caption)' }}>Ед.</th>
+            <th className="text-left px-4 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: 'var(--fs-caption)' }}>Упаковка</th>
             <th
               className="text-left px-4 py-3 font-bold cursor-pointer"
-              style={{ color: 'var(--muted)', fontSize: '11px' }}
+              style={{ color: 'var(--muted)', fontSize: 'var(--fs-caption)' }}
               onClick={() => handleSort('price')}
             >
               Цена{sortIndicator('price')}
             </th>
-            <th className="text-left px-4 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: '11px' }}>
-              Цена синхронизирована
+            <th className="text-left px-4 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: 'var(--fs-caption)' }}>
+              Синхронизация цены
             </th>
             <th
               className="text-right px-4 py-3 font-bold cursor-pointer"
-              style={{ color: 'var(--muted)', fontSize: '11px' }}
+              style={{ color: 'var(--muted)', fontSize: 'var(--fs-caption)' }}
               onClick={() => handleSort('usage')}
             >
               В рецептах{sortIndicator('usage')}
             </th>
-            <th className="text-right px-4 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: '11px' }}>Действия</th>
+            <th className="text-right px-4 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: 'var(--fs-caption)' }}>Действия</th>
           </tr>
         </thead>
         <tbody>
           {sorted.map(product => (
             <tr key={product.id} data-testid="product-row" style={{ borderTop: "1px solid var(--border)" }}>
-              <td className="px-4 py-3">
+              <td className="row-title px-4 py-3" data-label="">
                 <b style={{ color: 'var(--text)' }}>{product.name}</b>
                 {product.packSize && (
                   <span className="chip-delta dim" style={{ marginLeft: '8px' }}>
@@ -309,25 +311,25 @@ export function ProductTable({ products, filters, onEdit, onDelete, onResetFilte
                   </span>
                 )}
               </td>
-              <td className="px-4 py-3">
+              <td className="px-4 py-3" data-label="Категория">
                 <span className="chip-delta" style={{ background: 'color-mix(in srgb, var(--wave-400) 14%, transparent)', color: 'var(--wave-300)' }}>
                   {product.categoryName}
                 </span>
               </td>
-              <td className="px-4 py-3" style={{ color: 'var(--muted)' }}>{humanizeUnit(product.unit)}</td>
-              <td className="px-4 py-3" style={{ color: 'var(--muted)' }}>
+              <td className="px-4 py-3" data-label="Ед." style={{ color: 'var(--muted)' }}>{humanizeUnit(product.unit)}</td>
+              <td className="px-4 py-3" data-label="Упаковка" style={{ color: 'var(--muted)' }}>
                 {product.packSize || 'развес'}
               </td>
-              <td className="px-4 py-3">
+              <td className="keep-num px-4 py-3" data-label="Цена">
                 {formatPrice(product.currentPrice)}
               </td>
-              <td className="px-4 py-3">
+              <td className="px-4 py-3" data-label="Синхронизация">
                 {formatSyncStatus(product)}
               </td>
-              <td className="px-4 py-3 text-right" style={{ color: 'var(--text)' }}>
+              <td className="keep-num px-4 py-3 text-right" data-label="В рецептах" style={{ color: 'var(--text)' }}>
                 {product.usageRecipes}
               </td>
-              <td className="px-4 py-3 text-right">
+              <td className="no-label px-4 py-3 text-right" data-label="">
                 <div className="flex items-center justify-end gap-1">
                   <button
                     onClick={() => onEdit(product)}

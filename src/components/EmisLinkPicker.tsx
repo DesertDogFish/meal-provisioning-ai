@@ -230,7 +230,7 @@ export function EmisLinkPicker({
                       {item.pricePerUnit != null && (
                         <>
                           {' · после привязки '}
-                          <b style={{ color: 'var(--wave-300)' }}>{formatPrice(item.pricePerUnit)} ₽</b>
+                          <b className="keep-num" style={{ color: 'var(--wave-300)' }}>{formatPrice(item.pricePerUnit)}&nbsp;₽</b>
                           {unit ? ` за ${UNIT_LABELS[unit as UnitOfMeasure] ?? unit}` : ''}
                         </>
                       )}

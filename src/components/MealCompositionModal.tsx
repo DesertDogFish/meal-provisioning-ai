@@ -525,13 +525,13 @@ export default function MealCompositionModal({
   return (
     <Modal onClose={() => void requestClose()}>
       <div
-        className="rounded-2xl shadow-xl w-full max-w-3xl p-6 my-8"
+        className="modal-sheet rounded-2xl shadow-xl w-full max-w-3xl p-6 my-8"
         style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
         role="dialog"
         aria-label="Состав приёма"
       >
         {/* Шапка с контекстом дня/типа (§2.2) */}
-        <div className="flex items-start justify-between gap-3">
+        <div className="modal-head flex items-start justify-between gap-3">
           <div>
             <h2 className="text-lg font-bold flex items-center gap-2" style={{ color: 'var(--text)' }}>
               Состав приёма
@@ -795,7 +795,7 @@ export default function MealCompositionModal({
             )}
 
             {/* Одна commit-кнопка + сброс (§2.2) */}
-            <div className="flex items-center justify-end gap-3 mt-4">
+            <div className="modal-foot flex items-center justify-end gap-3 mt-4">
               <span className="text-sm mr-auto" style={{ color: isDirty ? 'var(--fire, #d97706)' : 'var(--muted)' }}>
                 {isDirty ? 'Изменения не сохранены ●' : 'Всё сохранено'}
               </span>

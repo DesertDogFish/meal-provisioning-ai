@@ -5,6 +5,7 @@ import ApiModeBadge from './ApiModeBadge';
 import BrandMark from './BrandMark';
 import ThemeToggle from './ThemeToggle';
 import ScrollTopButton from './ScrollTopButton';
+import { lockBodyScroll, unlockBodyScroll } from './Modal'; // подзадача 9: фон не скроллится под открытым drawer
 import { api } from '../api/client';
 import { useToast } from './ToastProvider';
 
@@ -56,6 +57,26 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     loadUser();
   }, [loadUser]);
 
+  /* Подзадача 9 (plans/done/2026-10-29-ui-nowrap-and-mobile.md): мобильный drawer —
+     Esc закрывает верхний оверлей (жёсткое правило дизайн-пака), фон под ним не
+     скроллится (тот же счётчик блокировок, что у модалок), фокус возвращается на
+     кнопку-гамбургер. На десктопе sidebarOpen всегда false — эффект не срабатывает. */
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!sidebarOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      setSidebarOpen(false);
+      menuButtonRef.current?.focus();
+    };
+    document.addEventListener('keydown', onKey);
+    lockBodyScroll();
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      unlockBodyScroll();
+    };
+  }, [sidebarOpen]);
+
   // FIX: нормализация роли — бэкенд отдаёт 'ADMIN', но защита от регистра-расхождений
   const isAdmin = currentUser?.role?.toUpperCase() === 'ADMIN';
 
@@ -103,7 +124,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           скроллится внутри, футер («Выйти», профиль, тогл темы) ПРИКОЛАН к низу
           вьюпорта и виден всегда — раньше absolute bottom-0 уезжал за экран вместе
           со страницей, и до «Выйти» надо было скроллить. */}
-      <aside className={`fixed inset-y-0 left-0 w-64 flex flex-col transform transition-transform lg:translate-x-0 lg:sticky lg:top-0 lg:h-screen lg:inset-auto ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`} style={{ background: 'color-mix(in srgb, var(--bg-1) 72%, transparent)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)', borderRight: '1px solid var(--line)', zIndex: 'var(--z-nav)' }}>
+      <aside
+        id="app-nav"
+        aria-label="Навигация по разделам"
+        className={`app-drawer fixed inset-y-0 left-0 w-64 flex flex-col transform transition-transform lg:translate-x-0 lg:sticky lg:top-0 lg:h-screen lg:inset-auto ${sidebarOpen ? 'app-drawer--open translate-x-0' : '-translate-x-full'}`} style={{ background: 'color-mix(in srgb, var(--bg-1) 72%, transparent)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)', borderRight: '1px solid var(--line)', zIndex: 'var(--z-nav)' }}>
         <div className="flex items-center gap-3 px-6 py-5" style={{ borderBottom: '1px solid var(--line)' }}>
           {/* DESIGN_MIGRATION 4.1: знак только из design-pack assets/ (mark.svg / mark-light.svg),
               инлайн-перерисовка и самопальная тень убраны — тень --shadow-glow из токена */}
@@ -195,17 +219,29 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </div>
       </aside>
 
-      {/* Mobile overlay */}
+      {/* Mobile overlay — подзадача 9: это кнопка (не div), чтобы закрытие drawer
+          было доступно с клавиатуры и скринридеру; слой --z-pop (под drawer --z-nav). */}
       {sidebarOpen && (
-        <div className="fixed inset-0 lg:hidden" onClick={() => setSidebarOpen(false)}
-          style={{ background: 'color-mix(in srgb, var(--bg-0) 50%, transparent)', zIndex: 'var(--z-pop)' }} />
+        <button
+          type="button"
+          aria-label="Закрыть меню навигации"
+          data-testid="drawer-overlay"
+          className="fixed inset-0 lg:hidden border-0 p-0 cursor-default"
+          onClick={() => setSidebarOpen(false)}
+          style={{ background: 'color-mix(in srgb, var(--bg-0) 50%, transparent)', zIndex: 'var(--z-pop)' }}
+        />
       )}
 
       {/* Main content */}
-      <div className="flex-1 flex flex-col min-h-screen relative z-10">
-        <header className="px-6 py-4 flex items-center gap-4 lg:hidden" style={{ background: 'color-mix(in srgb, var(--bg-1) 66%, transparent)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)', borderBottom: '1px solid var(--line)' }}>
+      {/* Подзадача 9: `min-w-0` ОБЯЗАТЕЛЕН — у flex-элемента `min-width: auto`,
+          поэтому колонка растягивалась до min-content самого широкого потомка
+          (полоса вкладок `.seg` с nowrap-подписями = 839px) и утаскивала за собой
+          всю страницу: на 360px появлялся горизонтальный скролл ДОКУМЕНТА вместо
+          скролла внутри `.seg`/`.mob-scroll`. */}
+      <div className="flex-1 flex flex-col min-h-screen relative z-10 min-w-0">
+        <header className="app-topbar px-4 py-3 flex items-center gap-3 lg:hidden" style={{ background: 'color-mix(in srgb, var(--bg-1) 66%, transparent)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)', borderBottom: '1px solid var(--line)' }}>
           {/* DESIGN_MIGRATION 7.2: иконочные кнопки с обязательным aria-label */}
-          <button className="ibtn" onClick={() => setSidebarOpen(true)} aria-label="Открыть меню навигации">
+          <button ref={menuButtonRef} className="ibtn" onClick={() => setSidebarOpen(true)} aria-label="Открыть меню навигации" aria-expanded={sidebarOpen} aria-controls="app-nav">
             <Menu size={24} />
           </button>
           <BrandMark size={28} />
@@ -216,7 +252,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         {/* Бейдж режима API */}
         <ApiModeBadge />
         
-        <main className="flex-1 p-4 md:p-6 lg:p-8 overflow-auto">
+        <main className="app-main flex-1 min-w-0 p-4 md:p-6 lg:p-8 overflow-auto">
           {/* Fix-7 (п.10): контент центрирован и оторван от краёв — max-width 1200px */}
           <div className="app-shell">
             {children}

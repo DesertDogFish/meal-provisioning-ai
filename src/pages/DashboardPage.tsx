@@ -74,17 +74,17 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="stat">
           <span className="text-xs" style={{ color: 'var(--muted)' }}>Активных походов</span>
-          <p className="stat-value text-2xl font-bold mt-1">{myTrips.length}</p>
+          <p className="stat-value keep-num text-2xl font-bold mt-1">{myTrips.length}</p>
           <div className="h-6 mt-2" style={{ background: 'linear-gradient(90deg, transparent, color-mix(in srgb, var(--wave-400) 25%, transparent))', clipPath: 'polygon(0 80%, 15% 60%, 30% 70%, 45% 40%, 60% 55%, 75% 25%, 100% 45%, 100% 100%, 0 100%)' }}></div>
         </div>
         <div className="stat">
           <span className="text-xs" style={{ color: 'var(--muted)' }}>Всего людей</span>
-          <p className="stat-value text-2xl font-bold mt-1">{totalPeople}</p>
+          <p className="stat-value keep-num text-2xl font-bold mt-1">{totalPeople}</p>
           <div className="h-6 mt-2" style={{ background: 'linear-gradient(90deg, transparent, color-mix(in srgb, var(--wave-400) 25%, transparent))', clipPath: 'polygon(0 70%, 20% 50%, 40% 60%, 60% 30%, 80% 45%, 100% 35%, 100% 100%, 0 100%)' }}></div>
         </div>
         <div className="stat">
           <span className="text-xs" style={{ color: 'var(--muted)' }}>Всего дней</span>
-          <p className="stat-value text-2xl font-bold mt-1">{myTrips.reduce((acc, t) => acc + (t.days?.length || 0), 0)}</p>
+          <p className="stat-value keep-num text-2xl font-bold mt-1">{myTrips.reduce((acc, t) => acc + (t.days?.length || 0), 0)}</p>
           <div className="h-6 mt-2" style={{ background: 'linear-gradient(90deg, transparent, color-mix(in srgb, var(--amber-500) 25%, transparent))', clipPath: 'polygon(0 60%, 25% 45%, 50% 55%, 75% 35%, 100% 50%, 100% 100%, 0 100%)' }}></div>
         </div>
       </div>

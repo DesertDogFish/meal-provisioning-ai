@@ -3,8 +3,9 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { calculateMenuByDays, calculateShoppingList, calculateDayShopping, calculatePersonSummary, formatAmount, realTripPeople, isRowExcluded, dayScopedExclusions, findPriceForDate } from '../utils/calculations';
 import InfoTip from '../components/InfoTip';     // Fix-5 (п.3–5): формулы в тултипах
 import TabHeader from '../components/TabHeader'; // Fix-5 (п.2): единые шапки вкладок
-import FreeAmountInput from '../components/FreeAmountInput'; // Fix-6 (п.8): свободные единицы факта
-import { isActualLessThanNeeded, neededAsActual, type ActualAmount } from '../utils/checkUnits';
+// Подзадача 6: FreeAmountInput и проверки количества уехали в ChecklistTab.tsx;
+// странице нужен только тип факта (колбэк commitActualQty → общий стейдж).
+import { type ActualAmount } from '../utils/checkUnits';
 import { formatRub } from '../utils/formatRub'; // Фаза 13: итоги — целые рубли
 import { ArrowLeft, Plus, Trash2, Users, ShoppingCart, BookOpen, TrendingUp, Calendar, ChevronDown, ChevronRight, ListChecks, ClipboardCheck, PackagePlus, ArrowUpDown, X, FileDown } from 'lucide-react';
 import { MealType } from '../types';
@@ -23,13 +24,14 @@ import { getManualItems, deleteManualItem, type TripManualItem } from '../api/tr
 import { mergeManualIntoShopping, manualForDay, manualForTrip } from '../utils/manualItems'; // U40
 import { buildEffectiveRecipesMap } from '../utils/recipeEdits'; // Fix-6 (п.22/25): правки состава в расчётах
 import { useConfirm } from '../components/ConfirmDialog'; // Fix-6 (п.7)
-import { buildChecklist, type ChecklistProductInfo } from '../utils/checklist'; // U38
+import { buildChecklist, collectChecklistKeys, type ChecklistProductInfo } from '../utils/checklist'; // U38 + подзадача 6
 import { sortRows, nextDir, compareRu, type SortDir } from '../utils/rowSort'; // U26–U28
 import { tripReadiness } from '../utils/readiness'; // Fix-3 (п.2): сквозной статус
 import { getServerExclusions, syncServerExclusions } from '../api/shoppingExclusions'; // Fix-3 / R2
 import { categoryName } from '../utils/format';
 
 import PageLoader from '../components/PageLoader';
+import ChecklistTab from '../components/ChecklistTab'; // подзадача 6: вкладка «Чеклист» вынесена из страницы (R8)
 /** Фаза 13: черновик фактической цены (₽ за единицу измерения продукта).
  * Fix-7 (п.17): тип живёт в общем хранилище tripStaging (там же neededAt —
  * штамп потребности для сброса устаревших фактов). */
@@ -565,7 +567,8 @@ export default function TripDetailPage() {
   // Fix-5 (п.9): отметка «взято» привязана к позиции И её количеству:
   // добавил ещё 100 г к купленному продукту — галочка слетает, позицию надо
   // переподтвердить (ключ '<id>@<нужно, граммы/шт с точностью 3 знака>').
-  const checklistRowIds = checklist.flatMap(g => g.rows.map(r => `${r.ingredientId}@${Math.round(r.needed * 1000)}`));
+  // Подзадача 6: ключ отметки считает общая утилита (тот же формат, что и в ChecklistTab)
+  const checklistRowIds = collectChecklistKeys(checklist);
   const boughtInList = checklistRowIds.filter(k => checklistBought.has(k)).length;
   // Fix-4 (п.11): «введено 57… а должно быть?» — знаменатель = число позиций
   // закупки, по которым нужно ввести факт; числитель — сколько из них уже с фактом.
@@ -623,26 +626,30 @@ export default function TripDetailPage() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2" style={{ maxWidth: '52rem' }}>
         <div className="stat px-3 py-2 flex items-baseline justify-between gap-2">
           <span className="text-xs" style={{ color: 'var(--muted)' }}>Дней</span>
-          <span className="stat-value text-lg font-bold whitespace-nowrap">{trip.days?.length || 0}</span>
+          <span className="stat-value keep-num text-lg font-bold">{trip.days?.length || 0}</span>
         </div>
         <div className="stat px-3 py-2 flex items-baseline justify-between gap-2">
           <span className="text-xs" style={{ color: 'var(--muted)' }}>Приёмов пищи</span>
-          <span className="stat-value text-lg font-bold whitespace-nowrap">{trip.days?.reduce((a, d) => a + (d.meals?.length || 0), 0) || 0}</span>
+          <span className="stat-value keep-num text-lg font-bold">{trip.days?.reduce((a, d) => a + (d.meals?.length || 0), 0) || 0}</span>
         </div>
         <div className="stat px-3 py-2 flex items-baseline justify-between gap-2">
           <span className="text-xs" style={{ color: 'var(--muted)' }}>
-            Стоимость
-            <InfoTip text="Сумма всей закупки: план по ценам справочника, а после ввода чека — фактические суммы. Без исключённых позиций." />
+            <span className="keep-pair">
+              Стоимость
+              <InfoTip text="Сумма всей закупки: план по ценам справочника, а после ввода чека — фактические суммы. Без исключённых позиций." />
+            </span>
           </span>
           {/* Release-1.0: formatRub — целые рубли, неразрывный пробел; без «123,678 ₽» */}
-          <span className="stat-value text-lg font-bold whitespace-nowrap">{formatRub(tripSummary.totalCost)}</span>
+          <span className="stat-value keep-num text-lg font-bold">{formatRub(tripSummary.totalCost)}</span>
         </div>
         <div className="stat px-3 py-2 flex items-baseline justify-between gap-2">
           <span className="text-xs" style={{ color: 'var(--muted)' }}>
-            На человека
-            <InfoTip text={`Общая стоимость ÷ людей в походе (${Math.round(realPeople * 10) / 10} чел. — среднее по дням с учётом переопределений). Столько платит каждый при равном делении.`} />
+            <span className="keep-pair">
+              На человека
+              <InfoTip text={`Общая стоимость ÷ людей в походе (${Math.round(realPeople * 10) / 10} чел. — среднее по дням с учётом переопределений). Столько платит каждый при равном делении.`} />
+            </span>
           </span>
-          <span className="stat-value text-lg font-bold whitespace-nowrap">{formatRub(tripSummary.costPerDefaultPerson)}</span>
+          <span className="stat-value keep-num text-lg font-bold">{formatRub(tripSummary.costPerDefaultPerson)}</span>
         </div>
       </div>
 
@@ -662,7 +669,7 @@ export default function TripDetailPage() {
         ].map((st, i) => (
           <span key={st.text} className="inline-flex items-center gap-1.5">
             {i > 0 && <ChevronRight size={13} style={{ color: 'var(--line-strong)' }} aria-hidden />}
-            <span className="px-2 py-0.5 text-[11px] font-bold rounded-full whitespace-nowrap"
+            <span className="px-2 py-0.5 text-xs font-bold rounded-full whitespace-nowrap"
               style={st.ok
                 ? { background: 'color-mix(in srgb, var(--success) 16%, transparent)', color: 'var(--success)' }
                 : { background: 'var(--elev)', color: 'var(--muted)' }}
@@ -672,7 +679,7 @@ export default function TripDetailPage() {
           </span>
         ))}
         <ChevronRight size={13} style={{ color: 'var(--line-strong)' }} aria-hidden />
-        <span className="px-2 py-0.5 text-[11px] font-extrabold rounded-full whitespace-nowrap"
+        <span className="px-2 py-0.5 text-xs font-extrabold rounded-full whitespace-nowrap"
           style={readiness.ready
             ? { background: 'var(--success)', color: '#fff' }
             : { background: 'var(--elev)', color: 'var(--muted)' }}
@@ -694,7 +701,7 @@ export default function TripDetailPage() {
       </div>
 
       {/* Tabs — сегментированный контрол (.seg) из брендбука */}
-      <div className="seg w-full overflow-x-auto">
+      <div className="seg seg-scroll w-full overflow-x-auto" role="tablist" aria-label="Вкладки похода">
         {tabs.map(tab => (
           <button
             key={tab.id}
@@ -955,7 +962,7 @@ export default function TripDetailPage() {
               </>
             }
           />
-          <div className="rounded-xl overflow-hidden mob-scroll" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+          <div className="rounded-xl overflow-hidden mob-scroll table-cards" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
           {/* Fix-6 (п.23): без внутреннего скролла — как в чеклисте, полная высота */}
             <table className="w-full text-sm">
               <thead style={{ background: 'var(--elev)' }}>
@@ -993,12 +1000,12 @@ export default function TripDetailPage() {
               <tbody style={{ borderTop: '1px solid var(--border)' }}>
                 {sortedShopping.map(item => (
                   <tr key={item.ingredientId} style={{ borderTop: '1px solid var(--border)', opacity: item.excluded ? 0.45 : 1 }}>
-                    <td className="px-4 py-3">
+                    <td className="cell-check px-4 py-3" data-label="">
                       <ExclusionCheckbox ingredientId={item.ingredientId} />
                     </td>
-                    <td className="px-4 py-3" style={{ color: 'var(--text)', textDecoration: item.excluded ? 'line-through' : 'none' }}>{item.ingredientName}</td>
-                    <td className="px-4 py-3 text-right" style={{ color: 'var(--muted)' }}>{formatAmount(item.totalAmount, item.unit)}</td>
-                    <td className="px-4 py-3 text-right">
+                    <td className="row-title px-4 py-3" data-label="" style={{ color: 'var(--text)', textDecoration: item.excluded ? 'line-through' : 'none' }}>{item.ingredientName}</td>
+                    <td className="keep-num px-4 py-3 text-right" data-label="Количество" style={{ color: 'var(--muted)' }}>{formatAmount(item.totalAmount, item.unit)}</td>
+                    <td className="keep-num px-4 py-3 text-right" data-label="Стоимость">
                       {item.hasPrice ? (
                         <span style={{ color: 'var(--text)' }}>
                           {formatRub(item.effectiveCost)}
@@ -1113,10 +1120,12 @@ export default function TripDetailPage() {
             <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
               <div>
                 <p className="text-xs" style={{ color: 'var(--muted)' }}>
-                  Приёмов пищи всего
                   {/* Fix-7 (п.29): считаем ПРИЁМЫ (завтраки+обеды+ужины+перекусы),
                       а не человеко-приёмы */}
-                  <InfoTip text="Число приёмов пищи во всём меню: завтраки + обеды + ужины + перекусы по всем дням." />
+                  <span className="keep-pair">
+                    Приёмов пищи всего
+                    <InfoTip text="Число приёмов пищи во всём меню: завтраки + обеды + ужины + перекусы по всем дням." />
+                  </span>
                 </p>
                 <p className="text-lg font-bold" style={{ color: 'var(--text)' }}>
                   {(trip.days ?? []).reduce((a, d) => a + (d.meals?.length ?? 0), 0)}
@@ -1124,29 +1133,37 @@ export default function TripDetailPage() {
               </div>
               <div>
                 <p className="text-xs" style={{ color: 'var(--muted)' }}>
-                  Людей в походе
-                  <InfoTip text="Среднее число участников по дням (переопределения «людей на день» учитываются). На него делятся общие суммы." />
+                  <span className="keep-pair">
+                    Людей в походе
+                    <InfoTip text="Среднее число участников по дням (переопределения «людей на день» учитываются). На него делятся общие суммы." />
+                  </span>
                 </p>
                 <p className="text-lg font-bold" style={{ color: 'var(--text)' }}>{Math.round(realPeople * 10) / 10}</p>
               </div>
               <div>
                 <p className="text-xs" style={{ color: 'var(--muted)' }}>
-                  На человека за поход
-                  <InfoTip text="Общая стоимость закупки ÷ людей в походе. Столько платит каждый участник при равном делении." />
+                  <span className="keep-pair">
+                    На человека за поход
+                    <InfoTip text="Общая стоимость закупки ÷ людей в походе. Столько платит каждый участник при равном делении." />
+                  </span>
                 </p>
                 <p className="text-lg font-bold" style={{ color: 'var(--text)' }}>{formatRub(tripSummary.costPerDefaultPerson)}</p>
               </div>
               <div>
                 <p className="text-xs" style={{ color: 'var(--muted)' }}>
-                  На человека за приём
-                  <InfoTip text="Общая стоимость ÷ число приёмов пищи (люди × приёмы). Средняя цена одного приёма на одного человека." />
+                  <span className="keep-pair">
+                    На человека за приём
+                    <InfoTip text="Общая стоимость ÷ число приёмов пищи (люди × приёмы). Средняя цена одного приёма на одного человека." />
+                  </span>
                 </p>
                 <p className="text-lg font-bold" style={{ color: 'var(--text)' }}>{formatRub(tripSummary.costPerPersonMeal)}</p>
               </div>
               <div>
                 <p className="text-xs" style={{ color: 'var(--muted)' }}>
-                  Калории за приём
-                  <InfoTip text="Средняя калорийность одного приёма пищи на человека — считается из продуктов блюд." />
+                  <span className="keep-pair">
+                    Калории за приём
+                    <InfoTip text="Средняя калорийность одного приёма пищи на человека — считается из продуктов блюд." />
+                  </span>
                 </p>
                 <p className="text-lg font-bold" style={{ color: 'var(--text)' }}>{tripSummary.caloriesPerPersonMeal ? `${Math.round(tripSummary.caloriesPerPersonMeal)} ккал` : '—'}</p>
               </div>
@@ -1154,7 +1171,7 @@ export default function TripDetailPage() {
           </div>
 
           {/* Per person products */}
-          <div className="rounded-xl overflow-hidden mob-scroll" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+          <div className="rounded-xl overflow-hidden mob-scroll table-cards" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
             <div className="p-4" style={{ borderBottom: '1px solid var(--border)' }}>
               <h3 className="font-bold" style={{ color: 'var(--text)' }}>Продукты на человека</h3>
             </div>
@@ -1164,26 +1181,32 @@ export default function TripDetailPage() {
                   <tr>
                     <th className="text-left px-4 py-3 font-medium" style={{ color: 'var(--muted)' }}>Продукт</th>
                     <th className="text-right px-4 py-3 font-medium" style={{ color: 'var(--muted)' }}>
-                      На человека
-                      <InfoTip text="Количество продукта на одного участника за ВЕСЬ поход: общее количество ÷ людей в походе." />
+                      <span className="keep-pair">
+                        На человека
+                        <InfoTip text="Количество продукта на одного участника за ВЕСЬ поход: общее количество ÷ людей в походе." />
+                      </span>
                     </th>
                     <th className="text-right px-4 py-3 font-medium" style={{ color: 'var(--muted)' }}>
-                      На человека за приём
-                      <InfoTip text="Среднее количество на одного человека за один приём пищи: общее количество ÷ приёмов пищи всего." />
+                      <span className="keep-pair">
+                        На чел./приём
+                        <InfoTip text="Среднее количество на одного человека за один приём пищи: общее количество ÷ приёмов пищи всего." />
+                      </span>
                     </th>
                     <th className="text-right px-4 py-3 font-medium" style={{ color: 'var(--muted)' }}>
-                      Стоимость на человека
-                      <InfoTip text="Стоимость этого продукта на одного участника за весь поход (с фактическими ценами, если чек введён)." />
+                      <span className="keep-pair">
+                        Стоимость на человека
+                        <InfoTip text="Стоимость этого продукта на одного участника за весь поход (с фактическими ценами, если чек введён)." />
+                      </span>
                     </th>
                   </tr>
                 </thead>
                 <tbody style={{ borderTop: '1px solid var(--border)' }}>
                   {personSummary.map((item, i) => (
                     <tr key={i} style={{ borderTop: '1px solid var(--border)' }}>
-                      <td className="px-4 py-2.5" style={{ color: 'var(--text)' }}>{item.ingredientName}</td>
-                      <td className="px-4 py-2.5 text-right" style={{ color: 'var(--muted)' }}>{formatAmount(item.amountPerDefaultPerson, item.unit)}</td>
-                      <td className="px-4 py-2.5 text-right" style={{ color: 'var(--muted)' }}>{formatAmount(item.amountPerPersonMeal, item.unit)}</td>
-                      <td className="px-4 py-2.5 text-right" style={{ color: 'var(--text)' }}>
+                      <td className="row-title px-4 py-2.5" data-label="" style={{ color: 'var(--text)' }}>{item.ingredientName}</td>
+                      <td className="keep-num px-4 py-2.5 text-right" data-label="На человека" style={{ color: 'var(--muted)' }}>{formatAmount(item.amountPerDefaultPerson, item.unit)}</td>
+                      <td className="keep-num px-4 py-2.5 text-right" data-label="На чел./приём" style={{ color: 'var(--muted)' }}>{formatAmount(item.amountPerPersonMeal, item.unit)}</td>
+                      <td className="keep-num px-4 py-2.5 text-right" data-label="Стоимость" style={{ color: 'var(--text)' }}>
                         {item.costPerDefaultPerson != null ? formatRub(item.costPerDefaultPerson) : '—'}
                       </td>
                     </tr>
@@ -1200,113 +1223,19 @@ export default function TripDetailPage() {
 
       {/* U38: «Чеклист» — что брать в магазине: ЦЕЛЫЕ упаковки (округление вверх),
           группы по категориям, алфавит. Исключённые позиции не попадают (их не берём).
-          Отметки «взято» живут в рамках сессии — это рабочий лист магазина, не данные похода. */}
+          Подзадача 6 (plans/done/2026-10-29-ui-nowrap-and-mobile.md): вкладка вынесена в
+          ChecklistTab.tsx (R8/R9) — страница отдаёт данные и колбэки, компонент
+          владеет только мобильным UI чеклиста (фильтр, сворачивание групп, прогресс)
+          и подтверждением массовых действий (подзадача 7). */}
       {activeTab === 'checklist' && (
-        <div className="space-y-3 max-w-3xl">
-          <TabHeader
-            title="Чеклист закупки"
-            subtitle={
-              <>
-                {/* Fix-7 (п.21): «целые упаковки (округление вверх — излишек…)» — убрано */}
-                Взято {boughtInList} из {checklistRowIds.length}
-                <InfoTip text="Отметка «взято» привязана к количеству: измените потребность (добавите продукт) — отметка слетит, позицию нужно переподтвердить. В поле «беру» уже подставлено расчётное количество — поправьте, если берёте иначе (на развес, россыпью или упаковками другого объёма)." />
-              </>
-            }
-            right={
-              /* Fix-3 (п.2): одной кнопкой — всё куплено / сброс (чтобы чек не блокировался намертво) */
-              <div className="flex gap-2 shrink-0">
-                <Button variant="soft" size="sm" onClick={() => setAllBought(true)}
-                        aria-label="Отметить всё купленным" disabled={checklistRowIds.length === 0 || boughtInList === checklistRowIds.length}>
-                  Отметить всё
-                </Button>
-                <Button variant="ghost" size="sm" onClick={() => setAllBought(false)}
-                        aria-label="Снять все отметки" disabled={boughtInList === 0}>
-                  Снять всё
-                </Button>
-              </div>
-            }
-          />
-          {checklist.length === 0 && (
-            <div className="rounded-xl p-8 text-center text-sm" style={{ background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--muted)' }}>
-              В закупке нет позиций — добавьте приёмы пищи или продукты к дню/походу.
-            </div>
-          )}
-          {checklist.map(group => (
-            <div key={group.category} className="rounded-xl overflow-hidden" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
-              <div className="px-4 py-2.5" style={{ borderBottom: '1px solid var(--border)', background: 'var(--elev)' }}>
-                <h4 className="text-sm font-bold" style={{ color: 'var(--text)' }}>{group.category}</h4>
-              </div>
-              {group.rows.map(row => {
-                // Fix-5 (п.9): ключ отметки включает количество — потребность
-                // изменилась (добавили ещё) ⇒ галочка слетает автоматически.
-                const boughtKey = `${row.ingredientId}@${Math.round(row.needed * 1000)}`;
-                const bought = checklistBought.has(boughtKey);
-                // Fix-5 (п.21) + Fix-7 (п.22) + Fix-8 (п.6): свободный ввод
-                // «сколько реально берём». Сохранённый факт переживает изменение
-                // потребности (люди/состав) — пользовательский ввод не стирается;
-                // пока факта нет — поле ПРЕДЗАПОЛНЕНО расчётным количеством
-                // (целые упаковки вверх / потребность) — «ожидаемые значения
-                // автоматически», править нужно только отличия.
-                const storedActual = actualQty[row.ingredientId] ?? null;
-                const actual = storedActual ?? neededAsActual(row.buyAmount, row.unit);
-                // Fix-6 (п.9): куплено МЕНЬШЕ нужного — подсветка предупреждением
-                const underfilled = bought && actual != null
-                  ? isActualLessThanNeeded(actual, row.needed, row.unit, row.pieceWeightG)
-                  : null;
-                const packHintStr = row.packsToBuy != null && row.packSize
-                  ? `нужно ${formatAmount(row.needed, row.unit)} ≈ ${row.packsToBuy} × ${formatAmount(row.packSize, row.unit)}`
-                  : `нужно ${formatAmount(row.needed, row.unit)} (без фасовки)`;
-                return (
-                  <div
-                    key={row.ingredientId}
-                    className="checklist-row flex items-center gap-3 px-4 py-3 text-sm"
-                    style={{
-                      borderTop: '1px solid var(--border)',
-                      opacity: bought && !underfilled ? 0.6 : 1,
-                      // Fix-6 (п.9): янтарная подсветка — отмечено «взято», но количество меньше нужного
-                      background: underfilled ? 'color-mix(in srgb, var(--amber-500) 10%, transparent)' : undefined,
-                    }}
-                    onClick={() => toggleBought(boughtKey)}
-                    role="button"
-                    tabIndex={0}
-                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleBought(boughtKey); } }}
-                    aria-label={`${bought ? 'Взято' : 'Отметить взятым'}: ${row.name}`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={bought}
-                      onChange={() => toggleBought(boughtKey)}
-                      onClick={(e) => e.stopPropagation()}
-                      aria-label={`Взято: ${row.name}`}
-                      className="cursor-pointer shrink-0"
-                      style={{ accentColor: 'var(--w2)' }}
-                    />
-                    <span className="flex-1 min-w-0">
-                      <span className="block" style={{ color: 'var(--text)', textDecoration: bought ? 'line-through' : 'none' }}>
-                        {row.name}
-                      </span>
-                      <span className="block text-xs" style={{ color: underfilled ? 'var(--amber-300)' : 'var(--muted)' }}>
-                        {underfilled ? `⚠ взяли меньше, чем нужно · ${packHintStr}` : packHintStr}
-                      </span>
-                    </span>
-                    {/* Fix-6 (п.8): свободные единицы — «беру 300 г» даже если учтён в штуках */}
-                    <span className="shrink-0 flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
-                      <span className="text-xs" style={{ color: 'var(--muted)' }}>беру</span>
-                      <FreeAmountInput
-                        value={actual}
-                        baseUnit={row.unit}
-                        pieceWeightG={row.pieceWeightG}
-                        onChange={(v) => commitActualQty(row.ingredientId, v, row.needed)}
-                        ariaLabel={`Сколько реально берёте: ${row.name}`}
-                        testId={`actual-qty-${row.ingredientId}`}
-                      />
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          ))}
-        </div>
+        <ChecklistTab
+          groups={checklist}
+          bought={checklistBought}
+          actualQty={actualQty}
+          onToggleRow={toggleBought}
+          onCommitActualQty={commitActualQty}
+          onSetAll={setAllBought}
+        />
       )}
 
       {/* Модалка A — «Добавить приём пищи» (FORM-spec §2.1): одна commit-кнопка,

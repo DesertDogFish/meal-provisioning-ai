@@ -99,7 +99,7 @@ export function FreeAmountInput({
             aria-label={`Единица: ${u}`}
             aria-pressed={unit === u}
             onClick={() => setUnit(u)}
-            className="flex-1 px-1.5 text-[10px] leading-none flex items-center justify-center transition-colors"
+            className="flex-1 px-1.5 text-xs leading-none flex items-center justify-center transition-colors"
             style={{
               color: unit === u ? 'var(--on-fire)' : 'var(--muted)',
               fontWeight: unit === u ? 700 : 400,
