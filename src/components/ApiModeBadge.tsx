@@ -7,7 +7,7 @@ import Modal from './Modal';
 import { useToast } from './ToastProvider';
 import { useConfirm } from './ConfirmDialog'; // Fix-6 (п.7)
 
-export default function ApiModeBadge() {
+export default function ApiModeBadge({ inline = false }: { inline?: boolean } = {}) {
   const { showSuccess, showError } = useToast();
   const { confirm, dialog: confirmDialog } = useConfirm(); // Fix-6 (п.7)
   const [mode, setMode] = useState<'real' | 'mock'>(api.getMode());
@@ -92,9 +92,20 @@ export default function ApiModeBadge() {
 
   return (
     <>
-      {/* Бейдж */}
+      {/* Бейдж. Подзадача 9 / пост-закрытие плана: на мобильном бейдж жил
+          `fixed top-20 right-4` и на узком экране НАЕЗЖАЛ на длинные заголовки
+          страниц («Поход на Карельский перешеек» уходил под плашку). Внизу слева
+          он не пересекается ни с заголовками, ни с `.scroll-top-btn` (внизу
+          справа); низ поднят на safe-area для iPhone с домашней полосой.
+          На десктопе — как было: справа вверху. */}
       <div
-        className="fixed top-20 lg:top-4 right-4 flex items-center gap-2 px-3 py-1.5 rounded-[var(--r-pill)] cursor-pointer transition-colors"
+        className={[
+          'flex items-center gap-2 px-3 py-1.5 rounded-[var(--r-pill)] cursor-pointer transition-colors',
+          // Ревизия скриншотов 29.10: плавающий бейдж закрывал данные списка
+          // (снизу) или заголовок (сверху). На мобильном он теперь живёт В
+          // топбаре (inline), плавающим остаётся только на десктопе.
+          inline ? 'shrink-0' : 'fixed top-4 right-4',
+        ].join(' ')}
         style={{
           zIndex: 'var(--z-nav)',
           background: 'var(--surface)',

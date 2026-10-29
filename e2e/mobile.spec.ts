@@ -82,6 +82,30 @@ test('M-02 поход: KPI-связки целы, вкладки не рвут �
   const tab = page.getByRole('button', { name: 'Закупка на поход' });
   const tabBox = await tab.boundingBox();
   expect(tabBox!.height).toBeLessThanOrEqual(48);
+
+  // Плавающий бейдж режима не должен наезжать на заголовок страницы: на мобильном
+  // он закреплён внизу слева (на 360px `top-20 right-4` перекрывал «Поход на
+  // Карельский перешеек»), внизу справа живёт `.scroll-top-btn` — не сталкиваем.
+  const h1 = await page.locator('main h1').first().boundingBox();
+  // инстансов бейджа в DOM два (inline в топбаре + десктопный fixed в hidden-lg
+  // обёртке): на мобильном видим первый, .first() снимает strict-mode
+  const badge = await page.getByTitle('Клик для настройки режима').first().boundingBox();
+  const intersects = !(badge!.x + badge!.width <= h1!.x || h1!.x + h1!.width <= badge!.x
+    || badge!.y + badge!.height <= h1!.y || h1!.y + h1!.height <= badge!.y);
+  expect(intersects, 'бейдж режима пересекает заголовок страницы').toBe(false);
+
+  // KPI-значения не вылезают за границы своих карточек (на 360px nowrap-связка
+  // «Стоимость ⓘ» + «1 630 ₽» не помещалась в строку и значение обрезалось):
+  // на телефоне карточка складывается в столбик (@media max-width 480px).
+  const clippedStats = await page.evaluate(() => Array.from(document.querySelectorAll('main .stat'))
+    .filter((card) => {
+      const v = card.querySelector('.stat-value');
+      if (!v) return false;
+      const c = card.getBoundingClientRect();
+      const r = v.getBoundingClientRect();
+      return r.right > c.right + 1 || r.left < c.left - 1;
+    }).length);
+  expect(clippedStats, 'KPI-значение обрезано границей карточки').toBe(0);
 });
 
 test('M-03 InfoTip: подсказка открывается тапом и целиком в экране', async ({ page }) => {

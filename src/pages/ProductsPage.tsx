@@ -345,7 +345,7 @@ export default function ProductsPage() {
       </div>
 
       {/* Toolbar */}
-      <div className="flex gap-3 items-center flex-wrap">
+      <div className="filters-row flex gap-3 items-center flex-wrap">
         <div className="relative flex-1 min-w-[200px]">
           <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--muted)' }} />
           <input

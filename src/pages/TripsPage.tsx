@@ -6,6 +6,7 @@ import { TripForm, type TripFormData } from '../components/TripForm';
 import { useConfirm } from '../components/ConfirmDialog'; // Fix-6 (п.7): красивые подтверждения
 import { api } from '../api/client';
 import { getTripCover } from '../utils/getTripCover';
+import { pluralize } from '../utils/pluralize'; // ревизия скриншотов 29.10: «4 дней» → «4 дня»
 import { Button } from '../components/Button';
 
 import PageLoader from '../components/PageLoader';
@@ -262,7 +263,7 @@ export default function TripsPage() {
                     </span>
                     <span className="flex items-center gap-1">
                       <Mountain size={14} />
-                      {trip.days?.length || 0} дней
+                      {pluralize(trip.days?.length || 0, ['день', 'дня', 'дней'])}
                     </span>
                   </div>
                   {trip.notes && <p className="text-sm mt-1" style={{ color: 'var(--muted)' }}>{trip.notes}</p>}

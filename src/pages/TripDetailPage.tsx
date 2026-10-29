@@ -610,10 +610,14 @@ export default function TripDetailPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" onClick={() => navigate('/trips')} aria-label="Назад к походам"><ArrowLeft size={20} /></Button>
+      {/* Ревизия скриншотов 29.10: на телефоне кнопка «назад» прижата к верхней
+          строке заголовка (items-start), а не висит по центру трёхстрочного h1. */}
+      <div className="flex items-start gap-4">
+        <div className="shrink-0 mt-0.5">
+          <Button variant="ghost" onClick={() => navigate('/trips')} aria-label="Назад к походам"><ArrowLeft size={20} /></Button>
+        </div>
         <div className="flex-1">
-          <h1 className="text-2xl font-bold" style={{ color: 'var(--text)' }}>{trip.name}</h1>
+          <h1 className="text-xl min-[480px]:text-2xl font-bold" style={{ color: 'var(--text)' }}>{trip.name}</h1>
           <p className="text-sm" style={{ color: 'var(--muted)' }}>
             {new Date(trip.startDate).toLocaleDateString('ru-RU')} — {new Date(trip.endDate).toLocaleDateString('ru-RU')} • {trip.defaultPeople} чел.
           </p>
@@ -655,7 +659,7 @@ export default function TripDetailPage() {
 
       {/* Fix-3 (п.2) + Fix-4 (п.9): готовность похода — СКВОЗНАЯ, видна на каждой
           вкладке, а не только в меню: цепочка «меню → закупка → чеки» */}
-      <div className="rounded-xl px-3 py-2 flex flex-wrap items-center gap-x-1.5 gap-y-1.5"
+      <div className="readiness-chain rounded-xl px-3 py-2 flex flex-wrap items-center gap-x-1.5 gap-y-1.5"
            style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
         {/* Fix-6 (п.10/17/п.28-диаграмма): тонкий степпер — шаги маршрута со стрелками:
             Меню → Закупка → Чек → Готов; подсказки про «отметьте покупки» убраны
@@ -705,7 +709,12 @@ export default function TripDetailPage() {
         {tabs.map(tab => (
           <button
             key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
+            onClick={(e) => {
+              setActiveTab(tab.id);
+              // Ревизия скриншотов 29.10: активная вкладка центрируется в
+              // scroll-контейнере, вместо того чтобы торчать обрезанной у края.
+              e.currentTarget.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+            }}
             className={`seg-btn flex items-center gap-2 whitespace-nowrap ${activeTab === tab.id ? 'active' : ''}`}
           >
             {tab.icon}

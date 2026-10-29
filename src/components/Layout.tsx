@@ -245,12 +245,15 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <Menu size={24} />
           </button>
           <BrandMark size={28} />
-          <h1 className="text-lg font-bold logo-word flex-1" style={{ fontFamily: 'var(--font-display)', color: 'var(--text-1)' }}>Провиант</h1>
+          {/* Слово-логотип уступает место бейджу режима на очень узких экранах */}
+          <h1 className="text-lg font-bold logo-word flex-1 min-w-0 hidden min-[400px]:block" style={{ fontFamily: 'var(--font-display)', color: 'var(--text-1)' }}>Провиант</h1>
+          <ApiModeBadge inline />
           <ThemeToggle />
         </header>
         
-        {/* Бейдж режима API */}
-        <ApiModeBadge />
+        {/* Бейдж режима API: на мобильном — в топбаре (см. выше), плавающий
+            фикс-экземпляр только для десктопа */}
+        <div className="hidden lg:block"><ApiModeBadge /></div>
         
         <main className="app-main flex-1 min-w-0 p-4 md:p-6 lg:p-8 overflow-auto">
           {/* Fix-7 (п.10): контент центрирован и оторван от краёв — max-width 1200px */}

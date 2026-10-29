@@ -580,7 +580,7 @@ export default function MealCompositionModal({
 
         {!loading && server && (
           <>
-            <table className="w-full text-sm" aria-label="Состав приёма">
+            <table className="w-full text-sm meal-comp" aria-label="Состав приёма">
               <thead>
                 <tr style={{ color: 'var(--muted)' }}>
                   <th className="text-left font-medium py-1">Продукт</th>
