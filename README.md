@@ -43,7 +43,7 @@ docker compose up --build
 - Health API: http://localhost:8080/api/v1/meta (`"db":"ok"`; 503 при недоступной БД)
 - Swagger: http://localhost:8080/swagger-ui.html (profile `dev`)
 
-Порт PostgreSQL проброшен только на `127.0.0.1:5432`. Миграции Flyway (V1–V20) применяются при старте бэкенда, каталог сеется автоматически.
+Порт PostgreSQL проброшен только на `127.0.0.1:5432`. Миграции Flyway (V1–VXXX) применяются при старте бэкенда, каталог сеется автоматически.
 
 ### Первый вход и демо-данные
 
@@ -84,7 +84,7 @@ docker compose up --build
 | `ROSSTAT_REGION` | `Российская Федерация` | Регион из справочника ОКАТО (например, `Белгородская область`) |
 | `ROSSTAT_CACHE_HOURS` | `24` | TTL кэша выгрузки ЕМИСС (данные обновляются раз в месяц) |
 | `INTEGRATION_CONTACT_EMAIL` | пусто (дефолт `dev@provision.app`) | Контакт для User-Agent внешних интеграций |
-| `VITE_API_URL`, `VITE_API_MODE` | `/api/v1`, `real` в Docker-сборке | Подставляются **при сборке** фронта; режим: `auto` / `real` / `mock` |
+| `VITE_API_URL`, `VITE_API_MODE` | `/api/v1`, `auto` | Подставляются **при сборке** фронта; режим: `auto` / `real` / `mock`. Дефолт проекта — `auto` (`.env.example` + fallback в `mode.ts`), в Docker-сборке не `real` |
 | `VITE_MOCK_LATENCY_MS` | `100` | Базовая имитация задержки mock-режима (мс, +до 80 мс джиттера); `0` — мгновенный mock. Подставляется при сборке фронта |
 
 В Docker-стеке фронт ходит в API через nginx-прокси (`/api/` → backend), CORS не нужен. Приоритет выбора режима фронта: переключатель в UI (localStorage) → `VITE_API_MODE` → авто-пинг `GET /api/v1/meta`.
@@ -122,7 +122,7 @@ Fix-10 (п.4): демо-деплой `https://meal-provisioning-ai.vercel.app/` 
 
 ## Технологический стек
 
-- **Backend:** Java 17, Spring Boot 3.2.5 (Web, Security, Data JPA, Validation), PostgreSQL 15 + Flyway (V1–V20), JJWT, springdoc-openapi, MapStruct-free (ручные DTO), JUnit 5 + AssertJ + Mockito + Testcontainers/LocalPgFallback
+- **Backend:** Java 17, Spring Boot 3.2.5 (Web, Security, Data JPA, Validation), PostgreSQL 15 + Flyway (V1–VXXX), JJWT, springdoc-openapi, MapStruct-free (ручные DTO), JUnit 5 + AssertJ + Mockito + Testcontainers/LocalPgFallback
 - **Frontend:** React 18 + TypeScript + Vite, Tailwind 4, React Router, lucide-react, react-datepicker; раздаётся nginx
 - **Инфраструктура:** Docker Compose (postgres + backend + frontend), GitHub Actions (CI, Docker Stack Smoke, contract parity nightly, e2e nightly)
 

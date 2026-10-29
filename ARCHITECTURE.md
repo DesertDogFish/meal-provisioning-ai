@@ -30,7 +30,7 @@ Services (Transactional; ownership-проверки trip.user == principal)
    ▼
 Spring Data JPA repositories (@Query JOIN FETCH / DISTINCT ON; Specifications для продуктов)
    ▼
-PostgreSQL 15 + Flyway V1–V20 (без.hand-right схем: ddl-auto=validate)
+PostgreSQL 15 + Flyway V1–VXXX (без.hand-right схем: ddl-auto=validate)
 ```
 
 Правки состава похода (V19) и снепшоты (V20) применяются в расчётном конвейере `SummaryService.computeShopping` (единая @Transactional-точка для shopping / by-days / person / kcal, без self-invocation и N+1).
