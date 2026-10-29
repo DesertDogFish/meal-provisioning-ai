@@ -22,7 +22,7 @@
 `coverage.include` vitest.config). Прогон в песочнице — по классам, не `mvn test` целиком
 (KB-10).
 
-- **BL-1. `EmisUnitTest`** (unit, `backend/src/test/java/com/provision/service/`).
+- **BL-1. `EmisUnitTest`** — ГОТОВО 29.10.2026. Написан и зелёным прогоном проверен: 20/20.
   Разбор суффикса: «кг», «350 г», «100 г (100 мл)», «100 мл», «л», «10 шт.», «25 пакетиков»,
   «упаковка 100 шт.», «упаковка 500 листов», «коробок», «рулон», «ампула 5 мл»,
   нераспознанный суффикс → `OTHER`. `pricePerUnit` по всем парам, включая плотность ≈ 1:
@@ -30,15 +30,17 @@
   COUNT(1)→PCS, COUNT(10)→PCS. Отрицательные: COUNT→KG/L, OTHER→*, `emisPrice ≤ 0`,
   `amount ≤ 0`, `pieceWeightG = null`, `ingredientUnit = null`. Округление `rounded` —
   копейки, HALF_UP. Фикстуры — реальные цены выгрузки (8016 = 198,32; 5311 = 702,38;
-  6502 = 26,49; 6505 = 42,90; 5701 = 4,18; 1501 = 113,85 за десяток). Закрывает KB-9.
-- **BL-2. `EmisPriceApplierTest`** (unit + Mockito, без Spring-контекста): `apply` создаёт
-  точку (`CREATED`), перезаписывает существующую (`UPDATED`), отбрасывает несовместимую
-  (`skipped` + причина в `ProductOutcome.reason`); пустой список точек → `SKIPPED` с причиной
-  «нет цен позиции»; позиция отсутствует в справочнике → `EmisUnit.OTHER` и `SKIPPED`;
-  `deleteManualByIngredientId` вызывается ТОЛЬКО если хоть одна точка применена;
-  `loadLinkedProducts` не тянет trip-копии (`trip_id IS NULL`). Закрывает KB-9.
-- **BL-3. `EmisMirrorServiceTest`**: upsert справочника и цен, идемпотентность повторного
-  `store`, обрезка окна `period-years`, счётчики `products/prices/deleted`. Закрывает KB-9.
+  6502 = 26,49; 6505 = 42,90; 5701 = 4,18; 1501 = 113,85 за десяток). Тесты на единицы
+  частично закрывают KB-9 (остаток долга: BL-2…BL-7).
+- **BL-2. `EmisPriceApplierTest`** — в работе (долг KB-9). unit + Mockito, без Spring-контекста:
+  `apply` создаёт точку (`CREATED`), перезаписывает существующую (`UPDATED`), отбрасывает
+  несовместимую (`skipped` + причина в `ProductOutcome.reason`); пустой список точек →
+  `SKIPPED` с причиной «нет цен позиции»; позиция отсутствует в справочнике → `EmisUnit.OTHER`
+  и `SKIPPED`; `deleteManualByIngredientId` вызывается ТОЛЬКО если хоть одна точка применена;
+  `loadLinkedProducts` не тянет trip-копии (`trip_id IS NULL`).
+- **BL-3. `EmisMirrorServiceTest`** — в работе (долг KB-9): upsert справочника и цен,
+  идемпотентность повторного `store`, обрезка окна `period-years`, счётчики
+  `products/prices/deleted`.
 - **BL-4. `EmisCatalogServiceTest` + `EmisControllerTest`** (`@WebMvcTest`): поиск по подстроке
   имени и по коду, лимит, сортировка по имени (ru-коллация), `describe`/`exists`, неизвестный
   код → 404/400, доступ только роли ADMIN (IDOR/403 по `AGENTS.md` §4). Закрывает KB-9.
