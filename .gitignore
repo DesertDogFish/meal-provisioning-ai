@@ -36,3 +36,6 @@ Thumbs.db
 # Misc
 *.orig
 .cache/
+
+# Goose local agents (project-local roles, not part of the repo)
+.agents/agents/
