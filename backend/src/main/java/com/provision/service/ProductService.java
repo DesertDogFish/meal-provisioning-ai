@@ -87,7 +87,11 @@ public class ProductService {
     ) {
         // FIX P0 (аудит): раньше все фильтры игнорировались ("Упрощенная реализация")
         // и возвращался весь справочник. Теперь фильтрация выполняется на БД через Specification.
-        PageRequest pageRequest = PageRequest.of(page, size,
+        // Аудит 29.10.2026 (подзадача 20): page/size — вход клиента, зажимаем в sane-диапазон
+        // (size<=200 — защита от «size=1000000» как способа положить БД/память).
+        int safePage = Math.max(0, page);
+        int safeSize = Math.min(Math.max(1, size), 200);
+        PageRequest pageRequest = PageRequest.of(safePage, safeSize,
                 Sort.by(Sort.Direction.fromString(direction != null ? direction : "asc"),
                         sort != null ? sort : "name"));
 

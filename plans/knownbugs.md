@@ -57,9 +57,11 @@
   frontend (`ProductTable.test.tsx` — значок со счётчиком, `src/api/contractEmis.test.ts` 21 —
   форма `EmisProductDto`, контекстные параметры, тексты предупреждений, `emisSharedCount`;
   входит в `npm run test:contract`). Прогон: 94/94 + 5/5 backend, 482/482 frontend.
-  **Остаток долга (открыт):** `EmisMirrorService` (окно `period-years`, upsert справочника и цен),
-  `EmisPriceApplier`/`PriceSyncService` (перенос цен в `ingredient_prices`, счётчики
-  `updated`/`skipped`), `priceSyncStatus` в `ProductService`, multipart-путь загрузки файла
+  **Остаток долга (открыт, сокращён 29.10.2026 вечером — BL-2/BL-3 выполнены,**
+  `EmisPriceApplierTest` 8/8 + `EmisMirrorServiceTest` 6/6, план
+  `plans/2026-10-29-full-audit.md` подзадача 27): `PriceSyncService` (оркестрация синка
+  и счётчики — частично покрыт метриками emis.sync.* того же плана), `priceSyncStatus`
+  в `ProductService`, multipart-путь загрузки файла
   (`IntegrationService.uploadSnapshot`, `api.postFile`), сиды V27/V28/V29 (идемпотентность
   проверена двойным прогоном вручную), `JdkEmisTransport` (живая сеть — KB-10).
 
@@ -78,23 +80,31 @@
   не подхватывается. Память и агенты задаются через `MAVEN_OPTS` + `-DforkCount=0` (тесты идут
   в JVM самого maven) — так снято покрытие jacoco 0.8.12 для пакета `integration`.
 - Источник: прогоны 29.10.2026.
+- **Поправка 2 29.10.2026 (вечер, подзадача 28):** `EconomicConsistencyTest` (10/10, ~65 c)
+  и `UserPricesIntegrationTest` (5/5, ~50 c) УСПЕШНО прогоняются по отдельности с
+  `MAVEN_OPTS="-Xmx512m -XX:MaxMetaspaceSize=256m -XX:+UseSerialGC -XX:ReservedCodeCacheSize=64m
+  …mockito-javaagent…" -DforkCount=0` + `JWT_SECRET` + LocalPgFallback. OOM-kill (137) даёт
+  только ПОЛНЫЙ прогон `mvn test` (несколько тяжёлых Spring-контекстов в одной JVM), а не эти
+  классы сами по себе. В отчётах больше не помечать их «не прогнано»; не запускается в
+  песочнице по-прежнему только `DockerStackSmokeTest` (нет Docker-демона).
 - **Статус 29.10.2026: оставлено как есть по решению владельца** («KB-10 оставляем как есть
-  пока»): ограничение песочницы, не дефект кода.
+  пока»): ограничение песочницы, не дефект кода; поправка 2 уточняет обход.
 
 
-### KB-14. R8-долг крупных UI-файлов: `TripDetailPage.tsx` и `PriceOverridesTab.tsx`
+### KB-14. R8-долг крупных UI-файлов: `PriceOverridesTab.tsx` (часть про `TripDetailPage.tsx` ЗАКРЫТА)
 
-- Симптом: `src/pages/TripDetailPage.tsx` — 1300 строк (было 1372 до выноса чеклиста),
-  `src/components/PriceOverridesTab.tsx` — 756 строк; оба превышают лимит R8 (500 строк).
-  В `TripDetailPage` в одном файле живут вкладки «Меню», «Закупка», «По дням», «На человека»
-  и обвязка похода; в `PriceOverridesTab` — таблица чеков, итоги и ввод факта.
-- Влияние: правка одной вкладки задевает соседние, точечное покрытие тестами и ревью
+- Симптом: `src/components/PriceOverridesTab.tsx` — 756 строк; превышает лимит R8 (500 строк):
+  в одном файле живут таблица чеков, итоги и ввод факта.
+- Влияние: правка одного блока задевает соседние, точечное покрытие тестами и ревью
   затруднены (R8/R9).
-- Обход: вкладка «Чеклист» вынесена в `src/components/ChecklistTab.tsx` (подзадача 6 плана
-  `plans/done/2026-10-29-ui-nowrap-and-mobile.md`, 14 тестов, в `coverage.include`); остальной
-  файл не трогали, поведение не менялось.
+- Обход: `TripDetailPage.tsx` декомпозирован (подзадача 26 аудита `plans/2026-10-29-full-audit.md`,
+  29.10.2026): страница 1310 → 240 строк, состояние — хук `pages/useTripDetail.tsx`, производные —
+  `utils/tripDerived.ts`, вкладки/шапка — компоненты `Trip*` (все ≤300 строк, в `coverage.include`,
+  34 новых теста); раньше тем же способом вынесена вкладка «Чеклист» (`ChecklistTab.tsx`, подзадача 6
+  плана `plans/done/2026-10-29-ui-nowrap-and-mobile.md`). `PriceOverridesTab` не трогали,
+  поведение не менялось.
 - Источник: `plans/done/2026-10-29-ui-nowrap-and-mobile.md` (секция `Known bugs`).
-- Закроют: BL-25 (`TripDetailPage`), BL-26 (`PriceOverridesTab`).
+- Закроют: BL-26 (`PriceOverridesTab`); BL-25 (`TripDetailPage`) — закрыт подзадачей 26.
 
 ### KB-15. Отметки «взято» и факт чеклиста живут в localStorage
 

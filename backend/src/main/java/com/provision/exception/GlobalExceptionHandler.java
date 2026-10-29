@@ -6,7 +6,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
-import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -168,6 +167,32 @@ public class GlobalExceptionHandler {
                 null
         );
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(error);
+    }
+
+    /**
+     * 429 + Retry-After (аудит 29.10.2026, подзадача 19): brute-force guard
+     * {@link com.provision.security.LoginAttemptService}.
+     */
+    @ExceptionHandler(com.provision.exception.TooManyRequestsException.class)
+    public ResponseEntity<ErrorResponse> handleTooManyRequests(
+            com.provision.exception.TooManyRequestsException ex,
+            HttpServletRequest request
+    ) {
+        log.warn("Too many requests: {} (retryAfterSec={})", ex.getMessage(), ex.getRetryAfterSeconds());
+        ErrorResponse error = new ErrorResponse(
+                "about:blank",
+                "Too Many Requests",
+                HttpStatus.TOO_MANY_REQUESTS.value(),
+                ex.getMessage(),
+                request.getRequestURI(),
+                LocalDateTime.now(),
+                null,
+                null,
+                null
+        );
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .header("Retry-After", String.valueOf(ex.getRetryAfterSeconds()))
+                .body(error);
     }
 
     @ExceptionHandler(com.provision.exception.ValidationException.class)

@@ -1,6 +1,8 @@
 package com.provision.service;
 
 import com.provision.entity.SyncLog;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import com.provision.integration.EmisDataSource;
 import com.provision.integration.EmisSnapshot;
 import com.provision.repository.IntegrationRepository;
@@ -14,6 +16,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
@@ -62,6 +65,12 @@ public class PriceSyncService {
     private final IntegrationRepository integrationRepository;
     /** Сколько последних лет храним в локальной копии (решение владельца: два года). */
     private final int periodYears;
+    /**
+     * Метрики синка (аудит 29.10.2026, подзадача 18): emis.sync.runs{provider,status},
+     * emis.sync.duration{provider}, emis.sync.items{provider,outcome}. Может быть null
+     * в unit-тестах — запись метрик тогда просто пропускается.
+     */
+    private final MeterRegistry meterRegistry;
     // Self-injection через ObjectProvider: вызов @Transactional(REQUIRES_NEW)-методов должен
     // идти через прокси Spring. ObjectProvider (а не прямой self-инжект) разрывает цикл
     // создания бина и позволяет unit-тестам конструировать сервис с null-провайдером.
@@ -76,7 +85,7 @@ public class PriceSyncService {
                             IntegrationRepository integrationRepository,
                             int periodYears) {
         this(sourceList, mirrorService, catalogService, priceApplier, syncLogRepository,
-                integrationRepository, periodYears, null);
+                integrationRepository, periodYears, null, null);
     }
 
     @Autowired
@@ -87,7 +96,8 @@ public class PriceSyncService {
                             SyncLogRepository syncLogRepository,
                             IntegrationRepository integrationRepository,
                             @Value("${integration.rosstat.period-years:2}") int periodYears,
-                            ObjectProvider<PriceSyncService> selfProvider) {
+                            ObjectProvider<PriceSyncService> selfProvider,
+                            MeterRegistry meterRegistry) {
         this.sources = new HashMap<>();
         for (EmisDataSource source : sourceList) {
             this.sources.put(source.code(), source);
@@ -99,6 +109,7 @@ public class PriceSyncService {
         this.integrationRepository = integrationRepository;
         this.periodYears = periodYears;
         this.selfProvider = selfProvider;
+        this.meterRegistry = meterRegistry;
         log.debug("PriceSyncService ready, источники ЕМИСС: {}, окно хранения: {} год(а)",
                 this.sources.keySet(), periodYears);
     }
@@ -128,9 +139,11 @@ public class PriceSyncService {
     }
 
     private void runSync(String providerCode, Long syncLogId, byte[] payload, String fileName) {
+        long startedAtNanos = System.nanoTime();
         SyncLog syncLog = syncLogRepository.findById(syncLogId).orElse(null);
         if (syncLog == null) {
             log.error("Price sync aborted: SyncLog {} not found (provider={})", syncLogId, providerCode);
+            recordRun(providerCode, "ABORTED", Duration.ZERO, 0, 0, 0);
             return;
         }
         log.info("Price sync started: provider={}, syncLogId={}, triggeredBy={}",
@@ -204,6 +217,8 @@ public class PriceSyncService {
 
             self().finalizeSyncLog(syncLogId, created, updated, errors,
                     SyncDetailsBuilder.details(requestCount, items, errorEntries, null, mirrorDetails));
+            recordRun(providerCode, statusOf(created, updated, errors),
+                    Duration.ofNanos(System.nanoTime() - startedAtNanos), created, updated, errors);
             log.info("Price sync finished: provider={}, syncLogId={}, created={}, updated={}, errors={}",
                     providerCode, syncLogId, created, updated, errors);
 
@@ -214,9 +229,36 @@ public class PriceSyncService {
             errorEntries.add(0, SyncDetailsBuilder.error("—", message));
             self().finalizeSyncLog(syncLogId, created, updated, errors + 1,
                     SyncDetailsBuilder.details(requestCount, items, errorEntries, message, mirrorDetails));
+            recordRun(providerCode, statusOf(created, updated, errors + 1),
+                    Duration.ofNanos(System.nanoTime() - startedAtNanos), created, updated, errors + 1);
             log.error("Price sync failed for provider {} (syncLogId={}): {}",
                     providerCode, syncLogId, message, e);
         }
+    }
+
+    /**
+     * Единый контракт статуса синка (аудит 29.10.2026, подзадачи 13/18): errors==0 → SUCCESS;
+     * ошибки есть и ничего не записано → FAILED; ошибки есть, но работа выполнена → PARTIAL
+     * (CHECK в БД расширен в V25). Используется и finalizeSyncLog, и метриками.
+     */
+    static String statusOf(int created, int updated, int errors) {
+        return errors == 0 ? "SUCCESS" : (created + updated == 0 ? "FAILED" : "PARTIAL");
+    }
+
+    /** Метрики одного запуска (подзадача 18): runs{status}, duration, items{outcome}. */
+    private void recordRun(String providerCode, String status, Duration duration,
+                           int created, int updated, int errors) {
+        if (meterRegistry == null) {
+            return; // unit-тесты без реестра
+        }
+        meterRegistry.counter("emis.sync.runs", "provider", providerCode, "status", status).increment();
+        Timer.builder("emis.sync.duration")
+                .tag("provider", providerCode)
+                .register(meterRegistry)
+                .record(duration);
+        meterRegistry.counter("emis.sync.items", "provider", providerCode, "outcome", "created").increment(created);
+        meterRegistry.counter("emis.sync.items", "provider", providerCode, "outcome", "updated").increment(updated);
+        meterRegistry.counter("emis.sync.items", "provider", providerCode, "outcome", "error").increment(errors);
     }
 
     /**
@@ -233,7 +275,7 @@ public class PriceSyncService {
             log.warn("SyncLog {} vanished before finalization", syncLogId);
             return;
         }
-        String status = errors == 0 ? "SUCCESS" : (created + updated == 0 ? "FAILED" : "PARTIAL");
+        String status = statusOf(created, updated, errors);
         syncLog.setStatus(status);
         syncLog.setFinishedAt(LocalDateTime.now());
         syncLog.setCreatedCount(created);

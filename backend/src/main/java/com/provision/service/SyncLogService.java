@@ -2,14 +2,9 @@ package com.provision.service;
 
 import com.provision.dto.sync.SyncKpiResponse;
 import com.provision.dto.sync.SyncLogResponse;
-import com.provision.entity.Integration;
 import com.provision.entity.SyncLog;
-import com.provision.entity.User;
-import com.provision.exception.ConflictException;
 import com.provision.exception.NotFoundException;
-import com.provision.repository.IntegrationRepository;
 import com.provision.repository.SyncLogRepository;
-import com.provision.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
@@ -26,7 +21,6 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -48,8 +42,6 @@ public class SyncLogService {
 
 
     private final SyncLogRepository syncLogRepository;
-    private final IntegrationRepository integrationRepository;
-    private final UserRepository userRepository;
 
     @Transactional(readOnly = true)
     public List<SyncLogResponse> getSyncLogs(
@@ -71,75 +63,14 @@ public class SyncLogService {
         return toResponse(syncLog);
     }
 
-    @Transactional
-    public SyncLogResponse startSync(String providerCode, Long userId) {
-        // Проверка существования провайдера
-        Integration integration = integrationRepository.findByProvider(providerCode)
-                .orElseThrow(() -> new NotFoundException("Integration not found: " + providerCode));
-
-        // Проверка статуса подключения
-        if (!"CONNECTED".equals(integration.getStatus())) {
-            throw new ConflictException("INTEGRATION_DISCONNECTED: Provider is not connected");
-        }
-
-        // Проверка на параллельный запуск
-        Optional<SyncLog> runningSync = syncLogRepository.findRunningByProvider(providerCode);
-        if (runningSync.isPresent()) {
-            throw new ConflictException("SYNC_ALREADY_RUNNING: Sync is already running for provider " + providerCode);
-        }
-
-        // Получение пользователя
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new NotFoundException("User not found"));
-
-        // Создание записи синка
-        SyncLog syncLog = SyncLog.builder()
-                .provider(providerCode)
-                .type("PRICES")
-                .status("RUNNING")
-                .triggeredBy("MANUAL")
-                .triggeredUser(user)
-                .startedAt(LocalDateTime.now())
-                .createdCount(0)
-                .updatedCount(0)
-                .errorCount(0)
-                .build();
-
-        syncLog = syncLogRepository.save(syncLog);
-        log.info("Started sync for provider {} by user {}", providerCode, user.getEmail());
-
-        return toResponse(syncLog);
-    }
-
-    @Transactional
-    public void completeSync(Long syncLogId, Integer createdCount, Integer updatedCount, Integer errorCount, Map<String, Object> details) {
-        SyncLog syncLog = syncLogRepository.findById(syncLogId)
-                .orElseThrow(() -> new NotFoundException("Sync log not found"));
-
-        syncLog.setStatus(errorCount > 0 && createdCount == 0 && updatedCount == 0 ? "FAILED" : "SUCCESS");
-        syncLog.setFinishedAt(LocalDateTime.now());
-        syncLog.setCreatedCount(createdCount);
-        syncLog.setUpdatedCount(updatedCount);
-        syncLog.setErrorCount(errorCount);
-        syncLog.setDetails(details);
-
-        syncLogRepository.save(syncLog);
-        log.info("Completed sync #{}: status={}, created={}, updated={}, errors={}", 
-                syncLogId, syncLog.getStatus(), createdCount, updatedCount, errorCount);
-    }
-
-    @Transactional
-    public void failSync(Long syncLogId, String errorMessage) {
-        SyncLog syncLog = syncLogRepository.findById(syncLogId)
-                .orElseThrow(() -> new NotFoundException("Sync log not found"));
-
-        syncLog.setStatus("FAILED");
-        syncLog.setFinishedAt(LocalDateTime.now());
-        syncLog.setDetails(Map.of("fatalError", errorMessage));
-
-        syncLogRepository.save(syncLog);
-        log.error("Failed sync #{}: {}", syncLogId, errorMessage);
-    }
+    // FIX (аудит 29.10.2026, подзадача 13, plans/2026-10-29-full-audit.md):
+    // были удалены мёртвые startSync/completeSync/failSync — дубли жизненного цикла синка:
+    //   • старт (проверка «уже бежит» + запись RUNNING) — единственная точка входа:
+    //     IntegrationService.startSyncLog (в потоке запроса, 409 при конкурентном запуске);
+    //   • финализация (SUCCESS/PARTIAL/FAILED из счётчиков + last_sync_at) — единственная
+    //     точка: PriceSyncService.finalizeSyncLog (REQUIRES_NEW в фоне).
+    // Локальный completeSync не знал про PARTIAL (контракт V25) и расходился с finalizeSyncLog.
+    // Вызовов ни из кода, ни из контроллеров, ни из фронта не было (проверено grep 29.10.2026).
 
     @Transactional
     public void markRunningAsFailedOnStartup() {
@@ -151,6 +82,23 @@ public class SyncLogService {
             syncLogRepository.save(syncLog);
             log.warn("Marked sync #{} as FAILED due to application restart", syncLog.getId());
         }
+    }
+
+    /**
+     * Пометить запуск FAILED без изменения {@code last_sync_at} (синк не выполнялся).
+     * Аудит 29.10.2026, подзадача 15: вызывается из IntegrationService.dispatch, когда
+     * пул отклонил фоновую задачу (очередь полна) — журнал не должен оставаться в RUNNING.
+     */
+    @Transactional
+    public void markRejected(Long syncLogId, String reason) {
+        syncLogRepository.findById(syncLogId).ifPresentOrElse(syncLog -> {
+            syncLog.setStatus("FAILED");
+            syncLog.setFinishedAt(LocalDateTime.now());
+            syncLog.setErrorCount(syncLog.getErrorCount() + 1);
+            syncLog.setDetails(Map.of("fatalError", reason));
+            syncLogRepository.save(syncLog);
+            log.warn("Marked sync #{} as FAILED (rejected before execution): {}", syncLogId, reason);
+        }, () -> log.warn("markRejected: SyncLog {} not found", syncLogId));
     }
 
     /**

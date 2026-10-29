@@ -16,6 +16,15 @@ public interface RefreshTokenRepository extends JpaRepository<RefreshToken, Long
     @Modifying
     @Query("DELETE FROM RefreshToken rt WHERE rt.user.id = :userId")
     void deleteByUserId(Long userId);
+
+    /**
+     * Атомарная инвалидация токена по хэшу (аудит 29.10.2026, подзадача 4):
+     * возвращает число удалённых строк; 0 — токен уже ротирован/удалён другой
+     * транзакцией (защита от race при параллельных /auth/refresh).
+     */
+    @Modifying
+    @Query("DELETE FROM RefreshToken rt WHERE rt.tokenHash = :tokenHash")
+    int deleteByTokenHash(String tokenHash);
     
     @Modifying
     @Query("DELETE FROM RefreshToken rt WHERE rt.expiresAt < :now")

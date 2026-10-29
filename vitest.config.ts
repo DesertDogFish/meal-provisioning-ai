@@ -31,9 +31,14 @@ export default defineConfig({
         perFile: true,
       },
       include: [
-        // src/api: зона изменения MODE-сьюта (mockServer.ts — legacy-мок 564 строк,
-        // вне гейта по правилу R5 «не гнаться за legacy»; его контракт-тесты MOCK-01..03)
+        // src/api: зона изменения MODE-сьюта (mockServer.ts и модули mock*, выделенные
+        // в подзадаче 25 аудита, — legacy-мок, вне гейта по правилу R5 «не гнаться за
+        // legacy»; его контракт-тесты MOCK-01..03 и mock-parity-сьюты)
         'src/api/client.ts',
+        // подзадача 24 (аудит 29.10.2026): модули, выделенные из client.ts
+        'src/api/authInterceptor.ts',
+        'src/api/modeResolver.ts',
+        'src/api/problemDetailParser.ts',
         'src/api/mode.ts',
         'src/api/watchdog.ts',
         
@@ -77,6 +82,17 @@ export default defineConfig({
         // plans/done/2026-10-29-ui-nowrap-and-mobile.md (R5): чеклист-компонент,
         // поповер подсказки и единый оверлей модалок
         'src/components/ChecklistTab.tsx',
+        // подзадача 26 (аудит 29.10.2026): TripDetailPage декомпозирована —
+        // презентационные компоненты вкладок/шапки + чистые производные
+        'src/utils/tripDerived.ts',
+        'src/components/TripActions.tsx',
+        'src/components/TripSummaryPanel.tsx',
+        'src/components/TripMealCard.tsx',
+        'src/components/TripDaysList.tsx',
+        'src/components/TripShoppingTab.tsx',
+        'src/components/TripDayShoppingTab.tsx',
+        'src/components/TripPersonTab.tsx',
+        'src/components/ExclusionCheckbox.tsx',
         'src/components/Modal.tsx',
       ],
     },

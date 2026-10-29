@@ -63,7 +63,7 @@ Compose-файл — в корне репозитория: `docker compose up --
 export JWT_SECRET=$(openssl rand -base64 48)          # обязателен, иначе fail-fast
 export SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5432/provision
 export SPRING_DATASOURCE_USERNAME=provision
-export SPRING_DATASOURCE_PASSWORD=provision123
+export SPRING_DATASOURCE_PASSWORD='<пароль БД из .env>'   # или POSTGRES_PASSWORD
 export SPRING_PROFILES_ACTIVE=dev                     # dev: DEBUG-логи + Swagger + демо-сид
 export SEED_DEMO_USERS=true                           # демо-пользователи и демо-походы (dev only)
 # export APP_VERSION=1.0.2                            # необязательно: переопределить версию без пересборки

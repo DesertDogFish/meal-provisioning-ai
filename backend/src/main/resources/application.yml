@@ -5,7 +5,9 @@ spring:
   datasource:
     url: jdbc:postgresql://localhost:5432/provision
     username: provision
-    password: provision123
+    # Пароль БД — только из окружения (аудит 29.10.2026: статический дефолт удалён).
+    # Локально: export POSTGRES_PASSWORD=... (или SPRING_DATASOURCE_PASSWORD=...), см. backend/README.md.
+    password: ${POSTGRES_PASSWORD:}
     driver-class-name: org.postgresql.Driver
 
   jpa:
@@ -49,10 +51,42 @@ server:
     include-message: always
     include-binding-errors: always
 
+# Аудит 29.10.2026, подзадача 18: метрики и health (Micrometer + Prometheus).
+# exposure намеренно НЕ "*": env/heapdump/threaddump публично — дыра; наружу только
+# health/info/metrics/prometheus, остальное — за ролью ADMIN (SecurityConfig).
+management:
+  endpoints:
+    web:
+      exposure:
+        include: ${ACTUATOR_EXPOSE:health,info,metrics,prometheus}
+  endpoint:
+    health:
+      show-details: ${ACTUATOR_HEALTH_DETAILS:never}
+      probes:
+        enabled: true
+  metrics:
+    tags:
+      application: ${spring.application.name}
+
 jwt:
   secret: ${JWT_SECRET:}
   access-token-expiration: 3600000  # 1 hour
   refresh-token-expiration: 604800000  # 7 days
+  # FIX (аудит 29.10.2026, подзадача 5): issuer/audience пишутся в каждый access-токен
+  # и требуются при разборе — токен, выпущенный другим сервисом с тем же алгоритмом,
+  # отклоняется. Значения по умолчанию подходят одиночному деплою; при нескольких
+  # окружениях на одном секрете — переопределить JWT_ISSUER/JWT_AUDIENCE.
+  issuer: ${JWT_ISSUER:provision}
+  audience: ${JWT_AUDIENCE:provision-api}
+
+# Dev-профиль: сид демо-данных (DevDataInitializer/DevTripsInitializer).
+# FIX (аудит 29.10.2026, подзадача 1, CRITICAL): пароли демо-пользователей НЕ хардкодятся.
+# Пустое значение ADMIN_PASSWORD/DEMO_USER_PASSWORD — при старте генерируется случайный
+# пароль и печатается в лог backend'а (dev-профиль — локальный инструмент).
+dev:
+  seed-demo-users: ${SEED_DEMO_USERS:false}
+  admin-password: ${ADMIN_PASSWORD:}
+  user-password: ${DEMO_USER_PASSWORD:}
 
 # CORS для прямых запросов с фронтенда (vite dev-сервер -> :8080).
 # В docker-сценарии фронт идёт через nginx same-origin и CORS не задействован.
@@ -135,6 +169,10 @@ springdoc:
 # Держим Hibernate на WARN, но SQL оставляем DEBUG — это полезный инструмент
 # для отслеживания N+1 (число «select ... from ingredients where id=?» и т.п.).
 logging:
+  # traceId в каждой строке лога (TraceIdFilter: X-Request-Id или сгенерированный UUID);
+  # фоновые @Async-потоки наследуют MDC через AsyncConfig.mdcTaskDecorator (аудит, подзадача 15).
+  pattern:
+    level: "%5p [%X{traceId:-}]"
   level:
     root: INFO
     com.provision: DEBUG          # наш код — можно DEBUG в dev

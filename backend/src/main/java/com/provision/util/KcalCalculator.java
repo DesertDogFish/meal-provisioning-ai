@@ -17,6 +17,9 @@ import java.util.List;
 public class KcalCalculator {
     
     private static final MathContext MC = new MathContext(6, RoundingMode.HALF_UP);
+
+    /** Знаменатель питательности: ккал заданы НА 100 ГРАММОВ. */
+    private static final BigDecimal PER_100G = BigDecimal.valueOf(100);
     
     /**
      * Рассчитать ккал для одного ингредиента в рецепте
@@ -28,22 +31,17 @@ public class KcalCalculator {
         if (ingredient == null || amount == null) return null;
         if (ingredient.getKcalPer100g() == null) return null;
         
-        BigDecimal grams;
         UnitOfMeasure unit = ingredient.getUnit();
-        
-        if (unit == UnitOfMeasure.KG || unit == UnitOfMeasure.L) {
-            // кг/л → граммы: умножаем на 1000
-            grams = amount.multiply(BigDecimal.valueOf(1000), MC);
-        } else if (unit == UnitOfMeasure.PCS || unit == UnitOfMeasure.PACK) {
-            // шт/уп → граммы: умножаем на piece_weight_g
-            if (ingredient.getPieceWeightG() == null) return null;
-            grams = amount.multiply(ingredient.getPieceWeightG(), MC);
-        } else {
-            return null;
-        }
-        
+        if (unit == null) return null;
+
+        // Конвертация — в UnitOfMeasure: KG/L → ×GRAMS_PER_KG; PCS/PACK → ×piece_weight_g
+        // (null, если вес штуки не задан/неположителен — считаем ккал неизвестными).
+        BigDecimal per = unit.gramsPerOne(ingredient.getPieceWeightG());
+        if (per == null) return null;
+        BigDecimal grams = amount.multiply(per, MC);
+
         // kcal = grams / 100 × kcal_per_100g
-        return grams.divide(BigDecimal.valueOf(100), MC)
+        return grams.divide(PER_100G, MC)
                    .multiply(ingredient.getKcalPer100g())
                    .setScale(1, RoundingMode.HALF_UP);
     }
@@ -100,12 +98,12 @@ public class KcalCalculator {
         switch (unit) {
             case KG:
                 if (amount.compareTo(BigDecimal.ONE) < 0) {
-                    return amount.multiply(BigDecimal.valueOf(1000)).setScale(0, RoundingMode.HALF_UP) + " г";
+                    return amount.multiply(UnitOfMeasure.GRAMS_PER_KG).setScale(0, RoundingMode.HALF_UP) + " г";
                 }
                 return amount.setScale(2, RoundingMode.HALF_UP) + " кг";
             case L:
                 if (amount.compareTo(BigDecimal.ONE) < 0) {
-                    return amount.multiply(BigDecimal.valueOf(1000)).setScale(0, RoundingMode.HALF_UP) + " мл";
+                    return amount.multiply(UnitOfMeasure.GRAMS_PER_KG).setScale(0, RoundingMode.HALF_UP) + " мл";
                 }
                 return amount.setScale(2, RoundingMode.HALF_UP) + " л";
             case PCS:

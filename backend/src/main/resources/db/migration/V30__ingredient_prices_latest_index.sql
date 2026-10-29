@@ -1,0 +1,31 @@
+-- V30: составной индекс для «последнего действующего среза цен»
+-- (аудит 29.10.2026, подзадача 16, plans/2026-10-29-full-audit.md).
+--
+-- Горячие запросы IngredientPriceRepository (DISTINCT ON):
+--   SELECT DISTINCT ON (ip.ingredient_id) ip.*
+--   FROM ingredient_prices ip
+--   WHERE ip.ingredient_id IN (...) AND ip.effective_from <= :date
+--   ORDER BY ip.ingredient_id, ip.effective_from DESC
+-- — путь /api/v1/prices, /trips/{id}/prices, summary-расчёты (стоимость похода).
+--
+-- Существующие одиночные индексы (ingredient_id) и (effective_from) заставляют
+-- PostgreSQL сортировать строки на каждую выборку; составной (ingredient_id,
+-- effective_from DESC) даёт готовый порядок прямо из индекса (Index Scan /
+-- Index Only Scan на DISTINCT ON).
+--
+-- Повторный прогон безопасен (IF NOT EXISTS). Старые одиночные индексы НЕ удаляем:
+-- effective_from используется фильтрами истории цен, ingredient_id — точечными
+-- запросами (existsByIngredientIdAndEffectiveFrom и пр.).
+--
+-- РЕЗУЛЬТАТЫ АУДИТА остальных зон (изменений не потребовали):
+--   * trip_days(trip_id, day_date) — покрыт UNIQUE-ограничением V1
+--     (idx_trip_days_trip_id избыточен как левый префикс, но безвреден);
+--   * emis_products(code PK, name) и emis_prices — UNIQUE(emis_code, region_code,
+--     period_year, period_month) + idx_emis_prices_lookup (V26) покрывают
+--     DISTINCT ON (emis_code) выборки EmisPriceRepository.findLatestPerProduct;
+--   * ingredients: uniq_product_identity_global (partial, trip_id IS NULL, V20),
+--     idx_ingredients_emis_code (V26), name/name_norm/category/trip_id/snapshot_of;
+--   * refresh_tokens(token_hash) — unique-колонка + индекс (поиск при каждом refresh);
+--   * users(email) — индекс под findByEmail (каждый JWT-запрос).
+CREATE INDEX IF NOT EXISTS idx_ingredient_prices_latest
+    ON ingredient_prices (ingredient_id, effective_from DESC);

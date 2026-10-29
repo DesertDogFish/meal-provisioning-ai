@@ -164,17 +164,30 @@ class MealCompositionMathTest {
     @Test
     @DisplayName("Вес и ккал строки: KG→×1000 г; PCS→piece_weight_g; kcal = г/100×kcalPer100g")
     void weightAndKcalOfItem() {
-        assertThat(MealCompositionService.weightOfGrams(
+        assertThat(CompositionCalculator.weightOfGrams(
                 new BigDecimal("0.18"), UnitOfMeasure.KG, null)).isEqualByComparingTo("180");
-        assertThat(MealCompositionService.weightOfGrams(
+        assertThat(CompositionCalculator.weightOfGrams(
                 new BigDecimal("1"), UnitOfMeasure.PCS, new BigDecimal("250"))).isEqualByComparingTo("250");
         // 0,18 кг картофеля × 336 ккал/100г = 604,8 ккал
-        assertThat(MealCompositionService.kcalOf(
+        assertThat(CompositionCalculator.kcalOf(
                 new BigDecimal("0.18"), UnitOfMeasure.KG, new BigDecimal("336"), null))
                 .isCloseTo(new BigDecimal("604.8"), org.assertj.core.api.Assertions.within(new BigDecimal("0.001")));
         // 1 шт консервов 250 г × 120 ккал/100г = 300 ккал
-        assertThat(MealCompositionService.kcalOf(
+        assertThat(CompositionCalculator.kcalOf(
                 new BigDecimal("1"), UnitOfMeasure.PCS, new BigDecimal("120"), new BigDecimal("250")))
                 .isCloseTo(new BigDecimal("300"), org.assertj.core.api.Assertions.within(new BigDecimal("0.001")));
+    }
+
+    @Test
+    @DisplayName("CompositionCalculator.costOf: копейки scale 2 HALF_UP; цена null → null (подзадача 11)")
+    void costOfRoundsToKopecks() {
+        // 0.18 × 198.32 = 35.6976 → 35.70
+        assertThat(CompositionCalculator.costOf(new BigDecimal("0.18"), new BigDecimal("198.32")))
+                .isEqualByComparingTo("35.70");
+        assertThat(CompositionCalculator.costOf(new BigDecimal("2"), null)).isNull();
+        assertThat(CompositionCalculator.costOf(null, new BigDecimal("5"))).isNull();
+        // nvl: ratio по умолчанию = 1
+        assertThat(CompositionCalculator.nvl(null)).isEqualByComparingTo("1");
+        assertThat(CompositionCalculator.nvl(new BigDecimal("0.5"))).isEqualByComparingTo("0.5");
     }
 }

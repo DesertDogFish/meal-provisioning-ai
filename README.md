@@ -33,8 +33,8 @@
 git clone https://github.com/DesertDogFish/meal-provisioning-ai.git
 cd meal-provisioning-ai
 cp .env.example .env
-# в .env замените JWT_SECRET на собственный (обязательно, иначе стек не поднимется):
-#   openssl rand -base64 48
+# в .env замените на собственные JWT_SECRET и POSTGRES_PASSWORD (обе обязательны,
+# иначе стек не поднимется); секрет — openssl rand -base64 48
 docker compose up --build
 # дождаться, пока все сервисы станут healthy (2–3 минуты): docker compose ps
 ```
@@ -43,7 +43,7 @@ docker compose up --build
 - Health API: http://localhost:8080/api/v1/meta (`"db":"ok"`; 503 при недоступной БД)
 - Swagger: http://localhost:8080/swagger-ui.html (profile `dev`)
 
-Порт PostgreSQL проброшен только на `127.0.0.1:5432`. Миграции Flyway (V1–V20) применяются при старте бэкенда, каталог сеется автоматически.
+Порт PostgreSQL проброшен только на `127.0.0.1:5432`. Миграции Flyway (V1–V30) применяются при старте бэкенда, каталог сеется автоматически.
 
 ### Первый вход и демо-данные
 
@@ -53,12 +53,12 @@ docker compose up --build
 
 | Учётная запись | Пароль | Роль | Демо-походы |
 |---|---|---|---|
-| `admin@provision.app` | `provision123` | ADMIN | «Осенний Кавказ: Архыз» (прошедший, 4 чел., факт-цены и замена в составе), «Яхта Хорватия: Сплит — Хвар — Вис» (7 дней, 6 чел., день с people-override) |
-| `user@provision.app` | `provision123` | USER | «ПВД Карелия: Ладожские шхеры» (2 дня, 2 чел.) |
+| `admin@provision.app` | `ADMIN_PASSWORD` из `.env`; если не задан — случайный, печатается в лог старта бэкенда | ADMIN | «Осенний Кавказ: Архыз» (прошедший, 4 чел., факт-цены и замена в составе), «Яхта Хорватия: Сплит — Хвар — Вис» (7 дней, 6 чел., день с people-override) |
+| `user@provision.app` | `DEMO_USER_PASSWORD` из `.env`; если не задан — случайный, печатается в лог старта | USER | «ПВД Карелия: Ладожские шхеры» (2 дня, 2 чел.) |
 
 Демо-походы наполнены меню и работают на снепшотах каталога (V20), как и любые пользовательские походы.
 
-> ⚠️ Для публичного сервера: `SEED_DEMO_USERS=false` и `SPRING_PROFILES_ACTIVE=prod` — пароли демо-учёток открыты в репозитории.
+> ⚠️ Для публичного сервера: `SEED_DEMO_USERS=false` и `SPRING_PROFILES_ACTIVE=prod`. Демо-пароли из `.env` не должны быть тривиальными: учётка `admin` имеет полный доступ.
 
 ## Профили Spring
 
@@ -75,7 +75,7 @@ docker compose up --build
 
 | Переменная | По умолчанию | Назначение |
 |---|---|---|
-| `POSTGRES_PASSWORD` | `provision123` | Пароль БД (локально допустимо; для публичного хоста смените) |
+| `POSTGRES_PASSWORD` | **обязательна** (без неё compose не стартует) | Пароль БД; задаётся в `.env` (шаблон — `.env.example`) |
 | `JWT_SECRET` | **обязательна** | Подпись JWT; без неё compose/бэкенд падают fail-fast. Минимум 32 символа: `openssl rand -base64 48` |
 | `SPRING_PROFILES_ACTIVE` | `dev` | Профиль бэкенда |
 | `SEED_DEMO_USERS` | `false` (в compose) / `true` (в `.env.example`) | Демо-пользователи и демо-походы (только `dev`) |

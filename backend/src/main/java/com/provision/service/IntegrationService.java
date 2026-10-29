@@ -46,6 +46,8 @@ public class IntegrationService {
     private final UserRepository userRepository;
     /** Фоновая синхронизация — здесь только граница {@code @Async} (Fix-16, R8/R9). */
     private final PriceSyncService priceSyncService;
+    /** Гигиена журнала синков (markRejected при отказе пула — подзадача 15 аудита). */
+    private final SyncLogService syncLogService;
     // FIX (P1): self-injection через ObjectProvider — вызов @Async-метода должен идти
     // через прокси Spring, иначе аннотация игнорируется при internal call.
     // ObjectProvider нужен, чтобы unit-тесты конструировали сервис с null-бином.
@@ -56,9 +58,10 @@ public class IntegrationService {
                               IntegrationRepository integrationRepository,
                               SyncLogRepository syncLogRepository,
                               UserRepository userRepository,
-                              PriceSyncService priceSyncService) {
+                              PriceSyncService priceSyncService,
+                              SyncLogService syncLogService) {
         this(providerList, integrationRepository, syncLogRepository, userRepository,
-                priceSyncService, null);
+                priceSyncService, syncLogService, null);
     }
 
     @Autowired
@@ -67,6 +70,7 @@ public class IntegrationService {
                               SyncLogRepository syncLogRepository,
                               UserRepository userRepository,
                               PriceSyncService priceSyncService,
+                              SyncLogService syncLogService,
                               ObjectProvider<IntegrationService> selfProvider) {
         this.providers = new HashMap<>();
         for (PriceProvider provider : providerList) {
@@ -76,6 +80,7 @@ public class IntegrationService {
         this.syncLogRepository = syncLogRepository;
         this.userRepository = userRepository;
         this.priceSyncService = priceSyncService;
+        this.syncLogService = syncLogService;
         this.selfProvider = selfProvider;
         log.info("Loaded {} price providers: {}", providers.size(), providers.keySet());
     }
@@ -146,7 +151,8 @@ public class IntegrationService {
         }
 
         SyncLog syncLog = startSyncLog(providerCode, userId);
-        self().executePriceSync(providerCode, syncLog.getId());
+        dispatch(() -> self().executePriceSync(providerCode, syncLog.getId()),
+                syncLog.getId(), providerCode);
 
         return syncLog;
     }
@@ -176,9 +182,26 @@ public class IntegrationService {
         SyncLog syncLog = startSyncLog(providerCode, userId);
         log.info("ЕМИСС: загрузка файла «{}» ({} байт) запущена как синк {} провайдера {}",
                 fileName, payload.length, syncLog.getId(), providerCode);
-        self().executeUploadSync(providerCode, syncLog.getId(), payload, fileName);
+        dispatch(() -> self().executeUploadSync(providerCode, syncLog.getId(), payload, fileName),
+                syncLog.getId(), providerCode);
 
         return syncLog;
+    }
+
+    /**
+     * Отправка фоновой задачи в пул с явной обработкой отказа (аудит 29.10.2026,
+     * подзадача 15). Пул использует {@code AbortPolicy}: если воркеры заняты и очередь
+     * полна, задача отклоняется СРАЗУ, а SyncLog не остаётся висеть в RUNNING — помечаем
+     * его FAILED с причиной и отвечаем 409 (клиент повторяет позже, прогресс виден в журнале).
+     */
+    private void dispatch(Runnable asyncCall, Long syncLogId, String providerCode) {
+        try {
+            asyncCall.run();
+        } catch (java.util.concurrent.RejectedExecutionException e) {
+            log.error("Sync {} rejected by executor (pool/queue saturated): {}", syncLogId, e.getMessage());
+            syncLogService.markRejected(syncLogId, "EXECUTOR_SATURATED: пул синхронизации перегружен");
+            throw new ConflictException("EXECUTOR_SATURATED: Sync executor is saturated, retry later");
+        }
     }
 
     /**

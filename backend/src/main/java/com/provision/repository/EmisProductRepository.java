@@ -18,7 +18,9 @@ import java.util.List;
 public interface EmisProductRepository extends JpaRepository<EmisProduct, String> {
 
     /** Подстрока в названии (без учёта регистра), сортировка по названию, лимит — Pageable. */
-    @Query("SELECT p FROM EmisProduct p WHERE lower(p.name) LIKE lower(concat('%', :query, '%')) "
+    // LIKE-параметр экранируется вызывающим кодом (EmisCatalogService -> SearchEscape.like),
+    // ESCAPE '\' делает поиск буквальным (аудит 29.10.2026, подзадачи 20/30).
+    @Query("SELECT p FROM EmisProduct p WHERE lower(p.name) LIKE lower(concat('%', :query, '%')) ESCAPE '!' "
             + "ORDER BY p.name")
     List<EmisProduct> searchByName(@Param("query") String query, Pageable pageable);
 

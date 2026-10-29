@@ -76,7 +76,7 @@ public class EmisCatalogService {
     @Transactional(readOnly = true)
     public List<EmisProductDto> search(String query, int limit, LinkContext context) {
         int cap = limit <= 0 ? 20 : Math.min(limit, 100);
-        String q = query == null ? "" : query.trim().toLowerCase();
+        String q = com.provision.util.SearchEscape.like(query == null ? "" : query.trim().toLowerCase());
         List<EmisProduct> found = productRepository.searchByName(q, PageRequest.of(0, cap));
         log.debug("ЕМИСС-поиск «{}»: найдено {} (лимит {}), контекст продукта: {}",
                 q, found.size(), cap, context == null ? "нет" : context.ingredientUnit());

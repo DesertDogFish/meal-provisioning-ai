@@ -59,7 +59,8 @@ public class MealCompositionService {
     private final UserRepository userRepository;
     private final PriceResolutionService priceResolutionService;
     private final SummaryService summaryService;
-    private final TripCatalogSnapshotService snapshotService;
+    private final TripScopedIdResolver tripScopedIdResolver;
+    private final CompositionDiffEngine diffEngine;
 
     /** GET /trips/{t}/meals/{m}/composition — сервер считает ВСЁ масштабирование. */
     @Transactional(readOnly = true)
@@ -99,7 +100,7 @@ public class MealCompositionService {
         }
         Map<Long, Long> resolved = new LinkedHashMap<>();
         for (Long id : wantedIds) {
-            resolved.put(id, resolveTripScopedId(ctx, id));
+            resolved.put(id, tripScopedIdResolver.resolveTripScopedId(ctx, id));
         }
 
         // Проверки дублей/самозамен — ПОСЛЕ резолва (два разных глобальных id могут
@@ -132,141 +133,14 @@ public class MealCompositionService {
             }
         }
 
-        List<TripIngredientSubstitution> current =
-                substitutionRepository.findByTripIdAndRecipeId(tripId, ctx.recipe.getId());
-        Map<Long, TripIngredientSubstitution> scaleByFrom = new HashMap<>();
-        Map<Long, TripIngredientSubstitution> extraByTo = new HashMap<>();
-        Map<Long, TripIngredientSubstitution> excludeByFrom = new HashMap<>();
-        Map<Long, TripIngredientSubstitution> replaceByFrom = new HashMap<>();
-        for (TripIngredientSubstitution s : current) {
-            if (s.isAdded() || s.getFromIngredient() == null) {
-                if (s.getToIngredient() != null) extraByTo.put(s.getToIngredient().getId(), s);
-            } else if (s.isRemoved() || s.getToIngredient() == null) {
-                excludeByFrom.put(s.getFromIngredient().getId(), s);
-            } else if (s.getToIngredient().getId().equals(s.getFromIngredient().getId())) {
-                scaleByFrom.put(s.getFromIngredient().getId(), s);
-            } else {
-                replaceByFrom.put(s.getFromIngredient().getId(), s);
-            }
-        }
-
         User user = userRepository.findById(userId).orElse(null);
-
-        // --- diff по items ---
-        Set<Long> keepScaled = new HashSet<>();
-        Set<Long> keepExtra = new HashSet<>();
-        Set<Long> keepExcluded = new HashSet<>();
-        for (CompositionPutRequest.ItemDto item : request.items()) {
-            Long ingId = resolved.get(item.ingredientId());
-            switch (item.state()) {
-                case STATE_SCALED -> {
-                    keepScaled.add(ingId);
-                    TripIngredientSubstitution existing = scaleByFrom.get(ingId);
-                    Ingredient ing = ingredients.get(ingId);
-                    if (existing == null) {
-                        substitutionRepository.save(TripIngredientSubstitution.builder()
-                                .trip(ctx.trip).recipe(ctx.recipe)
-                                .fromIngredient(ing).toIngredient(ing)
-                                .ratio(item.ratio()).comment("SCALE via composition")
-                                .createdBy(user).build());
-                    } else if (existing.getRatio().compareTo(item.ratio()) != 0) {
-                        existing.setRatio(item.ratio());
-                        substitutionRepository.save(existing);
-                    }
-                    // SCALED поверх EXCLUDED — снимаем исключение
-                    TripIngredientSubstitution ex = excludeByFrom.get(ingId);
-                    if (ex != null) {
-                        substitutionRepository.delete(ex);
-                        excludeByFrom.remove(ingId);
-                    }
-                }
-                case STATE_EXTRA -> {
-                    keepExtra.add(ingId);
-                    // §3/V21: EXTRA — АБСОЛЮТ на приём; amount_per_serving added-строки хранит
-                    // его напрямую (SummaryService не масштабирует такие строки — см.
-                    // EffectiveLine.absolute; GET composition отдаёт значение как есть).
-                    // Старая схема (abs/people) теряла точность при baseServings≠1 и давала
-                    // вклад abs/base в закупке — расчёт расходился с составом.
-                    BigDecimal absolute = item.amount();
-                    TripIngredientSubstitution existing = extraByTo.get(ingId);
-                    if (existing == null) {
-                        substitutionRepository.save(TripIngredientSubstitution.builder()
-                                .trip(ctx.trip).recipe(ctx.recipe)
-                                .fromIngredient(null).toIngredient(ingredients.get(ingId))
-                                .amountPerServing(absolute).ratio(BigDecimal.ONE)
-                                .added(true).removed(false)
-                                .comment("EXTRA via composition")
-                                .createdBy(user).build());
-                    } else if (existing.getAmountPerServing() == null
-                            || existing.getAmountPerServing().compareTo(absolute) != 0) {
-                        existing.setAmountPerServing(absolute);
-                        substitutionRepository.save(existing);
-                    }
-                }
-                case STATE_EXCLUDED -> {
-                    keepExcluded.add(ingId);
-                    if (!excludeByFrom.containsKey(ingId)) {
-                        Ingredient ing = ingredients.get(ingId);
-                        substitutionRepository.save(TripIngredientSubstitution.builder()
-                                .trip(ctx.trip).recipe(ctx.recipe)
-                                .fromIngredient(ing).toIngredient(null)
-                                .ratio(BigDecimal.ONE).removed(true)
-                                .comment("EXCLUDE via composition")
-                                .createdBy(user).build());
-                    }
-                }
-                default -> { /* RECIPE — правок нет */ }
-            }
-        }
-
-        // Убираем правки, которых нет в desired-состоянии (state=RECIPE или позиция исчезла)
-        for (Map.Entry<Long, TripIngredientSubstitution> e : scaleByFrom.entrySet()) {
-            if (!keepScaled.contains(e.getKey())) substitutionRepository.delete(e.getValue());
-        }
-        for (Map.Entry<Long, TripIngredientSubstitution> e : extraByTo.entrySet()) {
-            if (!keepExtra.contains(e.getKey())) substitutionRepository.delete(e.getValue());
-        }
-        for (Map.Entry<Long, TripIngredientSubstitution> e : excludeByFrom.entrySet()) {
-            if (!keepExcluded.contains(e.getKey())) substitutionRepository.delete(e.getValue());
-        }
-
-        // --- diff по substitutions (полная замена набора) ---
-        List<CompositionPutRequest.SubstitutionDto> wantSubs =
-                request.substitutions() == null ? List.of() : request.substitutions();
-        Map<Long, TripIngredientSubstitution> keepReplace = new HashMap<>();
-        for (CompositionPutRequest.SubstitutionDto dto : wantSubs) {
-            Long fromId = resolved.get(dto.fromIngredientId());
-            Long toId = resolved.get(dto.toIngredientId());
-            TripIngredientSubstitution existing = replaceByFrom.get(fromId);
-            boolean changed = existing == null
-                    || !existing.getToIngredient().getId().equals(toId)
-                    || nvl(existing.getRatio()).compareTo(nvl(dto.ratio())) != 0;
-            if (changed) {
-                if (existing != null) substitutionRepository.delete(existing);
-                substitutionRepository.save(TripIngredientSubstitution.builder()
-                        .trip(ctx.trip).recipe(ctx.recipe)
-                        .fromIngredient(ingredients.get(fromId))
-                        .toIngredient(ingredients.get(toId))
-                        .ratio(nvl(dto.ratio())).comment("SUBST via composition")
-                        .createdBy(user).build());
-            }
-            if (existing != null) keepReplace.put(fromId, existing);
-        }
-        for (Map.Entry<Long, TripIngredientSubstitution> e : replaceByFrom.entrySet()) {
-            if (!keepReplace.containsKey(e.getKey())) substitutionRepository.delete(e.getValue());
-        }
-
-        substitutionRepository.flush();
-        log.info("Composition commit: trip {} meal {} items {} subs {}", tripId, mealId,
-                request.items().size(), wantSubs.size());
+        diffEngine.applyDiff(ctx, request, resolved, ingredients, user);
 
         // Ответ = свежий GET (пересобрать контекст после изменений набора правок)
         return buildResponse(loadContext(tripId, mealId, userId));
     }
 
     // ================= расчёт состава =================
-
-    private record MealContext(Trip trip, TripDay day, TripMeal meal, Recipe recipe, int people) {}
 
     private MealContext loadContext(Long tripId, Long mealId, Long userId) {
         Trip trip = tripRepository.findByIdWithDaysAndMeals(tripId, userId)
@@ -294,44 +168,9 @@ public class MealCompositionService {
         return new MealContext(trip, foundDay, foundMeal, recipe, people);
     }
 
-    /**
-     * V20-привязка входящего ingredientId к trip-scope похода:
-     *  1) id строки состава рецепта (уже trip-scoped) — как есть;
-     *  2) ГЛОБАЛЬНЫЙ id продукта, чей trip-снепшот есть в составе рецепта, — id снепшота
-     *     (UI может прислать id из справочника для уже присутствующей позиции);
-     *  3) продукт этого же похода (например, цель прошлой правки) — как есть;
-     *  4) продукт из глобального справочника — создаём/переиспользуем снепшот-копию
-     *     (TripCatalogSnapshotService: копия + замороженная плановая цена);
-     *  5) чужой trip-scope / несуществующий id — 404.
-     */
-    private Long resolveTripScopedId(MealContext ctx, Long id) {
-        if (id == null) {
-            throw new IllegalArgumentException("ingredientId is required");
-        }
-        for (RecipeIngredient ri : ctx.recipe.getIngredients()) {
-            Ingredient ing = ri.getIngredient();
-            if (ing.getId().equals(id)) {
-                return ing.getId();
-            }
-            if (id.equals(ing.getSnapshotOf())) {
-                return ing.getId();
-            }
-        }
-        Ingredient loaded = ingredientRepository.findById(id)
-                .orElseThrow(() -> new NotFoundException("Ingredient not found: " + id));
-        if (ctx.trip.getId().equals(loaded.getTripId())) {
-            return loaded.getId();
-        }
-        if (loaded.getTripId() != null) {
-            // trip-scoped продукт ЧУЖОГО похода — в этом походе его не существует
-            throw new NotFoundException("Ingredient not found: " + id);
-        }
-        return snapshotService.snapshotIngredient(ctx.trip, loaded).getId();
-    }
-
     private CompositionResponse buildResponse(MealContext ctx) {
         List<TripIngredientSubstitution> edits =
-                substitutionRepository.findByTripIdAndRecipeId(ctx.trip.getId(), ctx.recipe.getId());
+                substitutionRepository.findByTripIdAndRecipeId(ctx.trip().getId(), ctx.recipe().getId());
 
         Map<Long, BigDecimal> scaleRatios = new HashMap<>();
         Map<Long, BigDecimal> extraAmounts = new HashMap<>(); // абсолют на приём
@@ -346,18 +185,18 @@ public class MealCompositionService {
             } else if (s.isRemoved() || s.getToIngredient() == null) {
                 excluded.add(s.getFromIngredient().getId());
             } else if (s.getToIngredient().getId().equals(s.getFromIngredient().getId())) {
-                scaleRatios.put(s.getFromIngredient().getId(), nvl(s.getRatio()));
+                scaleRatios.put(s.getFromIngredient().getId(), CompositionCalculator.nvl(s.getRatio()));
             } else {
                 replacements.put(s.getFromIngredient().getId(), s);
             }
         }
 
-        int baseServings = ctx.recipe.getBaseServings() != null && ctx.recipe.getBaseServings() > 0
-                ? ctx.recipe.getBaseServings() : 1;
+        int baseServings = ctx.recipe().getBaseServings() != null && ctx.recipe().getBaseServings() > 0
+                ? ctx.recipe().getBaseServings() : 1;
 
         // Кэш ингредиентов состава/правок — нужен уже при построении строк (EXTRA-позиции).
         Map<Long, Ingredient> ingCache = new HashMap<>();
-        for (RecipeIngredient ri : ctx.recipe.getIngredients()) {
+        for (RecipeIngredient ri : ctx.recipe().getIngredients()) {
             ingCache.put(ri.getIngredient().getId(), ri.getIngredient());
         }
         for (TripIngredientSubstitution s : edits) {
@@ -368,7 +207,7 @@ public class MealCompositionService {
         // 1) эффективные количества до замен: SCALE → people → EXCLUDE → EXTRA
         Map<Long, Item> itemsById = new LinkedHashMap<>();
         Map<Long, BigDecimal> effective = new LinkedHashMap<>();
-        for (RecipeIngredient ri : ctx.recipe.getIngredients()) {
+        for (RecipeIngredient ri : ctx.recipe().getIngredients()) {
             Ingredient ing = ri.getIngredient();
             if (excluded.contains(ing.getId())) {
                 itemsById.put(ing.getId(), toItem(ing, ri.getAmount(), null, BigDecimal.ZERO,
@@ -378,7 +217,7 @@ public class MealCompositionService {
             }
             BigDecimal ratio = scaleRatios.get(ing.getId());
             BigDecimal derived = summaryService.calculateAmountForMeal(
-                    ri.getAmount(), baseServings, ctx.people);
+                    ri.getAmount(), baseServings, ctx.people());
             if (ratio != null) {
                 derived = derived.multiply(ratio).setScale(3, RoundingMode.HALF_UP);
             }
@@ -387,7 +226,7 @@ public class MealCompositionService {
             effective.put(ing.getId(), derived);
         }
         for (Map.Entry<Long, BigDecimal> e : extraAmounts.entrySet()) {
-            Ingredient ing = resolveIngredient(e.getKey(), ingCache);
+            Ingredient ing = tripScopedIdResolver.resolveIngredient(e.getKey(), ingCache);
             if (ing == null) continue;
             itemsById.put(ing.getId(), toItem(ing, null, null, e.getValue(), STATE_EXTRA, null, null));
             effective.put(ing.getId(), e.getValue());
@@ -399,7 +238,8 @@ public class MealCompositionService {
             Long fromId = s.getFromIngredient().getId();
             Long toId = s.getToIngredient().getId();
             BigDecimal qtyFrom = effective.getOrDefault(fromId, BigDecimal.ZERO);
-            BigDecimal moved = qtyFrom.multiply(nvl(s.getRatio())).setScale(3, RoundingMode.HALF_UP);
+            BigDecimal moved = qtyFrom.multiply(CompositionCalculator.nvl(s.getRatio()))
+                    .setScale(3, RoundingMode.HALF_UP);
             effective.put(fromId, BigDecimal.ZERO);
 
             // §3: строка-источник ОБНУЛЯЕТСЯ и в ответе (количество перенесено приёмнику) —
@@ -438,29 +278,29 @@ public class MealCompositionService {
                     baseTo.add(moved), newState, newRatio,
                     s.getFromIngredient().getName()));
             subDtos.add(new Substitution(s.getId(), fromId, s.getFromIngredient().getName(),
-                    toId, s.getToIngredient().getName(), nvl(s.getRatio())));
+                    toId, s.getToIngredient().getName(), CompositionCalculator.nvl(s.getRatio())));
         }
 
         // 3) totals: ккал, вес (г), план-стоимость по ЦЕНЕ ДНЯ приёма
         BigDecimal kcal = BigDecimal.ZERO;
         BigDecimal weightGrams = BigDecimal.ZERO;
         BigDecimal plannedCost = BigDecimal.ZERO;
-        LocalDate date = ctx.day.getDayDate();
+        LocalDate date = ctx.day().getDayDate();
         for (Item item : itemsById.values()) {
             BigDecimal qty = item.effectiveAmount() == null ? BigDecimal.ZERO : item.effectiveAmount();
             if (qty.signum() <= 0) continue;
-            Ingredient ing = resolveIngredient(item.ingredientId(), ingCache);
+            Ingredient ing = tripScopedIdResolver.resolveIngredient(item.ingredientId(), ingCache);
             if (ing != null) {
                 if (ing.getKcalPer100g() != null) {
-                    kcal = kcal.add(kcalOf(qty, ing.getUnit(), ing.getKcalPer100g(),
-                            ing.getPieceWeightG()));
+                    kcal = kcal.add(CompositionCalculator.kcalOf(qty, ing.getUnit(),
+                            ing.getKcalPer100g(), ing.getPieceWeightG()));
                 }
-                weightGrams = weightGrams.add(weightOfGrams(qty, ing.getUnit(), ing.getPieceWeightG()));
-                BigDecimal unitPrice = priceResolutionService
-                        .getPlannedPrice(ing.getId(), date).orElse(null);
-                if (unitPrice != null) {
-                    plannedCost = plannedCost.add(
-                            qty.multiply(unitPrice).setScale(2, RoundingMode.HALF_UP));
+                weightGrams = weightGrams.add(CompositionCalculator.weightOfGrams(
+                        qty, ing.getUnit(), ing.getPieceWeightG()));
+                BigDecimal cost = CompositionCalculator.costOf(qty, priceResolutionService
+                        .getPlannedPrice(ing.getId(), date).orElse(null));
+                if (cost != null) {
+                    plannedCost = plannedCost.add(cost);
                 }
             }
         }
@@ -468,33 +308,25 @@ public class MealCompositionService {
         List<Item> orderedItems = new ArrayList<>();
         for (Item item : itemsById.values()) {
             BigDecimal qty = item.effectiveAmount() == null ? BigDecimal.ZERO : item.effectiveAmount();
-            Ingredient ing = resolveIngredient(item.ingredientId(), ingCache);
+            Ingredient ing = tripScopedIdResolver.resolveIngredient(item.ingredientId(), ingCache);
             BigDecimal kcalTotal = ing != null && ing.getKcalPer100g() != null && qty.signum() > 0
-                    ? kcalOf(qty, ing.getUnit(), ing.getKcalPer100g(), ing.getPieceWeightG())
+                    ? CompositionCalculator.kcalOf(qty, ing.getUnit(), ing.getKcalPer100g(),
+                            ing.getPieceWeightG())
                             .setScale(1, RoundingMode.HALF_UP)
                     : BigDecimal.ZERO;
             orderedItems.add(withKcal(item, kcalTotal));
         }
 
         return new CompositionResponse(
-                ctx.meal.getId(), ctx.day.getDayDate(), ctx.meal.getMealType(), ctx.people,
-                baseServings, ctx.recipe.getId(),
+                ctx.meal().getId(), ctx.day().getDayDate(), ctx.meal().getMealType(), ctx.people(),
+                baseServings, ctx.recipe().getId(),
                 // Fix-2 (п.7): глобальный id блюда — snapshotOf снепшота или сам id
-                ctx.recipe.getSnapshotOf() != null ? ctx.recipe.getSnapshotOf() : ctx.recipe.getId(),
-                ctx.recipe.getName(),
+                ctx.recipe().getSnapshotOf() != null ? ctx.recipe().getSnapshotOf() : ctx.recipe().getId(),
+                ctx.recipe().getName(),
                 orderedItems, subDtos,
                 new Totals(kcal.setScale(1, RoundingMode.HALF_UP),
                         weightGrams.setScale(1, RoundingMode.HALF_UP),
                         plannedCost.setScale(2, RoundingMode.HALF_UP)));
-    }
-
-    /** Ингредиент из кэша состава/правок; при промахе — один точечный запрос (EXTRA-копия). */
-    private Ingredient resolveIngredient(Long id, Map<Long, Ingredient> cache) {
-        Ingredient cached = cache.get(id);
-        if (cached != null) return cached;
-        Ingredient loaded = ingredientRepository.findById(id).orElse(null);
-        if (loaded != null) cache.put(id, loaded);
-        return loaded;
     }
 
     private Item toItem(Ingredient ing, BigDecimal basePerServing, BigDecimal derived,
@@ -511,31 +343,6 @@ public class MealCompositionService {
     }
 
     // ================= математика единиц (эталон ARCHITECTURE/calc.ts) =================
-
-    /** Граммы позиции: KG/L → ×1000; PCS/PACK → qty × piece_weight_g (если известен). */
-    static BigDecimal weightOfGrams(BigDecimal qty, UnitOfMeasure unit, BigDecimal pieceWeightG) {
-        if (qty == null) return BigDecimal.ZERO;
-        if (unit == UnitOfMeasure.KG || unit == UnitOfMeasure.L) {
-            return qty.multiply(BigDecimal.valueOf(1000));
-        }
-        if (pieceWeightG != null && pieceWeightG.signum() > 0) {
-            return qty.multiply(pieceWeightG);
-        }
-        return BigDecimal.ZERO;
-    }
-
-    /** Ккал позиции: kcalPer100g × граммы / 100 (без округления — суммируем точно). */
-    static BigDecimal kcalOf(BigDecimal qty, UnitOfMeasure unit, BigDecimal kcalPer100g,
-                             BigDecimal pieceWeightG) {
-        if (kcalPer100g == null) return BigDecimal.ZERO;
-        return weightOfGrams(qty, unit, pieceWeightG)
-                .multiply(kcalPer100g)
-                .divide(BigDecimal.valueOf(100), 6, RoundingMode.HALF_UP);
-    }
-
-    private static BigDecimal nvl(BigDecimal v) {
-        return v == null ? BigDecimal.ONE : v;
-    }
 
     private void validate(CompositionPutRequest request) {
         if (request.items() == null) {

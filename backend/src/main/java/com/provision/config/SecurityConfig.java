@@ -38,6 +38,15 @@ public class SecurityConfig {
     @Value("${cors.allowed-origins:http://localhost:5173,http://localhost:3000}")
     private String corsAllowedOrigins;
 
+    /**
+     * Публичность swagger/openapi (аудит 29.10.2026, подзадача 10).
+     * Тот же флаг, что включает/выключает сами эндпоинты springdoc; в prod-деплое
+     * задаётся SPRINGDOC_API_DOCS_ENABLED=false — тогда документация уходит за
+     * роль ADMIN (и springdoc её больше не отдаёт). Дефолт true — dev-профиль compose.
+     */
+    @Value("${springdoc.api-docs.enabled:true}")
+    private boolean apiDocsEnabled;
+
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
@@ -53,18 +62,34 @@ public class SecurityConfig {
                                 org.springframework.http.HttpStatus.UNAUTHORIZED)))
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/v1/auth/**").permitAll()
-                        .requestMatchers("/api/v1/meta").permitAll()
-                        .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
-                        // P0-3: GET /api/v1/prices** — чтение цен для ВСЕХ аутентифицированных
-                        // (страницы походов обычного USER). Эндпоинт лежит вне /api/v1/admin/**,
-                        // поэтому его открывает любое из правил ниже + anyRequest().authenticated();
-                        // явное правило добавлено для читаемости и защиты от будущих правок.
-                        .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/v1/prices", "/api/v1/prices/**").authenticated()
-                        .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
-                        .anyRequest().authenticated()
-                )
+                .authorizeHttpRequests(auth -> {
+                    auth.requestMatchers("/api/v1/auth/**").permitAll()
+                            .requestMatchers("/api/v1/meta").permitAll()
+                            // Аудит 29.10.2026, подзадача 18: health публичен (liveness/readiness
+                            // для оркестраторов), прочие actuator-эндпоинты — только ADMIN.
+                            .requestMatchers("/actuator/health", "/actuator/health/**", "/actuator/info").permitAll()
+                            .requestMatchers("/actuator/**").hasRole("ADMIN");
+                    // Аудит 29.10.2026, подзадача 10: swagger открыт анонимно только когда
+                    // springdoc включён (dev); в prod (SPRINGDOC_API_DOCS_ENABLED=false) —
+                    // только ADMIN. Заодно добавлен /api-docs/**: springdoc.api-docs.path
+                    // в application.yml переносит openapi с /v3/api-docs на /api-docs,
+                    // а whitelist этого пути не содержал (swagger-ui падал с 401).
+                    if (apiDocsEnabled) {
+                        auth.requestMatchers("/v3/api-docs/**", "/api-docs/**",
+                                "/swagger-ui/**", "/swagger-ui.html").permitAll();
+                    } else {
+                        auth.requestMatchers("/v3/api-docs/**", "/api-docs/**",
+                                "/swagger-ui/**", "/swagger-ui.html").hasRole("ADMIN");
+                    }
+                    auth
+                            // P0-3: GET /api/v1/prices** — чтение цен для ВСЕХ аутентифицированных
+                            // (страницы походов обычного USER). Эндпоинт лежит вне /api/v1/admin/**,
+                            // поэтому его открывает любое из правил ниже + anyRequest().authenticated();
+                            // явное правило добавлено для читаемости и защиты от будущих правок.
+                            .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/v1/prices", "/api/v1/prices/**").authenticated()
+                            .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
+                            .anyRequest().authenticated();
+                })
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
@@ -84,7 +109,16 @@ public class SecurityConfig {
                 .toList());
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("Authorization", "Content-Type"));
-        config.setAllowCredentials(false); // токен в Authorization-заголовке, cookie не используем
+        // РЕШЕНИЕ (аудит 29.10.2026, подзадача 9): allowCredentials=false — осознанно.
+        // Аутентификация stateless: access/refresh-токены клиент хранит сам и шлёт
+        // заголовком Authorization: Bearer; cookie-сессий нет (SessionCreationPolicy.STATELESS),
+        // поэтому credentials в CORS-смысле (cookie/HTTP-auth) не передаются.
+        // Следствия, которые нельзя нарушать будущими правками:
+        //  1) если появится cookie-based auth — здесь потребуется allowCredentials(true)
+        //     и ТОЧЕЧНЫЕ origins (никогда "*" вместе с credentials);
+        //  2) allowedHeaders намеренно узкий (Authorization, Content-Type) — кастомные
+        //     заголовки добавлять явно, а не "*".
+        config.setAllowCredentials(false);
         config.setMaxAge(3600L);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();

@@ -5,7 +5,7 @@
     environment:
       POSTGRES_DB: provision
       POSTGRES_USER: provision
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-provision123}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env (copy .env.example)}
     ports:
       - "127.0.0.1:5432:5432"
     volumes:
@@ -35,7 +35,7 @@
       SEED_DEMO_USERS: ${SEED_DEMO_USERS:-false}
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/provision
       SPRING_DATASOURCE_USERNAME: provision
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-provision123}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env (copy .env.example)}
       SPRING_JPA_HIBERNATE_DDL_AUTO: validate
       SPRING_FLYWAY_ENABLED: "true"
       JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env}

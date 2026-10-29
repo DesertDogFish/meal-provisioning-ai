@@ -48,7 +48,8 @@ public class RecipeService {
                     .map(this::toResponse)
                     .toList();
         }
-        return recipeRepository.findWithFilters(mealType, category, cookMinutes, search).stream()
+        return recipeRepository.findWithFilters(mealType, category, cookMinutes,
+                com.provision.util.SearchEscape.like(search)).stream()
                 .map(this::toResponse)
                 .toList();
     }

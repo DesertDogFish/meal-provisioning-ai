@@ -33,10 +33,12 @@ public final class ProductSpecifications {
             if (query == null || query.isBlank()) {
                 return null;
             }
-            String like = "%" + query.trim().toLowerCase() + "%";
+            // Аудит 29.10.2026 (подзадачи 20/30): LIKE параметризован (injection невозможен),
+            // но user-wildcards экранируются — поиск «100%» буквальный, а не «весь каталог».
+            String like = "%" + com.provision.util.SearchEscape.like(query.trim().toLowerCase()) + "%";
             return cb.or(
-                    cb.like(cb.lower(root.get("name")), like),
-                    cb.like(cb.lower(cb.coalesce(root.get("code"), "")), like)
+                    cb.like(cb.lower(root.get("name")), like, com.provision.util.SearchEscape.ESCAPE_CHAR),
+                    cb.like(cb.lower(cb.coalesce(root.get("code"), "")), like, com.provision.util.SearchEscape.ESCAPE_CHAR)
             );
         };
     }

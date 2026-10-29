@@ -1,5 +1,6 @@
 package com.provision.service;
 
+import com.provision.config.JwtProperties;
 import com.provision.dto.auth.*;
 import com.provision.entity.RefreshToken;
 import com.provision.entity.User;
@@ -10,15 +11,17 @@ import com.provision.exception.UnauthorizedException;
 import com.provision.repository.RefreshTokenRepository;
 import com.provision.repository.UserRepository;
 import com.provision.security.JwtService;
+import com.provision.security.LoginAttemptService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
+import java.security.GeneralSecurityException;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -31,6 +34,18 @@ public class AuthService {
     private final RefreshTokenRepository refreshTokenRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
+    /** Ключ HMAC для хэширования refresh-токенов (подзадача 3 аудита). */
+    private final JwtProperties jwtProperties;
+    /** Brute-force guard (подзадача 19 аудита): 5 неудач на email -> 429 на 15 минут. */
+    private final LoginAttemptService loginAttemptService;
+
+    /**
+     * Фиктивный BCrypt-хэш для выравнивания времени ответа login при неизвестном email
+     * (подзадача 8 аудита): значение не важно — результат matches() отбрасывается,
+     * важно лишь, что BCrypt-проверка выполняется и в этой ветке тоже.
+     */
+    private static final String DUMMY_PASSWORD_HASH =
+            "$2a$10$dXJ3SW6G7P50lGmMkkmwe.20cQQubK3.HZWzG3YB1tlRy.fqvM/BG";
 
     @Transactional
     public AuthResponseWithUser register(RegisterRequest request) {
@@ -71,12 +86,27 @@ public class AuthService {
 
     @Transactional
     public AuthResponse login(LoginRequest request) {
-        User user = userRepository.findByEmail(request.email())
-                .orElseThrow(() -> new UnauthorizedException("Invalid email or password"));
+        // FIX (подзадача 19 аудита): заблокированный email отклоняется 429 ДО обращения
+        // к БД и BCrypt — brute-force не тратит ресурсы сервера.
+        loginAttemptService.assertNotBlocked(request.email());
 
-        if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
+        // FIX (подзадача 8 аудита, user enumeration): раньше отсутствие пользователя
+        // бросало исключение ДО BCrypt-проверки — ответ «user not found» приходил заметно
+        // быстрее «wrong password», что позволяло enumerровать email по таймингу.
+        // Теперь проверка пароля выполняется всегда (против dummy-хэша, если пользователя
+        // нет), а сообщение об ошибке едино для обеих веток.
+        User user = userRepository.findByEmail(request.email()).orElse(null);
+        boolean passwordMatches = passwordEncoder.matches(
+                request.password(),
+                user != null ? user.getPasswordHash() : DUMMY_PASSWORD_HASH);
+
+        if (user == null || !passwordMatches) {
+            loginAttemptService.recordFailure(request.email());
+            log.warn("Failed login attempt for email={} (userExists={})",
+                    request.email(), user != null);
             throw new UnauthorizedException("Invalid email or password");
         }
+        loginAttemptService.recordSuccess(request.email());
 
         String accessToken = jwtService.generateAccessToken(user);
         String refreshToken = generateRefreshToken();
@@ -92,21 +122,34 @@ public class AuthService {
     public AuthResponse refreshTokens(RefreshTokenRequest request) {
         String tokenHash = hashToken(request.refreshToken());
         RefreshToken storedToken = refreshTokenRepository.findByTokenHash(tokenHash)
-                .orElseThrow(() -> new UnauthorizedException("Invalid refresh token"));
+                .orElseThrow(() -> {
+                    log.warn("Refresh rejected: token not found");
+                    return new UnauthorizedException("Invalid refresh token");
+                });
 
         if (storedToken.getExpiresAt().isBefore(LocalDateTime.now())) {
-            refreshTokenRepository.delete(storedToken);
+            refreshTokenRepository.deleteByTokenHash(tokenHash);
+            log.info("Refresh rejected: token expired for userId={}", storedToken.getUser().getId());
             throw new UnauthorizedException("Refresh token expired");
         }
 
         User user = storedToken.getUser();
+
+        // FIX (подзадача 4 аудита, race condition): старый токен инвалидируется АТОМАРНО
+        // (bulk DELETE по уникальному token_hash берёт блокировку строки) ДО выдачи новой пары.
+        // При двух параллельных refresh с одним UUID вторая транзакция получит deleted=0
+        // и будет отклонена — два валидных токена из одного выдать невозможно.
+        int deleted = refreshTokenRepository.deleteByTokenHash(tokenHash);
+        if (deleted == 0) {
+            log.warn("Refresh race detected: token already rotated/deleted, userId={}", user.getId());
+            throw new UnauthorizedException("Invalid refresh token");
+        }
+
         String newAccessToken = jwtService.generateAccessToken(user);
         String newRefreshToken = generateRefreshToken();
-
-        // Удаляем старый и сохраняем новый
-        refreshTokenRepository.delete(storedToken);
         saveRefreshToken(user, newRefreshToken);
 
+        log.info("Refresh tokens rotated for userId={}", user.getId());
         return new AuthResponse(newAccessToken, newRefreshToken);
     }
 
@@ -139,17 +182,28 @@ public class AuthService {
         return UUID.randomUUID().toString();
     }
 
+    /**
+     * Хэш refresh-токена для хранения в БД (колонка refresh_tokens.token_hash).
+     *
+     * FIX (подзадача 3 аудита): раньше — unsalted SHA-256, обратимый по радужным
+     * таблицам при утечке БД. Теперь — HMAC-SHA256 с ключом из JWT_SECRET (≥32 байт
+     * гарантирует JwtProperties.validate()); без знания ключа хэш не подбирается.
+     * Следствие для деплоя: сохранённые ранее SHA-256-хэши перестанут находиться —
+     * пользователи разово перелогинятся (access-токены не затронуты).
+     */
     private String hashToken(String token) {
         try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] hash = digest.digest(token.getBytes(StandardCharsets.UTF_8));
-            StringBuilder hexString = new StringBuilder();
+            Mac mac = Mac.getInstance("HmacSHA256");
+            mac.init(new SecretKeySpec(
+                    jwtProperties.getSecret().getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+            byte[] hash = mac.doFinal(token.getBytes(StandardCharsets.UTF_8));
+            StringBuilder hexString = new StringBuilder(hash.length * 2);
             for (byte b : hash) {
                 hexString.append(String.format("%02x", 0xff & b));
             }
             return hexString.toString();
-        } catch (NoSuchAlgorithmException e) {
-            throw new RuntimeException("SHA-256 algorithm not found", e);
+        } catch (GeneralSecurityException e) {
+            throw new IllegalStateException("Cannot hash refresh token (HmacSHA256)", e);
         }
     }
 

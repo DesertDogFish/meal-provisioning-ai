@@ -13,7 +13,7 @@ Provision — SPA + REST-бэкенд + PostgreSQL. Домен: каталог �
 | Режим | Источник данных | Когда |
 |---|---|---|
 | `real` | REST API бэкенда (`VITE_API_URL`, в Docker — same-origin через nginx `/api`) | продакшн-сборка, compose |
-| `mock` | `src/api/mockServer.ts` (in-memory + localStorage) | офлайн-демо, component/e2e-тесты |
+| `mock` | `src/api/mockServer.ts` (фасад) + модули `mock*` (in-memory + localStorage) | офлайн-демо, component/e2e-тесты |
 | `auto` | пинг `GET /api/v1/meta` (700 мс), фолбэк в mock + watchdog-возврат | дефолт dev-сборки |
 
 Приоритет: переключатель UI (localStorage `apiMode`) → `VITE_API_MODE` → auto. Контракт mock↔real фиксируют contract-тесты (`npm run test:contract`, nightly parity). **Известное отклонение:** mock-`summary/shopping` пока отдаёт фикстуру FIX-1, а не расчёт из meals (PLAN P2) — новые эндпоинты так не делать.
@@ -44,7 +44,7 @@ PostgreSQL 15 + Flyway V1–V20 (без.hand-right схем: ddl-auto=validate)
 ### Люди и количества
 
 `effectivePeople = meal.peopleOverride ?: day.peopleOverride ?: trip.defaultPeople`.
-Количество ингредиента на приём = `recipe_amount / base_servings × effectivePeople` (scale 3, HALF_UP), с применением правок состава V19: `removed` исключает строку, `added` добавляет `amount_per_serving × effectivePeople`, substitution переносит количество `from → to × ratio`.
+Количество ингредиента на приём = `recipe_amount / base_servings × effectivePeople` (scale 3, HALF_UP), с применением правок состава V19/V21: `removed` исключает строку, `added` (EXTRA) добавляет `amount_per_serving` КАК АБСОЛЮТ на приём — без масштабирования людьми/baseServings (`EffectiveLine.absolute`, спека §3; legacy `× effectivePeople` — историческая девиация, устранена V21), substitution переносит количество `from → to × ratio`. Конвертация единиц (граммы/ккал) — единый источник `UnitOfMeasure.gramsPerOne/toGrams` (KG/L → ×1000; PCS/PACK → ×piece_weight_g, без него конвертация неизвестна).
 
 ### Закупки и упаковки
 
@@ -74,7 +74,7 @@ PostgreSQL 15 + Flyway V1–V20 (без.hand-right схем: ddl-auto=validate)
 - **План похода (строка):** `Σ по дням` (баг «цена endDate» закрыт PR #44–46); `plannedUnitPrice` строки = средневзвешенная `plannedCost/qty` (scale 2).
 - **Факт:** `actualUnitPrice = trip_price_override ?: plannedUnitPrice`; `actualCost = qty × actualUnitPrice`. Оверрайд ставится из чека (`PUT /trips/{id}/price-overrides/{ingredientId}`) и действует на весь поход.
 - **Снепшот (V20):** у продуктов-копий одна строка цены, замороженная при создании копии → правки глобальных цен план похода не меняют.
-- `deltaPercent = (actual−planned)/planned×100` (scale 2; planned=0 → null). Итоги = сумма округлённых строк.
+- `deltaPercent = (actual−planned)/planned×100` (scale 2; planned=0 → 0). Итоги = сумма округлённых строк.
 
 ### Эталон округлений
 
@@ -125,7 +125,7 @@ DTO-рассинхрон имён/единиц закрыт нормализац
 Правила привязки (Release-1.0, econ-guardian — охраняются `EconomicConsistencyTest`):
 - **один снепшот на (поход, оригинал)**: `createRecipeCopy` переиспользует копии продуктов других рецептов похода (`snapshotIngredient` → `findByTripIdAndSnapshotOf`); до фикса каждый рецепт плодил свои копии, и один продукт разъезжался на несколько строк закупки со своими ценами/упаковками;
 - **заморозка цены на дату старта похода**: копия получает строку цены, действовавшую на `trip.startDate` (фолбэк — на сегодня), с `effective_from ≤ startDate` — замороженный план виден при резолве на ЛЮБОЙ день похода и сервером (`loadLatestPrices`), и клиентом (`findPriceForDate`); V21 прижал legacy-строки бэкфила;
-- **все ссылки похода — только trip-scoped**: `updateMeal` снепшотит рецепт как `addMeal`; `MealCompositionService.putComposition` резолвит каждый входящий id (строка рецепта → её снепшот по `snapshot_of` → снепшот-копия глобального продукта), поэтому EXTRA/SUBST-цели из справочника привязываются к походу с замороженной ценой; `TripPriceOverrideService` редиректит чек, введённый на глобальный id, на снепшот похода (иначе оверрайд молча не применялся);
+- **все ссылки похода — только trip-scoped**: `updateMeal` снепшотит рецепт как `addMeal`; `MealCompositionService.putComposition` резолвит каждый входящий id модулем `TripScopedIdResolver` (строка рецепта → её снепшот по `snapshot_of` → продукт своего похода → снепшот-копия глобального продукта; чужой trip-scope/несуществующий → 404), поэтому EXTRA/SUBST-цели из справочника привязываются к походу с замороженной ценой; `TripPriceOverrideService` редиректит чек, введённый на глобальный id, на снепшот похода (иначе оверрайд молча не применялся);
 - миграция V21 дополнительно дедуплицировала legacy-снепшоты (канон — MIN(id) на (trip_id, snapshot_of), перепривязка recipe_ingredients/substitutions/overrides).
 
 Бэкфил: миграция V20 перевела существовавшие походы на снепшоты (temp-таблицы соответствий, перепривязка overrides/exclusions/substitutions). Повторный прогон миграций безопасен (IF NOT EXISTS + DROP temp-таблиц в начале).
@@ -427,7 +427,7 @@ Mock-сервер повторяет контракт (`mockIntegrations.test.ts
 | EXCLUDED | removed=true, to=null | строка рецепта пропускается |
 | замена | from=A, to=B, ratio | qty(B) += qty(A)×ratio; qty(A) := 0; SCALE-правки A переносятся на B |
 
-API: `GET/PUT /api/v1/trips/{tripId}/meals/{mealId}/composition` (GET — сервер считает масштабирование и totals; PUT — атомарный batch-диф desired-состояния). Порядок в конвейере: SCALE → people → EXCLUDE → EXTRA → substitutions. UI: `MealCompositionModal` (5 статусов-бейджей, действия по состоянию, merge-подтверждение, инлайн-замены, dirty-state, live-итоги; свободный ввод при сохранении резолвится в справочник через check-name/`POST /admin/products` — на сервер уходят только реальные id).
+API: `GET/PUT /api/v1/trips/{tripId}/meals/{mealId}/composition` (GET — сервер считает масштабирование и totals; PUT — атомарный batch-диф desired-состояния). Модули (аудит 29.10.2026, SRP-декомпозиция): `MealCompositionService` — оркестратор (валидация, контекст, GET-ответ), `CompositionDiffEngine` — диф-коммит SCALE/EXTRA/EXCLUDE/SUBST, `TripScopedIdResolver` — V20-резолв входящих id, `CompositionCalculator` — чистая математика веса/ккал/стоимости. Порядок в конвейере: SCALE → people → EXCLUDE → EXTRA → substitutions. UI: `MealCompositionModal` (5 статусов-бейджей, действия по состоянию, merge-подтверждение, инлайн-замены, dirty-state, live-итоги; свободный ввод при сохранении резолвится в справочник через check-name/`POST /admin/products` — на сервер уходят только реальные id).
 
 Исторические девиации (устранены Release-1.0, econ-guardian):
 - EXTRA: раньше сервис хранил `abs/people`, а закупка делила ещё на `baseServings` → вклад EXTRA занижался в base раз и расходился с составом/UI/mock. Теперь `amount_per_serving` added-строк хранит абсолют (спека §3), V21 сконвертировала legacy-строки (× effectivePeople первого приёма рецепта); mock хранит то же значение (паритет формы).
@@ -482,9 +482,10 @@ GET  /api/v1/trips/{id}/summary/{menu|shopping|shopping/by-days|person}
 
 ### Backend
 
-- `SummaryService.computeShopping` — единый расчётный конвейер (shopping/by-days/person/kcal), price-series кэш, пакетные загрузки (JOIN FETCH / DISTINCT ON / IN-батчи).
+- `SummaryService.computeShopping` — единый расчётный конвейер (shopping/by-days/person/kcal), price-series кэш, пакетные загрузки (JOIN FETCH / DISTINCT ON / IN-батчи). Аудит 29.10.2026 (SRP): сервис — оркестратор (загрузка графа/контекста, транзакционные границы), расчёт в модулях `MealPlanCalculator` (люди/количества/округление итогов), `ShoppingListCalculator` (закупка: общий список Σ qty_day×цена дня + по дням + упаковки), `DailySummaryCalculator` (меню по дням), `PerUserSummaryCalculator` («на человека»).
 - `TripCatalogSnapshotService` — copy-on-write снепшоты (V20).
-- `TripIngredientEditService`, `TripShoppingExclusionService` — правки состава/исключения (V19).
+- `TripIngredientEditService`, `TripShoppingExclusionService` — правки состава/исключения (V19); `MealCompositionService` + `CompositionDiffEngine`/`TripScopedIdResolver`/`CompositionCalculator` — состав приёма (V19/V21, модалка B).
+- `SearchEscape` — единое экранирование LIKE (`%`, `_`, `!` — escape-символ) во всех поисковых Specification/запросах; пагинация каталога клампит page≥0, size 1..200.
 - `PriceResolutionService` — actual = override ?: planned.
 - `SecurityConfig` + `JwtService`/`JwtAuthenticationFilter` — stateless JWT, CORS из ENV, fail-fast секрета (`JwtProperties.validate`).
 - `DevDataInitializer` / `DevTripsInitializer` — демо-пользователи и демо-походы (profile `dev` + `SEED_DEMO_USERS=true`), демо-походы создаются через снепшот-сервис.
@@ -495,22 +496,23 @@ GET  /api/v1/trips/{id}/summary/{menu|shopping|shopping/by-days|person}
 
 ### Frontend
 
-- `api/client.ts` — режимы, refresh single-flight, `auth:session-lost`, `postFile` (multipart-загрузка выгрузки ЕМИСС); `api/mockServer.ts` — mock-паритет роутов.
+- `api/client.ts` — режимы, refresh single-flight, `auth:session-lost`, `postFile` (multipart-загрузка выгрузки ЕМИСС); `api/mockServer.ts` — mock-паритет роутов: фасад (роутер `handleRequest` + тонкие обёртки), ресурсы — в модулях `mockState/mockEmis/mockSync/mockPrices/mockSnapshot/mockComposition/mockCatalog/mockTrips/mockAuth` (подзадача 25 аудита).
 - `Modal` — единая портальная модалка (U3/U21): оверлей `.modal-overlay`, закрытие крестиком / Esc / кликом по фону; все модальные окна (TripForm, AddMealModal, MealCompositionModal, RecipeEditorModal, ApiModeBadge, детали рецепта/продукта, ввод чека) рендерятся через портал, e2e-селекторы скопятся на `.modal-overlay`.
-- `TripDetailPage` (5 вкладок) + `PriceOverridesTab` (чеки план/факт); `RecipeEditorModal` (админ-редактор блюда с составом); `ProductsPage` (CRUD + цена срезом + `EmisLinkPicker` — источник цены из ЕМИСС); `ProductTable` (колонка «Цена синхронизирована»); `IntegrationsPage` (подключение, синк, ручная загрузка файла) + `IntegrationSyncLogs`; `CustomSelect/NumberField/DateRange/DatePicker` (контракты CR-3/CR-4).
+- `TripDetailPage` (6 вкладок; подзадача 26 аудита: тонкий layout — состояние в хуке `pages/useTripDetail.tsx`, производные в `utils/tripDerived.ts`, презентация в `TripActions`/`TripSummaryPanel`/`TripDaysList`/`TripMealCard`/`TripShoppingTab`/`TripDayShoppingTab`/`TripPersonTab`/`ExclusionCheckbox`) + `PriceOverridesTab` (чеки план/факт); `RecipeEditorModal` (админ-редактор блюда с составом); `ProductsPage` (CRUD + цена срезом + `EmisLinkPicker` — источник цены из ЕМИСС); `ProductTable` (колонка «Цена синхронизирована»); `IntegrationsPage` (подключение, синк, ручная загрузка файла) + `IntegrationSyncLogs`; `CustomSelect/NumberField/DateRange/DatePicker` (контракты CR-3/CR-4).
 - Дизайн-система «Провиант»: токены в `src/index.css`, design-pack в `provisions/` (источник правды дизайна; миграция — DESIGN_MIGRATION.md, ведётся отдельно).
 
 ## Security
 
-- JWT: access 1 ч / refresh 7 д, refresh в БД хэшем с ротацией; logout удаляет токен; fail-fast при коротком/пустом секрете.
+- JWT: access 1 ч / refresh 7 д; refresh в БД — HMAC-SHA256(JWT_SECRET), а не SHA-256 (нельзя проверить по дампу БД без секрета); ротация DELETE-first (предел гонки — 401, повторное использование утекшего токена невозможно); logout удаляет токен; fail-fast при коротком/пустом секрете (<32 байт). Токены: `iss`/`aud` обязательны и проверяются, `typ=JWT`, clock skew 60 c.
+- Login: `LoginAttemptService` — 5 неудачных попыток на email в окне 15 мин → блокировка 15 мин (429 + Retry-After), успешный логин сбрасывает счётчик; ответы login/refresh не различают «нет пользователя» и «неверный пароль» (анти-энумерация); демо-пароли сидов — только из env (`ADMIN_PASSWORD`/`DEMO_USER_PASSWORD`), хардкод удалён (аудит 29.10.2026).
 - Ownership: все trip-эндпоинты фильтруют `trip.user = principal` (404 на чужое); ADMIN-зона под `@PreAuthorize`.
-- Профили: `dev` (DEBUG, Swagger, демо-сид) / `prod` (WARN/INFO, Swagger off, ошибки без detail, actuator health+info).
+- Профили: `dev` (DEBUG, Swagger, демо-сид) / `prod` (WARN/INFO, Swagger/springdoc выключены, ошибки без detail, actuator health+info).
 - CORS: whitelist из ENV, `allowCredentials=false` (токен в заголовке).
-- Открытые задачи (PLAN P1): rate limiting `/auth/*`, security-заголовки и gzip в nginx, refresh в httpOnly-cookie (пока localStorage — XSS-риск зафиксирован), fail-fast `POSTGRES_PASSWORD`, backup-процедура.
+- Открытые задачи (PLAN P1): security-заголовки и gzip в nginx, refresh в httpOnly-cookie (пока localStorage — XSS-риск зафиксирован), fail-fast `POSTGRES_PASSWORD`, backup-процедура. Rate limiting `/auth/*` закрыт аудитом 29.10.2026 (`LoginAttemptService`).
 
 ## Database
 
-- PostgreSQL 15, Flyway V1–V29. Пропуски номеров осознанные: V9 не создавалась, V14/V15 удалены из истории дерева (урок: применённые миграции НЕ удалять и НЕ править; только новые номера; в существующих БД демо-юзеры V14/V15 могли остаться — cleanup-запрос в README).
+- PostgreSQL 15, Flyway V1–V30 (V30 — композитный индекс `ingredient_prices(ingredient_id, effective_from DESC)` под DISTINCT ON-срезы «последняя цена»; аудит 29.10.2026). Пропуски номеров осознанные: V9 не создавалась, V14/V15 удалены из истории дерева (урок: применённые миграции НЕ удалять и НЕ править; только новые номера; в существующих БД демо-юзеры V14/V15 могли остаться — cleanup-запрос в README).
 - Снепшоты: `recipes.trip_id/snapshot_of`, `ingredients.trip_id/snapshot_of`; partial unique `(name_norm, unit) WHERE trip_id IS NULL`; копии создаются с `code = NULL`.
 - История цен: `ingredient_prices` UNIQUE(ingredient_id, effective_from), `source` ∈ MANUAL/ROSSTAT/API (V28 сузил CHECK, значение OFF вычищено); сид V13/V17 генерирует 24 мес. сезонного дрейфа детерминированно.
 - Локальная копия ЕМИСС (V26): `emis_products` (PK `code`, единица наблюдения) и `emis_prices` (unique `(emis_code, region_code, period_year, period_month)`, индекс под «последнюю цену»); `ingredients.emis_code` — софт-привязка без FK. V27 — сид (885 позиций, 2260 точек из реальной выгрузки), V28 — привязки (187 продуктов), переименования под номенклатуру ЕМИСС и демонтаж legacy (`ingredient_mappings`, `external_products`, source `OFF`), V29 — решения владельца 29.10.2026: три продукта переведены на фасовку ЕМИСС (рулон, упаковка 20 шт., коробок) с пересчётом `piece_weight_g` и истории цен, четыре новые привязки (антисептик 8016, крем для лица 5311, бумага 6502, салфетки 6505) — всего 191 привязка из 204 продуктов, 13 осознанно без привязки.
@@ -532,6 +534,8 @@ GET  /api/v1/trips/{id}/summary/{menu|shopping|shopping/by-days|person}
 | Docker stack | compose up + smoke `/meta` + nginx-прокси | CI blocking (красный, CI-2) |
 
 Правила: red-green для каждого фикса (R1), тест того слоя, где изменение (R2), фича без теста не готова (R3), `@Disabled` только с TODO и ссылкой (R4).
+
+**Аудит 29.10.2026 (план `plans/2026-10-29-full-audit.md`)** добавлены: `ProductSearchInjectionTest` (INJ-01..04 — SQLi-попытки в поиске/пагинации), `ProductPageQueryCountTest` (число запросов страницы каталога не зависит от размера страницы), `EmisPriceApplierTest` (8) и `EmisMirrorServiceTest` (6) — закрытие BL-2/BL-3, `UnitOfMeasureTest` (3), `TripScopedIdResolverTest` (8), `CompositionDiffEngineTest` (8), `DailySummaryCalculatorTest` (2), `PerUserSummaryCalculatorTest` (2), `JwtServiceTest`/`AuthServiceTest`-кейсы ротации и анти-энумерации. `EconomicConsistencyTest` прогоняется в песочнице по классу отдельно (`MAVEN_OPTS -Xmx512m`, `-DforkCount=0`, LocalPgFallback) — 10/10 (KB-10, поправка 2).
 
 **ЕМИСС-зона (29.10.2026: BL-23 + план `plans/done/2026-10-29-sdmx-stax-streaming.md`)**:
 `SdmxStreamParserTest` (16 — golden-фикстура боевого ответа `src/test/resources/emis/data-31448-real.xml`,
@@ -575,7 +579,7 @@ Frontend: `ProductTable.test.tsx` (значок общей привязки со
     новая строка с `absolute: true` (абсолют на приём — людьми НЕ масштабируется, §3/V21).
   - `buildEffectiveRecipesMap(recipesMap, edits, snapshotOf?)` — карта рецептов с
     применёнными правками; ЕДИНЫЙ источник для меню/закупки/дней/«на человека»/чека/отчёта
-    (TripDetailPage, PriceOverridesTab, TripPrintPage).
+    (tripDerived.ts страницы похода, PriceOverridesTab, TripPrintPage).
 - `calculations.ts`: строки с `absolute` не масштабируются `people/baseServings`
   (`calculateMenuByDays` прокидывает флаги `added`/`substitutedFrom` для бейджей меню).
 - Страницы больше не применяют `overlayEditsOnIngredients` к меню (menuOverlay остаётся

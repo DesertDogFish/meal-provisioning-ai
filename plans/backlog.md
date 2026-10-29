@@ -31,13 +31,13 @@
   `amount ≤ 0`, `pieceWeightG = null`, `ingredientUnit = null`. Округление `rounded` —
   копейки, HALF_UP. Фикстуры — реальные цены выгрузки (8016 = 198,32; 5311 = 702,38;
   6502 = 26,49; 6505 = 42,90; 5701 = 4,18; 1501 = 113,85 за десяток). Закрывает KB-9.
-- **BL-2. `EmisPriceApplierTest`** (unit + Mockito, без Spring-контекста): `apply` создаёт
+- **BL-2. `EmisPriceApplierTest`** (unit + Mockito, без Spring-контекста) — ГОТОВО 29.10.2026 (commit 2cbb37a2, план plans/2026-10-29-full-audit.md подзадача 27; 8/8 зелёные): `apply` создаёт
   точку (`CREATED`), перезаписывает существующую (`UPDATED`), отбрасывает несовместимую
   (`skipped` + причина в `ProductOutcome.reason`); пустой список точек → `SKIPPED` с причиной
   «нет цен позиции»; позиция отсутствует в справочнике → `EmisUnit.OTHER` и `SKIPPED`;
   `deleteManualByIngredientId` вызывается ТОЛЬКО если хоть одна точка применена;
   `loadLinkedProducts` не тянет trip-копии (`trip_id IS NULL`). Закрывает KB-9.
-- **BL-3. `EmisMirrorServiceTest`**: upsert справочника и цен, идемпотентность повторного
+- **BL-3. `EmisMirrorServiceTest`** — ГОТОВО 29.10.2026 (commit 2cbb37a2, план plans/2026-10-29-full-audit.md подзадача 27; 6/6 зелёные): upsert справочника и цен, идемпотентность повторного
   `store`, обрезка окна `period-years`, счётчики `products/prices/deleted`. Закрывает KB-9.
 - **BL-4. `EmisCatalogServiceTest` + `EmisControllerTest`** (`@WebMvcTest`): поиск по подстроке
   имени и по коду, лимит, сортировка по имени (ru-коллация), `describe`/`exists`, неизвестный
@@ -182,6 +182,12 @@
   затронутые файлы ≤ 500 строк, поведение вкладок не изменилось (`e2e/main-flow.spec.ts`
   зелёные), новые компоненты в `coverage.include` с lines ≥ 80 %. Закрывает KB-14.
   Источник: `plans/done/2026-10-29-ui-nowrap-and-mobile.md`.
+  **ГОТОВО** (29.10.2026, подзадача 26 аудита `plans/2026-10-29-full-audit.md`,
+  коммиты 849707d7/409bc52d/6727182e): страница 1310 → 240 строк; состояние — хук
+  `pages/useTripDetail.tsx`, производные — `utils/tripDerived.ts`, вкладки — компоненты
+  `Trip*` + `ExclusionCheckbox` (все ≤300); vitest 590/590, новые файлы в
+  `coverage.include` со 100% statements. Примечание: `e2e/main-flow.spec.ts` в песочнице
+  не прогнаны (нет Docker/браузерного раннера) — регрессия подтверждена юнит-сььютом.
 - **BL-26. Декомпозиция `src/components/PriceOverridesTab.tsx`** (756 строк, R8): таблица
   чеков, итоги и ввод факта — отдельные компоненты. Файлы: `src/components/PriceOverridesTab.tsx`,
   новые `src/components/Checks*.tsx`, `vitest.config.ts`. Критерий приёмки: файлы ≤ 500 строк,

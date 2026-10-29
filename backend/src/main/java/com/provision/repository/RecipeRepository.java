@@ -44,13 +44,10 @@ public interface RecipeRepository extends JpaRepository<Recipe, Long> {
            "LEFT JOIN FETCH i.category WHERE r.tripId IS NULL ORDER BY r.name")
     List<Recipe> findAllWithIngredients();
     
-    // NOTE: DISTINCT здесь нельзя — Hibernate не умеет DISTINCT + FETCH (ошибка кеша Second Level).
-    // Дедупликация — в service-слое через LinkedHashSet (поиск по join на ingredients даёт дубли).
-    @Query("SELECT r FROM Recipe r LEFT JOIN r.ingredients ri LEFT JOIN ri.ingredient " +
-           "WHERE r.tripId IS NULL AND (LOWER(r.name) LIKE LOWER(CONCAT('%', :search, '%')) " +
-           "OR LOWER(ri.ingredient.name) LIKE LOWER(CONCAT('%', :search, '%'))) ORDER BY r.name")
-    List<Recipe> searchByNameOrIngredient(@Param("search") String search);
-    
+    // NOTE: мёртвый searchByNameOrIngredient удалён (аудит 29.10.2026): вызовов не было,
+    // поиск живёт в findWithFilters. LIKE-параметры экранируются вызывающим кодом
+    // (RecipeService -> SearchEscape.like) и матчатся с ESCAPE '\' (подзадача 20/30).
+
     // NOTE: CAST(:search AS string) типизирует параметр — при search == null PostgreSQL
     // иначе выводит lower(bytea) на не типизированном NULL и падает (500).
     @Query("SELECT r FROM Recipe r LEFT JOIN FETCH r.ingredients ri LEFT JOIN FETCH ri.ingredient i " +
@@ -60,9 +57,9 @@ public interface RecipeRepository extends JpaRepository<Recipe, Long> {
            "AND (:category IS NULL OR r.category = :category) " +
            "AND (:cookMinutes IS NULL OR r.cookMinutes = :cookMinutes) " +
            "AND (CAST(:search AS string) IS NULL OR (" +
-           "LOWER(r.name) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%')) " +
-           "OR LOWER(ri.ingredient.name) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%')))) " +
-           "ORDER BY r.name")
+           "LOWER(r.name) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%')) ESCAPE '!' " +
+           "OR LOWER(ri.ingredient.name) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%')) ESCAPE '!'))" +
+           " ORDER BY r.name")
     List<Recipe> findWithFilters(
             @Param("mealType") MealType mealType,
             @Param("category") String category,

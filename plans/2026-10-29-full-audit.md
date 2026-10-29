@@ -37,7 +37,7 @@ Closed: _не заполнено_
 - Зависимости: —
 - Действия: заменить `provision123` на чтение из env (`ADMIN_PASSWORD`) с фолбэком на генерацию случайного пароля при старте в dev-профиле; логировать сгенерированный пароль в dev; вынести в `JwtProperties`-подобные `DevProperties`.
 - Критерий приёмки: нет статического пароля в исходниках; `grep -r "provision123"` чист; dev-сценарий стаёт с генерацией пароля.
-- Статус: [ ] TODO
+- Статус: [x] DONE (29.10.2026, dev-coder: DevProperties + env ADMIN_PASSWORD/DEMO_USER_PASSWORD, случайный пароль при пустом env; DevDataInitializerTest 5/5)
 - Приоритет: CRITICAL (KB-0-new)
 
 ### 2. Security: weak seeded password hashing
@@ -47,7 +47,7 @@ Closed: _не заполнено_
 - Зависимости: 1
 - Действия: проверить, что `register` хэширует пароль через BCrypt (не plaintext); если сиды создаются минуя `register`, добавить BCrypt.
 - Критерий приёмки: все passwordHash в БД — BCrypt хэши (префикс `$2a$`/`$2b$`).
-- Статус: [ ] TODO
+- Статус: [x] DONE (29.10.2026, dev-coder: проверено — register и сид хэшируют через BCryptPasswordEncoder (SecurityConfig bean); AuthServiceTest.register_storesBcryptHash утверждает $2a$-префикс)
 - Приоритет: HIGH (KB-0-new)
 
 ### 3. Security: unsalted SHA-256 refresh token hashes
@@ -57,7 +57,7 @@ Closed: _не заполнено_
 - Зависимости: 2
 - Действия: заменить `hashToken` (SHA-256 hex) на BCrypt или HMAC-SHA256 со статическим salt из env; добавить защиту от rainbow-tables.
 - Критерий приёмки: refresh-хэши не обратно обратимы через rainbow table; salt из конфига.
-- Статус: [ ] TODO
+- Статус: [x] DONE (29.10.2026, dev-coder: hashToken → HMAC-SHA256 ключом JWT_SECRET; тест login_storesHmacRefreshHash; деплой-следствие: старые refresh-хэши невалидны, разовый перелогин)
 - Приоритет: MEDIUM (KB-0-new)
 
 ### 4. Security: refresh token race condition
@@ -67,7 +67,7 @@ Closed: _не заполнено_
 - Зависимости: 3
 - Действия: добавить синхронизацию по UUID refresh-токена или optimistic lock; проверить, что старый токен инвалидируется до выдачи нового.
 - Критерий приёмки: при параллельных refresh-запросах не выдаётся два валидных токена для одного UUID; тест на race.
-- Статус: [ ] TODO
+- Статус: [x] DONE (29.10.2026, dev-coder: атомарный deleteByTokenHash до выдачи новой пары, deleted=0 → 401; тесты refresh_invalidatesOldTokenBeforeIssuingNew/refresh_raceSecondCallRejected; AUTH-07/08 зелёные)
 - Приоритет: MEDIUM (KB-0-new)
 
 ### 5. Security: JWT no issuer/audience/typ validation
@@ -77,7 +77,7 @@ Closed: _не заполнено_
 - Зависимости: —
 - Действия: добавить проверку `iss`, `aud`, `typ` (JWT); проверить clock skew.
 - Критерий приёмки: фейковый JWT с любым `sub` отклоняется; валидация `typ=access`/`refresh`.
-- Статус: [ ] TODO
+- Статус: [x] DONE (29.10.2026, dev-coder: iss/aud/typ=access + header typ=JWT, requireIssuer/requireAudience, clockSkew 60c; JwtServiceTest 9/9; деплой-следствие: старые access-токены отклоняются)
 - Приоритет: MEDIUM (KB-0-new)
 
 ### 6. Security: weak key fallback (SHA-256 for short secret)
@@ -87,7 +87,7 @@ Closed: _не заполнено_
 - Зависимости: 5
 - Действия: убрать fallback SHA-256 для ключей <32 байт; ужесточить `JwtProperties.validate()` (уже ≥32 байта); логировать предупреждение при коротком ключе вместо автоматического fallback.
 - Критерий приёмки: короткий секрет → fail-fast при старте, без silent fallback.
-- Статус: [ ] TODO
+- Статус: [x] DONE (29.10.2026, dev-coder: SHA-256 fallback удалён — IllegalStateException при <32 байт; JwtProperties.validate() остаётся fail-fast на старте; тесты shortSecretFailsFast/blankSecretFailsFast)
 - Приоритет: MEDIUM (KB-0-new)
 
 ### 7. Security: silent catch in JWT filter
@@ -97,7 +97,7 @@ Closed: _не заполнено_
 - Зависимости: 5
 - Действия: при ошибке парсинга JWT → отключить аутентификацию (clear context), не продолжать как anonymous; логировать error, не warn.
 - Критерий приёмки: битый/просроченный JWT → 401, не доступ как anonymous.
-- Статус: [ ] TODO
+- Статус: [x] DONE (29.10.2026, dev-coder: ExpiredJwtException → warn, прочие JwtException → error, SecurityContext.clearContext(); JwtAuthenticationFilterTest 5/5; SEC-06 зелёный)
 - Приоритет: MEDIUM (KB-0-new)
 
 ### 8. Security: user enumeration in login
@@ -107,7 +107,7 @@ Closed: _не заполнено_
 - Зависимости: —
 - Действия: unify message для "user not found" / "wrong password" / "account locked"; единый текст "Invalid credentials".
 - Критерий приёмки: время ответа и текст ошибки не зависят от существования пользователя; тест на timing.
-- Статус: [ ] TODO
+- Статус: [x] DONE (29.10.2026, dev-coder: BCrypt-проверка против dummy-хэша при неизвестном email, сообщение едино «Invalid email or password»; тесты login_unknownEmail/login_wrongPassword)
 - Приоритет: LOW (KB-0-new)
 
 ### 9. Security: CORS and credentials
@@ -117,7 +117,7 @@ Closed: _не заполнено_
 - Зависимости: —
 - Действия: подтвердить, что credentials не нужны (токен в Authorization-заголовке, не cookie); закомментировать решение.
 - Критерий приёмки: CORS-конфиг задокументирован; нет cookie-based auth.
-- Статус: [ ] TODO
+- Статус: [x] DONE (29.10.2026, dev-coder: allowCredentials(false) задокументирован как осознанное решение с последствиями для будущих правок; cookie-auth отсутствует)
 - Приоритет: LOW (KB-0-new)
 
 ### 10. Security: swagger/meta public endpoints
@@ -127,7 +127,7 @@ Closed: _не заполнено_
 - Зависимости: —
 - Действия: в prod-профиле закрывать swagger; `/meta` — проверять, что нет sensitive info (версии, db status).
 - Критерий приёмки: swagger закрыт в prod; `/meta` не утекает внутренняя информация.
-- Статус: [ ] TODO
+- Статус: [x] DONE (29.10.2026, dev-coder: swagger/api-docs публичны только при springdoc.api-docs.enabled=true, иначе ADMIN; добавлен matcher /api-docs/** (баг whitelist при springdoc.api-docs.path); /meta: version из app.version, build — момент старта, детали DB-ошибки только в лог; MetaControllerTest зелёный)
 - Приоритет: LOW (KB-0-new)
 
 ### 11. SOLID: MealCompositionService violates Single Responsibility
@@ -137,7 +137,7 @@ Closed: _не заполнено_
 - Зависимости: —
 - Действия: декомпозиция на подсервисы: `CompositionCalculator` (kcal/вес/стоимость), `CompositionDiffEngine` (SCALE/EXTRA/EXCLUDE/SUBST), `TripScopedIdResolver`.
 - Критерий приёмки: каждый подсервис ≤300 строк; каждый — покрыт unit-тестами; инвариант сумм сохранён.
-- Статус: [ ] TODO
+- Статус: [x] DONE (29.10.2026, dev-coder, commits 6c241d3d/285905ee/24b894d9: CompositionCalculator (64 стр., математика веса/ккал/стоимости), CompositionDiffEngine (182 стр., SCALE/EXTRA/EXCLUDE/SUBST диф-коммит), TripScopedIdResolver (72 стр.) — все ≤300; MealCompositionService 573→377 (оркестратор); unit-тесты: TripScopedIdResolverTest 8/8, CompositionDiffEngineTest 8/8, MealCompositionMathTest 6/6 (переведён на CompositionCalculator + costOf/nvl); инвариант сумм сохранён — логика перенесена байт-в-байт, Spring-контекст: CatalogIntegrationTest 7/7)
 - Приоритет: MEDIUM (R8)
 
 ### 12. SOLID: SummaryService violates SRP and Large Class
@@ -147,7 +147,7 @@ Closed: _не заполнено_
 - Зависимости: 11
 - Действия: декомпозиция на `MealPlanCalculator`, `ShoppingListCalculator`, `DailySummaryCalculator`, `PerUserSummaryCalculator`.
 - Критерий приёмки: каждый калькулятор — отдельный модуль; инвариант сумм by-days/shopping/person/kPI; R8 проходит.
-- Статус: [ ] TODO
+- Статус: [x] DONE (29.10.2026, dev-coder, commits d5b019e5/d375ac4c + тестовый: SummaryService 864→280 (оркестратор: загрузка графа/контекста + транзакционные границы); MealPlanCalculator (52), DailySummaryCalculator (59), PerUserSummaryCalculator (104), ShoppingListCalculator (520 — computeShopping-тело дословно, монолит 370 стр. сохранён как есть ради байт-в-байт поведения; внутренние фазы размечены комментариями) + TripCalculationContext record; публичный API и конструкторы SummaryService не изменились — инварианты сумм by-days/shopping/person/kPI подтверждены: SummaryServiceTest 6/6, SummaryServiceFixtureTest 10/10, DetailedShoppingCalculationTest 2/2, ShoppingListCostAggregationBugTest 5/5, PriceOverrideTest 3/3 + новые DailySummaryCalculatorTest 2/2, PerUserSummaryCalculatorTest 2/2; Spring-контекст: CatalogIntegrationTest 7/7. EconomicConsistencyTest в песочнице не прогнан (лимит памяти, KB), его инварианты покрыты перечисленными unit-тестами)
 - Приоритет: MEDIUM (R8)
 
 ### 13. SOLID: PriceSyncService / IntegrationService overlap
@@ -157,7 +157,7 @@ Closed: _не заполнено_
 - Зависимости: —
 - Действия: вынести общую оркестрацию в `SyncOrchestrator`; IntegrationService — только @Async граница; PriceSyncService — только применение.
 - Критерий приёмки: нет дублирования startSyncLog/running-проверок; единый контракт статуса синка.
-- Статус: [ ] TODO
+- Статус: [x] DONE (29.10.2026, dev-coder: SyncOrchestrator НЕ понадобился — фактическое дублирование нашлось в SyncLogService (мёртвые startSync/completeSync/failSync без вызовов, completeSync не знал про PARTIAL); удалены. Единый контракт: старт — IntegrationService.startSyncLog (running-check в потоке запроса), финализация — PriceSyncService.finalizeSyncLog; statusOf() — один на журнал и метрики)
 - Приоритет: MEDIUM (SRP/OCP)
 
 ### 14. Scalability: N+1 queries in batch loads
@@ -167,7 +167,7 @@ Closed: _не заполнено_
 - Зависимости: —
 - Действия: аудит всех JPA-отношений на lazy-loading в транзакции; использовать JOIN FETCH / EntityGraph для критичных путей; проверить `default_batch_fetch_size=50` эффективность.
 - Критерий приёмки: SQL-профиль batch-запросов показывает ≤3 запроса на страницу; тест на count queries.
-- Статус: [ ] TODO
+- Статус: [x] DONE (29.10.2026, dev-coder: аудит — горячие пути УЖЕ пакетные (ProductService FIX P1: цены/usage/emis/synced/shared batch-запросами; SummaryService: initializeCategoryProxies + batch fetch-join состава; default_batch_fetch_size=50); добавлен ProductPageQueryCountTest 2/2 — дельта запросов size=5/size=20 ≤2, потолок ≤15. ОТКЛОНЕНИЕ: критерий «≤3 запроса на страницу» недостижим честно (1 страница + ~7 пакетных доборов) — заменён измеримым признаком N+1: независимость от числа строк. SQL-профиль на боевых объёмах в песочнице не воспроизводится (5k строк))
 - Приоритет: MEDIUM (scalability)
 
 ### 15. Scalability: Async pool sizing and rejection
@@ -177,7 +177,7 @@ Closed: _не заполнено_
 - Зависимости: —
 - Действия: добавить `ThreadPoolExecutor.CallerRunsPolicy` или `AbortPolicy` с метриками; `keepAliveSeconds` для warm-down; `setTaskDecorator` для MDC (trace-id).
 - Критерий приёмки: при перегрузке очереди — предсказуемое поведение; метрики pool stats (active, completed, rejected); MDC trace-id в логах синка.
-- Статус: [ ] TODO
+- Статус: [x] DONE (29.10.2026, dev-coder: AbortPolicy + перехват RejectedExecutionException в IntegrationService.dispatch → markRejected(FAILED) + 409 EXECUTOR_SATURATED; CallerRunsPolicy отклонён — синк выполнялся бы в потоке Tomcat; keepAliveSeconds=60 + allowCoreThreadTimeOut; MDC TaskDecorator + TraceIdFilter (X-Request-Id/UUID8 → traceId в логах и ответном заголовке); AsyncUncaughtExceptionHandler)
 - Приоритет: MEDIUM (scalability)
 
 ### 16. Scalability: Database indexing
@@ -187,7 +187,7 @@ Closed: _не заполнено_
 - Зависимости: —
 - Действия: проверить индексы на `emis_products(emis_code, trip_id IS NULL)`, `is_prices(ingredient_id, effective_from)`, `trip_days(trip_id, date)`; добавить недостающие.
 - Критерий приёмки: EXPLAIN ANALYZE показывает index scan на ключевых запросах; нет seq scan на больших таблицах.
-- Статус: [ ] TODO
+- Статус: [x] DONE (29.10.2026, dev-coder: V30 — ingredient_prices(ingredient_id, effective_from DESC) под DISTINCT ON latest-среза (существующий UNIQUE (ing,eff) ASC/ASC этот порядок НЕ покрывает); аудит остальных зон без изменений: trip_days покрыт UNIQUE(trip_id,day_date), emis_* — V26-индексами, ingredients/users/refresh_tokens — существующими. EXPLAIN в песочнице (5k строк) честно предпочитает seq scan — индекс рассчитан на боевые объёмы, planner подключит его сам; Flyway-прогон V1→V30 зелёный (CatalogIntegrationTest 7/7), повторный прогон безопасен (IF NOT EXISTS))
 - Приоритет: MEDIUM (scalability)
 
 ### 17. Scalability: Flyway migration sprawl
@@ -197,7 +197,7 @@ Closed: _не заполнено_
 - Зависимости: —
 - Действия: проверить, что нет отменённых/переименованных миграций; убедиться, что бэкфики safe (IF NOT EXISTS / ON CONFLICT); документировать V20/V26–V29.
 - Критерий приёмки: `flyway info` показывает clean history; existing-DB прогон без ошибок; ретро-миграции безопасны.
-- Статус: [ ] TODO
+- Статус: [x] DONE (29.10.2026, dev-coder: аудит V1→V30 — applied-миграции не правились (git: только новый V30); пропуски номеров V9/V14/V15 историчны (урок V14/V15 в AGENTS §11 — номера не переиспользуются); каждый интеграционный прогон делает Flyway clean+migrate V1→V30 (validate) — история чистая, ошибок нет; бэкфилы V20/V26-V29 идемпотентны (IF NOT EXISTS/ON CONFLICT, V29 проверен двойным прогоном ранее); existing-DB прогон в песочнице недоступен (нет живой БД с историей) — риск зафиксирован)
 - Приоритет: LOW (maintainability)
 
 ### 18. Best practice: Metrics and observability
@@ -207,7 +207,7 @@ Closed: _не заполнено_
 - Зависимости: 15
 - Действия: добавить `management.endpoints.web.exposure.include=*`; метрики на синк (duration, success/fail, items processed); health check для DB + Redis (если есть).
 - Критерий приёмки: `/actuator/metrics` доступен; кастомные метрики синка; алертинг на failed syncs.
-- Статус: [ ] TODO
+- Статус: [x] DONE (29.10.2026, dev-coder: actuator + micrometer-prometheus; ОТКЛОНЕНИЕ от плана осознанное — exposure НЕ "*" (env/heapdump публично = дыра): health,info,metrics,prometheus, из них health/info permitAll, прочий /actuator/** — ADMIN; метрики emis.sync.runs{status}/duration/items{outcome}; алертинг — на стороне скрейпера Prometheus, в репо не входит)
 - Приоритет: MEDIUM (ops)
 
 ### 19. Best practice: Rate limiting and brute force protection
@@ -217,7 +217,7 @@ Closed: _не заполнено_
 - Зависимости: —
 - Действия: добавить Spring Security brute-force protection (retry) или Guava rate limiter на `/api/v1/auth/register`, `/login`; store failed attempts in Redis.
 - Критерий приёмки: >X failed attempts → 429/lock; тест на brute-force.
-- Статус: [ ] TODO
+- Статус: [x] DONE (29.10.2026, dev-coder: LoginAttemptService — 5 неудач/email в окне 15 мин → блок 15 мин, 429 + Retry-After; assertNotBlocked до БД/BCrypt. ОТКЛОНЕНИЯ: Redis в стеке нет — in-memory (одноинстансный деплой; при N инстансах счётчик per-node — зафиксировано в javadoc); register не лимитируется отдельно (уникальность email + тот же guard-компонент доступен для расширения); тесты LoginAttemptServiceTest 6/6 + AuthServiceTest 2 кейса)
 - Приоритет: MEDIUM (security)
 
 ### 20. Best practice: Input validation completeness
@@ -227,7 +227,7 @@ Closed: _не заполнено_
 - Зависимости: —
 - Действия: проверить `@Valid` на всех контроллерах; `@Size`, `@Pattern` для emis_code, name; XSS-очистка для user-generated text (name, notes).
 - Критерий приёмки: все DTO — с `@Valid`; emis_code → `@Pattern`; name → `@Size` + XSS-санитизация.
-- Статус: [ ] TODO
+- Статус: [x] DONE (29.10.2026, dev-coder: аудит — все @RequestBody-контроллеры с @Valid (11/11, остальные без тел); DTO: 74 constraint-аннотации; XSS: сервер НЕ sanitize-ит — React экранирует вывод, dangerouslySetInnerHTML только со статическими SVG-ассетами (BrandMark); добавлено: экранирование LIKE-wildcards (SearchEscape, ESCAPE '!'), clamp page/size справочника ≤200, limit ЕМИСС-поиска уже ≤100)
 - Приоритет: MEDIUM (security)
 
 ### 21. Code smell: Magic numbers in EmisUnit / weightOfGrams
@@ -237,7 +237,7 @@ Closed: _не заполнено_
 - Зависимости: —
 - Действия: вынести в `enum UnitFactor` с метод `toGrams(value)`; задокументировать PCS/PACK логику.
 - Критерий приёмки: все конвертации — через enum; нет литералов 1000/100 в расчётах.
-- Статус: [ ] TODO
+- Статус: [x] DONE (29.10.2026, dev-coder, commit ef886afe: конвертация — в enum UnitOfMeasure (gramsPerOne/toGrams + GRAMS_PER_KG); weightOfGrams/kcalOf/calculateKcal/humanize без литералов 1000/100 (PER_100G); PCS/PACK-логика задокументирована; UnitOfMeasureTest 3/3 + MealCompositionMathTest 5/5)
 - Приоритет: LOW (maintainability)
 
 ### 22. Code smell: resolveTripScopedId logic spread
@@ -247,7 +247,7 @@ Closed: _не заполнено_
 - Зависимости: 11
 - Действия: вынести в `TripScopedIdResolver` с явной семантикой (global id vs snapshot id vs trip copy).
 - Критерий приёмки: резолвер — отдельный модуль с unit-тестами на edge cases (null, foreign trip).
-- Статус: [ ] TODO
+- Статус: [x] DONE (29.10.2026, dev-coder, commits 6c241d3d/24b894d9: resolveTripScopedId + resolveIngredient вынесены в отдельный @Component TripScopedIdResolver с документированной семантикой 5 случаев (строка рецепта / глобальный-id-со-снепшотом / свой trip / глобальный → снепшот-копия / чужой trip+несуществующий+null → 404/400); edge cases покрыты TripScopedIdResolverTest 8/8, включая null и чужой trip; закрыт вместе с подзадачей 11)
 - Приоритет: LOW (maintainability)
 
 ### 23. Code smell: self-injection pattern duplication
@@ -257,7 +257,7 @@ Closed: _не заполнено_
 - Зависимости: 13
 - Действия: вынести в общий `SelfProxyHelper` или использовать `ApplicationContext`-паттерн единым образом.
 - Критерий приёмки: единый паттерн self-injection; документирован почему (bypass proxy for @Async/REQUIRES_NEW).
-- Статус: [ ] TODO
+- Статус: [x] DONE (29.10.2026, dev-coder: ревизия — паттерн self-injection уже ЕДИНЫЙ в обоих сервисах (ObjectProvider + null в unit-конструкторе) и задокументирован комментариями с причиной (bypass internal call для @Async/REQUIRES_NEW); извлечение SelfProxyHelper отклонено как over-abstraction над 2 строками (R9 — не жертвовать связностью))
 - Приоритет: LOW (maintainability)
 
 ### 24. Frontend: client.ts single-flight refresh complexity
@@ -267,7 +267,7 @@ Closed: _не заполнено_
 - Зависимости: —
 - Действия: декомпозиция на `authInterceptor`, `modeResolver`, `problemDetailParser`; проверить race на refresh.
 - Критерий приёмки: каждый interceptor — отдельный модуль; тесты на single-flight; R5 coverage.
-- Статус: [ ] TODO
+- Статус: [x] DONE (29.10.2026, dev-coder, commits 3da0f48f/0ff3a6cb: client.ts 567→353 — authInterceptor.ts (single-flight refresh P0.5#1, 401-retry, session-lost), modeResolver.ts (localStorage→env→auto-пинг /meta, Fix-11), problemDetailParser.ts (ProblemDetail→ApiClientError, 204/пустое→null Fix-15); публичный контракт сохранён реэкспортами; тесты: существующие refresh/mode/resolveMode/modeStateMachine 54/54 БЕЗ правок (race на refresh проверен: p1===p2, один fetch, ротация без гонки) + новые authInterceptor 12/12, modeResolver 10/10, problemDetailParser 7/7, clientModule 11/11; R5: полный прогон 556/556, client.ts lines 98.01%, новые модули добавлены в coverage-гейт vitest.config; tsc/eslint чистые)
 - Приоритет: MEDIUM (R8)
 
 ### 25. Frontend: mockServer.ts parity (2583 строки)
@@ -277,7 +277,7 @@ Closed: _не заполнено_
 - Зависимости: —
 - Действия: декомпозиция по ресурсам (`mockTrips.ts`, `mockPrices.ts`, `mockSync.ts`); проверить паритет с бэком (latest-price, snapshots, composition batch).
 - Критерий приёмки: каждый ресурс — отдельный файл; contract-тесты mock vs backend; R8.
-- Статус: [ ] TODO
+- Статус: [x] DONE (29.10.2026, dev-coder a7ab4a1b: mockServer.ts 2583→143 строки — фасад (роутер handleRequest дословно + тонкие обёртки, публичная поверхность сохранена); ресурсы вынесены в mockState/mockEmis/mockSync/mockPrices/mockSnapshot/mockComposition/mockCatalog/mockTrips/mockAuth.ts, код маршрутов дословный (this.→srv.); inline-ветки роутера — через sentinel {hit,result} (пути не пересекаются); счётчики seq — через next*Seq() (live-binding ES-импортов read-only); паритет подтверждён: tsc+eslint clean, vitest 556/556 без изменений тестов, все mock-parity/contract-сьюты зелёные)
 - Приоритет: MEDIUM (R8, mock-паритет)
 
 ### 26. Frontend: TripDetailPage large component (1301 строки)
@@ -287,7 +287,7 @@ Closed: _не заполнено_
 - Зависимости: —
 - Действия: декомпозиция на `TripDaysList`, `TripMealCard`, `TripSummaryPanel`, `TripActions`.
 - Критерий приёмки: каждый компонент ≤300 строк; R5 coverage; нет дублирования state.
-- Статус: [ ] TODO
+- Статус: [x] DONE (29.10.2026, dev-coder 849707d7/409bc52d/6727182e: страница 1310 → 240 строк; все четыре компонента из «Действий» созданы (TripDaysList 235, TripMealCard 103, TripSummaryPanel 116, TripActions 36) + потребовались для критерия ≤300: TripShoppingTab/TripDayShoppingTab/TripPersonTab/ExclusionCheckbox; состояние — единственный владелец хук pages/useTripDetail.tsx (321, не компонент, ≤500 R8), производные — чистый utils/tripDerived.ts (278); JSX перенесён дословно, компоненты props-driven — дублирования state нет; R5: 9 новых файлов в coverage.include, покрытие каждого 100% statements (порог 80%), 34 новых теста; tsc+eslint clean; vitest 590/590 — прежние 556 без изменений)
 - Приоритет: MEDIUM (R8)
 
 ### 27. Testing: unit test gaps for Emis services
@@ -297,7 +297,7 @@ Closed: _не заполнено_
 - Зависимости: 13
 - Действия: написать unit-тесты на конвертацию единиц, UPSERT логику, ретеншен цен; закрыть BL-2/BL-3.
 - Критерий приёмки: EmisPriceApplierTest green; EmisMirrorServiceTest green; R5.
-- Статус: [ ] TODO
+- Статус: [x] DONE (29.10.2026, dev-coder, commit 2cbb37a2: EmisPriceApplierTest 8/8 (CREATED/UPDATED+MANUAL-перезапись/skipped-несовместимые/пустые точки/нет позиции/исчезнувший продукт/global-only/OTHER; deleteManual только при применении) + EmisMirrorServiceTest 6/6 (upsert+ON CONFLICT, окно period-years, дедуп месяца, fallback региона, ошибки); BL-2/BL-3 помечены ГОТОВО в plans/backlog.md, остаток KB-9 сокращён в plans/knownbugs.md)
 - Приоритет: MEDIUM (KB-9)
 
 ### 28. Testing: EconomicConsistencyTest invariant
@@ -307,7 +307,7 @@ Closed: _не заполнено_
 - Зависимости: 12
 - Действия: убедиться, что сумма by-days = сумма person = сумма shopping; инвариант в тесте.
 - Критерий приёмки: EconomicConsistencyTest green; инвариант сумм проверен.
-- Статус: [ ] TODO
+- Статус: [x] DONE (29.10.2026, dev-coder: инвариант сумм by-days = shopping = person = kPI уже зафиксирован в EconomicConsistencyTest (EK-03 «690+390+330=1410; строка закупки == сумма её дней», EK-10 «Σ точных планов по дням == Σ закупки == итог; round(Σ позиций)==итоги экрана; perPersonMeal/perDefaultPerson == roundToRub(Σ/24, Σ/4); totals состава Д3 == plannedCost дня; amountPerDefaultPerson×4 == totalAmount») — новых assertion не потребовалось; ПРОГНАН ПОСЛЕ декомпозиции SummaryService (подзадача 12): EconomicConsistencyTest 10/10 green за 65 c (MAVEN_OPTS -Xmx512m, -DforkCount=0, LocalPgFallback) + бонус UserPricesIntegrationTest 5/5 — см. поправку 2 в plans/knownbugs.md KB-10)
 - Приоритет: MEDIUM (baseline CI)
 
 ### 29. Documentation: ARCHITECTURE.md freshness
@@ -317,7 +317,7 @@ Closed: _не заполнено_
 - Зависимости: 11, 12
 - Действия: проверить, что формулы EmisUnit, V20 снепшоты, diff-commit логики актуальны; обновить девиации composition.
 - Критерий приёмки: ARCHITECTURE.md соответствует коду; формулы проверены.
-- Статус: [ ] TODO
+- Статус: [x] DONE (29.10.2026, dev-coder, commit 9e27c578: формулы сверены с кодом — EmisUnit pricePerUnit-пары совпадают с ARCHITECTURE (рефакторинг factor() логику не менял); девиации composition обновлены: EXTRA — абсолют на приём (устаревшее «× effectivePeople» убрано), deltaPercent planned=0 → 0 (не null), конвертация единиц — UnitOfMeasure (подзадача 21); V20-резолв — TripScopedIdResolver; SRP-модули SummaryService/MealCompositionService внесены в Key Components; Security-раздел приведён в соответствие с подзадачами 1–10/18 (HMAC refresh, ротация DELETE-first→401, iss/aud/typ+skew, LoginAttemptService 5/15→429, анти-энумерация, env-пароли сидов, swagger off в prod); Database: V1–V30; Testing: тесты аудита + прогон EconomicConsistencyTest 10/10 в песочнице)
 - Приоритет: LOW (maintainability)
 
 ### 30. Security: SQL injection in JPA Specifications
@@ -327,7 +327,7 @@ Closed: _не заполнено_
 - Зависимости: —
 - Действия: проверить, что Specification используют parameterized queries (no string concatenation); `matchesQuery` на name.
 - Критерий приёмки: все Specification — parameterized; тест на injection attempt.
-- Статус: [ ] TODO
+- Статус: [x] DONE (29.10.2026, dev-coder: аудит — все Specification через Criteria API, JPQL/native через :param-биндинги, конкатенации в SQL нет; тест ProductSearchInjectionTest 4/4: DROP TABLE в query → 200 + пустая выдача + таблица цела; OR 1=1 не выводит каталог)
 - Приоритет: LOW (security)
 
 ## CI

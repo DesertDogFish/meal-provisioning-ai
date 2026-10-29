@@ -63,10 +63,12 @@ public class DevTripsInitializer {
                                     TripMealRepository tripMealRepository,
                                     TripPriceOverrideRepository priceOverrideRepository,
                                     TripIngredientSubstitutionRepository substitutionRepository,
-                                    TripCatalogSnapshotService snapshotService) {
+                                    TripCatalogSnapshotService snapshotService,
+                                    DevProperties devProperties) {
         return args -> {
-            String seedEnabled = System.getenv("SEED_DEMO_USERS");
-            if (!"true".equalsIgnoreCase(seedEnabled)) {
+            // FIX (аудит 29.10.2026, подзадача 1): гейт сида — из единого источника
+            // (DevProperties.seedDemoUsers), а не повторным чтением System.getenv.
+            if (!devProperties.isSeedDemoUsers()) {
                 return; // тот же гейт, что и у демо-пользователей
             }
 

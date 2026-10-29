@@ -64,7 +64,8 @@ test.describe('REAL mode (docker compose stack)', () => {
   test('REAL-01 обычный USER загружает поход и видит цены (P0-3 regression)', async ({ page }) => {
     const stamp = Date.now();
     const email = `real-user-${stamp}@provision.test`;
-    const password = 'provision123';
+    // Свой пароль свежерегистрированного пользователя (не секрет из конфига).
+    const password = `E2e-Real-${stamp}`;
 
     // 1. Подготовка данных через API под обычным USER (не админом!)
     const token = await apiRegister(email, password);
