@@ -39,3 +39,12 @@ Thumbs.db
 
 # Goose local agents (project-local roles, not part of the repo)
 .agents/agents/
+
+# Local read-only helper scripts (UTF-8 readers; not part of the repo)
+scripts/read_utf8.py
+scripts/read_chunk.py
+
+# Local edit helper scripts (not part of the repo)
+scripts/replace_one.py
+scripts/replace_all.py
+scripts/replace_lines.py
