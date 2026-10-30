@@ -1318,6 +1318,14 @@ textarea {
   z-index: calc(var(--z-nav) - 20);
   background: var(--bg-1);
 }
+/* На телефоне скроллится документ, а над липким итогом ещё две липкие
+   полосы: шапка (52px) и trip-strip (~52px) —.offset считаем от них.
+   Используется только на странице похода, где trip-strip есть всегда. */
+@media (max-width: 767px) {
+  .checklist-sticky {
+    top: calc(104px + env(safe-area-inset-top, 0px));
+  }
+}
 .checklist-group-toggle {
   display: flex;
   width: 100%;
@@ -1465,6 +1473,12 @@ textarea {
   }
   .app-main {
     padding-bottom: calc(var(--sp-4) + env(safe-area-inset-bottom, 0px));
+    /* Скролл-контейнер на телефоне — документ, а не main: иначе sticky
+       (trip-strip, .checklist-sticky) липнет к непроворачиваемому боксу main
+       и уезжает за экран. overflow-x: clip не создаёт scroll-контейнер,
+       но страхует от горизонтального скролла документа. */
+    overflow-y: visible;
+    overflow-x: clip;
   }
 }
 
@@ -1560,3 +1574,495 @@ textarea {
 @media (max-width: 480px) {
   .filters-row > div { width: 100% !important; }
 }
+
+/* ============================================================
+   Plan plans/2026-10-30-mobile-workflow-ux.md
+   Мобильный воркфлоу «4 этапа похода»: нижний таб-бар, степпер,
+   компактная полоса похода, bottom-sheet, UnitChip, компактные
+   строки чеклиста/чека, карточка похода целиком-тап.
+   Десктоп не трогаем: все новые блоки скрыты на ≥768px, кроме
+   оговорённого (степпер-стрелки заменяют .seg только на мобильном).
+   ============================================================ */
+
+/* --- 1. Компактная sticky-полоса похода (вместо KPI-плиток на телефоне) --- */
+.trip-strip {
+  position: sticky;
+  top: calc(52px + env(safe-area-inset-top, 0px)); /* под липкой шапкой Layout */
+  z-index: calc(var(--z-nav) - 22);
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  width: 100%;
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: color-mix(in srgb, var(--bg-1) 92%, transparent);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  color: var(--text-1);
+  font: 600 var(--fs-body)/1.2 var(--font-body);
+  text-align: left;
+  cursor: pointer;
+  min-height: var(--touch-target);
+}
+.trip-strip:focus-visible { outline: 2px solid var(--amber-500); outline-offset: 2px; }
+.trip-strip__kpis {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: var(--sp-1);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.trip-strip__sep { color: var(--text-3); }
+.trip-strip__sum { color: var(--amber-300); font-weight: 800; }
+.trip-strip .chev { margin-left: auto; flex: none; color: var(--text-2); }
+@media (min-width: 768px) {
+  .trip-strip { display: none; }
+}
+
+/* Мини-степпер этапов внутри полосы и в sheet-сводке */
+.mini-steps { display: inline-flex; align-items: center; gap: 2px; flex: none; }
+.mini-step {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  font: 800 11px/1 var(--font-body);
+  background: var(--elev);
+  color: var(--text-2);
+}
+.mini-step.done { background: color-mix(in srgb, var(--success) 22%, transparent); color: var(--success); }
+.mini-step.active { background: var(--grad-brand); color: var(--on-fire); }
+
+/* --- 2. Верхний степпер-прогресс со стрелками (мобильный) --- */
+.stage-stepper {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  width: 100%;
+  overflow-x: auto;
+  flex-wrap: nowrap;
+  padding: 2px 0;
+  scrollbar-width: none;
+}
+.stage-stepper::-webkit-scrollbar { display: none; }
+.stage-stepper__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  border: 0;
+  background: transparent;
+  padding: 6px 2px;
+  color: var(--text-2);
+  font: 700 var(--fs-body)/1 var(--font-body);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.stage-stepper__item:focus-visible { outline: 2px solid var(--amber-500); outline-offset: 2px; border-radius: 6px; }
+.stage-stepper__num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--elev);
+  color: var(--text-2);
+  font: 800 12px/1 var(--font-body);
+}
+.stage-stepper__item.done { color: var(--success); }
+.stage-stepper__item.done .stage-stepper__num { background: color-mix(in srgb, var(--success) 20%, transparent); color: var(--success); }
+.stage-stepper__item.active { color: var(--amber-300); }
+.stage-stepper__item.active .stage-stepper__num { background: var(--grad-brand); color: var(--on-fire); }
+.stage-stepper__arrow { color: var(--line-strong); flex: none; }
+@media (min-width: 768px) {
+  .stage-stepper { display: none; }
+}
+
+/* --- 2b. Нижний таб-бар этапов (мобильный) --- */
+.stage-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: var(--z-nav);
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  background: color-mix(in srgb, var(--bg-1) 94%, transparent);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border-top: 1px solid var(--line);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+.stage-bar__btn {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  min-height: 56px;
+  padding: 6px 2px 8px;
+  border: 0;
+  background: transparent;
+  color: var(--text-2);
+  font: 700 11px/1.1 var(--font-body);
+  cursor: pointer;
+}
+.stage-bar__btn:focus-visible { outline: 2px solid var(--amber-500); outline-offset: -2px; }
+.stage-bar__btn.active { color: var(--amber-300); }
+.stage-bar__btn.done { color: var(--success); }
+.stage-bar__btn.active.done { color: var(--success); }
+.stage-bar__badge {
+  position: absolute;
+  top: 4px;
+  right: calc(50% - 20px);
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: var(--r-pill);
+  background: var(--fire);
+  color: var(--on-fire);
+  font: 800 10px/16px var(--font-body);
+  text-align: center;
+}
+.stage-bar__badge.ok {
+  background: color-mix(in srgb, var(--success) 26%, transparent);
+  color: var(--success);
+}
+@media (min-width: 768px) {
+  .stage-bar { display: none; }
+}
+/* контент страницы похода не прячется под таб-бар */
+@media (max-width: 767px) {
+  .stage-page { padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px)); }
+}
+
+/* --- Bottom-sheet (сводка похода, единицы, фильтры) --- */
+.sheet-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal);
+  background: color-mix(in srgb, #000 55%, transparent);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+.sheet {
+  width: 100%;
+  max-width: 560px;
+  max-height: 82dvh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: var(--bg-1);
+  border: 1px solid var(--line-strong);
+  border-bottom: 0;
+  border-radius: var(--r-lg) var(--r-lg) 0 0;
+  padding: var(--sp-3) var(--sp-4) calc(var(--sp-5) + env(safe-area-inset-bottom, 0px));
+  animation: sheet-up var(--t-base) var(--ease) both;
+}
+.sheet:focus { outline: none; }
+@keyframes sheet-up {
+  from { transform: translateY(24px); opacity: .6; }
+  to   { transform: none; opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sheet { animation: none; }
+}
+.sheet__grab {
+  width: 36px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--line-strong);
+  margin: 0 auto var(--sp-3);
+}
+.sheet__title {
+  font: 800 var(--fs-body)/1.2 var(--font-body);
+  color: var(--text-1);
+  margin: 0 0 var(--sp-3);
+}
+.sheet-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  width: 100%;
+  min-height: var(--touch-target);
+  padding: var(--sp-2) var(--sp-3);
+  border: 0;
+  border-radius: var(--r-md);
+  background: transparent;
+  color: var(--text-1);
+  font: 600 var(--fs-body)/1.2 var(--font-body);
+  text-align: left;
+  cursor: pointer;
+}
+.sheet-option:hover { background: var(--bg-2); }
+.sheet-option:focus-visible { outline: 2px solid var(--amber-500); outline-offset: -2px; }
+.sheet-option[aria-checked="true"] { background: color-mix(in srgb, var(--wave-400) 14%, transparent); color: var(--w1); }
+
+/* --- Kebab-меню (поповер действий) --- */
+.kebab-pop {
+  position: fixed;
+  z-index: var(--z-pop);
+  min-width: 180px;
+  padding: var(--sp-1);
+  background: var(--bg-2);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-1);
+  animation: infotip-in var(--t-fast) var(--ease) both;
+}
+.kebab-pop button {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  width: 100%;
+  min-height: var(--touch-target);
+  padding: var(--sp-2) var(--sp-3);
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--text-1);
+  font: 600 var(--fs-body)/1.2 var(--font-body);
+  text-align: left;
+  cursor: pointer;
+}
+.kebab-pop button:hover { background: var(--bg-3); }
+.kebab-pop button:focus-visible { outline: 2px solid var(--amber-500); outline-offset: -2px; }
+.kebab-pop button.danger { color: var(--danger); }
+
+/* --- UnitChip: единица измерения чипом вместо вертикального стека --- */
+.unit-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  min-height: 32px;
+  padding: 0 var(--sp-2);
+  border: 1px solid var(--border);
+  border-left: 0;
+  background: var(--elev);
+  color: var(--w1);
+  font: 700 13px/1 var(--font-body);
+  cursor: pointer;
+}
+.unit-chip:disabled { opacity: .5; cursor: default; }
+.unit-chip:focus-visible { outline: 2px solid var(--amber-500); outline-offset: 1px; }
+.unit-chip--solo {
+  border-left: 1px solid var(--border);
+  color: var(--text-2);
+  cursor: default;
+}
+
+/* --- 5. Чеклист «в магазине»: первый экран рабочий, строки под палец --- */
+.checklist-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2) var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md) var(--r-md) 0 0;
+}
+.checklist-head__count { font: 800 var(--fs-body)/1 var(--font-body); color: var(--text-1); }
+.checklist-toolbar {
+  display: flex;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-4) var(--sp-3);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-top: 0;
+  border-radius: 0 0 var(--r-md) var(--r-md);
+}
+.checklist-toolbar .btn { flex: 1 1 auto; min-height: var(--touch-target); }
+@media (max-width: 767px) {
+  .checklist-row { min-height: 64px; }
+  .checklist-row input[type="checkbox"] { width: 24px; height: 24px; }
+}
+
+/* --- 6. Чеки и итог: компактная мобильная строка --- */
+.checkline {
+  display: block;
+  width: 100%;
+  padding: var(--sp-3) var(--sp-4);
+  border: 0;
+  border-top: 1px solid var(--border);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  color: var(--text-1);
+}
+.checkline:focus-visible { outline: 2px solid var(--amber-500); outline-offset: -2px; }
+.checkline__top { display: flex; align-items: center; gap: var(--sp-3); }
+.checkline__name { font: 700 var(--fs-body)/1.2 var(--font-body); min-width: 0; flex: 1; }
+.checkline__qty {
+  flex: none;
+  padding: 3px 8px;
+  border-radius: var(--r-pill);
+  background: var(--elev);
+  color: var(--text-2);
+  font: 700 12px/1.4 var(--font-body);
+}
+.checkline__fact {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-top: var(--sp-2);
+  color: var(--text-2);
+  font-size: var(--fs-small);
+}
+.fact-add {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 40px;
+  padding: 0 var(--sp-4);
+  border: 1.5px dashed var(--amber-500);
+  border-radius: var(--r-input, 8px);
+  background: transparent;
+  color: var(--amber-300);
+  font: 800 var(--fs-body)/1 var(--font-body);
+  cursor: pointer;
+}
+.fact-add:focus-visible { outline: 2px solid var(--amber-500); outline-offset: 2px; }
+.checkline__details {
+  padding: var(--sp-2) var(--sp-4) var(--sp-3);
+  border-top: 1px dashed var(--line);
+  background: color-mix(in srgb, var(--bg-2) 60%, transparent);
+}
+.who-owes {
+  border-radius: var(--r-md);
+  padding: var(--sp-4);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--amber-500) 10%, transparent), color-mix(in srgb, var(--wave-400) 10%, transparent));
+  border: 1px solid var(--border);
+}
+.who-owes__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding: var(--sp-2) 0;
+  font: 600 var(--fs-body)/1.2 var(--font-body);
+  color: var(--text-1);
+}
+.who-owes__row + .who-owes__row { border-top: 1px solid color-mix(in srgb, var(--line) 60%, transparent); }
+.planfact-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2) var(--sp-4);
+  padding: var(--sp-3) var(--sp-4);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  font: 600 var(--fs-body)/1.2 var(--font-body);
+  color: var(--text-2);
+}
+@media (min-width: 768px) {
+  .checkline-mobile { display: none; }
+  .check-table-mobile-hide { display: table; }
+}
+@media (max-width: 767px) {
+  .check-table-mobile-hide { display: none; }
+}
+
+/* --- 4. Список походов: карточка целиком — тап --- */
+.trip-card {
+  position: relative;
+  display: block;
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: var(--sp-4) var(--sp-5);
+  text-align: left;
+  cursor: pointer;
+  color: var(--text-1);
+  background-size: cover;
+  background-position: center;
+}
+.trip-card:focus-visible { outline: 2px solid var(--amber-500); outline-offset: 2px; }
+.trip-card__progress {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-top: var(--sp-3);
+  font: 700 var(--fs-small)/1.2 var(--font-body);
+}
+.trip-card__bar {
+  flex: 1 1 6rem;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--bg-3);
+  overflow: hidden;
+}
+.trip-card__bar > span { display: block; height: 100%; background: var(--wave-400); }
+.trip-card__bar > span.stage-menu { background: var(--fire); }
+.trip-card__kebab { position: absolute; top: var(--sp-3); right: var(--sp-3); }
+@media (max-width: 767px) {
+  .trip-card { background-image: none !important; }
+  .trip-card__cover {
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background-size: cover;
+    background-position: center;
+    opacity: .45;
+    pointer-events: none;
+  }
+}
+
+/* --- 10. Карточка-строка блюд/продуктов на мобильном --- */
+.card-row__head {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  width: 100%;
+  min-height: 52px;
+  padding: var(--sp-3) var(--sp-4);
+  border: 0;
+  background: transparent;
+  color: var(--text-1);
+  font: 700 var(--fs-body)/1.25 var(--font-body);
+  text-align: left;
+  cursor: pointer;
+}
+.card-row__head:focus-visible { outline: 2px solid var(--amber-500); outline-offset: -2px; }
+.card-row__title { flex: 1 1 auto; min-width: 0; }
+.card-row__meta { flex: none; color: var(--text-2); font-weight: 600; font-size: var(--fs-small); }
+@media (max-width: 767px) {
+  .filters-bar { display: none; }
+}
+.filters-fab {
+  display: none;
+}
+@media (max-width: 767px) {
+  .filters-fab { display: inline-flex; }
+}
+
+/* --- 8. Модалки: контент не прячется под липким футером --- */
+.modal-wrap > * {
+  scroll-padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+}
+.modal-foot {
+  padding-bottom: calc(var(--sp-5) + env(safe-area-inset-bottom, 0px));
+}
+/* превью-заглушка больше не занимает пол-модалки до выбора блюда */
+.preview-hint {
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--r-md);
+  background: var(--bg-2);
+  color: var(--text-2);
+  font-size: var(--fs-small);
+}
+
+/* обложка карточки похода: слой только на мобильном (подзадача 4) */
+.trip-card__cover { display: none; }

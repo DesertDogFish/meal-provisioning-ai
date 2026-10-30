@@ -58,7 +58,18 @@ export interface Price {
 }
 
 /** Вкладки страницы похода. */
-export type TabType = 'menu' | 'shopping' | 'dayShopping' | 'person' | 'overrides' | 'checklist';
+/**
+ * Plan plans/2026-10-30-mobile-workflow-ux.md (подзадача 2): 6 равноправных
+ * вкладок заменены 4 этапами воркфлоу «Меню → Закупка → Магазин → Чеки и итог».
+ * Прежние «Закупка по дням» и «На человека» — виды списка внутри этапа
+ * «Закупка» (`ShoppingView`), «Чеклист» стал этапом «Магазин» (store),
+ * «Закупка и чеки» — этапом «Чеки» (checks). Старые значения в URL
+ * (?stage=dayShopping и т.п.) разбирает `parseStage` в StageTabBar.
+ */
+export type TabType = 'menu' | 'shopping' | 'store' | 'checks';
+
+/** Виды списка закупки внутри этапа ② (подзадача 3): состояние локальное. */
+export type ShoppingView = 'total' | 'days' | 'person';
 
 /** U26: поле сортировки таблицы «Закупка на поход». */
 export type ShoppingSortField = 'ingredientName' | 'totalAmount' | 'effectiveCost';

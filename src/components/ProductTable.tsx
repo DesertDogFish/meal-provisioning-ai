@@ -185,7 +185,9 @@ export function ProductTable({ products, filters, onEdit, onDelete, onResetFilte
     if (!price) return <span className="chip-delta fire">нет цены</span>;
     return (
       <span style={{ color: 'var(--text)' }}>
-        {price.value.toLocaleString('ru-RU')} {price.currency}
+        {/* Plan plans/2026-10-30-mobile-workflow-ux.md (подзадача 9): цены везде «₽» —
+            «30 RUB» в карточках продуктов был контент-баг (виден и на десктопе). */}
+        <span className="keep-num">{price.value.toLocaleString('ru-RU')}{'\u00A0'}₽</span>
         <span className="chip-delta dim" style={{ marginLeft: '8px' }}>
           {/* Источник цены: ROSSTAT — применила синхронизация ЕМИСС, MANUAL — ввёл человек,
               API — машинный источник (legacy-строки, V28). Значения 'OFF' больше нет. */}

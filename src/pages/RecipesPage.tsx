@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Pencil, Plus, Search, Trash2, Utensils, X } from 'lucide-react';
 import { MealType } from '../types';
 import { formatAmount } from '../utils/calculations';
@@ -10,6 +10,9 @@ import { useToast } from '../components/ToastProvider';
 import { useConfirm } from '../components/ConfirmDialog'; // Fix-6 (п.7)
 import Modal from '../components/Modal';
 import RecipeEditorModal from '../components/RecipeEditorModal';
+import FilterSheet from '../components/FilterSheet';
+import BottomSheet from '../components/BottomSheet';
+import { Flame } from 'lucide-react';
 import { Button } from '../components/Button';
 
 import PageLoader from '../components/PageLoader';
@@ -46,6 +49,11 @@ export default function RecipesPage() {
   const [filterCategory, setFilterCategory] = useState('');
   const [noFireOnly, setNoFireOnly] = useState(false);
   const [selectedRecipe, setSelectedRecipe] = useState<string | null>(null);
+  // подзадача 10 (30.10.2026): «В меню» — sheet с выбором похода и дня
+  const [menuSheet, setMenuSheet] = useState<Recipe | null>(null);
+  const [menuTrips, setMenuTrips] = useState<any[] | null>(null);
+  const [menuTrip, setMenuTrip] = useState<any | null>(null);
+  const navigate = useNavigate();
   const [visibleCount, setVisibleCount] = useState(24);
   const [isAdmin, setIsAdmin] = useState(false);
   const [editorOpen, setEditorOpen] = useState(false);
@@ -223,11 +231,12 @@ export default function RecipesPage() {
         )}
       </div>
 
-      {/* Фильтры */}
-      <div className="sticky top-0 z-10 py-3 space-y-3" style={{ 
-        background: 'linear-gradient(var(--bg) 75%, transparent)' 
+      {/* Фильтры. Plan plans/2026-10-30-mobile-workflow-ux.md (подзадача 10):
+          на мобильном строка фильтров = поиск + кнопка «Фильтры (N)», все
+          селекты и чипы — в bottom-sheet; на десктопе — прежний инлайн. */}
+      <div className="sticky top-0 z-10 py-3 space-y-3" style={{
+        background: 'linear-gradient(var(--bg) 75%, transparent)'
       }}>
-        {/* Первая строка: поиск и пресеты типов */}
         <div className="flex flex-wrap gap-3 items-center">
           <div className="relative flex-1 min-w-[200px]">
             <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--muted)' }} />
@@ -240,69 +249,72 @@ export default function RecipesPage() {
               style={{ background: 'var(--elev)', border: '1px solid var(--border)', color: 'var(--text)' }}
             />
           </div>
-          
-          {/* Fix-7 (п.6): пресеты фильтров — тоже слайдер: «Все / Завтрак / Обед /
-              Ужин / Перекус» со счётчиками — единый сегментированный контрол (.seg),
-              визуально «или-или», а не пять разрозненных кнопок */}
-          <div className="seg max-w-full overflow-x-auto" role="group" aria-label="Фильтр по типу приёма">
-            {([
-              { value: '' as MealType | '', label: 'Все', count: counts.all, aria: 'Показать все рецепты' },
-              { value: 'BREAKFAST' as MealType, label: 'Завтрак', count: counts.breakfast, aria: 'Фильтр: Завтрак' },
-              { value: 'LUNCH' as MealType, label: 'Обед', count: counts.lunch, aria: 'Фильтр: Обед' },
-              { value: 'DINNER' as MealType, label: 'Ужин', count: counts.dinner, aria: 'Фильтр: Ужин' },
-              { value: 'SNACK' as MealType, label: 'Перекус', count: counts.snack, aria: 'Фильтр: Перекус' },
-            ]).map(chip => (
-              <button
-                key={chip.value || 'all'}
-                type="button"
-                className={`seg-btn whitespace-nowrap ${filterMealType === chip.value ? 'active' : ''}`}
-                aria-pressed={filterMealType === chip.value}
-                onClick={() => setFilterMealType(chip.value)}
-                aria-label={chip.aria}
-              >
-                {chip.label} <span style={{ opacity: 0.72, fontVariantNumeric: 'tabular-nums' }}>{chip.count}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Вторая строка: категория, без огня, сброс */}
-        <div className="flex flex-wrap gap-3 items-center">
-          {/* Fix-5 (п.19): нативный «Все категории» выглядел чужеродно —
-              единый CustomSelect как в формах продукта/приёма.
-              Fix-7 (п.4): фиксированная ширина — короткое значение не сужает вёрстку */}
-          <div style={{ width: 220 }}>
-            <CustomSelect
-              className="w-full"
-              value={filterCategory}
-              onChange={setFilterCategory}
-              options={[{ value: '', label: 'Все категории' }, ...categories.map(cat => ({ value: cat, label: humanizeCategory(cat) }))]}
-              ariaLabel="Категория блюда"
-            />
-          </div>
-          
-          <button
-            onClick={() => setNoFireOnly(!noFireOnly)}
-            className="px-4 py-2.5 rounded-full text-xs font-bold transition-all"
-            style={{
-              background: noFireOnly ? 'color-mix(in srgb, var(--amber-500) 16%, transparent)' : 'transparent',
-              border: noFireOnly ? '1px solid var(--fire)' : '1px solid var(--border)',
-              color: noFireOnly ? 'var(--fire)' : 'var(--muted)'
-            }}
+          <FilterSheet
+            count={(filterMealType ? 1 : 0) + (filterCategory ? 1 : 0) + (noFireOnly ? 1 : 0)}
+            testId="recipes-filters"
           >
-            🔥 Только без огня
-          </button>
-          
-          {(search || filterMealType || filterCategory || noFireOnly) && (
-            <button
-              onClick={resetFilters}
-              className="flex items-center gap-1 px-3 py-2 rounded-full text-xs"
-              style={{ color: 'var(--muted)' }}
-            >
-              <X size={14} />
-              Сбросить фильтры
-            </button>
-          )}
+            <div className="seg max-w-full overflow-x-auto" role="group" aria-label="Фильтр по типу приёма">
+              {([
+                { value: '' as MealType | '', label: 'Все', count: counts.all, aria: 'Показать все рецепты' },
+                { value: 'BREAKFAST' as MealType, label: 'Завтрак', count: counts.breakfast, aria: 'Фильтр: Завтрак' },
+                { value: 'LUNCH' as MealType, label: 'Обед', count: counts.lunch, aria: 'Фильтр: Обед' },
+                { value: 'DINNER' as MealType, label: 'Ужин', count: counts.dinner, aria: 'Фильтр: Ужин' },
+                { value: 'SNACK' as MealType, label: 'Перекус', count: counts.snack, aria: 'Фильтр: Перекус' },
+              ]).map(chip => (
+                <button
+                  key={chip.value || 'all'}
+                  type="button"
+                  className={`seg-btn whitespace-nowrap ${filterMealType === chip.value ? 'active' : ''}`}
+                  aria-pressed={filterMealType === chip.value}
+                  onClick={() => setFilterMealType(chip.value)}
+                  aria-label={chip.aria}
+                >
+                  {chip.label} <span style={{ opacity: 0.72, fontVariantNumeric: 'tabular-nums' }}>{chip.count}</span>
+                </button>
+              ))}
+            </div>
+            <div className="flex flex-wrap gap-3 items-center">
+              {/* Fix-5 (п.19): нативный «Все категории» выглядел чужеродно —
+                  единый CustomSelect как в формах продукта/приёма.
+                  Fix-7 (п.4): фиксированная ширина — короткое значение не сужает вёрстку */}
+              <div style={{ width: 220 }}>
+                <CustomSelect
+                  className="w-full"
+                  value={filterCategory}
+                  onChange={setFilterCategory}
+                  options={[{ value: '', label: 'Все категории' }, ...categories.map(cat => ({ value: cat, label: humanizeCategory(cat) }))]}
+                  ariaLabel="Категория блюда"
+                />
+              </div>
+              {/* подзадача 10: tofu-глиф 🔥 заменён иконкой lucide (Flame) —
+                  эмодзи из шрифтов окружения убраны */}
+              <button
+                onClick={() => setNoFireOnly(!noFireOnly)}
+                className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-full text-xs font-bold transition-all"
+                aria-pressed={noFireOnly}
+                data-testid="recipes-nofire"
+                style={{
+                  background: noFireOnly ? 'color-mix(in srgb, var(--amber-500) 16%, transparent)' : 'transparent',
+                  border: noFireOnly ? '1px solid var(--fire)' : '1px solid var(--border)',
+                  color: noFireOnly ? 'var(--fire)' : 'var(--muted)'
+                }}
+              >
+                <Flame size={14} aria-hidden />
+                Только без огня
+              </button>
+              {(search || filterMealType || filterCategory || noFireOnly) && (
+                <button
+                  onClick={resetFilters}
+                  className="flex items-center gap-1 px-3 py-2 rounded-full text-xs"
+                  style={{ color: 'var(--muted)' }}
+                  data-testid="recipes-reset"
+                >
+                  <X size={14} />
+                  Сбросить фильтры
+                </button>
+              )}
+            </div>
+          </FilterSheet>
         </div>
       </div>
 
@@ -353,7 +365,7 @@ export default function RecipesPage() {
                     const rest = showAll ? 0 : Math.max(0, names.length - 2);
                     return (
                       <span
-                        className={`text-xs ${showAll ? '' : 'truncate'}`}
+                        className={`text-xs hidden md:inline ${showAll ? '' : 'truncate'}`}
                         style={{ color: 'var(--muted)', maxWidth: '62%' }}
                         title={`${recipe.ingredients.length} ${ingredientsWord(recipe.ingredients.length)}: ${names.join(', ')}`}
                       >
@@ -390,8 +402,17 @@ export default function RecipesPage() {
                     <button
                       className="px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap shrink-0"
                       style={{ background: 'var(--grad-brand)', color: 'var(--on-fire)' }}
+                      data-testid={`recipe-to-menu-${recipe.id}`}
+                      aria-label={`Добавить «${recipe.name}» в меню похода`}
+                      onClick={e => {
+                        e.stopPropagation();
+                        setMenuSheet(recipe);
+                        setMenuTrip(null);
+                        setMenuTrips(null);
+                        void api.get<any[]>('/trips').then((t) => setMenuTrips(Array.isArray(t) ? t : [])).catch(() => setMenuTrips([]));
+                      }}
                     >
-                      В меню
+                      В меню похода…
                     </button>
                   </span>
                 </div>
@@ -415,6 +436,49 @@ export default function RecipesPage() {
           <p className="mb-4" style={{ color: 'var(--muted)' }}>Рецепты не найдены</p>
           <Button variant="ghost" onClick={resetFilters} aria-label="Сбросить фильтры">Сбросить фильтры</Button>
         </div>
+      )}
+
+      {/* Подзадача 10: «В меню похода…» — выбор похода и дня в bottom-sheet;
+          день открывает страницу похода на этапе ① с открытой модалкой приёма */}
+      {menuSheet && (
+        <BottomSheet
+          title={menuTrip ? `День похода «${menuTrip.name}»` : 'В меню какого похода?'}
+          onClose={() => setMenuSheet(null)}
+          testId="recipe-to-menu-sheet"
+        >
+          {!menuTrip && (
+            <div role="list">
+              {menuTrips == null && <p className="cap" style={{ color: 'var(--muted)' }}>Загрузка походов…</p>}
+              {menuTrips != null && menuTrips.length === 0 && (
+                <p className="cap" style={{ color: 'var(--muted)' }}>Походов нет — создайте поход, чтобы добавлять блюда в меню.</p>
+              )}
+              {(menuTrips ?? []).map(t => (
+                <button key={t.id} type="button" role="listitem" className="sheet-option" data-testid={`menu-sheet-trip-${t.id}`}
+                        onClick={() => setMenuTrip(t)}>
+                  {t.name}
+                </button>
+              ))}
+            </div>
+          )}
+          {menuTrip && (
+            <div role="list">
+              {(menuTrip.days ?? []).map((d: any, i: number) => (
+                <button key={d.id} type="button" role="listitem" className="sheet-option" data-testid={`menu-sheet-day-${d.id}`}
+                        onClick={() => {
+                          const dayId = String(d.id);
+                          setMenuSheet(null);
+                          navigate(`/trips/${menuTrip.id}?stage=menu&addMeal=${dayId}`);
+                        }}>
+                  {new Date(d.dayDate).toLocaleDateString('ru-RU', { weekday: 'short', day: 'numeric', month: 'long' })}
+                  <span className="cap" style={{ color: 'var(--text-2)' }}>день {i + 1}</span>
+                </button>
+              ))}
+              {(menuTrip.days ?? []).length === 0 && (
+                <p className="cap" style={{ color: 'var(--muted)' }}>В походе ещё нет дней — даты вне границ похода.</p>
+              )}
+            </div>
+          )}
+        </BottomSheet>
       )}
 
       {/* Модалка деталей рецепта. U13/U21 (список багов 25.10): единая шапка —

@@ -4,21 +4,26 @@ import FreeAmountInput from './FreeAmountInput';
 import type { ActualAmount } from '../utils/checkUnits';
 
 describe('FreeAmountInput (Fix-6, п.8) — свободные единицы факта', () => {
-  it('для KG показывает чипы «г» и «кг», по умолчанию — кг', () => {
+  // подзадачи 5/9 (30.10.2026): юнит-стек заменён UnitChip — единица видна
+  // чипом, варианты — в bottom-sheet (цели ≥44px, Esc/клик вне)
+  it('для KG чип показывает текущую единицу; в sheet — варианты «г» и «кг», текущая отмечена', () => {
     render(<FreeAmountInput value={null} baseUnit="KG" onChange={() => {}} ariaLabel="Факт" testId="fa" />);
-    expect(screen.getByRole('button', { name: 'Единица: г' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Единица: кг' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Единица: кг' }).getAttribute('aria-pressed')).toBe('true');
+    const chip = screen.getByTestId('fa-unit');
+    expect(chip.textContent).toContain('кг');
+    fireEvent.click(chip);
+    expect(screen.getByTestId('unit-option-г')).toBeTruthy();
+    expect(screen.getByTestId('unit-option-кг').getAttribute('aria-checked')).toBe('true');
   });
 
-  it('для PCS без веса штуки — только «шт»; с весом — ещё г/кг', () => {
-    const { unmount } = render(<FreeAmountInput value={null} baseUnit="PCS" onChange={() => {}} />);
-    expect(screen.getByRole('button', { name: 'Единица: шт' })).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'Единица: г' })).toBeNull();
+  it('для PCS без веса штуки — одиночный чип «шт»; с весом — в sheet ещё г/кг', () => {
+    const { unmount } = render(<FreeAmountInput value={null} baseUnit="PCS" onChange={() => {}} testId="fa" />);
+    expect(screen.getByTestId('fa-unit-solo').textContent).toContain('шт');
     unmount();
-    render(<FreeAmountInput value={null} baseUnit="PCS" pieceWeightG={25} onChange={() => {}} />);
-    expect(screen.getByRole('button', { name: 'Единица: г' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Единица: кг' })).toBeTruthy();
+    render(<FreeAmountInput value={null} baseUnit="PCS" pieceWeightG={25} onChange={() => {}} testId="fa" />);
+    fireEvent.click(screen.getByTestId('fa-unit'));
+    expect(screen.getByTestId('unit-option-шт')).toBeTruthy();
+    expect(screen.getByTestId('unit-option-г')).toBeTruthy();
+    expect(screen.getByTestId('unit-option-кг')).toBeTruthy();
   });
 
   it('ввод «300» отдаёт {amount:300, unit} с выбранной единицей (запятая = точка)', () => {
@@ -28,10 +33,11 @@ describe('FreeAmountInput (Fix-6, п.8) — свободные единицы ф
     expect(onChange).toHaveBeenLastCalledWith({ amount: 0.3, unit: 'кг' });
   });
 
-  it('переключение единицы переэмитит текущее значение', () => {
+  it('переключение единицы (через sheet) переэмитит текущее значение', () => {
     const onChange = vi.fn();
     render(<FreeAmountInput value={{ amount: 300, unit: 'г' } as ActualAmount} baseUnit="PCS" pieceWeightG={25} onChange={onChange} testId="fa" />);
-    fireEvent.click(screen.getByRole('button', { name: 'Единица: шт' }));
+    fireEvent.click(screen.getByTestId('fa-unit'));
+    fireEvent.click(screen.getByTestId('unit-option-шт'));
     expect(onChange).toHaveBeenLastCalledWith({ amount: 300, unit: 'шт' });
   });
 

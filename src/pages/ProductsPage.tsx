@@ -7,6 +7,7 @@ import { ProductTable, type ProductRow } from '../components/ProductTable';
 import { EmisLinkPicker } from '../components/EmisLinkPicker';
 import Modal from '../components/Modal';
 import CustomSelect from '../components/CustomSelect';
+import FilterSheet from '../components/FilterSheet';
 import { DatePicker } from '../components/DatePicker';
 import { api } from '../api/client';
 import type { UnitOfMeasure, ProductCategory, IngredientPrice } from '../types';
@@ -358,6 +359,13 @@ export default function ProductsPage() {
           />
         </div>
         
+        {/* Plan plans/2026-10-30-mobile-workflow-ux.md (подзадача 10): на мобильном
+            селекты фильтров уезжают в bottom-sheet («Фильтры · N»), на десктопе —
+            прежний инлайн рядом с поиском. */}
+        <FilterSheet
+          count={(selectedUnit ? 1 : 0) + (priceStatus ? 1 : 0) + (bindingStatus ? 1 : 0)}
+          testId="products-filters"
+        >
         {/* Fix-5: нативные селекты фильтров — в единый CustomSelect.
             Fix-7 (п.4): ФИКСИРОВАННАЯ ширина обёртки + w-full на селекте —
             выбор короткого значения («кг», «все») больше не сужает контрол
@@ -412,6 +420,8 @@ export default function ProductsPage() {
                       Сбросить
                     </Button>
         )}
+
+        </FilterSheet>
       </div>
 
       {/* Table */}

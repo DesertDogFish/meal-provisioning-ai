@@ -201,13 +201,13 @@ export default function AddMealModal({
             высота, длинный состав скроллится внутри) — выбор блюда не меняет
             размер модалки: экран не «едет» ни при клике по поиску, ни при выборе. */}
         <div
-          className="mt-3 rounded-lg h-32 overflow-y-auto"
+          className="mt-3 rounded-lg overflow-y-auto"
           style={{ background: 'var(--elev)', border: '1px solid var(--border)' }}
           data-testid="meal-preview-slot"
         >
           {selected ? (
           <div
-            className="p-3"
+            className="p-3 h-32 overflow-y-auto"
             data-testid="meal-preview"
           >
             <div className="flex items-center justify-between gap-2">
@@ -243,10 +243,13 @@ export default function AddMealModal({
             )}
           </div>
           ) : (
-            /* Fix-8 (п.4): пустое состояние слота превью — подсказка, высота та же */
-            <div className="p-3 h-full flex items-center justify-center text-xs text-center" style={{ color: 'var(--muted)' }}>
-              Выберите блюдо — покажем калорийность и состав
-            </div>
+            /* Plan plans/2026-10-30-mobile-workflow-ux.md (подзадача 8): до выбора
+               блюда — компактная подсказка в ОДНУ строку (превью-заглушка на пол-
+               модалки съедала первый экран на телефоне); фиксированная высота
+               слота остаётся у превью выбранного блюда (Fix-8 п.4: экран не «едет»). */
+            <p className="preview-hint" data-testid="meal-preview-hint">
+              Калорийность и состав появятся после выбора блюда.
+            </p>
           )}
         </div>
 

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import UnitChip from './UnitChip';
 import { formatQty } from '../utils/format';
 
 /**
@@ -160,47 +161,14 @@ export function AmountInput({
           className={`${pad} compact-input w-20 text-right text-sm outline-none bg-transparent`}
           style={{ color: 'var(--text)' }}
         />
-        {weight ? (
-          <span className="flex flex-col items-stretch" style={{ borderLeft: '1px solid var(--border)' }}>
-            <button
-              type="button"
-              aria-label={`Единица: ${smallLabel}`}
-              aria-pressed={mode === 'small'}
-              onClick={() => switchMode('small')}
-              className="flex-1 px-2 text-xs transition-colors flex items-center justify-center"
-              style={{
-                color: mode === 'small' ? 'var(--on-fire)' : 'var(--muted)',
-                fontWeight: mode === 'small' ? 700 : 400,
-                background: mode === 'small' ? 'var(--wave-400)' : 'transparent',
-              }}
-            >
-              {smallLabel}
-            </button>
-            <button
-              type="button"
-              aria-label={`Единица: ${baseLabel}`}
-              aria-pressed={mode === 'base'}
-              onClick={() => switchMode('base')}
-              className="flex-1 px-2 text-xs transition-colors flex items-center justify-center"
-              style={{
-                color: mode === 'base' ? 'var(--on-fire)' : 'var(--muted)',
-                fontWeight: mode === 'base' ? 700 : 400,
-                background: mode === 'base' ? 'var(--wave-400)' : 'transparent',
-                borderTop: '1px solid var(--border)',
-              }}
-            >
-              {baseLabel}
-            </button>
-          </span>
-        ) : (
-          <span
-            className="px-2 text-xs flex items-center"
-            style={{ color: 'var(--muted)', borderLeft: '1px solid var(--border)' }}
-            aria-hidden
-          >
-            {baseLabel}
-          </span>
-        )}
+        <UnitChip
+          unit={weight ? (mode === 'small' ? smallLabel : baseLabel) : baseLabel}
+          options={weight ? [smallLabel, baseLabel] : [baseLabel]}
+          onChange={(u) => switchMode(u === smallLabel ? 'small' : 'base')}
+          disabled={disabled}
+          testId={testId ? `${testId}-unit` : undefined}
+          ariaLabel={`Единица количества «${ariaLabel ?? ''}»: ${weight ? (mode === 'small' ? smallLabel : baseLabel) : baseLabel}. Изменить`}
+        />
       </span>
       {hint && (
         <span className="text-xs whitespace-nowrap" style={{ color: 'var(--muted)' }} data-testid={testId ? `${testId}-hint` : undefined}>

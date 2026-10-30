@@ -110,8 +110,8 @@ test('M-02 поход: KPI-связки целы, вкладки не рвут �
 
 test('M-03 InfoTip: подсказка открывается тапом и целиком в экране', async ({ page }) => {
   await openSeededTrip(page);
-  const tip = page.locator('.stat .keep-pair', { hasText: 'Стоимость' }).first()
-    .locator('[data-testid="info-tip"]');
+  await page.getByTestId('stage-bar-store').click();
+  const tip = page.locator('.checklist-head [data-testid="info-tip"]').first();
   await tip.click();
   const pop = page.getByRole('tooltip');
   await expect(pop).toBeVisible();
@@ -148,7 +148,7 @@ test('M-04 модалка состава: по центру и целиком в
 
 test('M-05 чеклист: отметка тапом по строке, фильтр, прогресс', async ({ page }) => {
   await openSeededTrip(page);
-  await page.getByRole('button', { name: 'Чеклист' }).click();
+  await page.getByTestId('stage-bar-store').click();
   const progress = page.getByTestId('checklist-progress');
   await expect(progress).toBeVisible();
   await expect(progress).toHaveAttribute('aria-valuenow', '0');
@@ -160,18 +160,19 @@ test('M-05 чеклист: отметка тапом по строке, филь
   await expect(box).toBeChecked();
   await expect(progress).toHaveAttribute('aria-valuenow', '1');
 
-  // «только не взятое» скрывает отмеченную позицию
-  await page.getByTestId('checklist-only-missing').check();
+  // «Осталось · N» скрывает отмеченную позицию (подзадача 5: кнопка, не чекбокс)
+  await page.getByTestId('checklist-only-missing').click();
   await expect(box).toHaveCount(0);
   await expectNoHorizontalScroll(page, 'чеклист');
 });
 
 test('M-06 «Снять всё» — опасное действие только через подтверждение', async ({ page }) => {
   await openSeededTrip(page);
-  await page.getByRole('button', { name: 'Чеклист' }).click();
+  await page.getByTestId('stage-bar-store').click();
   await page.locator('[data-testid^="checklist-row-"]').first().click();
   await expect(page.getByTestId('checklist-progress')).toHaveAttribute('aria-valuenow', '1');
 
+  await page.getByTestId('checklist-kebab').click();
   await page.getByTestId('checklist-none').click();
   const dialog = page.getByRole('alertdialog');
   await expect(dialog).toBeVisible();
@@ -188,6 +189,7 @@ test('M-06 «Снять всё» — опасное действие тольк�
   await expect(page.getByTestId('checklist-progress')).toHaveAttribute('aria-valuenow', '1');
 
   // подтверждение — сбрасывает
+  await page.getByTestId('checklist-kebab').click();
   await page.getByTestId('checklist-none').click();
   await page.getByTestId('confirm-yes').click();
   await expect(page.getByTestId('checklist-progress')).toHaveAttribute('aria-valuenow', '0');
@@ -195,17 +197,15 @@ test('M-06 «Снять всё» — опасное действие тольк�
 
 test('M-07 «Закупка и чеки»: карточный режим, значения подписаны, скролла страницы нет', async ({ page }) => {
   await openSeededTrip(page);
-  await page.getByRole('button', { name: 'Закупка и чеки' }).click();
-  const panel = page.locator('.table-cards').first();
-  await expect(panel).toBeVisible();
-  await expectNoHorizontalScroll(page, 'закупка и чеки');
-
-  // подпись значения берётся из data-label (шапка таблицы на мобильном скрыта)
-  const cell = panel.locator('td[data-label="Думали ₽"]').first();
-  await expect(cell).toBeVisible();
-  await expect(cell).toHaveAttribute('data-label', 'Думали ₽');
-  // связка «Думали ₽» + подсказка в шапке не разорвана (проверяем на десктопной семантике)
-  await expect(panel.locator('thead .keep-pair').first()).toHaveCount(1);
+  await page.getByTestId('stage-bar-checks').click();
+  // подзадача 6: «кто сколько должен» и строка «План/Факт/Δ» — без скролла
+  await expect(page.getByTestId('who-owes')).toBeVisible();
+  await expect(page.getByTestId('planfact-strip')).toBeVisible();
+  const mobile = page.getByTestId('checks-mobile');
+  await expect(mobile).toBeVisible();
+  await expectNoHorizontalScroll(page, 'чеки и итог');
+  // компактная строка позиции: план → факт/«+ факт, ₽» + бейдж отклонения
+  await expect(page.locator('[data-testid^="checkline-"]').first()).toBeVisible();
 });
 
 test('M-08 каталог продуктов: карточный режим без горизонтального скролла', async ({ page }) => {
@@ -230,7 +230,7 @@ test('M-09 основной текст читается без зума (≥12px
   });
   expect(minText).toBeGreaterThanOrEqual(12);
 
-  await page.getByRole('button', { name: 'Чеклист' }).click();
+  await page.getByTestId('stage-bar-store').click();
   // Только текстовые/числовые поля: iOS зумит страницу при фокусе на input
   // с font-size < 16px. Чекбоксы в расчёт не берём — у них font-size на зум
   // не влияет, а их вычисленный размер наследуется от браузера (13.33px).
@@ -242,4 +242,74 @@ test('M-09 основной текст читается без зума (≥12px
   });
   expect(inputSizes.length, 'на вкладке «Чеклист» нет ни одного текстового поля').toBeGreaterThan(0);
   expect(Math.min(...inputSizes)).toBeGreaterThanOrEqual(16);
+});
+
+test('M-10 этапы: переходы таб-баром, ?stage= в URL, состояние не теряется', async ({ page }) => {
+  await openSeededTrip(page);
+  await expect(page).toHaveURL(/stage=menu|\/trips\/trip1/);
+  await page.getByTestId('stage-bar-shopping').click();
+  await expect(page).toHaveURL(/stage=shopping/);
+  // вид списка закупки переключается в один тап (подзадача 3)
+  await page.getByTestId('shopping-view-days').click();
+  await expect(page.getByTestId('shopping-view-days')).toHaveAttribute('aria-selected', 'true');
+  await page.getByTestId('shopping-view-person').click();
+  await expect(page.getByText('На человека за поход')).toBeVisible();
+  // возврат в меню и обратно — вид закупки сохранён (состояние этапа локальное)
+  await page.getByTestId('stage-bar-menu').click();
+  await expect(page).toHaveURL(/stage=menu/);
+  await page.getByTestId('stage-bar-shopping').click();
+  await expect(page.getByTestId('shopping-view-person')).toHaveAttribute('aria-selected', 'true');
+  // прямая ссылка на этап (детерминизм e2e)
+  await page.goto('/trips/trip1?stage=checks');
+  await expect(page.getByTestId('who-owes')).toBeVisible();
+  await expectNoHorizontalScroll(page, 'этапы');
+});
+
+test('M-11 полоса похода: тап раскрывает sheet с KPI, Esc закрывает', async ({ page }) => {
+  await openSeededTrip(page);
+  await page.getByTestId('trip-strip').click();
+  const sheet = page.getByTestId('trip-summary-sheet');
+  await expect(sheet).toBeVisible();
+  await expect(sheet).toContainText('Стоимость');
+  const box = await sheet.boundingBox();
+  const vp = page.viewportSize()!;
+  expect(box!.width).toBeLessThanOrEqual(vp.width);
+  expect(box!.y + box!.height).toBeLessThanOrEqual(vp.height + 1);
+  await page.keyboard.press('Escape');
+  await expect(sheet).toHaveCount(0);
+});
+
+test('M-12 чек одним тапом по строке: «+ факт, ₽» → ввод → бейдж и итоги', async ({ page }) => {
+  await openSeededTrip(page);
+  // отмечаем «взято» на этапе ③ — без этого ввод чека закрыт
+  await page.getByTestId('stage-bar-store').click();
+  const row = page.locator('[data-testid^="checklist-row-"]').first();
+  const ingId = ((await row.getAttribute('data-testid')) ?? '').replace('checklist-row-', '');
+  await row.click();
+  await page.getByTestId('stage-bar-checks').click();
+  const line = page.getByTestId(`checkline-${ingId}`);
+  await expect(line).toBeVisible();
+  const add = page.getByTestId(`fact-add-${ingId}`);
+  await expect(add).toBeVisible();
+  await add.click();
+  const input = page.getByTestId(`actual-input-mobile-${ingId}`);
+  await expect(input).toBeVisible();
+  await input.fill('100');
+  await input.press('Enter');
+  // после ввода строка показывает NumberField с суммой, а не кнопку
+  await expect(page.getByTestId(`actual-input-${ingId}`).first()).toBeVisible();
+  await expectNoHorizontalScroll(page, 'ввод чека');
+});
+
+test('M-13 отчёт: in-app маршрут читается в одну колонку, «Поделиться» даёт текст', async ({ page }) => {
+  await openSeededTrip(page);
+  await page.goto('/trips/trip1/report');
+  await expect(page.getByTestId('trip-report')).toBeVisible();
+  await expect(page.getByTestId('report-owe')).toBeVisible();
+  await expect(page.getByTestId('report-menu')).toBeVisible();
+  await expectNoHorizontalScroll(page, 'отчёт');
+  // фолбэк «Поделиться» — копирование текста итога
+  await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+  await page.getByTestId('report-share').click();
+  await expect(page.getByText(/Текст итога скопирован/).first()).toBeVisible({ timeout: 8_000 });
 });

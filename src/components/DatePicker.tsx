@@ -297,7 +297,7 @@ export function DatePicker({
     min: toISO(minDate),
     max: toISO(maxDate),
     disabled,
-    placeholder: placeholder ?? 'Выберите дату',
+    placeholder: placeholder ?? 'ДД.ММ.ГГГГ',
     stateClassName: `${error ? 'error' : ''} ${disabled ? 'disabled' : ''}`.trim() || undefined,
     onDateChange: handleChange,
   };
@@ -313,13 +313,13 @@ export function DatePicker({
       {...undocumentedPickerProps}
       dateFormat="yyyy-MM-dd"
       locale={ru}
-      placeholderText={placeholder ?? 'Выберите дату'}
+      placeholderText={placeholder ?? 'ДД.ММ.ГГГГ'}
       minDate={minDate}
       maxDate={maxDate}
       disabled={disabled}
       showPopperArrow={false}
       id={id}
-      aria-label={placeholder ?? 'Выберите дату'}
+      aria-label={placeholder ?? 'ДД.ММ.ГГГГ'}
       calendarClassName="dark-calendar"
       className="date-picker-input dp-text-input"
       wrapperClassName="w-full date-picker-wrapper"

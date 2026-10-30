@@ -5,7 +5,7 @@ import { syncServerExclusions } from '../api/shoppingExclusions';      // Fix-3 
 import { formatAmount, calculateShoppingList, calculateDayShopping, realTripPeople, dayScopedExclusions, findPriceForDate } from '../utils/calculations';
 import { formatRub, categoryName } from '../utils/format'; // Release-1.0: единый формат чисел/единиц
 import { compareRu } from '../utils/rowSort'; // U41: алфавитная сортировка
-import { mealsWord } from '../utils/text';
+import { checklistRowKey } from '../utils/checklist';
 import { NumberField } from './NumberField';
 import { useToast } from './ToastProvider';
 import InfoTip from '../components/InfoTip';
@@ -22,6 +22,7 @@ import {
   loadExcluded,
   setExcluded as persistExcluded,
   loadBought,
+  setBought as persistBought,
   loadActualQty,
   setActualQty,
   type ChecklistActual,
@@ -62,8 +63,6 @@ interface DayShopping {
 interface Props {
   tripId: string;
 }
-
-type TabType = 'total' | 'days' | 'person';
 
 interface Trip {
   id: string;
@@ -118,7 +117,6 @@ export default function PriceOverridesTab({ tripId }: Props) {
   // во всех суммах без ручного пересчёта и без расхождений между вкладками.
   const [allRecipes, setAllRecipes] = useState<Recipe[]>([]);
   const [prices, setPrices] = useState<Price[]>([]);
-  const [activeTab, setActiveTab] = useState<TabType>('total');
   const [trip, setTrip] = useState<Trip | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -205,6 +203,17 @@ export default function PriceOverridesTab({ tripId }: Props) {
     persistExcluded(tripId, next);
     setShoppingExcluded(next);
     void syncServerExclusions(tripId, next);
+  };
+
+  /** Plan plans/2026-10-30-mobile-workflow-ux.md (подзадача 6): отметка «взято»
+      прямо из мобильной строки чека — то же общее хранилище tripStaging, что
+      и чеклист этапа ③ (синхронизация через onTripStageChange). */
+  const toggleBought = (key: string) => {
+    const next = new Set(boughtSet);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
+    persistBought(tripId, next);
+    setBoughtSet(next);
   };
 
   // Загрузка данных через API
@@ -343,8 +352,11 @@ export default function PriceOverridesTab({ tripId }: Props) {
   };
 
   const formatDelta = (delta: number): string => {
-    if (delta === 0) return '0%';
-    return `${delta > 0 ? '+' : ''}${delta.toLocaleString('ru-RU', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
+    // Plan plans/2026-10-30-mobile-workflow-ux.md (подзадача 6): «−0,0%» — ноль
+    // с минусом после округления; нормализуем в «0%» (контент-баг виден и на десктопе).
+    const rounded = Math.round(delta * 10) / 10;
+    if (rounded === 0) return '0%';
+    return `${rounded > 0 ? '+' : ''}${rounded.toLocaleString('ru-RU', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
   };
 
   const getDeltaChipClass = (delta: number): string => {
@@ -416,9 +428,6 @@ export default function PriceOverridesTab({ tripId }: Props) {
   // Fix-5 (п.2): «на человека» — по реальному количеству людей
   const realPeople = trip ? Math.max(1, realTripPeople(trip as any)) : 1;
   const realPeopleLabel = Number.isInteger(realPeople) ? String(realPeople) : realPeople.toLocaleString('ru-RU', { maximumFractionDigits: 1 });
-  const totalPersonMeals = trip?.days?.reduce((acc: number, d: TripDay) =>
-    acc + (d.meals?.reduce((mealAcc: number, m: TripMeal) => mealAcc + (m.peopleOverride || d.peopleOverride || trip.defaultPeople || 1), 0) || 0)
-  , 0) || 1;
 
   if (loading) {
     return (
@@ -439,40 +448,98 @@ export default function PriceOverridesTab({ tripId }: Props) {
     );
   }
 
-  const segBtn = (id: TabType, label: string) => (
-    <button
-      key={id}
-      onClick={() => setActiveTab(id)}
-      className={`seg-btn whitespace-nowrap ${activeTab === id ? 'active' : ''}`}
-    >
-      {label}
-    </button>
-  );
+  // Plan plans/2026-10-30-mobile-workflow-ux.md (подзадача 6): внутренние подтабы
+  // «Закупка/По дням/На человека» убраны — это виды списка этапа ② (подзадача 3),
+  // дублировать их в этапе ④ не нужно; «по дням» осталось вторым блоком таблицы.
+  const factCount = shoppingItems
+    .filter(item => !shoppingExcluded.has(item.ingredientId))
+    .filter(item => (draftOverrides[String(item.ingredientId)]?.price ?? null) != null).length;
+  const factsTotal = shoppingItems.filter(item => !shoppingExcluded.has(item.ingredientId)).length;
 
   return (
     <div className="space-y-4">
       {/* Fix-6 (п.17): информационная простыня убрана — подсказки живут в InfoTip
           у колонок. Остаётся только одна строка, когда ввод действительно закрыт. */}
       {!canEnterCheck && (
-        <div className="note-box" style={{ color: 'var(--fire, #d97706)' }}>
-          Суммы из чека можно вводить, когда во вкладке «Чеклист» отмечено хотя бы одно «взято».
+        <div className="note-box" style={{ color: 'var(--fire, #d97706)' }} data-testid="checks-locked-note">
+          Суммы из чека можно вводить, когда на этапе «Магазин» отмечено хотя бы одно «взято».
         </div>
       )}
 
-      {/* Fix-6 (п.26) + Fix-7 (п.20): подтабы — компактная группа по контенту,
-          не растягивается во всю ширину */}
-      <div className="seg seg-scroll max-w-full overflow-x-auto">
-        {segBtn('total', 'Закупка')}
-        {segBtn('days', 'По дням')}
-        {segBtn('person', 'На человека')}
+      {/* Подзадача 6: блок «Кто сколько должен» — СВЕРХУ этапа, виден без скролла */}
+      <div className="who-owes max-w-3xl" data-testid="who-owes">
+        <b style={{ color: 'var(--text)' }}>Кто сколько должен · при равном делении</b>
+        <div className="who-owes__row">
+          <span className="keep-pair">
+            Поровну на человека
+            <InfoTip text={`Фактическая сумма закупки ÷ людей в походе (${realPeopleLabel} чел. — среднее по дням с учётом переопределений).`} />
+          </span>
+          <b className="keep-num" style={{ color: 'var(--w1)' }}>{formatRub(totalActual / realPeople)}</b>
+        </div>
+        {dayShopping.map(day => {
+          const dayPeople = trip?.days?.find(d => d.dayDate === day.dayDate)?.peopleOverride ?? trip?.defaultPeople ?? 1;
+          return (
+            <div className="who-owes__row" key={day.dayDate}>
+              <span className="keep-pair">
+                {new Date(day.dayDate).toLocaleDateString('ru-RU', { weekday: 'short', day: 'numeric', month: 'long' })}
+                <span className="cap" style={{ color: 'var(--text-2)' }}> · {dayPeople} чел.</span>
+              </span>
+              <span className="keep-num" style={{ color: 'var(--text-2)' }}>
+                {formatRub(day.actualCost)} · <b style={{ color: 'var(--text-1)' }}>{formatRub(day.actualCost / Math.max(1, dayPeople))}/чел</b>
+              </span>
+            </div>
+          );
+        })}
       </div>
 
-      {/* Вкладка: Закупка (группы по категориям, как в чеклисте; без внутреннего скролла) */}
-      {activeTab === 'total' && (
-        <div className="rounded-xl overflow-hidden max-w-5xl mob-scroll table-cards" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
-          {/* Fix-7 (п.18): table-layout fixed + colgroup — заголовки колонок стоят
-              ровно над полями ввода (единые ширины строк и шапки) */}
-          <table className="w-full text-sm" style={{ tableLayout: 'fixed' }}>
+      {/* Подзадача 6: липкая строка итогов «План · Факт · Δ» */}
+      <div className="planfact-strip checklist-sticky max-w-3xl" data-testid="planfact-strip">
+        <span className="keep-pair">План <b className="keep-num" style={{ color: 'var(--text)' }}>{formatRub(totalPlanned)}</b></span>
+        <span className="keep-pair">Факт <b className="keep-num" style={{ color: 'var(--w1)' }}>{formatRub(totalActual)}</b></span>
+        <span className={`chip-delta keep-num ${getDeltaChipClass(totalDelta)}`}>{formatDelta(totalDelta)}</span>
+        {shoppingExcluded.size > 0 && (
+          <span className="keep-pair cap" style={{ color: 'var(--muted)' }}>
+            без <span className="keep-num">{shoppingExcluded.size} искл.</span>
+          </span>
+        )}
+      </div>
+
+      {/* Подзадача 6: мобильные компактные строки чека (детали — раскрытие по тапу) */}
+      <div className="md:hidden rounded-xl overflow-hidden max-w-3xl" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }} data-testid="checks-mobile">
+        <div className="px-4 py-3 flex items-center justify-between" style={{ background: 'var(--elev)' }}>
+          <b style={{ color: 'var(--text)' }}>Ввести чек</b>
+          <span className="keep-num cap" style={{ color: 'var(--text-2)' }}>{factCount} из {factsTotal}</span>
+        </div>
+        {checkGroups.map(group => (
+          <MobileGroupRows
+            key={group.category}
+            category={group.category}
+            items={group.items}
+            shoppingExcluded={shoppingExcluded}
+            actualMap={actualMap}
+            pieceWeightById={pieceWeightById}
+            canEnterCheck={canEnterCheck}
+            draftOverrides={draftOverrides}
+            boughtSet={boughtSet}
+            onToggleBought={toggleBought}
+            calculateDelta={calculateDelta}
+            formatDelta={formatDelta}
+            getDeltaChipClass={getDeltaChipClass}
+            toggleExcluded={toggleExcluded}
+            commitActualTotal={commitActualTotal}
+            commitTook={commitTook}
+          />
+        ))}
+        <p className="px-4 py-3 cap" style={{ color: 'var(--text-2)' }}>
+          Тап по строке — ввести или поправить факт. Детали (нужно/взяли/исключить) — в раскрытии строки.
+        </p>
+      </div>
+
+      {/* Десктоп: таблица закупки (группы по категориям, как в чеклисте; без внутреннего скролла) */}
+      <div className="check-table-mobile-hide rounded-xl overflow-hidden max-w-5xl mob-scroll table-cards" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+        {/* Fix-7 (п.18): table-layout fixed + colgroup — заголовки колонок стоят
+            ровно над полями ввода (единые ширины строк и шапки) */}
+        <table className="w-full text-sm" style={{ tableLayout: 'fixed' }}>
             <colgroup>
               <col style={{ width: 32 }} />
               <col />
@@ -560,12 +627,11 @@ export default function PriceOverridesTab({ tripId }: Props) {
               </span>
             )}
           </div>
-        </div>
-      )}
+      </div>
 
-      {/* Вкладка: По дням */}
-      {activeTab === 'days' && (
-        <div className="rounded-xl overflow-hidden max-w-3xl mob-scroll table-cards" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+      {/* По дням: план/факт по дням — только десктоп (на мобильном всё есть
+          в компактных строках этапа ④ и блоке «кто сколько должен») */}
+      <div className="check-table-mobile-hide rounded-xl overflow-hidden max-w-3xl mob-scroll table-cards" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
           <table className="w-full text-sm">
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border)' }}>
@@ -601,64 +667,203 @@ export default function PriceOverridesTab({ tripId }: Props) {
               })}
             </tbody>
           </table>
-        </div>
-      )}
-
-      {/* Вкладка: На человека */}
-      {activeTab === 'person' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-3xl">
-          <div className="rounded-xl p-4" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
-            <b style={{ color: 'var(--text)' }}>На одного человека</b>
-            <p style={{ color: 'var(--muted)', fontSize: '12px', marginTop: '4px' }}>
-              <span className="keep-pair">
-                {realPeopleLabel} чел. в походе
-                <InfoTip text="Среднее число участников по дням (переопределения «людей на день» учитываются)." />
-              </span>
-            </p>
-            <div className="flex justify-between py-2 mt-2" style={{ borderTop: '1px solid var(--border)' }}>
-              <span style={{ color: 'var(--muted)' }}>Думали</span>
-              <b className="keep-num" style={{ color: 'var(--text)' }}>
-                {formatRub(totalPlanned / realPeople)}
-              </b>
-            </div>
-            <div className="flex justify-between py-2" style={{ borderTop: '1px solid var(--border)' }}>
-              <span style={{ color: 'var(--muted)' }}>Заплатили</span>
-              <b className="keep-num" style={{ color: 'var(--w1)' }}>
-                {formatRub(totalActual / realPeople)}
-              </b>
-            </div>
-          </div>
-
-          <div className="rounded-xl p-4" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
-            <b style={{ color: 'var(--text)' }}>На один приём пищи</b>
-            <p style={{ color: 'var(--muted)', fontSize: '12px', marginTop: '4px' }}>
-              <span className="keep-pair">
-                {totalPersonMeals} {mealsWord(totalPersonMeals)} за поход
-                <InfoTip text="Сумма по всем дням: приёмы пищи × число людей." />
-              </span>
-            </p>
-            <div className="flex justify-between py-2 mt-2" style={{ borderTop: '1px solid var(--border)' }}>
-              <span style={{ color: 'var(--muted)' }}>Думали</span>
-              <b className="keep-num" style={{ color: 'var(--text)' }}>
-                {formatRub(totalPlanned / totalPersonMeals)}
-              </b>
-            </div>
-            <div className="flex justify-between py-2" style={{ borderTop: '1px solid var(--border)' }}>
-              <span style={{ color: 'var(--muted)' }}>Заплатили</span>
-              <b className="keep-num" style={{ color: 'var(--w1)' }}>
-                {formatRub(totalActual / totalPersonMeals)}
-              </b>
-            </div>
-          </div>
-        </div>
-      )}
+      </div>
     </div>
   );
 }
 
 /* ------------------------------------------------------------------ */
-/* Строки одной категории в таблице закупки                            */
+/* Мобильные компактные строки чека (подзадача 6, 30.10.2026)          */
 /* ------------------------------------------------------------------ */
+
+interface MobileGroupRowsProps {
+  category: string;
+  items: ShoppingItem[];
+  shoppingExcluded: Set<string>;
+  actualMap: Record<string, ChecklistActual>;
+  pieceWeightById: Map<string, number | null>;
+  canEnterCheck: boolean;
+  draftOverrides: Record<string, ActualPriceDraft>;
+  boughtSet: Set<string>;
+  onToggleBought: (key: string) => void;
+  calculateDelta: (planned?: number | null, actual?: number | null) => number;
+  formatDelta: (delta: number) => string;
+  getDeltaChipClass: (delta: number) => string;
+  toggleExcluded: (ingredientId: string) => void;
+  commitActualTotal: (item: ShoppingItem, total: number | null) => void;
+  commitTook: (ingredientId: string, value: ActualAmount | null, needed?: number) => void;
+}
+
+function MobileGroupRows(props: MobileGroupRowsProps) {
+  const {
+    category, items, shoppingExcluded, actualMap, pieceWeightById, canEnterCheck,
+    draftOverrides, boughtSet, onToggleBought, calculateDelta, formatDelta,
+    getDeltaChipClass, toggleExcluded, commitActualTotal, commitTook,
+  } = props;
+  return (
+    <>
+      <div className="px-4 py-1.5 text-xs font-extrabold uppercase tracking-wide"
+           style={{ background: 'var(--elev)', color: 'var(--text)', borderTop: '1px solid var(--border)', borderBottom: '1px solid var(--border)' }}>
+        {category}
+      </div>
+      {items.map(item => (
+        <MobileCheckRow
+          key={item.ingredientId}
+          item={item}
+          excluded={shoppingExcluded.has(item.ingredientId)}
+          tookValue={actualMap[String(item.ingredientId)] ?? neededAsActual(item.totalAmount, item.unit)}
+          pieceWeightG={pieceWeightById.get(String(item.ingredientId)) ?? null}
+          canEnterCheck={canEnterCheck}
+          enteredUnit={draftOverrides[String(item.ingredientId)]?.price ?? null}
+          bought={boughtSet.has(checklistRowKey({ ingredientId: String(item.ingredientId), needed: item.totalAmount }))}
+          onToggleBought={() => onToggleBought(checklistRowKey({ ingredientId: String(item.ingredientId), needed: item.totalAmount }))}
+          calculateDelta={calculateDelta}
+          formatDelta={formatDelta}
+          getDeltaChipClass={getDeltaChipClass}
+          toggleExcluded={toggleExcluded}
+          commitActualTotal={commitActualTotal}
+          commitTook={commitTook}
+        />
+      ))}
+    </>
+  );
+}
+
+interface MobileCheckRowProps {
+  item: ShoppingItem;
+  excluded: boolean;
+  tookValue: ActualAmount | null;
+  pieceWeightG: number | null;
+  canEnterCheck: boolean;
+  enteredUnit: number | null;
+  bought: boolean;
+  onToggleBought: () => void;
+  calculateDelta: (planned?: number | null, actual?: number | null) => number;
+  formatDelta: (delta: number) => string;
+  getDeltaChipClass: (delta: number) => string;
+  toggleExcluded: (ingredientId: string) => void;
+  commitActualTotal: (item: ShoppingItem, total: number | null) => void;
+  commitTook: (ingredientId: string, value: ActualAmount | null, needed?: number) => void;
+}
+
+/**
+ * Подзадача 6: мобильная строка позиции чека — «[✓] Сахар · взяли 192,5 г ·
+ * 13 ₽ → [факт ₽] · [бейдж −2%]»; детали (нужно/взяли/исключить) — раскрытие
+ * по тапу. Ввод чека = 1 тап по «+ факт, ₽» + ввод суммы.
+ */
+function MobileCheckRow(props: MobileCheckRowProps) {
+  const {
+    item, excluded, tookValue, pieceWeightG, canEnterCheck, enteredUnit, bought,
+    onToggleBought, calculateDelta, formatDelta, getDeltaChipClass,
+    toggleExcluded, commitActualTotal, commitTook,
+  } = props;
+  const [open, setOpen] = useState(false);
+  const [entering, setEntering] = useState(false);
+  const actualTotal = enteredCheckTotal(enteredUnit, item.totalAmount);
+  const actualCostView = actualTotal ?? item.actualCost;
+  const delta = calculateDelta(item.plannedCost, actualCostView);
+  return (
+    <div style={{ opacity: excluded ? 0.45 : 1 }} data-testid={`checkline-${item.ingredientId}`}>
+      <button
+        type="button"
+        className="checkline"
+        aria-expanded={open}
+        data-testid={`checkline-toggle-${item.ingredientId}`}
+        onClick={() => setOpen(v => !v)}
+      >
+        <span className="checkline__top">
+          <input
+            type="checkbox"
+            checked={bought}
+            onChange={() => onToggleBought()}
+            onClick={(e) => e.stopPropagation()}
+            aria-label={`Взято: ${item.ingredientName}`}
+            className="checklist-check cursor-pointer shrink-0"
+            style={{ accentColor: 'var(--w2)', width: 22, height: 22 }}
+          />
+          <span className="checkline__name" style={{ textDecoration: bought ? 'line-through' : 'none' }}>
+            {item.ingredientName}
+          </span>
+          <span className="checkline__qty keep-num">
+            {tookValue ? formatAmount(tookValue.amount, tookValue.unit) : formatAmount(item.totalAmount, item.unit)}
+          </span>
+        </span>
+        <span className="checkline__fact">
+          <span className="keep-pair">план <b className="keep-num" style={{ color: 'var(--text-2)' }}>{formatRub(item.plannedCost)}</b></span>
+          <span aria-hidden>→</span>
+          <span onClick={(e) => e.stopPropagation()} className="inline-flex items-center gap-2">
+            {actualTotal != null ? (
+              <NumberField
+                value={actualTotal}
+                size="sm"
+                stepRef={item.plannedCost}
+                placeholder="факт, ₽"
+                disabled={!canEnterCheck}
+                onCommit={v => commitActualTotal(item, v)}
+                testId={`actual-input-${item.ingredientId}`}
+                ariaLabel={`Сумма из чека (₽): ${item.ingredientName}`}
+              />
+            ) : (
+              <button
+                type="button"
+                className="fact-add"
+                disabled={!canEnterCheck}
+                data-testid={`fact-add-${item.ingredientId}`}
+                aria-label={`Ввести сумму из чека: ${item.ingredientName}`}
+                onClick={(e) => { e.stopPropagation(); setOpen(true); setEntering(true); }}
+              >
+                + факт, ₽
+              </button>
+            )}
+          </span>
+          <span className={`chip-delta keep-num ${getDeltaChipClass(delta)}`}>{formatDelta(delta)}</span>
+        </span>
+      </button>
+      {open && (
+        <div className="checkline__details space-y-2" data-testid={`checkline-details-${item.ingredientId}`}>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="cap" style={{ color: 'var(--text-2)' }}>
+              нужно <b className="keep-num">{formatAmount(item.totalAmount, item.unit)}</b>
+            </span>
+            <span className="inline-flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+              <span className="cap" style={{ color: 'var(--muted)' }}>взяли</span>
+              <FreeAmountInput
+                value={tookValue}
+                baseUnit={item.unit}
+                pieceWeightG={pieceWeightG}
+                onChange={v => commitTook(String(item.ingredientId), v, item.totalAmount)}
+                ariaLabel={`Сколько реально куплено: ${item.ingredientName}`}
+                testId={`qty-input-${item.ingredientId}`}
+              />
+            </span>
+          </div>
+          {actualTotal == null && entering && (
+            <NumberField
+              value={null}
+              size="sm"
+              stepRef={item.plannedCost}
+              placeholder="факт, ₽"
+              disabled={!canEnterCheck}
+              onCommit={v => commitActualTotal(item, v)}
+              testId={`actual-input-mobile-${item.ingredientId}`}
+              ariaLabel={`Сумма из чека (₽): ${item.ingredientName}`}
+            />
+          )}
+          <label className="keep-pair keep-pair-center cap cursor-pointer" style={{ color: 'var(--text-2)' }}>
+            <input
+              type="checkbox"
+              checked={!excluded}
+              onChange={() => toggleExcluded(String(item.ingredientId))}
+              aria-label={excluded ? `Включить в расчёт: ${item.ingredientName}` : `Исключить из расчёта: ${item.ingredientName}`}
+              style={{ accentColor: 'var(--w2)' }}
+            />
+            В расчёте (исключить — снять галочку)
+          </label>
+        </div>
+      )}
+    </div>
+  );
+}
 
 interface GroupRowsProps {
   category: string;
@@ -751,7 +956,7 @@ function GroupRows(props: GroupRowsProps) {
                 value={actualTotal}
                 size="sm"
                 stepRef={item.plannedCost}
-                placeholder={`думали ${formatRub(item.plannedCost)}`}
+                placeholder="факт, ₽"
                 disabled={!canEnterCheck}
                 onCommit={v => commitActualTotal(item, v)}
                 testId={`actual-input-${item.ingredientId}`}

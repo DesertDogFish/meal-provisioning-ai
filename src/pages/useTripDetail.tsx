@@ -7,8 +7,8 @@
  * ЕДИНСТВЕННЫЙ владелец состояния (критерий «нет дублирования state»):
  * компоненты получают данные и колбэки только через props.
  */
-import { useState, useEffect, useMemo } from 'react';
-import { useParams } from 'react-router-dom';
+import { useState, useEffect, useMemo, useRef } from 'react';
+import { useParams, useSearchParams } from 'react-router-dom';
 import { api, getRecipes, getTripRecipes } from '../api/client';
 import { useToast } from '../components/ToastProvider';
 import { useConfirm } from '../components/ConfirmDialog'; // Fix-6 (п.7)
@@ -19,6 +19,7 @@ import { nextDir, type SortDir } from '../utils/rowSort'; // U26–U28
 import { getServerExclusions, syncServerExclusions } from '../api/shoppingExclusions'; // Fix-3 / R2
 import { categoryName } from '../utils/format';
 import { deriveTripView } from '../utils/tripDerived';
+import { parseStage } from '../components/StageTabBar';
 import type { AddMealDayContext } from '../components/AddMealModal';
 import type { MealType } from '../types';
 import type { ActualAmount } from '../utils/checkUnits';
@@ -28,7 +29,26 @@ export function useTripDetail() {
   const { showError } = useToast();
   const { confirm, dialog: confirmDialog } = useConfirm(); // Fix-6 (п.7)
   const { id } = useParams<{ id: string }>();
-  const [activeTab, setActiveTab] = useState<TabType>('menu');
+  // Plan plans/2026-10-30-mobile-workflow-ux.md (подзадача 2): этап живёт в
+  // URL (?stage=) — ссылкой попадаем в нужный этап, e2e детерминированы.
+  // Старые значения (dayShopping/person/checklist/overrides) маппятся в этапы.
+  const [searchParams, setSearchParams] = useSearchParams();
+  // подзадача 10 (30.10.2026): deep-link «В меню похода…» из каталога блюд —
+  // ?addMeal=<dayId> открывает модалку приёма на выбранном дне этапа ①
+  const addMealHandled = useRef(false);
+  const [activeTab, setActiveTabState] = useState<TabType>(() => parseStage(searchParams.get('stage')));
+  const setActiveTab = (t: TabType) => {
+    setActiveTabState(t);
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.set('stage', t);
+        return next;
+      },
+      { replace: true },
+    );
+  };
+
   const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set());
   const [editingDay, setEditingDay] = useState<string | null>(null);
   const [dayPeopleOverride, setDayPeopleOverride] = useState('');
@@ -304,6 +324,24 @@ export function useTripDetail() {
         products, draftOverrides, shoppingExcluded, checklistBought, sortSpec,
       })
     : null;
+
+  useEffect(() => {
+    if (!trip || addMealHandled.current) return;
+    const dayId = searchParams.get('addMeal');
+    if (!dayId) return;
+    addMealHandled.current = true;
+    const idx = (trip.days ?? []).findIndex((d) => String(d.id) === dayId);
+    if (idx >= 0) {
+      const d = trip.days![idx];
+      setAddMealCtx({ dayId: String(d.id), dayDate: d.dayDate, dayIndex: idx });
+    }
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete('addMeal');
+      return next;
+    }, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trip]);
 
   return {
     id, trip, loading, error,

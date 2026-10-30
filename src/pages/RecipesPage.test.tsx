@@ -124,10 +124,10 @@ describe('RecipesPage — кнопка «В меню» на карточке (Fi
   it('«В меню» — без переноса строки (whitespace-nowrap + shrink-0)', async () => {
     renderPage();
     await screen.findByText('Уха из рыбных консервов');
-    const btn = screen.getByRole('button', { name: 'В меню' });
+    const btn = screen.getByTestId('recipe-to-menu-r1');
     expect(btn.className).toContain('whitespace-nowrap');
     expect(btn.className).toContain('shrink-0');
     // текст — единая строка без разрывов
-    expect(btn.textContent?.trim()).toBe('В меню');
+    expect(btn.textContent?.trim()).toBe('В меню похода…');
   });
 });

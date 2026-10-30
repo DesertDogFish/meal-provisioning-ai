@@ -26,8 +26,8 @@ export function DateRange({
   onEndDateChange,
   startLabel = 'Дата начала',
   endLabel = 'Дата окончания',
-  startPlaceholder = 'Выберите дату',
-  endPlaceholder = 'Выберите дату'
+  startPlaceholder = 'ДД.ММ.ГГГГ',
+  endPlaceholder = 'ДД.ММ.ГГГГ'
 }: DateRangeProps) {
   // При первом рендере, если startDate есть, а endDate нет — ставим endDate = startDate
   useEffect(() => {

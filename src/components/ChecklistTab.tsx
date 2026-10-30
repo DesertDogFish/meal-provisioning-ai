@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react';
-import { ChevronDown, ChevronRight } from 'lucide-react';
-import TabHeader from './TabHeader';
+import { ChevronDown, ChevronRight, Filter } from 'lucide-react';
 import InfoTip from './InfoTip';
 import FreeAmountInput from './FreeAmountInput';
 import { Button } from './Button';
+import { KebabMenu } from './KebabMenu';
 import { useConfirm } from './ConfirmDialog';
 import { isActualLessThanNeeded, neededAsActual, type ActualAmount } from '../utils/checkUnits';
 import { formatAmount } from '../utils/calculations';
@@ -22,6 +22,12 @@ import type { ChecklistActual } from '../utils/tripStaging';
  *  - фильтр «только не взятое» (в магазине смотрят, что осталось);
  *  - группы по категориям сворачиваются;
  *  - «Отметить всё» / «Снять всё» — ОПАСНЫЕ действия, только через ConfirmDialog.
+ *
+ * Plan plans/2026-10-30-mobile-workflow-ux.md (подзадача 5): первый экран —
+ * рабочий: шапка чеклиста (прогресс + «Осталось · N» + «Отметить всё» с kebab
+ * «Снять всё») идёт сразу под полосой похода; строка ≥64px под большой палец,
+ * чекбокс 24px и визуально активный; «беру [значение] [UnitChip]» в той же
+ * строке справа; юнит-стек заменён UnitChip (bottom-sheet единиц).
  *
  * Хранилище — прежнее (`utils/tripStaging.ts`, долг R1/R2): НОВЫХ localStorage-
  * сущностей компонент не заводит (AGENTS.md §12), он полностью управляется
@@ -56,6 +62,7 @@ export function ChecklistTab({
   const boughtCount = allKeys.filter(k => bought.has(k)).length;
   const total = allKeys.length;
   const percent = total > 0 ? Math.round((boughtCount / total) * 100) : 0;
+  const leftCount = total - boughtCount;
 
   const visibleGroups = useMemo(() => {
     if (!onlyMissing) return groups;
@@ -97,45 +104,16 @@ export function ChecklistTab({
 
   return (
     <div className="space-y-3 max-w-3xl">
-      {/* Липкая шапка: прогресс и массовые действия видны при любом скролле списка */}
+      {/* Липкая шапка: прогресс и массовые действия видны при любом скролле списка.
+          30.10.2026 (подзадача 5): две строки — прогресс и тулбар действий;
+          «Снять всё» ушло в kebab (случайный сброс отметок исключён). */}
       <div className="checklist-sticky rounded-xl">
-        <TabHeader
-          title="Чеклист закупки"
-          subtitle={
-            <span className="keep-pair">
-              Взято <span className="keep-num">{boughtCount} из {total}</span>
-              <InfoTip text="Отметка «взято» привязана к количеству: измените потребность (добавите продукт) — отметка слетит, позицию нужно переподтвердить. В поле «беру» уже подставлено расчётное количество — поправьте, если берёте иначе (на развес, россыпью или упаковками другого объёма)." />
-            </span>
-          }
-          right={
-            <div className="flex gap-2 shrink-0">
-              <Button
-                variant="soft"
-                size="sm"
-                data-testid="checklist-all"
-                onClick={() => void askSetAll(true)}
-                aria-label="Отметить всё купленным"
-                disabled={total === 0 || boughtCount === total}
-              >
-                Отметить всё
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                data-testid="checklist-none"
-                onClick={() => void askSetAll(false)}
-                aria-label="Снять все отметки"
-                disabled={boughtCount === 0}
-              >
-                Снять всё
-              </Button>
-            </div>
-          }
-        />
-        <div className="px-4 py-2.5 flex flex-wrap items-center gap-x-3 gap-y-2"
-             style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderTop: 0, borderRadius: '0 0 var(--r-md) var(--r-md)' }}>
+        <div className="checklist-head">
+          <span className="checklist-head__count keep-num" data-testid="checklist-progress-count">
+            {boughtCount} из {total}
+          </span>
           <div
-            className="flex-1 min-w-[8rem] h-1.5 rounded-full overflow-hidden"
+            className="flex-1 min-w-[6rem] h-1.5 rounded-full overflow-hidden"
             style={{ background: 'var(--bg-3)' }}
             role="progressbar"
             aria-valuenow={boughtCount}
@@ -149,29 +127,53 @@ export function ChecklistTab({
               style={{ width: `${percent}%`, background: 'var(--wave-400)' }}
             />
           </div>
-          <span className="keep-num cap" style={{ color: 'var(--text-2)' }}>{percent}%</span>
-          <label className="keep-pair keep-pair-center cap cursor-pointer" style={{ color: 'var(--text-2)' }}>
-            <input
-              type="checkbox"
-              className="checklist-check cursor-pointer"
-              checked={onlyMissing}
-              onChange={(e) => setOnlyMissing(e.target.checked)}
-              data-testid="checklist-only-missing"
-              aria-label="Показать только не взятое"
-              style={{ accentColor: 'var(--w2)' }}
-            />
-            Только не взятое
-          </label>
+          <span className="keep-num chip-delta ok" style={{ padding: '3px 8px' }}>{percent}%</span>
+          <span className="keep-pair">
+            <InfoTip text="Отметка «взято» привязана к количеству: измените потребность (добавите продукт) — отметка слетит, позицию нужно переподтвердить. В поле «беру» уже подставлено расчётное количество — поправьте, если берёте иначе (на развес, россыпью или упаковками другого объёма)." />
+          </span>
+        </div>
+        <div className="checklist-toolbar">
+          <Button
+            variant={onlyMissing ? 'soft' : 'ghost'}
+            icon={<Filter size={15} />}
+            aria-pressed={onlyMissing}
+            data-testid="checklist-only-missing"
+            onClick={() => setOnlyMissing(v => !v)}
+          >
+            Осталось · {leftCount}
+          </Button>
+          <Button
+            variant="soft"
+            data-testid="checklist-all"
+            onClick={() => void askSetAll(true)}
+            aria-label="Отметить всё купленным"
+            disabled={total === 0 || boughtCount === total}
+          >
+            Отметить всё
+          </Button>
+          <KebabMenu
+            label="Массовые действия чеклиста"
+            testId="checklist-kebab"
+            items={[
+              {
+                id: 'none',
+                label: 'Снять всё',
+                danger: true,
+                testId: 'checklist-none',
+                onSelect: () => { void askSetAll(false); },
+              },
+            ]}
+          />
         </div>
       </div>
 
       {total === 0 && (
-        <div className="rounded-xl p-8 text-center text-sm" style={{ background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--muted)' }}>
+        <div className="rounded-xl p-8 text-center text-sm" style={{ background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--muted)' }} data-testid="checklist-empty">
           В закупке нет позиций — добавьте приёмы пищи или продукты к дню/походу.
         </div>
       )}
       {total > 0 && visibleGroups.length === 0 && (
-        <div className="rounded-xl p-8 text-center text-sm" style={{ background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--muted)' }}>
+        <div className="rounded-xl p-8 text-center text-sm" style={{ background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--muted)' }} data-testid="checklist-all-bought">
           Всё взято 🎉 Снимите фильтр «только не взятое», чтобы увидеть весь список.
         </div>
       )}
@@ -211,7 +213,10 @@ export function ChecklistTab({
                 : null;
               const packHintStr = row.packsToBuy != null && row.packSize
                 ? `нужно ${formatAmount(row.needed, row.unit)} ≈ ${row.packsToBuy} × ${formatAmount(row.packSize, row.unit)}`
-                : `нужно ${formatAmount(row.needed, row.unit)} (без фасовки)`;
+                : `нужно ${formatAmount(row.needed, row.unit)}`;
+              // 30.10.2026 (подзадача 5): взята позиция — строка говорит, СКОЛЬКО
+              // взяли (мок: «взяли 6,625 л»); не взята — сколько нужно.
+              const tookStr = actual != null ? `${formatAmount(actual.amount, actual.unit)}` : '';
               return (
                 <div
                   key={row.ingredientId}
@@ -239,16 +244,20 @@ export function ChecklistTab({
                     style={{ accentColor: 'var(--w2)' }}
                   />
                   <span className="flex-1 min-w-0">
-                    <span className="block" style={{ color: 'var(--text)', textDecoration: isBought ? 'line-through' : 'none' }}>
+                    <span className="block font-bold" style={{ color: 'var(--text)', textDecoration: isBought ? 'line-through' : 'none' }}>
                       {row.name}
                     </span>
                     <span className="block cap" style={{ color: underfilled ? 'var(--amber-300)' : 'var(--muted)' }}>
-                      {underfilled ? `⚠ взяли меньше, чем нужно · ${packHintStr}` : packHintStr}
+                      {underfilled
+                        ? `⚠ взяли меньше, чем нужно · ${packHintStr}`
+                        : isBought
+                          ? `взяли ${tookStr}`
+                          : packHintStr}
                     </span>
                   </span>
-                  {/* Fix-6 (п.8): свободные единицы — «беру 300 г» даже если учтён в штуках */}
+                  {/* Fix-6 (п.8): свободные единицы — «беру 300 г» даже если учтён в штуках.
+                      30.10.2026 (подзадача 5/9): единица — UnitChip (bottom-sheet). */}
                   <span className="checklist-amount shrink-0 flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
-                    <span className="cap" style={{ color: 'var(--muted)' }}>беру</span>
                     <FreeAmountInput
                       value={actual}
                       baseUnit={row.unit}

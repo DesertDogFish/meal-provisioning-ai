@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { defaultUnit, unitOptions, type ActualAmount } from '../utils/checkUnits';
+import UnitChip from './UnitChip';
 
 /**
  * Fix-6 (п.8): свободный ввод фактического количества — «беру 300 г», «2 кг»,
@@ -90,26 +91,14 @@ export function FreeAmountInput({
         className="compact-input px-2 py-1.5 w-16 text-right text-sm outline-none bg-transparent"
         style={{ color: 'var(--text)' }}
       />
-      <span className="flex flex-col items-stretch" style={{ borderLeft: '1px solid var(--border)' }}>
-        {options.map((u) => (
-          <button
-            key={u}
-            type="button"
-            disabled={disabled}
-            aria-label={`Единица: ${u}`}
-            aria-pressed={unit === u}
-            onClick={() => setUnit(u)}
-            className="flex-1 px-1.5 text-xs leading-none flex items-center justify-center transition-colors"
-            style={{
-              color: unit === u ? 'var(--on-fire)' : 'var(--muted)',
-              fontWeight: unit === u ? 700 : 400,
-              background: unit === u ? 'var(--wave-400)' : 'transparent',
-            }}
-          >
-            {u}
-          </button>
-        ))}
-      </span>
+      <UnitChip
+        unit={unit}
+        options={options}
+        onChange={setUnit}
+        disabled={disabled}
+        testId={testId ? `${testId}-unit` : undefined}
+        ariaLabel={`Единица количества «${ariaLabel ?? ''}»: ${unit}. Изменить`}
+      />
     </span>
   );
 }

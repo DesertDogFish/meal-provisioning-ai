@@ -56,7 +56,7 @@ export function TripPersonTab({ trip, realPeople, tripSummary, personSummary }: 
                 <InfoTip text="Среднее число участников по дням (переопределения «людей на день» учитываются). На него делятся общие суммы." />
               </span>
             </p>
-            <p className="text-lg font-bold" style={{ color: 'var(--text)' }}>{Math.round(realPeople * 10) / 10}</p>
+            <p className="text-lg font-bold keep-num" style={{ color: 'var(--text)' }}>{realPeople.toLocaleString('ru-RU', { maximumFractionDigits: 1 })}</p>
           </div>
           <div>
             <p className="text-xs" style={{ color: 'var(--muted)' }}>
@@ -106,7 +106,7 @@ export function TripPersonTab({ trip, realPeople, tripSummary, personSummary }: 
                 </th>
                 <th className="text-right px-4 py-3 font-medium" style={{ color: 'var(--muted)' }}>
                   <span className="keep-pair">
-                    На чел./приём
+                    На приём, ₽/чел
                     <InfoTip text="Среднее количество на одного человека за один приём пищи: общее количество ÷ приёмов пищи всего." />
                   </span>
                 </th>
@@ -123,7 +123,7 @@ export function TripPersonTab({ trip, realPeople, tripSummary, personSummary }: 
                 <tr key={i} style={{ borderTop: '1px solid var(--border)' }}>
                   <td className="row-title px-4 py-2.5" data-label="" style={{ color: 'var(--text)' }}>{item.ingredientName}</td>
                   <td className="keep-num px-4 py-2.5 text-right" data-label="На человека" style={{ color: 'var(--muted)' }}>{formatAmount(item.amountPerDefaultPerson, item.unit)}</td>
-                  <td className="keep-num px-4 py-2.5 text-right" data-label="На чел./приём" style={{ color: 'var(--muted)' }}>{formatAmount(item.amountPerPersonMeal, item.unit)}</td>
+                  <td className="keep-num px-4 py-2.5 text-right" data-label="На приём, ₽/чел" style={{ color: 'var(--muted)' }}>{formatAmount(item.amountPerPersonMeal, item.unit)}</td>
                   <td className="keep-num px-4 py-2.5 text-right" data-label="Стоимость" style={{ color: 'var(--text)' }}>
                     {item.costPerDefaultPerson != null ? formatRub(item.costPerDefaultPerson) : '—'}
                   </td>

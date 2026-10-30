@@ -17,6 +17,7 @@ import LoginPage from './pages/LoginPage';
 const TripsPage = lazy(() => import('./pages/TripsPage'));
 const TripDetailPage = lazy(() => import('./pages/TripDetailPage'));
 const TripPrintPage = lazy(() => import('./pages/TripPrintPage'));
+const TripReportPage = lazy(() => import('./pages/TripReportPage'));
 const RecipesPage = lazy(() => import('./pages/RecipesPage'));
 const AdminPage = lazy(() => import('./pages/AdminPage'));
 const IntegrationsPage = lazy(() => import('./pages/IntegrationsPage'));
@@ -51,6 +52,15 @@ function App() {
               <Route path="/trips/:id/print" element={
                 <ProtectedRoute>
                   <TripPrintPage />
+                </ProtectedRoute>
+              } />
+              {/* Plan plans/2026-10-30-mobile-workflow-ux.md (подзадача 7): in-app
+                  отчёт — финал воркфлоу на телефоне; без Layout, одна колонка.
+                  «Поделиться» — Web Share API с фолбэком «скопировать текст»;
+                  «PDF» открывает прежний print-маршрут (десктоп/печать). */}
+              <Route path="/trips/:id/report" element={
+                <ProtectedRoute>
+                  <TripReportPage />
                 </ProtectedRoute>
               } />
               <Route path="/trips/:id" element={

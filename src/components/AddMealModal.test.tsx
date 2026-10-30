@@ -70,12 +70,13 @@ describe('AddMealModal — постоянный размер формы (Fix-8 �
     expect(reserved!.className).toContain('h-44 sm:h-56');
   });
 
-  it('слот превью существует ДО выбора блюда (постоянная высота, подсказка)', async () => {
+  it('слот превью существует ДО выбора блюда (компактная подсказка в одну строку)', async () => {
     renderModal();
     const slot = await screen.findByTestId('meal-preview-slot');
-    expect(slot.className).toContain('h-32');
-    expect(slot.textContent).toContain('Выберите блюдо');
+    // подзадача 8 (30.10.2026): до выбора — ОДНА строка подсказки, не заглушка на пол-модалки
+    expect(screen.getByTestId('meal-preview-hint').textContent).toContain('после выбора блюда');
     expect(screen.queryByTestId('meal-preview')).toBeNull();
+    expect(slot.contains(screen.getByTestId('meal-preview-hint'))).toBe(true);
   });
 
   it('выбор блюда: превью рендерится ВНУТРИ того же слота — высота модалки не меняется', async () => {
@@ -85,6 +86,7 @@ describe('AddMealModal — постоянный размер формы (Fix-8 �
     const preview = await screen.findByTestId('meal-preview');
     expect(preview.textContent).toContain('Уха');
     expect(slot.contains(preview)).toBe(true);
-    expect(slot.className).toContain('h-32');
+    // фиксированная высота слота живёт на превью выбранного блюда (Fix-8 п.4)
+    expect(preview.className).toContain('h-32');
   });
 });

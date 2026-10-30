@@ -633,7 +633,7 @@ export default function MealCompositionModal({
                         {(state === 'RECIPE' || state === 'SCALED') && !fromReplaced && (
                           <>
                             <Button variant="ghost" size="sm" onClick={() => openSubst(row)} aria-label={`Заменить: ${row.name}`}>Заменить</Button>
-                            <Button variant="ghost" size="sm" onClick={() => toggleExclude(row)} aria-label={`Исключить: ${row.name}`}>Искл.</Button>
+                            <Button variant="ghost" size="sm" onClick={() => toggleExclude(row)} aria-label={`Исключить: ${row.name}`}>Исключить</Button>
                           </>
                         )}
                         {state === 'SCALED' && (

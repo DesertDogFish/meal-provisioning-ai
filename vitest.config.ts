@@ -82,6 +82,13 @@ export default defineConfig({
         // plans/done/2026-10-29-ui-nowrap-and-mobile.md (R5): чеклист-компонент,
         // поповер подсказки и единый оверлей модалок
         'src/components/ChecklistTab.tsx',
+        // plan plans/2026-10-30-mobile-workflow-ux.md (R5): новые компоненты
+        // мобильного воркфлоу «4 этапа»
+        'src/components/StageTabBar.tsx',
+        'src/components/BottomSheet.tsx',
+        'src/components/KebabMenu.tsx',
+        'src/components/UnitChip.tsx',
+        'src/components/FilterSheet.tsx',
         // подзадача 26 (аудит 29.10.2026): TripDetailPage декомпозирована —
         // презентационные компоненты вкладок/шапки + чистые производные
         'src/utils/tripDerived.ts',

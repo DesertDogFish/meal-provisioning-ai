@@ -152,6 +152,8 @@ describe('ChecklistTab — подтверждение массовых дейс�
 
   it('«Снять всё» — danger-диалог с числом теряемых отметок; отмена по умолчанию в фокусе', async () => {
     const props = setup({ bought: new Set(['1@200000', '3@4000']) });
+    // подзадача 5 (30.10.2026): «Снять всё» — в kebab, случайный сброс исключён
+    fireEvent.click(screen.getByTestId('checklist-kebab'));
     fireEvent.click(screen.getByTestId('checklist-none'));
     const dialog = screen.getByRole('alertdialog');
     expect(dialog.textContent).toContain('Снять все отметки?');
@@ -172,6 +174,7 @@ describe('ChecklistTab — подтверждение массовых дейс�
   it('кнопки заблокированы, когда действие бессмысленно', () => {
     setup({ bought: new Set(collectChecklistKeys(GROUPS)) });
     expect(screen.getByTestId('checklist-all')).toBeDisabled();
+    fireEvent.click(screen.getByTestId('checklist-kebab'));
     expect(screen.getByTestId('checklist-none')).not.toBeDisabled();
   });
 });

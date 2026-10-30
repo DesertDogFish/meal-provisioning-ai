@@ -7,13 +7,13 @@ describe('AmountInput (U31) — количество без «0,015 кг»', () 
   it('KG, значение < 1 → режим граммов: 0.015 кг отображается как «15» г', () => {
     render(<AmountInput value={0.015} unit="KG" onChange={() => {}} testId="qty" />);
     expect((screen.getByTestId('qty') as HTMLInputElement).value).toBe('15');
-    expect(screen.getByLabelText('Единица: г').getAttribute('aria-pressed')).toBe('true');
+    expect(screen.getByTestId('qty-unit').textContent).toContain('г');
   });
 
   it('KG, значение ≥ 1 → режим килограммов: «1,5» кг', () => {
     render(<AmountInput value={1.5} unit="KG" onChange={() => {}} testId="qty" />);
     expect((screen.getByTestId('qty') as HTMLInputElement).value).toBe('1,5');
-    expect(screen.getByLabelText('Единица: кг').getAttribute('aria-pressed')).toBe('true');
+    expect(screen.getByTestId('qty-unit').textContent).toContain('кг');
   });
 
   it('ввод «15» в граммах отдаёт 0.015 кг наружу (базовые единицы)', () => {
@@ -36,7 +36,8 @@ describe('AmountInput (U31) — количество без «0,015 кг»', () 
     const onChange = vi.fn();
     render(<AmountInput value={null} unit="KG" onChange={onChange} testId="qty" />);
     fireEvent.change(screen.getByTestId('qty'), { target: { value: '1500' } });
-    fireEvent.click(screen.getByLabelText('Единица: кг'));
+    fireEvent.click(screen.getByTestId('qty-unit'));
+    fireEvent.click(screen.getByTestId('unit-option-кг'));
     expect((screen.getByTestId('qty') as HTMLInputElement).value).toBe('1,5');
     expect(onChange).toHaveBeenLastCalledWith(1.5);
   });
@@ -44,21 +45,23 @@ describe('AmountInput (U31) — количество без «0,015 кг»', () 
   it('L → мл/л', () => {
     render(<AmountInput value={0.25} unit="L" onChange={() => {}} testId="qty" />);
     expect((screen.getByTestId('qty') as HTMLInputElement).value).toBe('250');
-    expect(screen.getByLabelText('Единица: мл')).toBeTruthy();
+    expect(screen.getByTestId('qty-unit').textContent).toContain('мл');
   });
 
   it('PCS — ввод в штуках, без переключателя', () => {
     const onChange = vi.fn();
     render(<AmountInput value={3} unit="PCS" onChange={onChange} testId="qty" />);
     expect((screen.getByTestId('qty') as HTMLInputElement).value).toBe('3');
-    expect(screen.queryByLabelText('Единица: г')).toBeNull();
+    expect(screen.queryByTestId('qty-unit')).toBeNull();
+    expect(screen.getByTestId('qty-unit-solo').textContent).toContain('шт');
     fireEvent.change(screen.getByTestId('qty'), { target: { value: '5' } });
     expect(onChange).toHaveBeenLastCalledWith(5);
   });
 
   it('подсказка эквивалента: 1500 г → «= 1,5 кг»', () => {
     render(<AmountInput value={1.5} unit="KG" onChange={() => {}} testId="qty" />);
-    fireEvent.click(screen.getByLabelText('Единица: г'));
+    fireEvent.click(screen.getByTestId('qty-unit'));
+    fireEvent.click(screen.getByTestId('unit-option-г'));
     expect(screen.getByTestId('qty-hint').textContent).toBe('= 1,5 кг');
   });
 

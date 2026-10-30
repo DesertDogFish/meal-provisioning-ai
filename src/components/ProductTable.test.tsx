@@ -162,7 +162,7 @@ describe('ProductTable (рендер и взаимодействия)', () => {
     renderTable();
     // Соль и Тушёнка без цены → 2 чипа «нет цены»
     expect(screen.getAllByText('нет цены')).toHaveLength(2);
-    expect(screen.getByText(/89 RUB/)).toBeTruthy();
+    expect(screen.getByText(/89 ₽/)).toBeTruthy();
     expect(screen.getByText('ЕМИСС')).toBeTruthy();
     expect(screen.getByText('ручная')).toBeTruthy();
   });
