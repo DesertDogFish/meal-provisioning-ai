@@ -16,7 +16,15 @@ Provision — SPA + REST-бэкенд + PostgreSQL. Домен: каталог �
 | `mock` | `src/api/mockServer.ts` (фасад) + модули `mock*` (in-memory + localStorage) | офлайн-демо, component/e2e-тесты |
 | `auto` | пинг `GET /api/v1/meta` (700 мс), фолбэк в mock + watchdog-возврат | дефолт dev-сборки |
 
-Приоритет: переключатель UI (localStorage `apiMode`) → `VITE_API_MODE` → auto. Контракт mock↔real фиксируют contract-тесты (`npm run test:contract`, nightly parity). **Известное отклонение:** mock-`summary/shopping` пока отдаёт фикстуру FIX-1, а не расчёт из meals (PLAN P2) — новые эндпоинты так не делать.
+**Прод = только real (решение владельца 31.10.2026, transparency-п.4, вариант A).**
+Mock-режим (демо-данные, бейдж `ApiModeBadge`, переключатель, mock-фолбэк auto-пинга)
+доступен только в dev-сборке или в прод-сборке с явным build-флагом
+`VITE_ENABLE_MOCK=true` (демо-стенд Vercel — `vercel.json → build.env`). В прод-сборке
+без флага: `apiMode=mock` в localStorage и `VITE_API_MODE=mock` игнорируются,
+`resolveMode` всегда даёт `real`, чанк `mockServer` в артефакт не попадает
+(статически мёртвая ветка dynamic import), а при недоступном бэкенде страницы
+показывают человеческую ошибку с кнопкой «Повторить» вместо тихого ухода на
+демо-данные. Приоритет (dev/демо-стенд): переключатель UI (localStorage `apiMode`) → `VITE_API_MODE` → auto. Контракт mock↔real фиксируют contract-тесты (`npm run test:contract`, nightly parity). **Известное отклонение:** mock-`summary/shopping` пока отдаёт фикстуру FIX-1, а не расчёт из meals (PLAN P2) — новые эндпоинты так не делать.
 
 ### Слои данных
 

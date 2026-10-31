@@ -16,6 +16,8 @@ import type { CompositionItem, CompositionPutRequest, CompositionResponse } from
 import type { Ingredient, MealType, UnitOfMeasure } from '../types';
 import { parseAmount } from './AddMealModal';
 import AmountInput from './AmountInput';
+import { loadActualPrices, loadBought, loadActualQty } from '../utils/tripStaging'; // transparency-п.3
+import { pluralize } from '../utils/pluralize';
 
 /**
  * FORM-meal-composition-spec §2.2 — Модалка B «Состав приёма».
@@ -475,8 +477,59 @@ export default function MealCompositionModal({
     return idMap;
   };
 
+  /**
+   * transparency-п.3: правка состава сбрасывает введённый чек и отметки «взято»/
+   * факт-количества по ЗАТРОНУТЫМ позициям (поведение бэкенда, README «Состав
+   * приёма под себя»). Собираем имена позиций, у которых в стейдже похода есть
+   * факт-цена, отметка «взято» (ключ '<id>@<нужно>') или факт-количество —
+   * сохранение без предупреждения теряло введённые суммы молча.
+   */
+  const affectedResetNames = (): string[] => {
+    const ids = new Set<string>();
+    for (const [id, d] of Object.entries(drafts)) {
+      if (d.state === 'EXCLUDED' || d.state === 'REMOVED' || d.state === 'SCALED' || d.state === 'EXTRA') {
+        ids.add(String(id));
+      }
+    }
+    // замена ингредиента затрагивает исходную позицию (она уходит из закупки)
+    for (const s of substitutes) ids.add(String(s.fromIngredientId));
+    if (ids.size === 0) return [];
+    const prices = loadActualPrices(tripId);
+    const bought = loadBought(tripId);
+    const qty = loadActualQty(tripId);
+    const touched = (id: string) =>
+      prices[id]?.price != null ||
+      [...bought].some(k => k === id || k.startsWith(`${id}@`)) ||
+      qty[id] != null;
+    // имя — из серверного состава (REMOVED-строки уже скрыты из `rows`)
+    const nameOf = (id: string) =>
+      (server?.items ?? []).find(it => String(it.ingredientId) === id)?.name
+      ?? extraRows.find(e => e.ingredientId === id)?.name
+      ?? `#${id}`;
+    return [...ids].filter(touched).map(nameOf);
+  };
+
   const save = async () => {
     if (saving) return;
+    // transparency-п.3: предупреждение о сбросе чека — ДО batch PUT (баг-тест:
+    // MealCompositionModal.test.tsx «предупреждение о сбросе чека»)
+    const affected = affectedResetNames();
+    if (affected.length > 0) {
+      const ok = await confirm({
+        title: 'Сбросить введённый чек?',
+        tone: 'warning',
+        confirmLabel: 'Да, сохранить состав',
+        message: (
+          <>
+            Правка состава сбросит введённый чек и отметки «взято» по{' '}
+            {affected.length} {pluralize(affected.length, ['позиции', 'позициям', 'позициям'])}:{' '}
+            <b>{affected.join(', ')}</b>. Другое количество — другая цена: суммы придётся
+            ввести заново на этапе «Чеки и итог» ④. Продолжить?
+          </>
+        ),
+      });
+      if (!ok) return;
+    }
     setSaving(true);
     setSaveProblem(null);
     try {

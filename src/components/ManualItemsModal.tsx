@@ -306,7 +306,8 @@ export default function ManualItemsModal({ tripId, dayId, dayLabel, items, produ
             </div>
             <Button variant="primary" onClick={() => void handleAdd()} disabled={busy} aria-label="Добавить позицию"
                     className="self-end" style={{ height: 'var(--h-control, 40px)' }}>
-              <Plus size={14} /> Добавить
+              {/* transparency-п.5: состояние «Добавляем…» до ответа сервера */}
+              <Plus size={14} /> {busy ? 'Добавляем…' : 'Добавить'}
             </Button>
           </div>
         </div>

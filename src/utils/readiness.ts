@@ -1,6 +1,7 @@
 /**
  * Fix-3 (список 26.10, п.2 «сквозная понятность»): готовность похода по цепочке
- * «меню → закупка → чеки». Чистая функция — страницу читает только факты:
+ * этапов «① Меню → ② Закупка → ③ Магазин → ④ Чеки и итог». Чистая функция —
+ * страницу читает только факты:
  * есть ли приёмы, сколько позиций чеклиста отмечено «взято», сколько фактических
  * цен введено. Никаких денег/ккал здесь не считается (AGENTS §9).
  */
@@ -25,7 +26,12 @@ export type StepState = 'done' | 'partial' | 'none';
 
 export interface TripReadiness {
   menu: StepState;
-  shopping: StepState;
+  /**
+   * transparency-п.1: шаг readiness «shopping» переименован в `store` — он считает
+   * «взято N из M» по чеклисту, а это этап ③ «Магазин», не этап ② «Закупка»
+   * (этап ② готов, когда в списке есть позиции — `checklistTotal > 0`).
+   */
+  store: StepState;
   checks: StepState;
   /** вся цепочка закрыта — поход «готов» */
   ready: boolean;
@@ -35,7 +41,7 @@ export interface TripReadiness {
 
 export function tripReadiness(f: ReadinessFacts): TripReadiness {
   const menu: StepState = f.mealsCount > 0 ? 'done' : 'none';
-  const shopping: StepState =
+  const store: StepState =
     f.checklistTotal === 0 ? 'none'
     : f.boughtCount >= f.checklistTotal ? 'done'
     : f.boughtCount > 0 ? 'partial'
@@ -47,9 +53,9 @@ export function tripReadiness(f: ReadinessFacts): TripReadiness {
     : 'partial';
   return {
     menu,
-    shopping,
+    store,
     checks,
-    ready: menu === 'done' && shopping === 'done' && checks === 'done',
+    ready: menu === 'done' && store === 'done' && checks === 'done',
     // чек вводим, только когда закупка подтверждена хоть чем-то (п.2)
     canEnterCheck: f.boughtCount > 0,
   };

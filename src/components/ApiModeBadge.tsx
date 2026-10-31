@@ -1,13 +1,26 @@
 import { useState, useEffect } from 'react';
 import { api } from '../api/client';
 import { startWatchdog, stopWatchdog, onWatchdogChange } from '../api/watchdog';
+import { mockModeAllowed } from '../api/modeResolver'; // transparency-п.4 (вариант A)
 import { X, AlertCircle, Wifi, WifiOff } from 'lucide-react';
 import { Button } from './Button';
 import Modal from './Modal';
 import { useToast } from './ToastProvider';
 import { useConfirm } from './ConfirmDialog'; // Fix-6 (п.7)
 
-export default function ApiModeBadge({ inline = false }: { inline?: boolean } = {}) {
+/**
+ * transparency-п.4 (решение владельца 31.10.2026 — вариант A «прод = только
+ * real»): бейдж режима и его переключатель — только dev-сборка (или прод с
+ * явным `VITE_ENABLE_MOCK=true`). В прод-сборке без флага компонент не
+ * рендерится вовсе: у пользователя нет ни демо-данных, ни способа на них
+ * переключиться (watchdog при этом не запускается).
+ */
+export default function ApiModeBadge(props: { inline?: boolean } = {}) {
+  if (!mockModeAllowed()) return null;
+  return <ApiModeBadgeInner {...props} />;
+}
+
+function ApiModeBadgeInner({ inline = false }: { inline?: boolean } = {}) {
   const { showSuccess, showError } = useToast();
   const { confirm, dialog: confirmDialog } = useConfirm(); // Fix-6 (п.7)
   const [mode, setMode] = useState<'real' | 'mock'>(api.getMode());

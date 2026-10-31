@@ -810,9 +810,16 @@ export function handleTripsImpl(srv: any, method: string, path: string, body?: a
   // POST /trips — создание похода (E2E-04/05: раньше роут отсутствовал,
   // TripsPage получал 405 и поход не появлялся в списке)
   if (parts.length === 1 && method === 'POST') {
+    // Паритет с бэкендом (TripService.createTrip): владелец берётся из сессии,
+    // а не хардкодом users[0]. Токен mock несёт id ('mock-access-token-<id>',
+    // см. mockAuth /auth/me). Без этого поход, созданный не-админом, исчезал
+    // из его списка: TripsPage фильтрует myTrips по userId (e2e navigation-п.10).
+    const token = localStorage.getItem('accessToken') || '';
+    const tokenMatch = token.match(/mock-access-token-(\d+)$/);
+    const sessionUser = tokenMatch && users.find(u => u.id === tokenMatch[1]);
     const newTrip: Trip = {
       id: `trip-${Date.now()}`,
-      userId: body?.userId ?? users[0].id,
+      userId: body?.userId ?? (sessionUser ? sessionUser.id : users[0].id),
       name: body.name,
       startDate: body.startDate,
       endDate: body.endDate,

@@ -4,7 +4,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 /**
- * План plans/2026-10-31-ux-audit-navigation.md (п.7): текст-инструкция
+ * План plans/done/2026-10-31-ux-audit-navigation.md (п.7): текст-инструкция
  * «выполните синхронизацию на странице «Интеграции»» — ссылка (deep-link на
  * таб «Настройка»), а не мёртвый текст. Проверяем на роутере (критерий п.7:
  * «клик переводит без потери контекста — тесты на роутере»).

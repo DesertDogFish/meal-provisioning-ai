@@ -192,3 +192,90 @@ describe('RecipesPage — ?view= (navigation-п.5)', () => {
     expect(screen.queryByRole('dialog')).toBeNull();
   });
 });
+
+/** Navigation-п.6: /recipes?ingredient=<id> — фильтр рецептов по ингредиенту
+ * (deep-link из таблицы продуктов «В рецептах: N»), чип с именем и сброс. */
+describe('RecipesPage — ?ingredient= (navigation-п.6)', () => {
+  const withIngredients = [
+    { ...recipeStub, id: 'r1', name: 'Каша', ingredients: [
+      { ingredientId: 'i1', amount: 100, ingredient: { id: 'i1', name: 'Гречка', unit: 'KG' } },
+    ] },
+    { ...recipeStub, id: 'r2', name: 'Суп', ingredients: [
+      { ingredientId: 'i2', amount: 50, ingredient: { id: 'i2', name: 'Тушёнка', unit: 'PCS' } },
+    ] },
+    { ...recipeStub, id: 'r3', name: 'Гарнир', ingredients: [
+      { ingredientId: 'i1', amount: 80, ingredient: { id: 'i1', name: 'Гречка', unit: 'KG' } },
+      { ingredientId: 'i3', amount: 10, ingredient: { id: 'i3', name: 'Соль', unit: 'KG' } },
+    ] },
+  ];
+
+  beforeEach(() => {
+    (getRecipes as any).mockResolvedValue(withIngredients);
+  });
+
+  function LocationProbe() {
+    const loc = useLocation();
+    return <div data-testid="loc">{`${loc.pathname}${loc.search}`}</div>;
+  }
+
+  const renderWithRoutes = (route: string) =>
+    render(
+      <MemoryRouter initialEntries={[route]}>
+        <AuthProvider>
+          <ToastProvider>
+            <Routes>
+              <Route path="/recipes" element={<RecipesPage />} />
+            </Routes>
+            <LocationProbe />
+          </ToastProvider>
+        </AuthProvider>
+      </MemoryRouter>
+    );
+
+  it('фильтрует список по вхождению ингредиента (ровно 2 рецепта с «Гречка»)', async () => {
+    renderWithRoutes('/recipes?ingredient=i1');
+    await screen.findByText('Каша');
+    expect(screen.getByText('Гарнир')).toBeTruthy();
+    expect(screen.queryByText('Суп')).toBeNull();
+  });
+
+  it('чип «Ингредиент: <название> ✕» виден в строке фильтров', async () => {
+    renderWithRoutes('/recipes?ingredient=i1');
+    const chip = await screen.findByTestId('recipes-ingredient-chip');
+    expect(chip.textContent).toContain('Ингредиент: Гречка');
+  });
+
+  it('клик по ✕ чипа снимает фильтр и убирает параметр из URL (shareable)', async () => {
+    renderWithRoutes('/recipes?ingredient=i1');
+    await screen.findByText('Каша');
+    fireEvent.click(screen.getByTestId('recipes-ingredient-chip'));
+    await screen.findByText('Суп'); // все три снова видны
+    await waitFor(() => {
+      expect(screen.getByTestId('loc').textContent).not.toContain('ingredient=');
+    });
+  });
+
+  it('«Сбросить фильтры» тоже снимает ингредиент-фильтр', async () => {
+    renderWithRoutes('/recipes?ingredient=i2');
+    await screen.findByText('Суп');
+    expect(screen.queryByText('Каша')).toBeNull();
+    fireEvent.click(screen.getByTestId('recipes-reset'));
+    await screen.findByText('Каша');
+    await waitFor(() => {
+      expect(screen.getByTestId('loc').textContent).not.toContain('ingredient=');
+    });
+  });
+
+  it('ингредиент без рецептов — empty-state «Рецепты не найдены»', async () => {
+    renderWithRoutes('/recipes?ingredient=i404');
+    expect(await screen.findByText('Рецепты не найдены')).toBeTruthy();
+  });
+
+  it('?edit= не затирает активный ingredient-фильтр (параметры независимы)', async () => {
+    renderWithRoutes('/recipes?ingredient=i1&edit=r1');
+    // редактор открылся (edit отработал) …
+    expect(await screen.findByLabelText('Название')).toBeTruthy();
+    // … а фильтр по ингредиенту остался в URL
+    expect(screen.getByTestId('loc').textContent).toContain('ingredient=i1');
+  });
+});

@@ -1,5 +1,5 @@
 /**
- * Баг-тест (AGENTS §8, plan plans/2026-10-31-ux-audit-navigation.md п.1):
+ * Баг-тест (AGENTS §8, plan plans/done/2026-10-31-ux-audit-navigation.md п.1):
  * deep-link «В меню похода…» из каталога блюд терял выбранное блюдо —
  * `navigate('/trips/:id?stage=menu&addMeal=<dayId>')` не переносил рецепт,
  * и пользователь искал его повторно. Контракт: параметр `&recipe=<id>`

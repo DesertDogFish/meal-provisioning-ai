@@ -112,6 +112,28 @@ describe('AuthProvider (cleanup-п.7)', () => {
     await waitFor(() => expect(screen.queryByTestId('probe-user')).toBeNull());
   });
 
+  it('баг (e2e navigation-п.10): монтирование БЕЗ токена → логин → refresh() реально запрашивает /auth/me', async () => {
+    // Воспроизводит залипание «Проверяем сессию…»: старт с /login (токена нет),
+    // затем токен появился (логин) и вызван refresh. Single-flight не должен
+    // отдавать устаревший промис монтирования вместо настоящего /auth/me.
+    localStorage.removeItem('accessToken');
+    render(
+      <MemoryRouter>
+        <AuthProvider><Probe /></AuthProvider>
+      </MemoryRouter>
+    );
+    await waitFor(() => expect(screen.getByTestId('probe-loading').textContent).toBe('false'));
+    expect(getMock).not.toHaveBeenCalled();
+    // «логин»: токен записан, страница НЕ перезагружалась (SPA-сценарий)
+    localStorage.setItem('accessToken', 'tok-after-login');
+    getMock.mockResolvedValue(ADMIN);
+    const user = userEvent.setup();
+    await user.click(screen.getByTestId('probe-refresh'));
+    await waitFor(() => expect(getMock).toHaveBeenCalledWith('/auth/me'));
+    expect(await screen.findByText('a@b.c')).toBeTruthy();
+    await waitFor(() => expect(screen.getByTestId('probe-loading').textContent).toBe('false'));
+  });
+
   it('single-flight: refresh во время загрузки не плодит запросы', async () => {
     let resolveMe: (v: unknown) => void = () => {};
     getMock.mockReturnValue(new Promise(r => { resolveMe = r; }));

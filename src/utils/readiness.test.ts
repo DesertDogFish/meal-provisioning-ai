@@ -4,26 +4,26 @@ import { tripReadiness } from './readiness';
 describe('tripReadiness (Fix-3, п.2) — сквозной статус похода', () => {
   it('пустой поход: ничего не готово, чек вводить нельзя', () => {
     const r = tripReadiness({ mealsCount: 0, checklistTotal: 0, boughtCount: 0, factCount: 0 });
-    expect(r).toMatchObject({ menu: 'none', shopping: 'none', checks: 'none', ready: false, canEnterCheck: false });
+    expect(r).toMatchObject({ menu: 'none', store: 'none', checks: 'none', ready: false, canEnterCheck: false });
   });
 
-  it('меню собрано, закупка не подтверждена — shopping none, чек заблокирован', () => {
+  it('меню собрано, закупка не подтверждена — store none, чек заблокирован', () => {
     const r = tripReadiness({ mealsCount: 5, checklistTotal: 12, boughtCount: 0, factCount: 0 });
     expect(r.menu).toBe('done');
-    expect(r.shopping).toBe('none');
+    expect(r.store).toBe('none');
     expect(r.canEnterCheck).toBe(false);
     expect(r.ready).toBe(false);
   });
 
-  it('куплено частично — shopping partial, чек уже можно вводить (не блокер)', () => {
+  it('куплено частично — store partial, чек уже можно вводить (не блокер)', () => {
     const r = tripReadiness({ mealsCount: 5, checklistTotal: 12, boughtCount: 3, factCount: 0 });
-    expect(r.shopping).toBe('partial');
+    expect(r.store).toBe('partial');
     expect(r.canEnterCheck).toBe(true);
   });
 
   it('всё куплено + все цены введены — ready', () => {
     const r = tripReadiness({ mealsCount: 5, checklistTotal: 12, boughtCount: 12, factCount: 12 });
-    expect(r).toMatchObject({ shopping: 'done', checks: 'done', ready: true });
+    expect(r).toMatchObject({ store: 'done', checks: 'done', ready: true });
   });
 
   it('цены введены частично — checks partial, не ready', () => {

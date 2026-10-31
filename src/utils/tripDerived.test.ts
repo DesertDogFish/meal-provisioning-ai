@@ -163,7 +163,7 @@ describe('deriveTripView — дни, чеклист, готовность, ру�
     expect(v.checklistRowIds).toHaveLength(3);
     expect(v.boughtInList).toBe(0);
     expect(v.readiness.menu).toBe('done');
-    expect(v.readiness.shopping).toBe('none');
+    expect(v.readiness.store).toBe('none');
     expect(v.readiness.checks).toBe('none');
     expect(v.readiness.ready).toBe(false);
   });
@@ -175,7 +175,7 @@ describe('deriveTripView — дни, чеклист, готовность, ру�
       draftOverrides: { i1: { price: 90, total: 0 }, i2: { price: 30, total: 0 }, i3: { price: 5, total: 0 } },
     }));
     expect(v.boughtInList).toBe(3);
-    expect(v.readiness.shopping).toBe('done');
+    expect(v.readiness.store).toBe('done');
     expect(v.readiness.checks).toBe('done');
     expect(v.readiness.ready).toBe(true);
   });

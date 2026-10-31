@@ -11,7 +11,7 @@ import FilterSheet from '../components/FilterSheet';
 import { DatePicker } from '../components/DatePicker';
 import { api } from '../api/client';
 import type { UnitOfMeasure, ProductCategory, IngredientPrice } from '../types';
-import { humanizeUnit, recipesWord } from '../utils/text';
+import { humanizeUnit, recipesWord, productsWord, categoriesWord } from '../utils/text';
 import { Button } from '../components/Button';
 
 import PageLoader from '../components/PageLoader';
@@ -336,7 +336,7 @@ export default function ProductsPage() {
         <div>
           <h1 className="text-2xl md:text-3xl font-bold" style={{ color: 'var(--text)' }}>Продукты</h1>
           <p className="mt-1" style={{ color: 'var(--muted)' }}>
-            {products.length} продуктов · {categories.length} категорий
+            {products.length} {productsWord(products.length)} · {categories.length} {categoriesWord(categories.length)}
           </p>
         </div>
         {/* Fix-7 (п.5): кнопка создания — справа, иконочная (единый паттерн);

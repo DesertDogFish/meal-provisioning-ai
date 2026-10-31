@@ -114,3 +114,60 @@ describe('ModeResolver — setMode / resetSeedData', () => {
     expect(localStorage.getItem('seedVersion')).toBe('1.0.0');
   });
 });
+
+/**
+ * Transparency-п.4 (решение владельца — вариант A «прод = только real») + BL-52:
+ * в прод-сборке (DEV=false, без VITE_ENABLE_MOCK) mock-режим недоступен:
+ * localStorage/VITE_API_MODE=mock игнорируются, авто-резолв всегда real,
+ * setMode('mock') — no-op. С флагом VITE_ENABLE_MOCK=true demo-стенд возвращается.
+ */
+describe('ModeResolver — прод-сборка без VITE_ENABLE_MOCK (transparency-п.4, вариант A)', () => {
+  it('stored apiMode=mock игнорируется → real без пинга', async () => {
+    setMetaEnv({ DEV: 'false' });
+    localStorage.setItem('apiMode', 'mock');
+    const r = new ModeResolver();
+    expect(r.getMode()).toBe('real');
+    await expect(r.resolveMode(BASE)).resolves.toBe('real');
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(localStorage.getItem('apiMode')).toBe('real');
+  });
+
+  it('чистый старт в проде → real (не mock)', () => {
+    setMetaEnv({ DEV: 'false' });
+    const r = new ModeResolver();
+    expect(r.getMode()).toBe('real');
+  });
+
+  it('VITE_API_MODE=mock в проде игнорируется', () => {
+    setMetaEnv({ DEV: 'false', VITE_API_MODE: 'mock' });
+    const r = new ModeResolver();
+    expect(r.getMode()).toBe('real');
+  });
+
+  it('setMode("mock") в проде — no-op с предупреждением в логе (R10)', () => {
+    setMetaEnv({ DEV: 'false' });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const r = new ModeResolver();
+    r.setMode('mock');
+    expect(r.getMode()).toBe('real');
+    expect(localStorage.getItem('apiMode')).not.toBe('mock');
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it('setMode("real") в проде работает', () => {
+    setMetaEnv({ DEV: 'false' });
+    const r = new ModeResolver();
+    r.setMode('real');
+    expect(r.getMode()).toBe('real');
+    expect(r.isResolved()).toBe(true);
+  });
+
+  it('VITE_ENABLE_MOCK=true возвращает демо-стенд (BL-52: явный build-флаг)', async () => {
+    setMetaEnv({ DEV: 'false', VITE_ENABLE_MOCK: 'true' });
+    localStorage.setItem('apiMode', 'mock');
+    const r = new ModeResolver();
+    expect(r.getMode()).toBe('mock');
+    expect(r.isResolved()).toBe(true);
+  });
+});

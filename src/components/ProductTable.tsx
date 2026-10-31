@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Edit2, Trash2, Share2 } from 'lucide-react';
 import type { PriceSyncStatus, UnitOfMeasure } from '../types';
 import { humanizeUnit, productsWord } from '../utils/text';
@@ -329,7 +330,22 @@ export function ProductTable({ products, filters, onEdit, onDelete, onResetFilte
                 {formatSyncStatus(product)}
               </td>
               <td className="keep-num px-4 py-3 text-right" data-label="В рецептах" style={{ color: 'var(--text)' }}>
-                {product.usageRecipes}
+                {/* navigation-п.6: «В рецептах: N» — ссылка на каталог блюд с фильтром
+                    по ингредиенту (?ingredient=<id>, shareable-URL). N=0 — не ссылка
+                    (нечего показывать); решение зафиксировано в DESIGN_MIGRATION §12. */}
+                {product.usageRecipes > 0 ? (
+                  <Link
+                    to={`/recipes?ingredient=${product.id}`}
+                    data-testid={`product-usage-link-${product.id}`}
+                    title={`Блюда с продуктом «${product.name}»`}
+                    aria-label={`Блюда с продуктом «${product.name}»: ${product.usageRecipes}`}
+                    style={{ color: 'var(--wave-300)', textDecoration: 'underline', textUnderlineOffset: 3 }}
+                  >
+                    {product.usageRecipes}
+                  </Link>
+                ) : (
+                  <span data-testid={`product-usage-none-${product.id}`}>0</span>
+                )}
               </td>
               <td className="no-label px-4 py-3 text-right" data-label="">
                 <div className="flex items-center justify-end gap-1">

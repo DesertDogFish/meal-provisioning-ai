@@ -40,34 +40,67 @@ export interface TripSummaryPanelProps {
   /** мобильный воркфлоу: текущий этап и статусы этапов для мини-степпера */
   stage?: StageId;
   done?: Record<StageId, boolean>;
+  /**
+   * transparency-п.2 (решение владельца 31.10 — «кликабельные чипы»): чипы
+   * готовности = переключение этапа. С колбэком чип становится кнопкой;
+   * без колбэка — прежний статичный вид (мобильный sheet тоже получает его).
+   */
+  onStage?: (s: StageId) => void;
   /** мобильный переход к отчёту (этап ④ / kebab шапки дублируют кнопку) */
   onOpenReport?: () => void;
 }
 
 export function TripSummaryPanel({
   trip, tripSummary, realPeople, readiness, boughtInList, checklistTotal, factCount, factsTotal,
-  stage, done, onOpenReport,
+  stage, done, onStage, onOpenReport,
 }: TripSummaryPanelProps) {
   const [sheetOpen, setSheetOpen] = useState(false);
   const days = trip.days?.length || 0;
   const meals = trip.days?.reduce((a, d) => a + (d.meals?.length || 0), 0) || 0;
 
+  /**
+   * transparency-п.1: ОДИН словарь этапов во всём UI — каждый чип соответствует
+   * своему этапу ①②③④ (STAGES из StageTabBar): «Меню собрано → Закупка: N поз. →
+   * Магазин: взято N из M → Чек: введено N из M». Прежний чип «Закупка: взято…»
+   * описывал этап ③ «Магазин» — исправлено.
+   * transparency-п.2: чипы кликабельны (= переключение этапа), готовность этапа ② —
+   * «в закупке есть позиции» (тот же критерий, что у `done.shopping` страницы).
+   */
+  const chipDefs: { id: StageId; text: string; ok: boolean }[] = [
+    { id: 'menu', text: `Меню ${readiness.menu === 'done' ? 'собрано' : 'пустое'}`, ok: readiness.menu === 'done' },
+    { id: 'shopping', text: `Закупка: ${checklistTotal} ${pluralize(checklistTotal, ['позиция', 'позиции', 'позиций'])}`, ok: checklistTotal > 0 },
+    { id: 'store', text: `Магазин: взято ${boughtInList} из ${checklistTotal}`, ok: readiness.store === 'done' },
+    { id: 'checks', text: `Чек: введено ${factCount} из ${factsTotal}`, ok: readiness.checks === 'done' },
+  ];
+
   const readinessChips = (
     <>
-      {[
-        { text: `Меню ${readiness.menu === 'done' ? 'собрано' : 'пустое'}`, ok: readiness.menu === 'done' },
-        { text: `Закупка: взято ${boughtInList} из ${checklistTotal}`, ok: readiness.shopping === 'done' },
-        { text: `Чек: введено ${factCount} из ${factsTotal}`, ok: readiness.checks === 'done' },
-      ].map((st, i) => (
-        <span key={st.text} className="inline-flex items-center gap-1.5">
+      {chipDefs.map((st, i) => (
+        <span key={st.id} className="inline-flex items-center gap-1.5">
           {i > 0 && <ChevronRight size={13} style={{ color: 'var(--line-strong)' }} aria-hidden />}
-          <span className="px-2 py-0.5 text-xs font-bold rounded-full whitespace-nowrap"
-            style={st.ok
-              ? { background: 'color-mix(in srgb, var(--success) 16%, transparent)', color: 'var(--success)' }
-              : { background: 'var(--elev)', color: 'var(--muted)' }}
-          >
-            {st.ok ? '✓ ' : '○ '}{st.text}
-          </span>
+          {onStage ? (
+            <button
+              type="button"
+              className="px-2 py-0.5 text-xs font-bold rounded-full whitespace-nowrap min-h-[32px]"
+              style={st.ok
+                ? { background: 'color-mix(in srgb, var(--success) 16%, transparent)', color: 'var(--success)' }
+                : { background: 'var(--elev)', color: 'var(--muted)' }}
+              data-testid={`stage-chip-${st.id}`}
+              aria-current={stage === st.id ? 'step' : undefined}
+              title={`Перейти к этапу «${STAGES.find(s => s.id === st.id)?.label}»`}
+              onClick={() => { setSheetOpen(false); onStage(st.id); }}
+            >
+              {st.ok ? '✓ ' : '○ '}{st.text}
+            </button>
+          ) : (
+            <span className="px-2 py-0.5 text-xs font-bold rounded-full whitespace-nowrap"
+              style={st.ok
+                ? { background: 'color-mix(in srgb, var(--success) 16%, transparent)', color: 'var(--success)' }
+                : { background: 'var(--elev)', color: 'var(--muted)' }}
+            >
+              {st.ok ? '✓ ' : '○ '}{st.text}
+            </span>
+          )}
         </span>
       ))}
       <ChevronRight size={13} style={{ color: 'var(--line-strong)' }} aria-hidden />

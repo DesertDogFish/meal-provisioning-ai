@@ -214,3 +214,24 @@ describe('ApiModeBadge — очистка кеша (reset seed)', () => {
     expect(apiMock.resetSeedData).not.toHaveBeenCalled();
   });
 });
+
+describe('ApiModeBadge — прод-сборка (transparency-п.4, вариант A)', () => {
+  afterEach(() => {
+    delete (window as unknown as { meta?: unknown }).meta;
+    cleanup();
+  });
+
+  it('DEV=false без VITE_ENABLE_MOCK — бейдж не рендерится, watchdog не стартует', () => {
+    (window as unknown as { meta?: unknown }).meta = { env: { DEV: 'false' } };
+    const { container } = render(<ApiModeBadge />);
+    expect(container.firstChild).toBeNull();
+    expect(screen.queryByText(/демо-режим/)).toBeNull();
+    expect(watchdogMock.startWatchdog).not.toHaveBeenCalled();
+  });
+
+  it('DEV=false + VITE_ENABLE_MOCK=true — бейдж рендерится (демо-стенд)', () => {
+    (window as unknown as { meta?: unknown }).meta = { env: { DEV: 'false', VITE_ENABLE_MOCK: 'true' } };
+    render(<ApiModeBadge />);
+    expect(screen.getByText(/демо-режим/)).toBeTruthy();
+  });
+});

@@ -2,6 +2,7 @@
 // Покрывают: сортировку, фильтрацию, empty state, отображение дубликатов/упаковок/цен.
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, cleanup } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import React from 'react';
 import { ProductTable, filterAndSortProducts, EMPTY_FILTERS } from './ProductTable';
 import type { ProductRow, ProductFilters } from './ProductTable';
@@ -117,8 +118,9 @@ describe('ProductTable (рендер и взаимодействия)', () => {
     baseProps.onResetFilters.mockReset();
   });
 
+  // navigation-п.6: «В рецептах: N» — <Link>, таблице нужен роутер-контекст
   const renderTable = (over = {}) =>
-    render(<ProductTable products={products} {...baseProps} {...over} />);
+    render(<MemoryRouter><ProductTable products={products} {...baseProps} {...over} /></MemoryRouter>);
 
   it('рендерит все строки', () => {
     renderTable();
@@ -204,7 +206,7 @@ describe('ProductTable: значок общей привязки ЕМИСС (KB-
     onResetFilters: vi.fn(),
   };
   const renderTable = (rows: ProductRow[]) =>
-    render(<ProductTable products={rows} {...baseProps} />);
+    render(<MemoryRouter><ProductTable products={rows} {...baseProps} /></MemoryRouter>);
 
   it('значка нет, если позиция ЕМИСС у продукта одна (0, null и undefined равнозначны)', () => {
     renderTable([
@@ -261,5 +263,30 @@ describe('ProductTable: значок общей привязки ЕМИСС (KB-
     ]);
     expect(screen.getByTestId('price-sync-status').textContent).toBe('нет данных');
     expect(screen.getByTestId('emis-shared-badge')).toBeTruthy();
+  });
+});
+
+describe('ProductTable: «В рецептах: N» — ссылка на фильтр рецептов (navigation-п.6)', () => {
+  const baseProps = {
+    filters: filters(),
+    onEdit: vi.fn(),
+    onDelete: vi.fn(),
+    onResetFilters: vi.fn(),
+  };
+  const renderTable = (rows: ProductRow[]) =>
+    render(<MemoryRouter><ProductTable products={rows} {...baseProps} /></MemoryRouter>);
+
+  it('N>0 — ссылка /recipes?ingredient=<id> (shareable deep-link)', () => {
+    renderTable([mk({ id: 'p1', name: 'Гречка', usageRecipes: 3 })]);
+    const link = screen.getByTestId('product-usage-link-p1');
+    expect(link.tagName).toBe('A');
+    expect(link.getAttribute('href')).toBe('/recipes?ingredient=p1');
+    expect(link.textContent).toBe('3');
+  });
+
+  it('N=0 — НЕ ссылка (пустой результат не показываем)', () => {
+    renderTable([mk({ id: 'p2', name: 'Соль', usageRecipes: 0 })]);
+    expect(screen.queryByTestId('product-usage-link-p2')).toBeNull();
+    expect(screen.getByTestId('product-usage-none-p2').textContent).toBe('0');
   });
 });

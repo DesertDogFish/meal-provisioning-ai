@@ -6,7 +6,7 @@ import { StageNextCta } from './StageNextCta';
 import type { StageId } from './StageTabBar';
 
 /**
- * План plans/2026-10-31-ux-audit-navigation.md (п.2): CTA «Далее» в конце
+ * План plans/done/2026-10-31-ux-audit-navigation.md (п.2): CTA «Далее» в конце
  * каждого этапа. Готовый этап — кнопка следующего шага (④ — отчёт /report);
  * незаполненный этап — подсказка вместо кнопки (критерий: «CTA скрыт/заменён
  * подсказкой»).

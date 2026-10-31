@@ -96,6 +96,18 @@ export class ApiClient {
         });
       }
 
+      // transparency-п.4 / BL-52 (вариант A): в прод-сборке без VITE_ENABLE_MOCK
+      // ветка статически мертва (import.meta.env.* заменяется литералами) — rollup
+      // не эмитит чанк mockServer в прод-артефакт; runtime-защита на случай
+      // «протухшего» localStorage: человеческая ошибка вместо тихих демо-данных.
+      if (import.meta.env.PROD && import.meta.env.VITE_ENABLE_MOCK !== 'true') {
+        throw new ApiClientError({
+          status: 503,
+          title: 'Сервер недоступен',
+          detail: 'Демо-режим отключён в этой сборке, а бэкенд не отвечает. Повторите попытку позже.',
+          type: 'about:blank',
+        });
+      }
       const { mockServer } = await import('./mockServer');
       return mockServer.handleRequest<T>(method, fullPath, body);
     }
@@ -137,6 +149,15 @@ export class ApiClient {
     }
 
     if (this.modes.getMode() === 'mock') {
+      // transparency-п.4 / BL-52: та же защита, что в request() (прод — без mock-чанка)
+      if (import.meta.env.PROD && import.meta.env.VITE_ENABLE_MOCK !== 'true') {
+        throw new ApiClientError({
+          status: 503,
+          title: 'Сервер недоступен',
+          detail: 'Демо-режим отключён в этой сборке, а бэкенд не отвечает. Повторите попытку позже.',
+          type: 'about:blank',
+        });
+      }
       const { mockServer } = await import('./mockServer');
       return mockServer.handleRequest<T>('POST', path, {
         __file: { name: file.name, size: file.size },

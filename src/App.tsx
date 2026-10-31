@@ -33,7 +33,7 @@ function App() {
             <Routes>
               <Route path="/login" element={<LoginPage />} />
               {/* План plans/2026-10-31-ux-audit-cleanup-dedup.md (п.1) +
-                  plans/2026-10-31-ux-audit-navigation.md (п.8, решение владельца —
+                  plans/done/2026-10-31-ux-audit-navigation.md (п.8, решение владельца —
                   вариант A): канон списка походов — /trips («Походы» = /trips,
                   URL совпадает со смыслом пункта сайдбара). /dashboard — легаси
                   точка входа после логина, редирект. Мёртвый DashboardPage.tsx

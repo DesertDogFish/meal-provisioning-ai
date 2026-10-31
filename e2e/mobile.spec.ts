@@ -195,7 +195,7 @@ test('M-06 «Снять всё» — опасное действие тольк�
   await expect(page.getByTestId('checklist-progress')).toHaveAttribute('aria-valuenow', '0');
 });
 
-test('M-07 «Закупка и чеки»: карточный режим, значения подписаны, скролла страницы нет', async ({ page }) => {
+test('M-07 этап ④ «Чеки и итог»: карточный режим, значения подписаны, скролла страницы нет', async ({ page }) => {
   await openSeededTrip(page);
   await page.getByTestId('stage-bar-checks').click();
   // подзадача 6: «кто сколько должен» и строка «План/Факт/Δ» — без скролла

@@ -67,8 +67,9 @@ async function pingApi(): Promise<void> {
     // Уведомляем callbacks
     callbacks.forEach(cb => cb(false, null, errorMessage));
     
-    // В режиме AUTO при недоступности API - фолбэк на мок
-    console.warn('[Watchdog] API unavailable, using mock data');
+    // transparency-п.4 (вариант A): фолбэка на mock нет — недоступность видна
+    // в error-состояниях страниц («Повторить»); watchdog лишь логирует факт (R10).
+    console.warn('[Watchdog] API unavailable');
   }
 }
 

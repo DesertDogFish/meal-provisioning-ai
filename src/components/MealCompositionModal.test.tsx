@@ -5,7 +5,7 @@
  * ({state:'EXTRA'}) и воскресала при сохранении. Фикс: черновик REMOVED — строка
  * скрывается и НЕ попадает в PUT (keepExtra-семантика: отсутствует ⇒ удаляется).
  */
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import MealCompositionModal from './MealCompositionModal';
 import { ToastProvider } from './ToastProvider';
@@ -119,5 +119,95 @@ describe('MealCompositionModal — U39 удаление добавленного
     await waitFor(() => expect(screen.queryByText('Сахар')).toBeNull());
     fireEvent.click(screen.getByLabelText('Сбросить изменения'));
     expect(await screen.findByText('Сахар')).toBeTruthy();
+  });
+});
+
+/**
+ * Transparency-п.3 (AGENTS §8 — сначала красный тест): правка состава сбрасывает
+ * введённый чек и отметки «взято»/факт-количества по затронутым позициям
+ * (поведение бэкенда, README «Состав приёма под себя»), но UI сохранял молча —
+ * пользователь терял введённые суммы без предупреждения. Фикс: ConfirmDialog
+ * (тон warning) со списком позиций ПЕРЕД batch PUT.
+ */
+import { saveActualPrice, setBought, setActualQty } from '../utils/tripStaging';
+
+describe('MealCompositionModal — transparency-п.3: предупреждение о сбросе чека', () => {
+  beforeEach(() => {
+    localStorage.removeItem('trip-actual-prices-t1');
+    localStorage.removeItem('trip-checklist-bought-t1');
+    localStorage.removeItem('trip-checklist-actualqty-t1');
+  });
+
+  it('введён чек по затрагиваемой позиции → подтверждение, PUT только после «Да»', async () => {
+    saveActualPrice('t1', '1', { price: 250, total: 100 });
+    renderModal();
+    await screen.findByText('Гречка');
+    fireEvent.click(screen.getByLabelText('Исключить: Гречка'));
+    fireEvent.click(screen.getByRole('button', { name: 'Сохранить состав' }));
+
+    // до подтверждения PUT НЕ выполняется
+    const yes = await screen.findByTestId('confirm-yes');
+    expect(yes).toBeTruthy();
+    const dialog = screen.getByRole('alertdialog', { name: 'Сбросить введённый чек?' });
+    expect(within(dialog).getByText(/сбросит введённый чек/)).toBeTruthy();
+    expect(within(dialog).getByText(/Гречка/)).toBeTruthy();
+    expect(putMealComposition).not.toHaveBeenCalled();
+
+    fireEvent.click(yes);
+    await waitFor(() => expect(putMealComposition).toHaveBeenCalledTimes(1));
+  });
+
+  it('отмена подтверждения — состав НЕ сохраняется', async () => {
+    saveActualPrice('t1', '1', { price: 250, total: 100 });
+    renderModal();
+    await screen.findByText('Гречка');
+    fireEvent.click(screen.getByLabelText('Исключить: Гречка'));
+    fireEvent.click(screen.getByRole('button', { name: 'Сохранить состав' }));
+    fireEvent.click(await screen.findByTestId('confirm-cancel'));
+    await waitFor(() => expect(screen.queryByTestId('confirm-yes')).toBeNull());
+    expect(putMealComposition).not.toHaveBeenCalled();
+  });
+
+  it('отметка «взято» без чека → предупреждение тоже есть', async () => {
+    setBought('t1', new Set(['1@400']));
+    renderModal();
+    await screen.findByText('Гречка');
+    fireEvent.click(screen.getByLabelText('Исключить: Гречка'));
+    fireEvent.click(screen.getByRole('button', { name: 'Сохранить состав' }));
+    expect(await screen.findByTestId('confirm-yes')).toBeTruthy();
+  });
+
+  it('факт-количество «Взяли» → предупреждение есть', async () => {
+    setActualQty('t1', '1', { amount: 500, unit: 'г' });
+    renderModal();
+    await screen.findByText('Гречка');
+    fireEvent.click(screen.getByLabelText('Исключить: Гречка'));
+    fireEvent.click(screen.getByRole('button', { name: 'Сохранить состав' }));
+    expect(await screen.findByTestId('confirm-yes')).toBeTruthy();
+  });
+
+  it('не затрагивает позиции без чеков/отметок → диалога нет, сохраняет сразу', async () => {
+    // чек введён по ДРУГОЙ позиции (id 999 — не из этого состава)
+    saveActualPrice('t1', '999', { price: 10, total: 10 });
+    renderModal();
+    await screen.findByText('Гречка');
+    fireEvent.click(screen.getByLabelText('Исключить: Гречка'));
+    fireEvent.click(screen.getByRole('button', { name: 'Сохранить состав' }));
+    await waitFor(() => expect(putMealComposition).toHaveBeenCalledTimes(1));
+    expect(screen.queryByTestId('confirm-yes')).toBeNull();
+  });
+
+  it('удаление ingredента (EXTRA «Удалить») с чеком по нему → предупреждение', async () => {
+    saveActualPrice('t1', '9', { price: 20, total: 5 });
+    renderModal();
+    await screen.findByText('Сахар');
+    fireEvent.click(screen.getByLabelText('Удалить: Сахар'));
+    fireEvent.click(screen.getByRole('button', { name: 'Сохранить состав' }));
+    const yes = await screen.findByTestId('confirm-yes');
+    // REMOVED-строка скрыта из таблицы, но имя осталось в списке диалога
+    const dialog = screen.getByRole('alertdialog', { name: 'Сбросить введённый чек?' });
+    expect(within(dialog).getByText(/Сахар/)).toBeTruthy();
+    fireEvent.click(yes);
+    await waitFor(() => expect(putMealComposition).toHaveBeenCalledTimes(1));
   });
 });

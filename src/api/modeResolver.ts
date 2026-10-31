@@ -31,6 +31,25 @@ export function readInjectedEnv(): Record<string, string> {
   );
 }
 
+/**
+ * transparency-п.4 (решение владельца 31.10.2026 — вариант A «прод = только
+ * real») + BL-52: mock-режим (демо-данные, бейдж, переключатель) доступен ТОЛЬКО
+ * в dev-сборке или при явном build-флаге `VITE_ENABLE_MOCK=true`. В прод-сборке
+ * без флага: режим всегда real, mock-фолбэк при недоступном бэкенде отключён —
+ * страницы показывают человеческую ошибку с «Повторить» (navigation-п.4), а не
+ * тихий уход на демо-данные.
+ *
+ * DEV читается через readInjectedEnv (window.meta-канал для тестов; в браузере —
+ * import.meta.env): undefined трактуется как «dev» (тестовые подмены window.meta
+ * без DEV не должны случайно включать прод-поведение).
+ */
+export function mockModeAllowed(): boolean {
+  const env = readInjectedEnv() as Record<string, unknown>;
+  const dev = env.DEV === undefined ? true : (env.DEV === true || env.DEV === 'true');
+  if (dev) return true;
+  return env.VITE_ENABLE_MOCK === 'true' || env.VITE_ENABLE_MOCK === true;
+}
+
 export class ModeResolver {
   private mode: ApiMode = 'mock';
   private modeResolved = false;
@@ -40,15 +59,23 @@ export class ModeResolver {
     const env = readInjectedEnv();
     const storedMode = localStorage.getItem(LS_MODE_KEY) as ApiMode | null;
     const envMode = env.VITE_API_MODE as ApiMode | undefined;
+    const allowMock = mockModeAllowed();
 
-    if (storedMode === 'mock' || storedMode === 'real') {
-      this.mode = storedMode;
+    if (storedMode === 'real') {
+      this.mode = 'real';
       this.modeResolved = true;
-    } else if (envMode === 'mock' || envMode === 'real') {
-      this.mode = envMode;
+    } else if (storedMode === 'mock' && allowMock) {
+      // transparency-п.4: «mock» из localStorage в прод-сборке игнорируется
+      this.mode = 'mock';
+      this.modeResolved = true;
+    } else if (envMode === 'mock' && allowMock) {
+      this.mode = 'mock';
+      this.modeResolved = true;
+    } else if (envMode === 'real') {
+      this.mode = 'real';
       this.modeResolved = true;
     } else {
-      this.mode = 'mock'; // default
+      this.mode = allowMock ? 'mock' : 'real'; // default (прод — всегда real)
     }
 
     // Проверка seedVersion
@@ -70,6 +97,16 @@ export class ModeResolver {
   async resolveMode(baseUrl: string): Promise<ApiMode> {
     if (this.modeResolved) return this.mode;
     if (this.resolvePromise) return this.resolvePromise.then(() => this.mode);
+
+    // transparency-п.4 (вариант A): в прод-сборке без VITE_ENABLE_MOCK авто-пинг
+    // не может «уронить» приложение в mock — режим всегда real; недоступность
+    // бэкенда обрабатывают error-состояния страниц («Повторить»).
+    if (!mockModeAllowed()) {
+      this.mode = 'real';
+      this.modeResolved = true;
+      localStorage.setItem(LS_MODE_KEY, 'real');
+      return this.mode;
+    }
 
     this.resolvePromise = (async () => {
       try {
@@ -105,6 +142,11 @@ export class ModeResolver {
   }
 
   setMode(mode: ApiMode) {
+    if (mode === 'mock' && !mockModeAllowed()) {
+      // R10: попытка переключения видна в логе; прод-сборка остаётся на real
+      console.warn('[mode] Демо-режим отключён в этой сборке (нет VITE_ENABLE_MOCK) — остаётся real');
+      return;
+    }
     this.mode = mode;
     this.modeResolved = true;
     localStorage.setItem(LS_MODE_KEY, mode);

@@ -48,7 +48,11 @@ function buildProgressMap(tripsData: Trip[]): Record<string, TripProgress> {
     } else if (checklistTotal > 0) {
       stage = 'shopping'; done = 0; total = checklistTotal;
     } else {
-      stage = 'menu'; done = meals; total = (trip.days?.length || 0) * 3;
+      // transparency-п.6: знаменатель «days×3» (норма «3 приёма в день») —
+      // выдуманная: у этапа ① нет реального знаменателя. Готовность ① = «меню
+      // собрано» (≥1 приём, как в utils/readiness); карточка показывает
+      // «N приёмов» БЕЗ процентной полосы (полоса — только у ②③④).
+      stage = 'menu'; done = meals; total = 0;
     }
     next[trip.id] = {
       stage,
@@ -139,7 +143,7 @@ export default function TripsPage() {
 
   const handleCreate = async (formData: TripFormData) => {
     try {
-      await api.post('/trips', {
+      const created = await api.post<any>('/trips', {
         name: formData.name,
         startDate: formData.startDate,
         endDate: formData.endDate,
@@ -147,6 +151,15 @@ export default function TripsPage() {
         notes: formData.notes || undefined
       });
       setShowCreate(false);
+      // navigation-п.9: воркфлоу не обрывается — после создания сразу открываем
+      // этап ① нового похода (id есть и в real TripResponse, и в mock-паритете).
+      // Фолбэк (ответ без id) — прежнее поведение: список с обновлением.
+      const newId = created?.id != null ? String(created.id) : null;
+      if (newId) {
+        showSuccess('Поход создан — добавьте первый приём пищи');
+        navigate(`/trips/${newId}?stage=menu`);
+        return;
+      }
       showSuccess('Поход успешно создан');
       await loadData();
     } catch (err: any) {
@@ -255,7 +268,9 @@ export default function TripsPage() {
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h1 className="text-2xl md:text-3xl font-bold" style={{ color: 'var(--text)' }}>Походы</h1>
-          <p className="mt-1" style={{ color: 'var(--muted)' }}>Управление вашими походами и запасами</p>
+          {/* transparency-п.7: подзаголовок обещает только то, что приложение
+              реально делает (функции «запасов» нет) */}
+          <p className="mt-1" style={{ color: 'var(--muted)' }}>Планирование питания: меню, закупка, чеки</p>
         </div>
         {/* Fix-7 (п.5): иконочная кнопка создания — единый паттерн всех шапок.
             Подзадача 4: текстовый блок шапки с min-w-0 — FAB не перекрывает подзаголовок. */}
@@ -373,15 +388,18 @@ export default function TripsPage() {
                           {p.ready ? <Check size={14} aria-hidden /> : <span aria-hidden>{stageLabel?.num}</span>}
                           {p.ready ? 'Готов' : stageLabel?.label}
                         </span>
-                        <span className="trip-card__bar" aria-hidden>
-                          <span className={p.stage === 'menu' ? 'stage-menu' : undefined}
-                                style={{ width: `${p.total > 0 ? Math.min(100, Math.round((p.done / p.total) * 100)) : 0}%` }} />
-                        </span>
+                        {/* transparency-п.6: процентная полоса — только у этапов с
+                            реальным знаменателем (②③④); у ① — честное «N приёмов» */}
+                        {p.stage !== 'menu' && (
+                          <span className="trip-card__bar" aria-hidden>
+                            <span style={{ width: `${p.total > 0 ? Math.min(100, Math.round((p.done / p.total) * 100)) : 0}%` }} />
+                          </span>
+                        )}
                         <span className="keep-num" style={{ color: 'var(--text-2)' }}>
                           {p.stage === 'store' ? `${p.bought}/${p.checklistTotal}`
                             : p.stage === 'checks' ? `${p.facts}/${p.total}`
                             : p.stage === 'shopping' ? `${p.checklistTotal} поз.`
-                            : `${p.done}/${p.total}`}
+                            : `${p.meals} ${pluralize(p.meals, ['приём', 'приёма', 'приёмов'])}`}
                         </span>
                       </div>
                       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 mt-2">

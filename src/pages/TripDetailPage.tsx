@@ -71,10 +71,12 @@ export default function TripDetailPage() {
 
   const stage = activeTab as StageId;
   // Статусы этапов — из единой готовности (utils/readiness): дублей нет
+  // transparency-п.1: readiness-шаг «shopping» переименован в `store` (семантика
+  // «взято N из M» = этап ③ Магазин) — маппинг выпрямлен, без перекрёстных имён.
   const done: Record<StageId, boolean> = {
     menu: view.readiness.menu === 'done',
     shopping: view.checklistRowIds.length > 0,
-    store: view.readiness.shopping === 'done',
+    store: view.readiness.store === 'done',
     checks: view.readiness.checks === 'done',
   };
 
@@ -108,6 +110,7 @@ export default function TripDetailPage() {
         factsTotal={view.factsTotal}
         stage={stage}
         done={done}
+        onStage={(s) => { setActiveTab(s); }}
         onOpenReport={() => navigate(`/trips/${trip.id}/report`)}
       />
 
@@ -127,15 +130,10 @@ export default function TripDetailPage() {
           >
             {tab.icon}
             {tab.label}
-            {/* navigation-п.2: статусы готовности в десктоп-.seg — один визуальный
-                язык с мобильным StageTabBar (номер/галочка из той же `done`) */}
-            <span
-              className={`seg-badge ${done[tab.id] ? 'ok' : ''}`}
-              aria-hidden
-              data-testid={`seg-status-${tab.id}`}
-            >
-              {done[tab.id] ? '✓' : tab.id === 'menu' ? 1 : tab.id === 'shopping' ? 2 : tab.id === 'store' ? 3 : 4}
-            </span>
+            {/* transparency-п.2 (решение владельца — «кликабельные чипы»): нумерация/
+                статусы убраны из .seg — готовность этапов изображается ровно один раз,
+                в кликабельных чипах TripSummaryPanel (stage-chip-*). .seg остаётся
+                переключателем вкладок (иконка + подпись + active). */}
           </button>
         ))}
       </div>

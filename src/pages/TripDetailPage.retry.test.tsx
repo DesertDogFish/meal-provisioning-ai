@@ -1,5 +1,5 @@
 /**
- * Баг-тест (AGENTS §8, plan plans/2026-10-31-ux-audit-navigation.md п.4):
+ * Баг-тест (AGENTS §8, plan plans/done/2026-10-31-ux-audit-navigation.md п.4):
  * «Повторить» в error-состоянии загрузки данных похода была МЁРТВОЙ
  * (PriceOverridesTab.tsx:446 — Button без onClick). После cleanup-п.5 этап ④
  * не грузит данные сам — ошибка загрузки показывается на уровне страницы,

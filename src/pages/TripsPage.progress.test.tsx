@@ -86,3 +86,34 @@ describe('TripsPage — прогресс из ответа списка (cleanup
     expect(row.textContent).toContain('2/5');
   });
 });
+
+describe('TripsPage — честный прогресс этапа ① (transparency-п.6)', () => {
+  const menuTrip = [{
+    id: 't3', userId: '1', name: 'Поход меню', startDate: '2026-09-01', endDate: '2026-09-04',
+    defaultPeople: 2,
+    days: [
+      { id: 'd31', dayDate: '2026-09-01', meals: [{}, {}] },
+      { id: 'd32', dayDate: '2026-09-02', meals: [] },
+      { id: 'd33', dayDate: '2026-09-03', meals: [] },
+      { id: 'd34', dayDate: '2026-09-04', meals: [] },
+    ],
+    progress: { stage: 'menu', meals: 2, checklistTotal: 0, facts: 0, factsTotal: 0, totalCost: 0, costPerPerson: 0 },
+  }];
+
+  beforeEach(() => {
+    (api.get as any).mockImplementation((path: string) => {
+      if (path === '/auth/me') return Promise.resolve({ id: '1', email: 'a@b.c', role: 'ADMIN' });
+      if (path === '/trips') return Promise.resolve(menuTrip);
+      return Promise.reject({ status: 404, detail: `unexpected ${path}` });
+    });
+  });
+
+  it('2 приёма за 4 дня — НЕ «2/12»: «2 приёма» и без процентной полосы', async () => {
+    renderPage();
+    const row = await screen.findByTestId('trip-progress-t3');
+    expect(row.textContent).toContain('Меню');
+    expect(row.textContent).toContain('2 приёма');
+    expect(row.textContent).not.toContain('2/12');
+    expect(row.querySelector('.trip-card__bar')).toBeNull();
+  });
+});

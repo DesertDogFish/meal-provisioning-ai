@@ -197,3 +197,24 @@ describe('mock GET /trips/:id/substitutions — обогащение имена�
     expect(add.toIngredientName).toBe(extra.name);
   });
 });
+
+describe('mock POST /trips — паритет владельца (e2e navigation-п.10)', () => {
+  // Реальный бэкенд (TripService.createTrip) берёт владельца из токена.
+  // Mock раньше всегда писал users[0] (админ) — поход, созданный обычным
+  // пользователем, исчезал из его списка (TripsPage фильтрует myTrips по userId).
+  it('владелец нового похода = пользователь из токена сессии', () => {
+    localStorage.setItem('accessToken', 'mock-access-token-2');
+    const created: any = mockServer.handleRequest('POST', '/trips', {
+      name: 'Мой поход', startDate: '2026-09-01', endDate: '2026-09-02',
+    });
+    expect(created.userId).toBe('2');
+  });
+
+  it('без токена — владелец users[0] (прежний дефолт сохранён)', () => {
+    localStorage.removeItem('accessToken');
+    const created: any = mockServer.handleRequest('POST', '/trips', {
+      name: 'Ничей поход', startDate: '2026-09-01', endDate: '2026-09-02',
+    });
+    expect(created.userId).toBe('1');
+  });
+});

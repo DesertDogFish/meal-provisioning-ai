@@ -110,11 +110,45 @@ describe('TripSummaryPanel', () => {
     // день1 (3 чел.): 1.5 кг × 100 ₽ = 150; день2 (2 чел.): 2 шт × 50 ₽ = 100 → 250 ₽
     expect(screen.getAllByText(/250/).length).toBeGreaterThan(0);
     expect(screen.getByText(/Меню собрано/)).toBeTruthy();
-    expect(screen.getByText(/Закупка: взято 2 из 2/)).toBeTruthy();
+    // transparency-п.1: чипы = этапы ①②③④ одним словарём (STAGES)
+    expect(screen.getByText(/Закупка: 2 позиции/)).toBeTruthy();
+    expect(screen.getByText(/Магазин: взято 2 из 2/)).toBeTruthy();
     expect(screen.getByText(/Чек: введено 2 из 2/)).toBeTruthy();
     expect(screen.getByText('Поход готов ✓')).toBeTruthy();
     fireEvent.click(screen.getByLabelText('Сформировать отчёт'));
     expect(open).toHaveBeenCalledWith('/trips/t1/print', '_blank');
+  });
+
+  it('transparency-п.2: с onStage чипы — кнопки переключения этапов (клик = этап)', () => {
+    const view = deriveTripView(viewInput());
+    const onStage = vi.fn();
+    render(
+      <TripSummaryPanel
+        trip={trip} tripSummary={view.tripSummary} realPeople={view.realPeople}
+        readiness={readiness} boughtInList={2} checklistTotal={2} factCount={2} factsTotal={2}
+        stage="menu" done={{ menu: true, shopping: true, store: true, checks: true }}
+        onStage={onStage}
+      />
+    );
+    const chip = screen.getAllByTestId('stage-chip-store')[0];
+    expect(chip.tagName).toBe('BUTTON');
+    expect(chip.textContent).toContain('Магазин: взято 2 из 2');
+    fireEvent.click(chip);
+    expect(onStage).toHaveBeenCalledWith('store');
+    // активный этап отмечен aria-current
+    expect(screen.getAllByTestId('stage-chip-menu')[0].getAttribute('aria-current')).toBe('step');
+  });
+
+  it('transparency-п.2: без onStage чипы статичны (мобильный sheet/печать не ломаются)', () => {
+    const view = deriveTripView(viewInput());
+    render(
+      <TripSummaryPanel
+        trip={trip} tripSummary={view.tripSummary} realPeople={view.realPeople}
+        readiness={readiness} boughtInList={2} checklistTotal={2} factCount={2} factsTotal={2}
+      />
+    );
+    expect(screen.queryAllByTestId('stage-chip-store')).toHaveLength(0);
+    expect(screen.getByText(/Магазин: взято 2 из 2/)).toBeTruthy();
   });
 
   it('не готов: «В процессе» и «Посмотреть отчёт»', () => {

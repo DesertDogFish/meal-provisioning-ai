@@ -48,32 +48,42 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const load = useCallback((): Promise<AuthUser | null> => {
     if (inflight.current) return inflight.current;
     const p = (async () => {
-      const token = localStorage.getItem('accessToken');
-      if (!token) {
-        setUser(null);
-        setLoading(false);
-        return null;
-      }
+      // Баг-фикс (найден e2e navigation-п.10): раньше ветка «нет токена»
+      // возвращалась ДО очистки inflight, и inflight.current навсегда
+      // оставался устаревшим решённым промисом. Single-flight затем отдавал
+      // его refresh()-у после логина вместо настоящего /auth/me — user не
+      // загружался, loading не сбрасывался, UI залипал на «Проверяем сессию…».
+      // ВАЖНО: очистка — в `p.finally` СНАРУЖИ, т.к. безтокенная ветка
+      // отрабатывает синхронно, до присваивания `inflight.current = p`.
       try {
-        const u = await api.get<AuthUser>('/auth/me');
-        setUser(u);
-        setProfileError(false);
-        return u;
-      } catch (err) {
-        // P0.5#1: api.get сам пробует refresh; сюда попадаем, если сессия мертва.
-        // R10: причина видна в логе приложения.
-        console.error('Auth: /auth/me failed, session cleared:', err);
-        localStorage.removeItem('accessToken');
-        localStorage.removeItem('refreshToken');
-        setUser(null);
-        setProfileError(true);
-        return null;
+        const token = localStorage.getItem('accessToken');
+        if (!token) {
+          setUser(null);
+          return null;
+        }
+        try {
+          const u = await api.get<AuthUser>('/auth/me');
+          setUser(u);
+          setProfileError(false);
+          return u;
+        } catch (err) {
+          // P0.5#1: api.get сам пробует refresh; сюда попадаем, если сессия мертва.
+          // R10: причина видна в логе приложения.
+          console.error('Auth: /auth/me failed, session cleared:', err);
+          localStorage.removeItem('accessToken');
+          localStorage.removeItem('refreshToken');
+          setUser(null);
+          setProfileError(true);
+          return null;
+        }
       } finally {
-        inflight.current = null;
         setLoading(false);
       }
     })();
     inflight.current = p;
+    void p.finally(() => {
+      if (inflight.current === p) inflight.current = null;
+    });
     return p;
   }, []);
 

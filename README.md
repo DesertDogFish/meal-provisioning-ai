@@ -85,9 +85,10 @@ docker compose up --build
 | `ROSSTAT_CACHE_HOURS` | `24` | TTL кэша выгрузки ЕМИСС (данные обновляются раз в месяц) |
 | `INTEGRATION_CONTACT_EMAIL` | пусто (дефолт `dev@provision.app`) | Контакт для User-Agent внешних интеграций |
 | `VITE_API_URL`, `VITE_API_MODE` | `/api/v1`, `real` в Docker-сборке | Подставляются **при сборке** фронта; режим: `auto` / `real` / `mock` |
+| `VITE_ENABLE_MOCK` | не задан | `true` — разрешить демо-режим (mock) в прод-сборке: бейдж/переключатель режима и mock-фолбэк. Без флага прод-сборка работает ТОЛЬКО с бэкендом (решение 31.10.2026) |
 | `VITE_MOCK_LATENCY_MS` | `100` | Базовая имитация задержки mock-режима (мс, +до 80 мс джиттера); `0` — мгновенный mock. Подставляется при сборке фронта |
 
-В Docker-стеке фронт ходит в API через nginx-прокси (`/api/` → backend), CORS не нужен. Приоритет выбора режима фронта: переключатель в UI (localStorage) → `VITE_API_MODE` → авто-пинг `GET /api/v1/meta`.
+В Docker-стеке фронт ходит в API через nginx-прокси (`/api/` → backend), CORS не нужен. Приоритет выбора режима фронта: переключатель в UI (localStorage) → `VITE_API_MODE` → авто-пинг `GET /api/v1/meta`. С 31.10.2026 прод-сборка без `VITE_ENABLE_MOCK=true` работает только в режиме `real` — переключатель и бейдж режима не рендерятся, авто-фолбэк на демо-данные отключён.
 
 > Росстат/ЕМИСС (Fix-13): данные скачиваются с fedstat.ru по протоколу CRAN-пакета
 > fedstatAPIr (страница показателя → одноразовый CSRF-токен → POST `downloadData.do?format=sdmx`).
@@ -100,8 +101,11 @@ docker compose up --build
 
 ## Деплой фронтенда на Vercel (демо без бэкенда)
 
-Fix-10 (п.4): демо-деплой `https://meal-provisioning-ai.vercel.app/` работает в mock-режиме
-(бэкенда на Vercel нет; `VITE_API_MODE=auto` сам falls back на mock). Что важно:
+Fix-10 (п.4): демо-деплой `https://meal-provisioning-ai.vercel.app/` работает в mock-режиме.
+С 31.10.2026 (transparency-п.4, вариант A) mock в прод-сборке доступен только по явному
+build-флагу: `vercel.json → build.env.VITE_ENABLE_MOCK=true` — демо-стенд остаётся демо,
+а обычная прод-сборка (Docker) работает только с бэкендом и при его недоступности
+показывает «Сервер недоступен» + «Повторить» вместо тихого ухода на демо-данные. Что важно:
 
 - **`vercel.json` (обязателен)** — SPA-rewrites всех маршрутов на `/index.html`: без него
   прямые заходы/refresh и PDF-отчёт (`/trips/:id/print`, открывается новой вкладкой)
@@ -152,6 +156,7 @@ npm run test:e2e     # Playwright, mock-режим (real-режим: E2E_BASE_UR
 |---|---|
 | backend долго не становится `healthy` | `docker compose logs backend` — ошибки БД/миграций |
 | фронт отдаёт страницу, но данные не грузятся | `curl localhost:8080/api/v1/meta`, затем `docker compose logs frontend` |
+| в прод-сборке при недоступном бэкенде нет демо-данных — «Сервер недоступен» + «Повторить» | это ожидаемое поведение (решение 31.10.2026): mock-фолбэк в проде отключён; демо-стенд собирается с `VITE_ENABLE_MOCK=true` (см. `vercel.json`) |
 | порт 3000/5432/8080 занят | поменяйте хостовую часть в `ports:` docker-compose.yml |
 | нужна чистая БД после сбоя миграций | `docker compose down -v && docker compose up --build` (данные удаляются!) |
 | после `git pull` backend не стартует: `Detected applied migration not resolved locally: 14` (или `15`) | начиная с аудита 30.10.2026 (AU-02) это лечится конфигом — `spring.flyway.ignore-migration-patterns: "*:missing"`, вручную делать ничего не нужно. Если образ старше правки: `docker compose exec postgres psql -U provision -d provision -c "DELETE FROM flyway_schema_history WHERE version IN ('14','15')"` либо `mvn org.flywaydb:flyway-maven-plugin:10.10.0:repair -Dflyway.url=... -Dflyway.user=... -Dflyway.password=...` |

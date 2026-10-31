@@ -43,6 +43,10 @@ export default function RecipesPage() {
   const [search, setSearch] = useState('');
   const [filterMealType, setFilterMealType] = useState<MealType | ''>('');
   const [filterCategory, setFilterCategory] = useState('');
+  // navigation-п.6: фильтр по ингредиенту — deep-link /recipes?ingredient=<id>
+  // из таблицы продуктов («В рецептах: N»). Параметр ЖИВЁТ в URL (shareable),
+  // чистится только явным сбросом (✕ на чипе / «Сбросить фильтры»).
+  const [filterIngredient, setFilterIngredient] = useState<string | null>(() => searchParams.get('ingredient'));
   const [noFireOnly, setNoFireOnly] = useState(false);
   const [selectedRecipe, setSelectedRecipe] = useState<string | null>(null);
   // подзадача 10 (30.10.2026): «В меню» — sheet с выбором похода и дня
@@ -124,7 +128,7 @@ export default function RecipesPage() {
     const target = recipes.find(r => String(r.id) === editId)
       ?? recipes.find(r => String(r.id) === base)
       ?? recipes.find(r => String((r as any).snapshotOf ?? '') === editId);
-    setSearchParams({}, { replace: true });
+    dropParam('edit');
     if (target) openEdit(target);
     else showError('Блюдо для редактирования не найдено в каталоге');
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -140,11 +144,28 @@ export default function RecipesPage() {
     const target = recipes.find(r => String(r.id) === viewId)
       ?? recipes.find(r => String(r.id) === base)
       ?? recipes.find(r => String((r as any).snapshotOf ?? '') === viewId);
-    setSearchParams({}, { replace: true });
+    dropParam('view');
     if (target) setSelectedRecipe(target.id);
     else showError('Блюдо не найдено в каталоге');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams, recipes, loading]);
+
+  // navigation-п.6: ?ingredient= — единственный «липкий» параметр фильтра; при
+  // навигации внутри страницы (переход по ссылке «В рецептах» без размонтирования)
+  // синхронизируем состояние с URL.
+  useEffect(() => {
+    const ing = searchParams.get('ingredient');
+    setFilterIngredient(prev => (prev === ing ? prev : ing));
+  }, [searchParams]);
+
+  /** Убрать свой параметр из URL, НЕ затирая остальные (ingredient/edit/view). */
+  const dropParam = useCallback((name: string) => {
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev);
+      next.delete(name);
+      return next;
+    }, { replace: true });
+  }, [setSearchParams]);
 
   // Получить уникальные категории
   const categories = useMemo(() => {
@@ -170,13 +191,33 @@ export default function RecipesPage() {
       
       // Фильтр по категории
       if (filterCategory && r.category !== filterCategory) return false;
+
+      // navigation-п.6: фильтр по ингредиенту (id продукта)
+      if (filterIngredient) {
+        const hit = (r.ingredients ?? []).some((ri: any) =>
+          String(ri.ingredientId ?? ri.ingredient?.id ?? '') === String(filterIngredient));
+        if (!hit) return false;
+      }
       
       // Только без огня
       if (noFireOnly && r.cookMinutes !== 0) return false;
       
       return true;
     });
-  }, [recipes, search, filterMealType, filterCategory, noFireOnly]);
+  }, [recipes, search, filterMealType, filterCategory, filterIngredient, noFireOnly]);
+
+  // navigation-п.6: имя продукта для чипа — из состава любого подходящего рецепта
+  const filterIngredientName = useMemo(() => {
+    if (!filterIngredient) return null;
+    for (const r of recipes) {
+      for (const ri of (r.ingredients ?? []) as any[]) {
+        if (String(ri.ingredientId ?? ri.ingredient?.id ?? '') === String(filterIngredient)) {
+          return ri.ingredient?.name ?? ri.ingredientName ?? 'продукт';
+        }
+      }
+    }
+    return 'продукт';
+  }, [recipes, filterIngredient]);
 
   // Подсчёт для чипов
   const counts = useMemo(() => {
@@ -194,6 +235,10 @@ export default function RecipesPage() {
     setFilterMealType('');
     setFilterCategory('');
     setNoFireOnly(false);
+    if (filterIngredient) {
+      setFilterIngredient(null);
+      dropParam('ingredient'); // navigation-п.6: сброс убирает параметр из URL
+    }
   };
 
   const selected = recipes.find(r => r.id === selectedRecipe);
@@ -256,7 +301,7 @@ export default function RecipesPage() {
             />
           </div>
           <FilterSheet
-            count={(filterMealType ? 1 : 0) + (filterCategory ? 1 : 0) + (noFireOnly ? 1 : 0)}
+            count={(filterMealType ? 1 : 0) + (filterCategory ? 1 : 0) + (noFireOnly ? 1 : 0) + (filterIngredient ? 1 : 0)}
             testId="recipes-filters"
           >
             <div className="seg max-w-full overflow-x-auto" role="group" aria-label="Фильтр по типу приёма">
@@ -292,6 +337,21 @@ export default function RecipesPage() {
                   ariaLabel="Категория блюда"
                 />
               </div>
+              {/* navigation-п.6: активный фильтр по ингредиенту — чип с ✕
+                  (в строке фильтров; на мобильном виден в FilterSheet) */}
+              {filterIngredient && (
+                <button
+                  type="button"
+                  onClick={() => { setFilterIngredient(null); dropParam('ingredient'); }}
+                  className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-full text-xs font-bold"
+                  style={{ background: 'color-mix(in srgb, var(--wave-400) 14%, transparent)', border: '1px solid var(--wave-300)', color: 'var(--wave-300)' }}
+                  data-testid="recipes-ingredient-chip"
+                  aria-label={`Фильтр по ингредиенту: ${filterIngredientName}. Снять`}
+                >
+                  Ингредиент: {filterIngredientName}
+                  <X size={14} aria-hidden />
+                </button>
+              )}
               {/* подзадача 10: tofu-глиф 🔥 заменён иконкой lucide (Flame) —
                   эмодзи из шрифтов окружения убраны */}
               <button
@@ -308,7 +368,7 @@ export default function RecipesPage() {
                 <Flame size={14} aria-hidden />
                 Только без огня
               </button>
-              {(search || filterMealType || filterCategory || noFireOnly) && (
+              {(search || filterMealType || filterCategory || filterIngredient || noFireOnly) && (
                 <button
                   onClick={resetFilters}
                   className="flex items-center gap-1 px-3 py-2 rounded-full text-xs"

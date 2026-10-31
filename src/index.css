@@ -364,30 +364,10 @@ h1, h2, h3, .logo-word, .font-display {
   box-shadow: var(--shadow-glow);
 }
 
-/* navigation-п.2: статусы готовности в десктоп-.seg — один визуальный язык
-   с мобильным StageTabBar (номер этапа → галочка, когда этап закрыт). */
-.seg-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 18px;
-  height: 18px;
-  padding: 0 5px;
-  margin-left: 2px;
-  border-radius: var(--r-pill);
-  background: color-mix(in srgb, var(--text-2) 16%, transparent);
-  color: var(--text-2);
-  font: 800 11px Manrope;
-  line-height: 1;
-}
-.seg-badge.ok {
-  background: color-mix(in srgb, var(--success) 26%, transparent);
-  color: var(--success);
-}
-.seg-btn.active .seg-badge {
-  background: color-mix(in srgb, var(--on-fire) 24%, transparent);
-  color: var(--on-fire);
-}
+/* transparency-п.2 (решение владельца 31.10 — «кликабельные чипы»): статусы
+   готовности убраны из десктоп-.seg (класс .seg-badge удалён) — готовность
+   этапов изображается ровно один раз: кликабельные чипы readiness-цепочки
+   (TripSummaryPanel, testid stage-chip-*), они же переключают этап. */
 
 /* navigation-п.2: CTA «Далее» в конце этапа — заметный, но не перекрывает
    контент; подсказка на незаполненном этапе — тот же слот (без скачков вёрстки). */
@@ -775,7 +755,7 @@ input:-webkit-autofill:active {
   pointer-events: none;
 }
 
-/* Fix-3 / R4-lite: печатная раскладка («Печать» во вкладке «Закупка и чеки») —
+/* Fix-3 / R4-lite: печатная раскладка («Печать» на этапе ④ «Чеки и итог») —
    только таблицы и итоги, без сайдбара, табов и управляющих элементов. */
 @media print {
   aside,
@@ -2061,7 +2041,7 @@ textarea {
   overflow: hidden;
 }
 .trip-card__bar > span { display: block; height: 100%; background: var(--wave-400); }
-.trip-card__bar > span.stage-menu { background: var(--fire); }
+/* transparency-п.6: .stage-menu удалён — у этапа ① больше нет процентной полосы */
 .trip-card__kebab { position: absolute; top: var(--sp-3); right: var(--sp-3); }
 @media (max-width: 767px) {
   .trip-card { background-image: none !important; }
