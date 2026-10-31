@@ -1,6 +1,8 @@
 import { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { lockBodyScroll, unlockBodyScroll } from './Modal';
+import { pushOverlay, popOverlay, isTopOverlay, type OverlayEntry } from '../utils/overlayStack';
+import { trapTab } from '../utils/focusTrap';
 
 /**
  * Plan plans/2026-10-30-mobile-workflow-ux.md (подзадачи 1/5/9/10): нижний
@@ -28,11 +30,15 @@ export function BottomSheet({ title, onClose, children, testId }: BottomSheetPro
 
   useEffect(() => {
     restoreTo.current = document.activeElement as HTMLElement | null;
+    // UX-осмотр 31.10 (п.14): общий стек оверлеев — Esc закрывает только верхний
+    const entry: OverlayEntry = pushOverlay();
     lockBodyScroll();
-    // фокус внутрь диалога: Esc/Tab живут в диалоге, а не на фоне
-    sheetRef.current?.focus();
+    // фокус внутрь диалога: Esc/Tab живут в диалоге, а не на фоне.
+    // preventScroll обязателен: focus() с scroll-into-view сдвигал содержимое
+    // оверлея в момент фокуса (механизм KB-29 — координатный клик глотался).
+    sheetRef.current?.focus({ preventScroll: true });
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
+      if (e.key === 'Escape' && isTopOverlay(entry)) {
         e.stopPropagation();
         onClose();
       }
@@ -40,8 +46,9 @@ export function BottomSheet({ title, onClose, children, testId }: BottomSheetPro
     window.addEventListener('keydown', onKey);
     return () => {
       window.removeEventListener('keydown', onKey);
+      popOverlay(entry);
       unlockBodyScroll();
-      restoreTo.current?.focus?.();
+      restoreTo.current?.focus?.({ preventScroll: true });
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -51,6 +58,7 @@ export function BottomSheet({ title, onClose, children, testId }: BottomSheetPro
       className="sheet-overlay"
       data-testid={testId ? `${testId}-overlay` : 'sheet-overlay'}
       onClick={onClose}
+      onKeyDown={(e) => trapTab(e, sheetRef.current)}
     >
       <div
         ref={sheetRef}

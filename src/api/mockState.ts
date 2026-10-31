@@ -297,3 +297,52 @@ export function nextManualSeq(): number {
   manualSeq += 1;
   return manualSeq;
 }
+
+/**
+ * KB-34 (план plans/done/2026-10-31-ux-audit-visual-inspection.md, подзадача 11):
+ * mock-паритет ownership (AGENTS R3).
+ *
+ * Бэкенд резолвит поход ТОЛЬКО вместе с владельцем —
+ * `tripRepository.findByIdWithDaysAndMeals(tripId, userId)` (TripService): чужой
+ * поход неотличим от несуществующего (404 TRIP_NOT_FOUND) для обеих ролей, а
+ * `GET /trips` — это `findByUserId`. Mock искал одним `trips.find(t => t.id)`,
+ * поэтому прямой URL чужого похода открывал и позволял править чужие данные.
+ *
+ * Владелец берётся из токена сессии — тот же канал, что `/auth/me`
+ * (`mock-access-token-<id>`). Если токена нет или он не резолвится в
+ * пользователя, сессия считается неопределённой и mock остаётся пермиссивным
+ * (прежний дефолт, см. mockTripsUpdate.test.ts «без токена — владелец users[0]»;
+ * реальный API на запрос без токена отвечает 401, а не данными).
+ */
+export function sessionUserId(): string | null {
+  try {
+    if (typeof localStorage === 'undefined') return null;
+    const token = localStorage.getItem('accessToken') || '';
+    const m = token.match(/mock-access-token-(\d+)$/);
+    if (!m) return null;
+    return users.some(u => u.id === m[1]) ? m[1] : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Поход текущей сессии; undefined — чужой (неотличим от несуществующего). */
+export function findOwnTrip(tripId: string): Trip | undefined {
+  const uid = sessionUserId();
+  return trips.find(t => t.id === tripId && (uid == null || String(t.userId) === uid));
+}
+
+/** Поход текущей сессии либо 404 в той же форме, что и прочие not-found мока. */
+export function ownTripOr404(tripId: string): Trip {
+  const trip = findOwnTrip(tripId);
+  if (!trip) {
+    throw { status: 404, message: 'Not found', detail: `Trip ${tripId} not found` };
+  }
+  return trip;
+}
+
+/** Список походов текущей сессии (паритет `TripRepository.findByUserId`). */
+export function visibleTrips(): Trip[] {
+  const uid = sessionUserId();
+  return uid == null ? trips : trips.filter(t => String(t.userId) === uid);
+}

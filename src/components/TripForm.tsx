@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { X } from 'lucide-react';
 import { DateRange } from './DateRange';
 import { validateTrip } from '../utils/validation';
+// UX-осмотр 31.10 (п.2): ошибки формы — человеческие RU-тексты, без префикса поля
+import { humanizeFieldError } from '../utils/validationMessages';
 import Modal from './Modal';
 import { Button } from './Button';
 import type { FieldError } from '../types/errors';
@@ -51,6 +53,9 @@ export function TripForm({ onSubmit, onCancel, externalErrors = [], submitLabel 
   const handleSubmit = async () => {
     const errors = validateTrip(data);
     if (errors.length > 0) {
+      // R10: техническая сторона ошибки (поле + rejectedValue) — в лог, пользователю
+      // показываем только человеческую копи (humanizeFieldError ниже).
+      console.info('[trip-form] валидация не прошла', errors.map(e => ({ field: e.field, rejectedValue: e.rejectedValue })));
       setFormErrors(errors);
       return;
     }
@@ -89,9 +94,13 @@ export function TripForm({ onSubmit, onCancel, externalErrors = [], submitLabel 
 
         {(formErrors.length > 0 || externalErrors.length > 0) && (
           <div className="mb-4 space-y-1" role="alert">
+            {/* UX-осмотр 31.10 (п.2): раньше выводилось «startDate: startDate must not
+                be blank» — технический префикс поля + английский шаблон Jakarta. Теперь
+                только человеческая RU-копи; поле остаётся в data-field и в problemDetail
+                (логи, подсветка инпута через errorFor). */}
             {(formErrors.length > 0 ? formErrors : externalErrors).map((err, idx) => (
-              <p key={idx} className="text-sm" style={{ color: 'var(--danger)' }}>
-                <span className="font-medium">{err.field}:</span> {err.message}
+              <p key={idx} className="text-sm" style={{ color: 'var(--danger)' }} data-field={err.field}>
+                {humanizeFieldError(err)}
               </p>
             ))}
           </div>

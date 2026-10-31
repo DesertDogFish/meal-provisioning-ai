@@ -27,7 +27,7 @@ import type { ActualAmount } from '../utils/checkUnits';
 import type { TripView } from '../utils/tripDerived';
 import type { Trip } from '../types/tripDetail';
 import {
-  buildCheckRows, groupCheckRows, dayPlanFacts, checkTotals,
+  buildCheckRows, groupCheckRows, dayPlanFacts, checkTotals, hasEnteredFacts,
   calculateDelta, formatDelta, getDeltaChipClass, type CheckRow,
 } from './ChecksModel';
 import { ChecksTable } from './ChecksTable';
@@ -84,6 +84,9 @@ export default function PriceOverridesTab(props: PriceOverridesTabProps) {
   // Fix-3 (п.2): чек вводим только после подтверждения закупки в чеклисте
   const canEnterCheck = boughtSet.size > 0;
   const totalDelta = calculateDelta(totalPlanned, totalActual);
+  // UX-осмотр 31.10 (п.10): «честный факт» — до первого введённого чека
+  // totalActual совпадает с планом, поэтому ни суммой, ни «+0%» его не показываем.
+  const hasFact = hasEnteredFacts(rows);
 
   return (
     <div className="space-y-4">
@@ -103,13 +106,26 @@ export default function PriceOverridesTab(props: PriceOverridesTabProps) {
       )}
 
       {/* Подзадача 6 (30.10): «Кто сколько должен» — СВЕРХУ этапа, виден без скролла */}
-      <WhoOwesBlock totalActual={totalActual} realPeople={view.realPeople} days={whoOwesDays} />
+      <WhoOwesBlock totalActual={totalActual} realPeople={view.realPeople} days={whoOwesDays} hasFact={hasFact} />
 
       {/* Подзадача 6: липкая строка итогов «План · Факт · Δ» */}
       <div className="planfact-strip checklist-sticky max-w-3xl" data-testid="planfact-strip">
         <span className="keep-pair">План <b className="keep-num" style={{ color: 'var(--text)' }}>{formatRub(totalPlanned)}</b></span>
-        <span className="keep-pair">Факт <b className="keep-num" style={{ color: 'var(--w1)' }}>{formatRub(totalActual)}</b></span>
-        <span className={`chip-delta keep-num ${getDeltaChipClass(totalDelta)}`}>{formatDelta(totalDelta)}</span>
+        <span className="keep-pair" data-testid="planfact-fact">
+          Факт{' '}
+          {hasFact ? (
+            <b className="keep-num" style={{ color: 'var(--w1)' }}>{formatRub(totalActual)}</b>
+          ) : (
+            <b className="keep-num" style={{ color: 'var(--muted)', fontWeight: 600 }}>нет данных</b>
+          )}
+        </span>
+        <span
+          className={`chip-delta keep-num ${hasFact ? getDeltaChipClass(totalDelta) : 'dim'}`}
+          data-testid="planfact-delta"
+          title={hasFact ? undefined : 'Отклонение появится после первого введённого чека'}
+        >
+          {hasFact ? formatDelta(totalDelta) : '—'}
+        </span>
         {excluded.size > 0 && (
           <span className="keep-pair cap" style={{ color: 'var(--muted)' }}>
             без <span className="keep-num">{excluded.size} искл.</span>

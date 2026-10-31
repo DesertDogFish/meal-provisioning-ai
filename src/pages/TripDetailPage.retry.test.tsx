@@ -79,3 +79,28 @@ describe('TripDetailPage: error-state этапа — рабочая «Повто
     });
   });
 });
+
+/**
+ * KB-34 (план plans/done/2026-10-31-ux-audit-visual-inspection.md, подзадача 11):
+ * чужой поход в mock теперь неотличим от несуществующего — 404 (паритет с
+ * TripService.findByIdWithDaysAndMeals(tripId, userId)). Прямой URL чужого
+ * похода обязан показывать ЧЕЛОВЕЧЕСКУЮ RU-ошибку, а не сырой английский
+ * detail из ProblemDetail («Trip 77 not found»).
+ */
+describe('TripDetailPage: 404 на чужой поход — человеческая ошибка (KB-34)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+  });
+
+  it('404 → «Поход не найден или недоступен», английский detail не показываем', async () => {
+    getMock.mockRejectedValue({ status: 404, message: 'Not found', detail: 'Trip 77 not found' });
+    renderPage();
+
+    expect((await screen.findAllByText('Поход не найден или недоступен')).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/Trip 77 not found/)).toBeNull();
+    // путь назад и «Повторить» на месте
+    expect(screen.getByRole('button', { name: /назад к походам/i })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /^повторить$/i })).toBeTruthy();
+  });
+});

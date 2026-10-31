@@ -105,19 +105,21 @@ function ApiModeBadgeInner({ inline = false }: { inline?: boolean } = {}) {
 
   return (
     <>
-      {/* Бейдж. Подзадача 9 / пост-закрытие плана: на мобильном бейдж жил
-          `fixed top-20 right-4` и на узком экране НАЕЗЖАЛ на длинные заголовки
-          страниц («Поход на Карельский перешеек» уходил под плашку). Внизу слева
-          он не пересекается ни с заголовками, ни с `.scroll-top-btn` (внизу
-          справа); низ поднят на safe-area для iPhone с домашней полосой.
-          На десктопе — как было: справа вверху. */}
+      {/* Бейдж. Подзадача 9: на мобильном бейдж жил `fixed top-20 right-4` и
+          наезжал на длинные заголовки страниц — переехал В топбар (inline).
+          KB-35 (UX-осмотр 31.10, п.12): десктопный вариант тоже был `fixed
+          top-4 right-4` и на ≥1200px перекрывал kebab действий похода и кнопку
+          темы (зона клика частично недоступна). Теперь бейдж — ОБЫЧНЫЙ
+          flow-элемент слота над контентом (`.dev-badge-flow`), ничего не
+          перекрывает по построению. В прод-сборке компонент возвращает null
+          (BL-52), слот схлопывается в нулевую высоту. */}
       <div
         className={[
           'flex items-center gap-2 px-3 py-1.5 rounded-[var(--r-pill)] cursor-pointer transition-colors',
           // Ревизия скриншотов 29.10: плавающий бейдж закрывал данные списка
           // (снизу) или заголовок (сверху). На мобильном он теперь живёт В
           // топбаре (inline), плавающим остаётся только на десктопе.
-          inline ? 'shrink-0' : 'fixed top-4 right-4',
+          inline ? 'api-badge api-badge--inline shrink-0' : 'api-badge dev-badge-flow',
         ].join(' ')}
         style={{
           zIndex: 'var(--z-nav)',
@@ -137,7 +139,7 @@ function ApiModeBadgeInner({ inline = false }: { inline?: boolean } = {}) {
             boxShadow: `0 0 8px ${getBadgeColor()}`
           }}
         />
-        <span style={{ color: 'var(--muted)' }}>
+        <span className="api-badge__text" style={{ color: 'var(--muted)' }}>
           {getBadgeText()}
         </span>
       </div>
@@ -154,7 +156,9 @@ function ApiModeBadgeInner({ inline = false }: { inline?: boolean } = {}) {
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl font-bold" style={{ color: 'var(--text)' }}>Режим данных</h2>
               <button
+                type="button"
                 onClick={() => setShowModal(false)}
+                aria-label="Закрыть"
                 className="p-2 rounded-lg transition-colors"
                 style={{ color: 'var(--muted)' }}
               >

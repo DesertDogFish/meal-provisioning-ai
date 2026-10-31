@@ -8,6 +8,7 @@ import { ArrowUpDown, ShoppingBasket } from 'lucide-react';
 import TabHeader from './TabHeader';
 import { EmptyState } from './EmptyState';
 import ExclusionCheckbox from './ExclusionCheckbox';
+import InfoTip from './InfoTip';
 import { formatAmount } from '../utils/calculations';
 import { formatRub } from '../utils/format' // cleanup-п.9: shim formatRub удалён;
 import type { SortDir } from '../utils/rowSort';
@@ -70,8 +71,23 @@ export function TripShoppingTab({
         <table className="w-full text-sm">
           <thead style={{ background: 'var(--elev)' }}>
             <tr>
-              {/* Фаза 13 (п.5): чекбокс soft-disable — исключить из расчёта, не удаляя */}
-              <th className="px-4 py-3 font-medium" style={{ color: 'var(--muted)' }} aria-label="В расчёт" />
+              {/* Фаза 13 (п.5): чекбокс soft-disable — исключить из расчёта, не удаляя.
+                  UX-осмотр 31.10 (п.10): колонка была БЕЗ подписи (пустой th с
+                  aria-label) — смысл галочки не читался. Теперь заголовок виден,
+                  а легенда раскрыта в InfoTip. */}
+              <th
+                className="px-4 py-3 font-medium"
+                style={{ color: 'var(--muted)', fontSize: 'var(--fs-caption)' }}
+                data-testid="shopping-check-col"
+              >
+                <span className="keep-pair">
+                  В расчёт
+                  <InfoTip
+                    label="Что означает галочка"
+                    text="Галочка — позиция участвует в закупке и в сумме «Итого». Снимите, чтобы исключить её из расчёта, не удаляя из списка: строка останется (полупрозрачной), но считаться перестанет."
+                  />
+                </span>
+              </th>
               {/* U26: сортируемые заголовки — клик переключает asc/desc */}
               {([
                 { field: 'ingredientName' as ShoppingSortField, label: 'Продукт', align: 'left' },

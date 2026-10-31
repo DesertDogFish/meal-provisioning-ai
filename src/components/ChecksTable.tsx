@@ -13,7 +13,7 @@ import { neededAsActual, type ActualAmount } from '../utils/checkUnits';
 import { enteredCheckTotal } from '../utils/checkInput';
 import type { ChecklistActual } from '../utils/tripStaging';
 import {
-  calculateDelta, formatDelta, getDeltaChipClass,
+  calculateDelta, formatDelta, getDeltaChipClass, hasEnteredFacts,
   type CheckRow, type CheckGroup, type DayPlanFact,
 } from './ChecksModel';
 
@@ -38,6 +38,9 @@ export function ChecksTable(props: ChecksTableProps) {
     totalPlanned, totalActual, onCommitActualTotal, onCommitTook, onToggleExcluded,
   } = props;
   const totalDelta = calculateDelta(totalPlanned, totalActual);
+  // UX-осмотр 31.10 (п.10): «честный факт» — пока ни один чек не введён,
+  // totalActual это копия плана; показывать её как факт и считать отклонение нельзя.
+  const hasFact = hasEnteredFacts(groups.flatMap(g => g.items));
 
   return (
     <>
@@ -72,20 +75,20 @@ export function ChecksTable(props: ChecksTableProps) {
               </th>
               <th className="text-right px-2 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: 'var(--fs-caption)' }}>
                 <span className="keep-pair">
-                  Думали ₽
+                  План ₽
                   <InfoTip text="Плановая стоимость позиции: нужное количество × цена справочника на дату." />
                 </span>
               </th>
               <th className="text-right px-2 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: 'var(--fs-caption)' }}>
                 <span className="keep-pair">
-                  Заплатили ₽
-                  <InfoTip text="Сумма из чека за позицию — сколько реально заплатили за купленное количество. Цена за единицу и распределение на всех посчитаются автоматически." />
+                  Факт ₽
+                  <InfoTip label="Что такое «Факт ₽»" text="Сумма из чека за позицию — сколько реально заплатили за купленное количество. Цена за единицу и распределение на всех посчитаются автоматически. Пока чек не введён, факт не показываем: план за факт не выдаётся." />
                 </span>
               </th>
               <th className="text-right px-2 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: 'var(--fs-caption)' }}>
                 <span className="keep-pair">
                   Отклонение
-                  <InfoTip text="(Заплатили − Думали) ÷ Думали × 100%." />
+                  <InfoTip text="(Факт − План) ÷ План × 100%. Пусто («—»), пока чек по позиции не введён." />
                 </span>
               </th>
             </tr>
@@ -108,20 +111,30 @@ export function ChecksTable(props: ChecksTableProps) {
           </tbody>
         </table>
 
-        {/* Sticky итог — народный нейминг (Fix-6 п.21) */}
-        <div className="sticky-totals">
+        {/* Sticky итог — единый словарь этапов ②④: «План/Факт» (UX-осмотр 31.10, п.10) */}
+        <div className="sticky-totals" data-testid="checks-sticky-totals">
           <span className="keep-pair" style={{ color: 'var(--text)' }}>
-            Думали: <b className="keep-num">{formatRub(totalPlanned)}</b>
+            План: <b className="keep-num">{formatRub(totalPlanned)}</b>
           </span>
           <span className="keep-pair" style={{ color: 'var(--text)' }}>
-            Заплатили: <b className="keep-num" style={{ color: 'var(--w1)' }}>{formatRub(totalActual)}</b>
+            Факт:{' '}
+            {hasFact ? (
+              <b className="keep-num" style={{ color: 'var(--w1)' }}>{formatRub(totalActual)}</b>
+            ) : (
+              <b className="keep-num" style={{ color: 'var(--muted)', fontWeight: 600 }}>нет данных</b>
+            )}
           </span>
-          <span className={`chip-delta keep-num ${getDeltaChipClass(totalDelta)}`}>
-            {formatDelta(totalDelta)}
+          <span
+            className={`chip-delta keep-num ${hasFact ? getDeltaChipClass(totalDelta) : 'dim'}`}
+            title={hasFact ? undefined : 'Отклонение появится после первого введённого чека'}
+          >
+            {hasFact ? formatDelta(totalDelta) : '—'}
           </span>
-          <span className="keep-pair cap" style={{ color: 'var(--muted)' }}>
-            разница: <span className="keep-num">{formatRub(totalActual - totalPlanned)}</span>
-          </span>
+          {hasFact && (
+            <span className="keep-pair cap" style={{ color: 'var(--muted)' }}>
+              разница: <span className="keep-num">{formatRub(totalActual - totalPlanned)}</span>
+            </span>
+          )}
           {excluded.size > 0 && (
             <span className="keep-pair cap" style={{ color: 'var(--muted)' }}>
               без <span className="keep-num">{excluded.size} искл.</span>
@@ -136,8 +149,8 @@ export function ChecksTable(props: ChecksTableProps) {
           <thead>
             <tr style={{ borderBottom: '1px solid var(--border)' }}>
               <th className="text-left px-4 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: 'var(--fs-caption)' }}>День</th>
-              <th className="text-right px-4 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: 'var(--fs-caption)' }}><span className="keep-pair">Думали ₽</span></th>
-              <th className="text-right px-4 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: 'var(--fs-caption)' }}><span className="keep-pair">Заплатили ₽</span></th>
+              <th className="text-right px-4 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: 'var(--fs-caption)' }}><span className="keep-pair">План ₽</span></th>
+              <th className="text-right px-4 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: 'var(--fs-caption)' }}><span className="keep-pair">Факт ₽</span></th>
               <th className="text-right px-4 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: 'var(--fs-caption)' }}>Отклонение</th>
             </tr>
           </thead>
@@ -145,21 +158,26 @@ export function ChecksTable(props: ChecksTableProps) {
             {dayFacts.map(day => {
               const delta = calculateDelta(day.plannedCost, day.actualCost);
               return (
-                <tr key={day.dayDate} style={{ borderBottom: '1px solid var(--border)' }}>
+                <tr key={day.dayDate} data-testid={`dayfact-row-${day.dayDate}`} style={{ borderBottom: '1px solid var(--border)' }}>
                   <td className="row-title px-4 py-3" data-label="">
                     <b style={{ color: 'var(--text)' }}>
                       {new Date(day.dayDate).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })}
                     </b>
                   </td>
-                  <td className="keep-num px-4 py-3 text-right" data-label="Думали ₽" style={{ color: 'var(--text)' }}>
+                  <td className="keep-num px-4 py-3 text-right" data-label="План ₽" style={{ color: 'var(--text)' }}>
                     {formatRub(day.plannedCost)}
                   </td>
-                  <td className="keep-num px-4 py-3 text-right" data-label="Заплатили ₽" style={{ color: 'var(--w1)' }}>
-                    {formatRub(day.actualCost)}
+                  <td className="keep-num px-4 py-3 text-right" data-label="Факт ₽" style={{ color: 'var(--w1)' }}>
+                    {day.hasFact
+                      ? formatRub(day.actualCost)
+                      : <span style={{ color: 'var(--muted)', fontWeight: 600 }}>нет данных</span>}
                   </td>
                   <td className="px-4 py-3 text-right" data-label="Отклонение">
-                    <span className={`chip-delta keep-num ${getDeltaChipClass(delta)}`}>
-                      {formatDelta(delta)}
+                    <span
+                      className={`chip-delta keep-num ${day.hasFact ? getDeltaChipClass(delta) : 'dim'}`}
+                      title={day.hasFact ? undefined : 'Чек за этот день не введён'}
+                    >
+                      {day.hasFact ? formatDelta(delta) : '—'}
                     </span>
                   </td>
                 </tr>
@@ -204,7 +222,7 @@ function GroupRows(props: GroupRowsProps) {
         // Fix-8 (п.6): сохранённый ввод переживает смену потребности
         const storedTook = actualMap[String(item.ingredientId)] ?? null;
         const tookValue = storedTook ?? neededAsActual(item.totalAmount, item.unit);
-        // Fix-10 (п.1): «Заплатили» по умолчанию ПУСТО — только введённый чек
+        // Fix-10 (п.1): «Факт» по умолчанию ПУСТО — только введённый чек
         const actualTotal = enteredCheckTotal(item.enteredUnitPrice, item.totalAmount);
         const actualCostView = actualTotal ?? item.actualCost;
         const delta = calculateDelta(item.plannedCost, actualCostView);
@@ -243,10 +261,10 @@ function GroupRows(props: GroupRowsProps) {
                 testId={`qty-input-${item.ingredientId}`}
               />
             </td>
-            <td className="keep-num px-2 py-2.5 text-right" data-label="Думали ₽" style={{ color: 'var(--text)' }}>
+            <td className="keep-num px-2 py-2.5 text-right" data-label="План ₽" style={{ color: 'var(--text)' }}>
               {isExcluded ? '—' : formatRub(item.plannedCost)}
             </td>
-            <td className="px-2 py-2.5 text-right" data-label="Заплатили ₽">
+            <td className="px-2 py-2.5 text-right" data-label="Факт ₽">
               {/* Fix-10 (п.3): sm — одной высоты с «Взяли» в этой строке */}
               <NumberField
                 value={actualTotal}
@@ -260,8 +278,12 @@ function GroupRows(props: GroupRowsProps) {
               />
             </td>
             <td className="px-2 py-2.5 text-right" data-label="Отклонение">
-              <span className={`chip-delta keep-num ${getDeltaChipClass(delta)}`}>
-                {formatDelta(delta)}
+              <span
+                className={`chip-delta keep-num ${actualTotal != null ? getDeltaChipClass(delta) : 'dim'}`}
+                data-testid={`row-delta-${item.ingredientId}`}
+                title={actualTotal != null ? undefined : 'Чек по позиции не введён — отклонение появится после ввода факта'}
+              >
+                {actualTotal != null ? formatDelta(delta) : '—'}
               </span>
             </td>
           </tr>

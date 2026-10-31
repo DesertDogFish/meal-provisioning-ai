@@ -20,7 +20,6 @@ interface Props {
   disabled?: boolean;
 }
 
-const normalize = (s: string) => s.toLowerCase().replace(/ё/g, 'е').replace(/\s+/g, ' ').trim();
 
 /**
  * Правка состава блюда прямо в окне добавления приёма пищи:
@@ -212,16 +211,6 @@ export default function RecipeIngredientsEditor({ recipe, products, onChange, di
               aria-label="Количество добавляемого продукта"
             />
           </span>
-          <button
-            type="button"
-            disabled={disabled}
-            onClick={() => {
-              // Клавиатура: если в поиске набрано имя — выбрать первый совпадающий продукт
-              const q = normalize(newProductQuery);
-              void q;
-            }}
-            className="hidden"
-          />
         </div>
         <p className="mt-1 flex items-center gap-1 text-xs" style={{ color: 'var(--muted)' }}>
           <Plus size={12} /> Найдите продукт в списке и укажите количество — оно прибавится, если продукт уже в составе.

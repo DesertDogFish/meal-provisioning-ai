@@ -3,21 +3,25 @@
 // валидацию и submit.
 //
 // Даты вводятся через DatePicker (обёртка над react-datepicker с customInput —
-// нативным <input type="date">). Особенности взаимодействия:
+// input type="text", свой попапер .dark-calendar). Особенности взаимодействия:
 //  - Целимся в input по id ('#start-date' / '#end-date'), который ставит DateRange;
 //    label связан через htmlFor, но у обоих пикеров одинаковый aria-label, поэтому
 //    getByLabelText ненадёжен — используем document.querySelector (модалка
 //    рендерится через createPortal в body, вне контейнера render()).
-//  - Значение input — ISO YYYY-MM-DD; fireEvent.change попадает в наш NativeInput
-//    (React-обработчик + колбэк onDateChange), т.е.onChange -> DateRange -> state формы.
-//  - Атрибут min присутствует на input как побочный эффект проброса minDate, но
-//    контракт CR-3 проверяем функционально (валидация при submit), а не атрибутом.
+//  - KB-32 (UX-осмотр 31.10, п.3): ПОКАЗЫВАЕТ поле ДД.ММ.ГГГГ, хранит форма ISO.
+//    Вводим по-прежнему ISO — парсер принимает оба формата (utils/dateInput).
+//    fireEvent.change попадает в наш NativeInput (React-обработчик + колбэк
+//    onDateChange), т.е. onChange -> DateRange -> state формы.
+//  - Атрибут min остаётся ISO YYYY-MM-DD (контракт CR-3, его проверяет e2e).
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
 import React from 'react';
 import { TripForm } from './TripForm';
 import type { TripFormData } from './TripForm';
 import { humanize } from '../utils/calc';
+
+/** ISO формы → то, что видно в поле (ДД.ММ.ГГГГ). См. utils/dateInput (KB-32). */
+const shown = (iso: string) => iso.split('-').reverse().join('.');
 
 beforeEach(() => cleanup());
 
@@ -79,7 +83,7 @@ describe('TripForm — даты (CR-3 спаренные дейт-пикеры)'
     await waitFor(() => expect(endInput()).toBeEnabled());
     expect(endInput().className).not.toContain('disabled');
     // Автоподтягивание CR-3: пустой endDate заполняется значением startDate
-    expect(endInput()).toHaveValue('2026-07-01');
+    expect(endInput()).toHaveValue(shown('2026-07-01'));
   });
 
   it('min второго пикера синхронизируется со startDate (через minDate проп react-datepicker)', async () => {
@@ -96,27 +100,34 @@ describe('TripForm — даты (CR-3 спаренные дейт-пикеры)'
     setStartDate('2026-07-01');
     await waitFor(() => expect(endInput()).toBeEnabled());
     setEndDate('2026-07-05');
-    await waitFor(() => expect(endInput()).toHaveValue('2026-07-05'));
+    await waitFor(() => expect(endInput()).toHaveValue(shown('2026-07-05')));
 
     setStartDate('2026-07-20'); // старт обогнал финиш
 
-    await waitFor(() => expect(endInput()).toHaveValue('2026-07-20'));
-    expect(startInput()).toHaveValue('2026-07-20');
+    await waitFor(() => expect(endInput()).toHaveValue(shown('2026-07-20')));
+    expect(startInput()).toHaveValue(shown('2026-07-20'));
   });
 });
 
 describe('TripForm — валидация при submit', () => {
-  it('пустая форма → ошибки name/startDate/endDate, onSubmit не вызван', async () => {
+  // UX-осмотр 31.10 (п.2): ошибки — человеческие RU-тексты, без «field: must not be blank»
+  it('пустая форма → RU-ошибки по полям, onSubmit не вызван', async () => {
     const onSubmit = vi.fn();
     renderTripForm({ onSubmit });
     fireEvent.click(screen.getByRole('button', { name: 'Создать' }));
     const alert = await screen.findByRole('alert');
-    expect(alert.textContent).toContain('name');
-    expect(alert.textContent).toContain('startDate');
+    expect(alert.textContent).toContain('Укажите название похода');
+    expect(alert.textContent).toContain('Укажите дату начала');
+    expect(alert.textContent).toContain('Укажите дату окончания');
+    // технический префикс поля и английский шаблон Jakarta больше не показываются
+    expect(alert.textContent).not.toMatch(/must not be blank/i);
+    expect(alert.textContent).not.toMatch(/(^|\s)(name|startDate|endDate):/);
+    // поле остаётся доступным программно (подсветка инпута / логи)
+    expect(alert.querySelector('[data-field="startDate"]')).toBeTruthy();
     expect(onSubmit).not.toHaveBeenCalled();
   });
 
-  it('endDate раньше startDate → ошибка «endDate must be on or after startDate»', async () => {
+  it('endDate раньше startDate → «Дата окончания не может быть раньше даты начала»', async () => {
     const onSubmit = vi.fn();
     const { endInput, setStartDate, setEndDate } = renderTripForm({ onSubmit });
     fillName('Алтай');
@@ -125,11 +136,11 @@ describe('TripForm — валидация при submit', () => {
     // Ручной ввод дублирует выбор из календаря: minDate ограничивает попап,
     // но нативный input пропускает значение дальше — до валидатора формы (CR-3).
     setEndDate('2026-08-05');
-    await waitFor(() => expect(endInput()).toHaveValue('2026-08-05'));
+    await waitFor(() => expect(endInput()).toHaveValue(shown('2026-08-05')));
 
     fireEvent.click(screen.getByRole('button', { name: 'Создать' }));
     const alert = await screen.findByRole('alert');
-    expect(alert.textContent).toMatch(/endDate must be on or after startDate/);
+    expect(alert.textContent).toContain('Дата окончания не может быть раньше даты начала');
     expect(onSubmit).not.toHaveBeenCalled();
   });
 
@@ -164,9 +175,9 @@ describe('TripForm — успешный submit с humanize-корректным�
     fillName(validData.name);
     setStartDate(validData.startDate);
     // Ждём каскадных обновлений DateRange (разблокировка + автоподтягивание endDate)
-    await waitFor(() => expect(endInput()).toHaveValue(validData.startDate));
+    await waitFor(() => expect(endInput()).toHaveValue(shown(validData.startDate)));
     setEndDate(validData.endDate);
-    await waitFor(() => expect(endInput()).toHaveValue(validData.endDate));
+    await waitFor(() => expect(endInput()).toHaveValue(shown(validData.endDate)));
 
     fireEvent.change(screen.getByLabelText('Количество человек'), { target: { value: '6' } });
     fireEvent.change(screen.getByLabelText('Заметки'), { target: { value: 'Север' } });
@@ -181,11 +192,11 @@ describe('TripForm — успешный submit с humanize-корректным�
     const { endInput, setStartDate } = renderTripForm({ onSubmit });
     fillName('Хибин');
     setStartDate('2026-09-01');
-    await waitFor(() => expect(endInput()).toHaveValue('2026-09-01'));
+    await waitFor(() => expect(endInput()).toHaveValue(shown('2026-09-01')));
     fireEvent.change(screen.getByLabelText('Количество человек'), { target: { value: '-2' } });
     fireEvent.click(screen.getByRole('button', { name: 'Создать' }));
     const alert = await screen.findByRole('alert');
-    expect(alert.textContent).toContain('defaultPeople');
+    expect(alert.textContent).toContain('Количество человек: значение должно быть больше нуля');
     expect(onSubmit).not.toHaveBeenCalled();
   });
 
@@ -233,8 +244,8 @@ describe('TripForm — edit-режим (U36)', () => {
     expect((screen.getByLabelText('Название') as HTMLInputElement).value).toBe('Поход на Алтай');
     expect((screen.getByLabelText('Количество человек') as HTMLInputElement).value).toBe('6');
     expect((screen.getByLabelText('Заметки') as HTMLInputElement).value).toBe('старая строка');
-    expect(startInput().value).toBe('2026-07-01');
-    expect(endInput().value).toBe('2026-07-05');
+    expect(startInput().value).toBe(shown('2026-07-01'));
+    expect(endInput().value).toBe(shown('2026-07-05'));
     expect(screen.getByRole('button', { name: 'Сохранить' })).toBeTruthy();
   });
 

@@ -2,6 +2,9 @@ import React, { forwardRef } from 'react';
 import ReactDatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import { ru } from 'date-fns/locale';
+// KB-32 (UX-осмотр 31.10, п.3): единый контракт текста поля — пользователь
+// видит/набирает ДД.ММ.ГГГГ, форма и API хранят ISO YYYY-MM-DD.
+import { parseDateInput, formatDateInput, isCompleteDateText, DATE_INPUT_PATTERN } from '../utils/dateInput';
 import './DatePicker.css';
 
 export interface DatePickerProps {
@@ -14,6 +17,11 @@ export interface DatePickerProps {
   disabled?: boolean;
   error?: boolean;
   id?: string;
+  /**
+   * KB-32 (п.3): id элемента-подсказки для `aria-describedby` — например,
+   * «сначала укажите дату начала» на заблокированном поле окончания.
+   */
+  describedBy?: string;
 }
 
 /** ISO YYYY-MM-DD без timezone-сдвига (локальные части даты, а не toISOString). */
@@ -85,21 +93,16 @@ interface NativeInputProps {
 }
 
 /**
- * Нормализатор значения для текстового поля (ISO YYYY-MM-DD).
+ * Нормализатор значения для текстового поля — ДД.ММ.ГГГГ (KB-32, п.3).
  *
  * react-datepicker хранит «напечатанное» состояние (state.inputValue) и отдаёт его
- * в cloneElement приоритетнее выбранной даты; формат задаётся `dateFormat`. Мы
- * ставим dateFormat="yyyy-MM-dd", поэтому значение уже имеет вид ISO YYYY-MM-DD —
- * оставляем его как есть. Пустое/нечитаемое → '' (поле остаётся чистым).
+ * в cloneElement приоритетнее выбранной даты; формат задаётся `dateFormat`
+ * (у нас `dd.MM.yyyy`). Значение может прийти и ISO (controlled-проп формы,
+ * вставка из буфера) — приводим оба вида к единому отображению.
+ * Пустое/нечитаемое → '' (поле остаётся чистым, виден плейсхолдер).
  */
-const normalizeForDateInput = (raw: unknown): string => {
-  if (typeof raw !== 'string' || raw === '') return '';
-  // Уже ISO YYYY-MM-DD (controlled-значение, выбранный день или ручной ввод)
-  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
-  const d = new Date(raw);
-  if (!Number.isNaN(d.getTime())) return toISO(d) ?? '';
-  return '';
-};
+const normalizeForDateInput = (raw: unknown): string =>
+  typeof raw === 'string' ? formatDateInput(raw) : '';
 
 /** Только ISO YYYY-MM-DD — для атрибута max нативного text-input (контракт CR-3). */
 const isISODate = (s: unknown): boolean => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s);
@@ -118,10 +121,8 @@ const isISODate = (s: unknown): boolean => typeof s === 'string' && /^\d{4}-\d{2
  * это сохраняет поведение и не ломает strict typecheck.
  */
 const parseDate = (text: string): Date | null => {
-  if (!text) return null;
-  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return new Date(`${text}T00:00:00`);
-  const d = new Date(text);
-  return Number.isNaN(d.getTime()) ? null : d;
+  const iso = parseDateInput(text);
+  return iso ? new Date(`${iso}T00:00:00`) : null;
 };
 
 /** Пропсы ReactDatePicker, не вошедшие в public .d.ts пакета (но рабочие в рантайме). */
@@ -160,25 +161,63 @@ const NativeInput = forwardRef<HTMLInputElement, NativeInputProps>(function Nati
   }
   const display = typed != null ? typed : normalizeForDateInput(value);
 
+  /** Отправить значение наверх: наш колбэк onDateChange приоритетнее onChange. */
+  const commit = (iso: string) => {
+    if (props.onDateChange) props.onDateChange(iso);
+    else props.onChange?.(iso);
+  };
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const raw = e.target.value;
-    // '' при очистке; ISO YYYY-MM-DD — принимаем как есть (выбор из календаря
-    // приходит именно в этом виде благодаря dateFormat="yyyy-MM-dd"); частичный
-    // ручной ввод оставляем в локальном состоянии («залипания» нет), наверх
-    // отправляем только завершённую дату.
+    // '' при очистке; ПОЛНОСТЬЮ набранная дата (ДД.ММ.ГГГГ или ISO из буфера)
+    // коммитится сразу — Playwright `fill` и быстрый ввод не делают blur,
+    // а «залипание» ненабранного значения было симптомом KB-32.
     if (raw === '') {
       setTyped('');
-      if (props.onDateChange) props.onDateChange('');
-      else props.onChange?.('');
-      return;
-    }
-    if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
-      setTyped(raw);
-      if (props.onDateChange) props.onDateChange(raw);
-      else props.onChange?.(raw);
+      commit('');
       return;
     }
     setTyped(raw);
+    // Коммитим ТОЛЬКО реально существующую дату: «31.02.2026» сформирована
+    // верно, но не существует — молча стирать значение формы нельзя (KB-32:
+    // «поле выглядит заполненным, а форма пустая» — ровно тот же симптом).
+    if (isCompleteDateText(raw)) {
+      const iso = parseDateInput(raw);
+      if (iso) commit(iso);
+    }
+  };
+
+  /**
+   * KB-32 (п.3): коммит набранного на blur/Enter.
+   * Полный текст уже ушёл наверх в handleChange; здесь доезжают короткие
+   * варианты («1.7.26», «10.11.26») и откатывается нераспознанный ввод —
+   * поле не остаётся в состоянии «выглядит заполненным, но форма пустая».
+   */
+  const commitTyped = (): boolean => {
+    if (typed == null) return false;
+    const iso = parseDateInput(typed);
+    if (iso) {
+      commit(iso);
+      return true;
+    }
+    setTyped(null); // нераспознанное — откат к значению из формы
+    return false;
+  };
+
+  const handleBlur = (e: React.FocusEvent<HTMLInputElement>) => {
+    commitTyped();
+    onBlur?.(e);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    // Enter по НАБРАННОМУ тексту — наш коммит; иначе (календарь открыт,
+    // пользователь ходит стрелками) передаём событие react-datepicker.
+    if (e.key === 'Enter' && typed != null && typed.trim() !== '' && parseDateInput(typed)) {
+      e.preventDefault();
+      commitTyped();
+      return;
+    }
+    onKeyDown?.(e);
   };
 
   return (
@@ -207,9 +246,9 @@ const NativeInput = forwardRef<HTMLInputElement, NativeInputProps>(function Nati
         aria-invalid={props['aria-invalid']}
         aria-required={props['aria-required']}
         onFocus={onFocus}
-        onBlur={onBlur}
+        onBlur={handleBlur}
         onClick={onClick}
-        onKeyDown={onKeyDown}
+        onKeyDown={handleKeyDown}
         onChange={handleChange}
       />
       {/* CR-4: иконка календаря — наша (lucide), а не браузерная. Клик по ней
@@ -258,6 +297,7 @@ export function DatePicker({
   disabled,
   error,
   id,
+  describedBy,
 }: DatePickerProps) {
   // Значение формы храним как ISO YYYY-MM-DD; текстовое поле принимает его как есть.
   const selected = value ? new Date(`${value}T00:00:00`) : null;
@@ -273,10 +313,10 @@ export function DatePicker({
       return;
     }
     const iso = dateToISO(date);
-    if (!iso) {
-      onChange('');
-      return;
-    }
+    // null/undefined от react-datepicker (нераспознанный текст в его внутреннем
+    // handleChange) НЕ означает «очистили поле»: явная очистка приходит строкой
+    // '' выше. Раньше здесь форма молча обнулялась при опечатке в дате.
+    if (!iso) return;
     // ВАЖНО: здесь НЕ фильтруем по minDate/maxDate. Ограничения выборки в
     // календаре обеспечивает сам react-datepicker (minDate/maxDate), а ручному
     // вводу текстового поля они не указ (контракт CR-3 в тестах TripForm:
@@ -297,9 +337,10 @@ export function DatePicker({
     min: toISO(minDate),
     max: toISO(maxDate),
     disabled,
-    placeholder: placeholder ?? 'ДД.ММ.ГГГГ',
+    placeholder: placeholder ?? DATE_INPUT_PATTERN,
     stateClassName: `${error ? 'error' : ''} ${disabled ? 'disabled' : ''}`.trim() || undefined,
     onDateChange: handleChange,
+    'aria-describedby': describedBy,
   };
 
   return (
@@ -311,15 +352,15 @@ export function DatePicker({
       onFocus={() => setPickerOpen(true)}
       onClickOutside={() => setPickerOpen(false)}
       {...undocumentedPickerProps}
-      dateFormat="yyyy-MM-dd"
+      dateFormat="dd.MM.yyyy"
       locale={ru}
-      placeholderText={placeholder ?? 'ДД.ММ.ГГГГ'}
+      placeholderText={placeholder ?? DATE_INPUT_PATTERN}
       minDate={minDate}
       maxDate={maxDate}
       disabled={disabled}
       showPopperArrow={false}
       id={id}
-      aria-label={placeholder ?? 'ДД.ММ.ГГГГ'}
+      aria-label={placeholder ?? DATE_INPUT_PATTERN}
       calendarClassName="dark-calendar"
       className="date-picker-input dp-text-input"
       wrapperClassName="w-full date-picker-wrapper"

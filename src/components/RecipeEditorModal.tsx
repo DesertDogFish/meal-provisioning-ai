@@ -7,6 +7,8 @@ import { usePortalDropdown } from './CustomSelect';
 import { api } from '../api/client';
 import { useToast } from './ToastProvider';
 import { validateRecipe } from '../utils/validation';
+// UX-осмотр 31.10 (п.2): ошибки — человеческие RU-тексты без префикса «field:»
+import { humanizeFieldError } from '../utils/validationMessages';
 import AmountInput from './AmountInput';
 import type { MealType, UnitOfMeasure } from '../types';
 
@@ -201,9 +203,9 @@ export default function RecipeEditorModal({ recipe, categories, onClose, onSaved
       mealType,
       baseServings: servings ?? 0,
       ingredients: meaningful.filter(r => r.ingredientId && parseAmount(r.amount) != null),
-    }).map(fe => `${fe.field}: ${fe.message}`);
+    }).map(humanizeFieldError);
     if (cookMinutes.trim() !== '' && (Number.isNaN(cook) || cook < 0)) {
-      fieldErrors.push('cookMinutes: время готовки не может быть отрицательным');
+      fieldErrors.push('Время готовки не может быть отрицательным');
     }
 
     const all = [...fieldErrors, ...rowErrors];

@@ -69,6 +69,17 @@ export function formatQty(amount: number | null | undefined, unit: UnitOfMeasure
 }
 
 /**
+ * UX-осмотр 31.10 (п.10): неденежные числа (длительность синхронизации, объём
+ * файла, проценты) — тоже через ru-RU, с ЗАПЯТОЙ. Раньше в этих местах стоял
+ * `toFixed()`: «1.5 с» и «9.86» вместо «1,5 с» и «9,86».
+ * null/undefined/NaN → '—'.
+ */
+export function formatNum(value: number | null | undefined, digits = 1): string {
+  if (value == null || Number.isNaN(value)) return '—';
+  return value.toLocaleString('ru-RU', { minimumFractionDigits: digits, maximumFractionDigits: digits });
+}
+
+/**
  * Категория продукта может приходить с бэкенда объектом (ProductCategoryDto:
  * {id, name, slug, sortOrder}) или строкой (mock/legacy). Приводим к строке,
  * иначе в UI протекает «[object Object]».

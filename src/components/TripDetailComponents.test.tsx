@@ -11,6 +11,7 @@ import TripPersonTab from './TripPersonTab';
 import ChecklistTab from './ChecklistTab';
 import ExclusionCheckbox from './ExclusionCheckbox';
 import { deriveTripView, type TripViewInput } from '../utils/tripDerived';
+import { namelessButtons } from '../test/a11y';
 import { tripReadiness } from '../utils/readiness';
 import type { MealType, UnitOfMeasure } from '../types';
 import type { Trip, Recipe, Price } from '../types/tripDetail';
@@ -298,6 +299,47 @@ describe('TripDaysList', () => {
     expect(p.onToggleDay).toHaveBeenCalledWith('d1');
     fireEvent.click(screen.getAllByTitle('Изменить количество людей')[0]);
     expect(p.onStartEditDay).toHaveBeenCalledWith('d1', '3');
+  });
+
+  // UX-осмотр 31.10 (п.1): подпись дня была хардкодом «2 приёмов пищи».
+  it('подзаголовок дня: плюрализация «N приёмов пищи» (1/2/5)', () => {
+    setup();
+    expect(screen.getByText('1 приём пищи • 3 чел.')).toBeTruthy();
+    const two = { ...trip, days: [{ ...trip.days![0], meals: [
+      { id: 'm1', tripDayId: 'd1', mealType: 'BREAKFAST' as MealType, recipeId: 'r1', sortOrder: 1 },
+      { id: 'm3', tripDayId: 'd1', mealType: 'LUNCH' as MealType, recipeId: 'r2', sortOrder: 2 },
+    ] }] };
+    const view2 = deriveTripView(viewInput({ trip: two }));
+    render(<TripDaysList
+      menuByDays={view2.menuByDays}
+      trip={two}
+      manualItems={[]}
+      expandedDays={new Set<string>()}
+      editingDay={null}
+      dayPeopleOverride=""
+      onToggleDay={vi.fn()} onStartEditDay={vi.fn()} onDayPeopleChange={vi.fn()}
+      onSaveDayPeople={vi.fn()} onCancelEditDay={vi.fn()} onAddDayProduct={vi.fn()}
+      onAddMeal={vi.fn()} onOpenComposition={vi.fn()} onDeleteMeal={vi.fn()}
+      onDeleteManual={vi.fn()} onAddTripProduct={vi.fn()}
+    />);
+    expect(screen.getByText('2 приёма пищи • 3 чел.')).toBeTruthy();
+    expect(screen.queryByText(/2 приёмов пищи/)).toBeNull();
+  });
+
+  // UX-осмотр 31.10 (п.6): иконочные кнопки дня («Изменить количество людей»,
+  // «Добавить приём пищи») несли только title — скринридер объявлял «button».
+  it('a11y: probe кнопок без accessible name = 0, иконки дня продублированы aria-label', () => {
+    setup({ expandedDays: new Set(['d1']) });
+    expect(screen.getAllByLabelText('Изменить количество людей').length).toBeGreaterThan(0);
+    expect(screen.getAllByLabelText('Добавить приём пищи').length).toBeGreaterThan(0);
+    expect(namelessButtons(document)).toEqual([]);
+  });
+
+  // UX-осмотр 31.10 (п.10): «Не блюда:» читалось как ошибка — термин «ручные позиции».
+  it('карточка «На весь поход»: подпись «Ручные позиции», а не «Не блюда»', () => {
+    setup();
+    expect(screen.getByText(/Ручные позиции: аптечка, антисептик, топливо…/)).toBeTruthy();
+    expect(screen.queryByText(/Не блюда:/)).toBeNull();
   });
 
   it('кнопки дня: продукт к дню, приём пищи (контекст §2.1)', () => {

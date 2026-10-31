@@ -12,6 +12,7 @@ import type { RefObject } from 'react';
 import { Link } from 'react-router-dom';
 import { Wifi, WifiOff, RefreshCw, Upload, X, CheckCircle, XCircle, Link as LinkIcon, Unlink, History } from 'lucide-react';
 import { Button } from './Button';
+import { formatNum } from '../utils/format';
 
 export interface IntegrationInfo {
   id: number;
@@ -212,9 +213,12 @@ export function EmisSettingsTab(props: EmisSettingsTabProps) {
   );
 }
 
-/** Человекочитаемый размер файла (КБ/МБ) — для чипа выбранного файла. */
+/**
+ * Человекочитаемый размер файла (КБ/МБ) — для чипа выбранного файла.
+ * UX-осмотр 31.10 (п.10): десятичный разделитель — запятая (formatNum), не точка.
+ */
 export function formatFileSize(bytes: number): string {
-  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} МБ`;
+  if (bytes >= 1024 * 1024) return `${formatNum(bytes / (1024 * 1024), 1)} МБ`;
   if (bytes >= 1024) return `${Math.round(bytes / 1024)} КБ`;
   return `${bytes} Б`;
 }

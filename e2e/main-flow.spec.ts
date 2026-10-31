@@ -68,6 +68,50 @@ test('E2E-04 создание похода со спаренными датам�
   await expect(page.getByText('Поход на Алтай').first()).toBeVisible({ timeout: 15_000 });
 });
 
+// UX-осмотр 31.10 (п.3, KB-32): даты можно набрать с клавиатуры в ДД.ММ.ГГГГ,
+// поле больше не показывает ISO, а заблокированное поле окончания объясняет причину.
+test('E2E-04b даты с клавиатуры: ДД.ММ.ГГГГ, откат опечатки, подсказка на disabled endDate', async ({ page }) => {
+  await login(page);
+  await page.goto('/trips');
+  await page.getByRole('button', { name: /Создать поход/ }).click();
+  await page.getByLabel(/Название/).fill('Поход с клавиатуры');
+  const start = page.locator('#start-date');
+  const end = page.locator('#end-date');
+  const hint = page.getByTestId('end-date-hint');
+
+  // 1) endDate заблокирован, причина видна (раньше — «молча disabled»)
+  await expect(end).toBeDisabled();
+  await expect(hint).toHaveText('Сначала укажите дату начала');
+  await expect(hint).toBeVisible();
+
+  // 2) опечатка (несуществующая дата) не коммитится и не «залипает» в поле
+  await start.click();
+  await start.pressSequentially('31.02.2026');
+  await start.press('Tab'); // blur — нераспознанный ввод откатывается
+  await expect(start).toHaveValue('');
+  await expect(end).toBeDisabled();
+
+  // 3) набранная с клавиатуры дата коммитится; поле показывает ДД.ММ.ГГГГ
+  await start.click();
+  await start.pressSequentially('10.11.2026');
+  await expect(start).toHaveValue('10.11.2026');
+  // значение формы осталось ISO: min у endDate подтянулся (контракт CR-3)
+  await expect(end).toHaveAttribute('min', '2026-11-10');
+  await expect(end).toBeEnabled();
+  await expect(hint).toBeHidden();
+
+  // 4) короткий год коммитится явным действием (Enter), отображается полным
+  await end.click();
+  await end.pressSequentially('15.11.26');
+  await end.press('Enter');
+  await expect(end).toHaveValue('15.11.2026');
+
+  // 5) форма уходит на сервер: поход создан
+  await page.getByLabel('Количество человек').fill('3');
+  await page.locator('.modal-overlay').getByRole('button', { name: 'Создать', exact: true }).click();
+  await expect(page.getByText('Поход с клавиатуры').first()).toBeVisible({ timeout: 15_000 });
+});
+
 test('E2E-05 сводка поездки: закупки/стоимость/калории', async ({ page }) => {
   await login(page);
   // детерминированный вход: создаём свой поход через UI и идём в него по testid

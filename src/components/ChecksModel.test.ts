@@ -10,6 +10,7 @@ import { deriveTripView, type TripViewInput } from '../utils/tripDerived';
 import {
   buildCheckRows, groupCheckRows, dayPlanFacts, checkTotals,
   calculateDelta, formatDelta, getDeltaChipClass,
+  hasEnteredFacts, rowHasFact,
 } from './ChecksModel';
 import type { TripManualItem } from '../api/tripManualItems';
 import type { Trip, Recipe, Price } from '../types/tripDetail';
@@ -114,5 +115,41 @@ describe('ChecksModel — строки этапа ④ из общей view (clea
     expect(getDeltaChipClass(0)).toBe('dim');
     expect(getDeltaChipClass(5)).toBe('fire');
     expect(getDeltaChipClass(-5)).toBe('ok');
+  });
+});
+
+/**
+ * UX-осмотр 31.10 (п.10): «честный факт». До первого введённого чека факт —
+ * это копия плана (effectiveCost фолбэчится в estimatedCost), поэтому UI
+ * показывал «Факт = План» и «+0%», как будто деньги уже посчитаны. Модель
+ * отдаёт признак «факт действительно введён» — по позициям и по дням.
+ */
+describe('ChecksModel — честный факт (UX-осмотр 31.10, п.10)', () => {
+  it('hasEnteredFacts: false, пока ни один чек не введён', () => {
+    const v = deriveTripView(input());
+    expect(hasEnteredFacts(buildCheckRows(v))).toBe(false);
+  });
+
+  it('hasEnteredFacts/rowHasFact: true после первой введённой факт-цены', () => {
+    const v = deriveTripView(input({ draftOverrides: { i1: { price: 120, total: 120 } } }));
+    const rows = buildCheckRows(v);
+    expect(hasEnteredFacts(rows)).toBe(true);
+    expect(rowHasFact(rows.find(r => r.ingredientName === 'Гречка')!)).toBe(true);
+    expect(rowHasFact(rows.find(r => r.ingredientName === 'Тушёнка')!)).toBe(false);
+  });
+
+  it('исключённая позиция с фактом не считается введённым чеком', () => {
+    const v = deriveTripView(input({
+      draftOverrides: { i2: { price: 60, total: 60 } },
+      shoppingExcluded: new Set(['i2']),
+    }));
+    expect(hasEnteredFacts(buildCheckRows(v))).toBe(false);
+  });
+
+  it('dayPlanFacts.hasFact: день с чеком — true, день без чека — false', () => {
+    const v = deriveTripView(input({ draftOverrides: { i1: { price: 200, total: 200 } } }));
+    const days = dayPlanFacts(v);
+    expect(days.find(d => d.dayDate === '2026-07-01')!.hasFact).toBe(true);
+    expect(days.find(d => d.dayDate === '2026-07-02')!.hasFact).toBe(false);
   });
 });

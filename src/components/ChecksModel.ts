@@ -72,6 +72,12 @@ export interface DayPlanFact {
   dayDate: string;
   plannedCost: number;
   actualCost: number;
+  /**
+   * UX-осмотр 31.10 (п.10): «честный факт» — есть ли по этому дню хотя бы один
+   * введённый чек. Пока чеков нет, actualCost — копия плана (effectiveCost
+   * фолбэчится в estimatedCost), и выдавать его за факт нельзя.
+   */
+  hasFact: boolean;
 }
 
 export function dayPlanFacts(view: TripView): DayPlanFact[] {
@@ -81,10 +87,25 @@ export function dayPlanFacts(view: TripView): DayPlanFact[] {
       .filter(i => !i.excluded)
       .reduce((a, i) => a + (i.estimatedCost ?? 0), 0),
     actualCost: day.dayCost,
+    hasFact: day.items.some(i => !i.excluded && i.actualUnitPrice != null),
   }));
 }
 
-/** Итоги «Думали/Заплатили» — из тех же строк, что и этапа ② (инвариант сумм). */
+/**
+ * UX-осмотр 31.10 (п.10): признак введённого чека — по строке и по набору строк.
+ * Единый словарь этапа ④: «План» (plannedCost) и «Факт» (введённый чек). Пока
+ * факт не введён, показывать его нельзя: «Факт = План» и «+0%» читаются как уже
+ * посчитанные деньги.
+ */
+export function rowHasFact(row: CheckRow): boolean {
+  return row.enteredUnitPrice != null;
+}
+
+export function hasEnteredFacts(rows: CheckRow[]): boolean {
+  return rows.some(r => !r.excluded && rowHasFact(r));
+}
+
+/** Итоги «План/Факт» — из тех же строк, что и этапа ② (инвариант сумм). */
 export function checkTotals(rows: CheckRow[]): { totalPlanned: number; totalActual: number } {
   let totalPlanned = 0;
   let totalActual = 0;

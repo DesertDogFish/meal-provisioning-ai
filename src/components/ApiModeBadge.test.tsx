@@ -5,6 +5,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, cleanup, act } from '@testing-library/react';
 import React from 'react';
 import ApiModeBadge from './ApiModeBadge';
+import { namelessButtons } from '../test/a11y';
 
 // Мок api-клиента: следим за setMode/resetSeedData/get
 const modeState = { mode: 'mock' as 'real' | 'mock' };
@@ -233,5 +234,49 @@ describe('ApiModeBadge — прод-сборка (transparency-п.4, вариа�
     (window as unknown as { meta?: unknown }).meta = { env: { DEV: 'false', VITE_ENABLE_MOCK: 'true' } };
     render(<ApiModeBadge />);
     expect(screen.getByText(/демо-режим/)).toBeTruthy();
+  });
+});
+
+// UX-осмотр 31.10 (подзадача 6): крестик модалки режима был без accessible name
+describe('ApiModeBadge — a11y: доступные имена кнопок (подзадача 6)', () => {
+  afterEach(() => cleanup());
+
+  it('probe: кнопок без accessible name = 0 (бейдж и открытая модалка режима)', async () => {
+    render(<ApiModeBadge />);
+    const badge = screen.getByText(/демо-режим/);
+    fireEvent.click(badge.closest('button') ?? badge);
+    await waitFor(() => expect(screen.getByRole('dialog')).toBeTruthy());
+    expect(screen.getByLabelText('Закрыть')).toBeTruthy();
+    expect(namelessButtons(document)).toEqual([]);
+  });
+});
+
+// KB-35 (UX-осмотр 31.10, подзадача 12): десктопный бейдж был `fixed top-4 right-4`
+// и наезжал на kebab действий похода и кнопку темы. Теперь — flow-элемент слота.
+describe('ApiModeBadge — KB-35: бейдж не перекрывает kebab/тему', () => {
+  afterEach(() => cleanup());
+
+  it('десктопный вариант НЕ позиционирован fixed/absolute', () => {
+    render(<ApiModeBadge />);
+    const badge = screen.getByText(/демо-режим/).closest('.api-badge') as HTMLElement;
+    expect(badge).toBeTruthy();
+    expect(badge.className).not.toMatch(/\bfixed\b|\babsolute\b/);
+    expect(badge.className).toContain('dev-badge-flow');
+    // никаких инлайновых top/right — только flow-отступы из CSS
+    expect(badge.style.top).toBe('');
+    expect(badge.style.right).toBe('');
+  });
+
+  it('inline-вариант (мобильный топбар) остаётся в потоке шапки', () => {
+    render(<ApiModeBadge inline />);
+    const badge = screen.getByText(/демо-режим/).closest('.api-badge') as HTMLElement;
+    expect(badge.className).toContain('api-badge--inline');
+    expect(badge.className).not.toMatch(/\bfixed\b|\babsolute\b/);
+  });
+
+  it('текст бейджа вынесен в отдельный span — на <400px скрывается CSS-ом', () => {
+    render(<ApiModeBadge inline />);
+    const text = screen.getByText(/демо-режим/);
+    expect(text.className).toContain('api-badge__text');
   });
 });

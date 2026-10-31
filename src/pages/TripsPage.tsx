@@ -12,6 +12,8 @@ import type { Trip } from '../types/tripDetail'; // cleanup-п.9: общий т�
 import { STAGES, type StageId } from '../components/StageTabBar';
 import { getTripCover } from '../utils/getTripCover';
 import { pluralize } from '../utils/pluralize'; // ревизия скриншотов 29.10: «4 дней» → «4 дня»
+// UX-осмотр 31.10 (п.1): счётчики «N приёмов пищи»/«N дней» — единый источник формы слова
+import { mealsWord, mealsCountLabel, daysCountLabel } from '../utils/text';
 import { formatRub } from '../utils/format';
 import { Button } from '../components/Button';
 import { useAuth } from '../components/AuthProvider'; // cleanup-п.7: без своего /auth/me
@@ -190,7 +192,7 @@ export default function TripsPage() {
             <>
               Из похода уйдут {lostDays.length} дн. ({lostDays.map((d: any) =>
                 new Date(d.dayDate).toLocaleDateString('ru-RU')).join(', ')}).
-              {lostMeals > 0 && <> Вместе с ними удалятся <b>{lostMeals} приёмов пищи</b>, их правки состава и позиции этих дней.</>}
+              {lostMeals > 0 && <> Вместе с ними удалятся <b>{mealsCountLabel(lostMeals)}</b>, их правки состава и позиции этих дней.</>}
               <br />Остальные дни сохранятся без изменений.
             </>
           ),
@@ -224,7 +226,7 @@ export default function TripsPage() {
       message: (
         <>
           Поход будет удалён безвозвратно вместе со всем содержимым:
-          {daysCount > 0 && <> {daysCount} дн., <b>{mealsCount} приёмов пищи</b>,</>} правки состава,
+          {daysCount > 0 && <> {daysCountLabel(daysCount, { short: true })}, <b>{mealsCountLabel(mealsCount)}</b>,</>} правки состава,
           чеки, ручные позиции и отметки чеклиста.
         </>
       ),
@@ -270,11 +272,17 @@ export default function TripsPage() {
           <h1 className="text-2xl md:text-3xl font-bold" style={{ color: 'var(--text)' }}>Походы</h1>
           {/* transparency-п.7: подзаголовок обещает только то, что приложение
               реально делает (функции «запасов» нет) */}
-          <p className="mt-1" style={{ color: 'var(--muted)' }}>Планирование питания: меню, закупка, чеки</p>
+          {/* UX-осмотр 31.10 (п.7): «чеки» повисало сиротой на второй строке —
+              перечисление собрано в неразрывную связку (.keep-pair), поэтому на
+              узком экране на новую строку уезжает ЦЕЛИКОМ, а не одним словом. */}
+          <p className="mt-1" style={{ color: 'var(--muted)' }}>
+            Планирование питания: <span className="keep-pair">меню, закупка, чеки</span>
+          </p>
         </div>
         {/* Fix-7 (п.5): иконочная кнопка создания — единый паттерн всех шапок.
             Подзадача 4: текстовый блок шапки с min-w-0 — FAB не перекрывает подзаголовок. */}
         <Button variant="primary" iconOnly onClick={() => setShowCreate(true)}
+                className="trips-fab touch-hit"
                 aria-label="Создать поход" title="Создать поход" icon={<Plus size={18} />} />
       </div>
 
@@ -313,7 +321,7 @@ export default function TripsPage() {
           </Button>
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="space-y-3 trips-list">
           {myTrips.map(trip => {
             const p = progress[trip.id];
             const stageLabel = p ? stageOf(p) : null;
@@ -399,13 +407,13 @@ export default function TripsPage() {
                           {p.stage === 'store' ? `${p.bought}/${p.checklistTotal}`
                             : p.stage === 'checks' ? `${p.facts}/${p.total}`
                             : p.stage === 'shopping' ? `${p.checklistTotal} поз.`
-                            : `${p.meals} ${pluralize(p.meals, ['приём', 'приёма', 'приёмов'])}`}
+                            : `${p.meals} ${mealsWord(p.meals)}`}
                         </span>
                       </div>
                       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 mt-2">
                         <b className="keep-num text-lg" style={{ color: 'var(--amber-300)' }}>{formatRub(p.totalCost)}</b>
                         <span className="keep-num text-sm" style={{ color: 'var(--muted)' }}>
-                          {formatRub(p.costPerPerson)}/чел · {p.meals} {pluralize(p.meals, ['приём', 'приёма', 'приёмов'])}
+                          {formatRub(p.costPerPerson)}/чел · {p.meals} {mealsWord(p.meals)}
                         </span>
                       </div>
                     </>

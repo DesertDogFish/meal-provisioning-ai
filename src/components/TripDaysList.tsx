@@ -9,6 +9,8 @@ import {
   Plus, Users, ChevronDown, ChevronRight, PackagePlus, X,
 } from 'lucide-react';
 import { formatAmount } from '../utils/calculations';
+// UX-осмотр 31.10 (п.1): форма слова «N приёмов пищи» — из единого источника (text.ts)
+import { mealsCountLabel } from '../utils/text';
 import { manualForDay, manualForTrip } from '../utils/manualItems';
 import type { TripManualItem } from '../api/tripManualItems';
 import { Button } from './Button';
@@ -62,6 +64,7 @@ export function TripDaysList(props: TripDaysListProps) {
           <div key={tripDay.id} className="rounded-xl overflow-hidden" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
             <div
               className="flex items-center justify-between p-4 cursor-pointer transition-colors"
+              data-testid={`day-header-${tripDay.id}`}
               onClick={() => onToggleDay(tripDay.id)}
               onMouseEnter={(e) => { e.currentTarget.style.background = 'color-mix(in srgb, var(--line-strong) 12%, transparent)'; }}
               onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
@@ -72,7 +75,7 @@ export function TripDaysList(props: TripDaysListProps) {
                   <p className="font-semibold" style={{ color: 'var(--text)' }}>
                     {new Date(day.dayDate).toLocaleDateString('ru-RU', { weekday: 'short', day: 'numeric', month: 'long' })}
                   </p>
-                  <p className="text-xs" style={{ color: 'var(--muted)' }}>{day.meals.length} приёмов пищи • {day.effectivePeople} чел.</p>
+                  <p className="text-xs" style={{ color: 'var(--muted)' }}>{mealsCountLabel(day.meals.length)} • {day.effectivePeople} чел.</p>
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -83,17 +86,18 @@ export function TripDaysList(props: TripDaysListProps) {
                 )}
                 <button
                   onClick={(e) => { e.stopPropagation(); onStartEditDay(tripDay.id, tripDay.peopleOverride?.toString() || ''); }}
-                  className="p-1.5 rounded transition-colors"
+                  className="p-1.5 rounded transition-colors touch-hit"
                   style={{ color: 'var(--muted)' }}
                   onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--w1)'; e.currentTarget.style.background = 'color-mix(in srgb, var(--wave-400) 10%, transparent)'; }}
                   onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--muted)'; e.currentTarget.style.background = 'transparent'; }}
                   title="Изменить количество людей"
+                  aria-label="Изменить количество людей"
                 >
                   <Users size={16} />
                 </button>
                 <button
                   onClick={(e) => { e.stopPropagation(); onAddDayProduct(tripDay.id, new Date(tripDay.dayDate).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })); }}
-                  className="p-1.5 rounded transition-colors"
+                  className="p-1.5 rounded transition-colors touch-hit"
                   style={{ color: 'var(--muted)' }}
                   onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--w1)'; e.currentTarget.style.background = 'color-mix(in srgb, var(--wave-400) 10%, transparent)'; }}
                   onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--muted)'; e.currentTarget.style.background = 'transparent'; }}
@@ -104,11 +108,12 @@ export function TripDaysList(props: TripDaysListProps) {
                 </button>
                 <button
                   onClick={(e) => { e.stopPropagation(); onAddMeal({ dayId: tripDay.id, dayDate: tripDay.dayDate, dayIndex: idx + 1 }); }}
-                  className="p-1.5 rounded transition-colors"
+                  className="p-1.5 rounded transition-colors touch-hit"
                   style={{ color: 'var(--muted)' }}
                   onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--w1)'; e.currentTarget.style.background = 'color-mix(in srgb, var(--wave-400) 10%, transparent)'; }}
                   onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--muted)'; e.currentTarget.style.background = 'transparent'; }}
                   title="Добавить приём пищи"
+                  aria-label="Добавить приём пищи"
                 >
                   <Plus size={16} />
                 </button>
@@ -193,14 +198,14 @@ export function TripDaysList(props: TripDaysListProps) {
             <div>
               <p className="font-semibold" style={{ color: 'var(--text)' }}>На весь поход</p>
               <p className="text-xs" style={{ color: 'var(--muted)' }}>
-                Не блюда: аптечка, антисептик, топливо… {manualForTrip(manualItems).length > 0 ? `· ${manualForTrip(manualItems).length} поз.` : ''}
+                Ручные позиции: аптечка, антисептик, топливо… {manualForTrip(manualItems).length > 0 ? `· ${manualForTrip(manualItems).length} поз.` : ''}
               </p>
             </div>
           </div>
           {/* Fix-6 (п.2): та же иконка-кнопка, что у дня («добавить продукт»), — единообразно */}
           <button
             onClick={onAddTripProduct}
-            className="p-1.5 rounded transition-colors"
+            className="p-1.5 rounded transition-colors touch-hit"
             style={{ color: 'var(--muted)' }}
             onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--w1)'; e.currentTarget.style.background = 'color-mix(in srgb, var(--wave-400) 10%, transparent)'; }}
             onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--muted)'; e.currentTarget.style.background = 'transparent'; }}

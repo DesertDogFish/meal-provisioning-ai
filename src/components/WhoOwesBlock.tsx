@@ -24,9 +24,15 @@ export interface WhoOwesBlockProps {
   days?: WhoOwesDay[];
   /** 'stage' — блок этапа ④ (поровну + дни); 'report' — список участников */
   variant?: 'stage' | 'report';
+  /**
+   * UX-осмотр 31.10 (п.10): «честный факт». false — ни один чек не введён,
+   * поэтому суммы здесь плановые, и мы это подписываем (числа не меняем:
+   * план закупки остаётся лучшей оценкой «кто сколько должен»).
+   */
+  hasFact?: boolean;
 }
 
-export function WhoOwesBlock({ totalActual, realPeople, days, variant = 'stage' }: WhoOwesBlockProps) {
+export function WhoOwesBlock({ totalActual, realPeople, days, variant = 'stage', hasFact = true }: WhoOwesBlockProps) {
   const perPerson = totalActual / Math.max(1, realPeople);
   const realPeopleLabel = Number.isInteger(realPeople)
     ? String(realPeople)
@@ -51,6 +57,11 @@ export function WhoOwesBlock({ totalActual, realPeople, days, variant = 'stage' 
   return (
     <div className="who-owes max-w-3xl" data-testid="who-owes">
       <b style={{ color: 'var(--text)' }}>Кто сколько должен · при равном делении</b>
+      {!hasFact && (
+        <div className="cap" style={{ color: 'var(--muted)' }} data-testid="who-owes-plan-note">
+          Чеки ещё не введены — суммы по плану закупки.
+        </div>
+      )}
       <div className="who-owes__row">
         <span className="keep-pair">
           Поровну на человека

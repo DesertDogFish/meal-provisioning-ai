@@ -227,6 +227,14 @@ export function ChecklistTab({
               // взяли (мок: «взяли 6,625 л»); не взята — сколько нужно.
               const tookStr = actual != null ? `${formatAmount(actual.amount, actual.unit)}` : '';
               return (
+                /* UX-осмотр 31.10 (п.14): строка чеклиста больше НЕ div[role="button"]
+                   с чекбоксом и полем ввода внутри — interactive-в-interactive (тот же
+                   дефект, что KB-31 в ChecksMobile): скринридер видел «кнопку» без
+                   содержимого, а вложенные контролы были недоступны с клавиатуры.
+                   Теперь: контейнер + настоящая кнопка-переключатель
+                   .checklist-row__toggle (её хит-зона ::after растянута на всю строку —
+                   «тап по строке» работает как раньше), а чекбокс и поле «беру» —
+                   СОСЕДИ, поднятые над хит-зоной через .checklist-row__hit. */
                 <div
                   key={row.ingredientId}
                   className="checklist-row flex flex-wrap items-center gap-3 px-4 py-3 text-sm"
@@ -236,37 +244,44 @@ export function ChecklistTab({
                     opacity: isBought && !underfilled ? 0.6 : 1,
                     background: underfilled ? 'color-mix(in srgb, var(--amber-500) 10%, transparent)' : undefined,
                   }}
-                  onClick={() => onToggleRow(boughtKey)}
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggleRow(boughtKey); } }}
-                  aria-label={`${isBought ? 'Взято' : 'Отметить взятым'}: ${row.name}`}
                 >
-                  <input
-                    type="checkbox"
-                    checked={isBought}
-                    onChange={() => onToggleRow(boughtKey)}
-                    onClick={(e) => e.stopPropagation()}
-                    data-testid={`bought-checkbox-${row.ingredientId}`}
-                    aria-label={`Взято: ${row.name}`}
-                    className="checklist-check cursor-pointer shrink-0"
-                    style={{ accentColor: 'var(--w2)' }}
-                  />
-                  <span className="flex-1 min-w-0">
-                    <span className="block font-bold" style={{ color: 'var(--text)', textDecoration: isBought ? 'line-through' : 'none' }}>
-                      {row.name}
+                  {/* п.7: чекбокс 22×22 — хит-зону даёт обёртка-<label> .check-hit
+                      (≥40px на pointer:coarse); ::after на <input> не работает */}
+                  <label className="check-hit checklist-row__hit shrink-0">
+                    <input
+                      type="checkbox"
+                      checked={isBought}
+                      onChange={() => onToggleRow(boughtKey)}
+                      data-testid={`bought-checkbox-${row.ingredientId}`}
+                      aria-label={`Взято: ${row.name}`}
+                      className="checklist-check cursor-pointer"
+                      style={{ accentColor: 'var(--w2)' }}
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    className="checklist-row__toggle"
+                    data-testid={`checklist-toggle-${row.ingredientId}`}
+                    aria-pressed={isBought}
+                    aria-label={`${isBought ? 'Снять отметку «взято»' : 'Отметить взятым'}: ${row.name}`}
+                    onClick={() => onToggleRow(boughtKey)}
+                  >
+                    <span className="flex-1 min-w-0">
+                      <span className="block font-bold" style={{ color: 'var(--text)', textDecoration: isBought ? 'line-through' : 'none' }}>
+                        {row.name}
+                      </span>
+                      <span className="block cap" style={{ color: underfilled ? 'var(--amber-300)' : 'var(--muted)' }}>
+                        {underfilled
+                          ? `⚠ взяли меньше, чем нужно · ${packHintStr}`
+                          : isBought
+                            ? `взяли ${tookStr}`
+                            : packHintStr}
+                      </span>
                     </span>
-                    <span className="block cap" style={{ color: underfilled ? 'var(--amber-300)' : 'var(--muted)' }}>
-                      {underfilled
-                        ? `⚠ взяли меньше, чем нужно · ${packHintStr}`
-                        : isBought
-                          ? `взяли ${tookStr}`
-                          : packHintStr}
-                    </span>
-                  </span>
+                  </button>
                   {/* Fix-6 (п.8): свободные единицы — «беру 300 г» даже если учтён в штуках.
                       30.10.2026 (подзадача 5/9): единица — UnitChip (bottom-sheet). */}
-                  <span className="checklist-amount shrink-0 flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                  <span className="checklist-amount checklist-row__hit shrink-0 flex items-center gap-1.5">
                     <FreeAmountInput
                       value={actual}
                       baseUnit={row.unit}

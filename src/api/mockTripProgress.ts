@@ -15,7 +15,7 @@
  * соответствующие роуты гарантированно отдавали ОДИНАКОВЫЕ данные (без дубля
  * логики, cleanup-п.9).
  */
-import { products, recipes, trips, prices, priceOverrides, shoppingExcluded, manualItems, allTripEdits, editRecipeKey, editIngredientKey } from './mockState';
+import { products, recipes, prices, priceOverrides, shoppingExcluded, manualItems, allTripEdits, editRecipeKey, editIngredientKey, visibleTrips } from './mockState';
 import { deriveTripView } from '../utils/tripDerived';
 import type { TripProgressDto } from '../types/tripDetail';
 
@@ -121,5 +121,7 @@ export function buildTripProgress(trip: any): MockTripProgress | null {
 
 /** GET /trips — список с прогрессом (один запрос вместо N+1 на клиенте). */
 export function tripsWithProgress(): any[] {
-  return trips.map(t => ({ ...t, progress: buildTripProgress(t) }));
+  // KB-34 (UX-осмотр 31.10, п.11): только свои походы — паритет
+  // TripService.getUserTrips → tripRepository.findByUserId(userId).
+  return visibleTrips().map(t => ({ ...t, progress: buildTripProgress(t) }));
 }

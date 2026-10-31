@@ -313,3 +313,39 @@ test('M-13 отчёт: in-app маршрут читается в одну кол
   await page.getByTestId('report-share').click();
   await expect(page.getByText(/Текст итога скопирован/).first()).toBeVisible({ timeout: 8_000 });
 });
+
+// UX-осмотр 31.10 (подзадача 5, KB-33): на 390px было три переключателя этапов
+// (степпер, протёкший из-под `hidden` десктопный .seg, нижний таб-бар), два из
+// них обрезаны справа. Проверяем, что осталась ровно одна мобильная навигация.
+test('M-11 KB-33: одна мобильная навигация этапов, .seg скрыт, обрезки нет', async ({ page }) => {
+  await openSeededTrip(page);
+
+  // десктопный .seg этапов на mobile — display:none (unlayered .seg перебивал `hidden`)
+  const seg = page.getByTestId('desktop-stage-seg');
+  await expect(seg).toBeHidden();
+  expect(await seg.evaluate((el) => getComputedStyle(el).display)).toBe('none');
+
+  // степпера-дубля больше нет
+  await expect(page.locator('.stage-stepper')).toHaveCount(0);
+  await expect(page.getByTestId('stage-stepper')).toHaveCount(0);
+
+  // ровно одна ВИДИМАЯ nav «Этапы похода» — нижний таб-бар
+  const visibleStageNavs = await page.evaluate(() => Array
+    .from(document.querySelectorAll('nav[aria-label="Этапы похода"]'))
+    .filter((n) => n.getBoundingClientRect().height > 0).length);
+  expect(visibleStageNavs).toBe(1);
+
+  // ничего не обрезано справа (overflowX = 0), в т.ч. у под-навигации вида закупки
+  const clipped = await page.evaluate(() => Array
+    .from(document.querySelectorAll('nav[aria-label="Этапы похода"], .seg-desktop-only'))
+    .map((el) => el.scrollWidth - el.clientWidth)
+    .filter((d) => d > 1));
+  expect(clipped, 'обрезка справа у навигации этапов').toEqual([]);
+  await expectNoHorizontalScroll(page, '/trips/trip1 (навигация этапов)');
+
+  // единственный переключатель действительно работает
+  await page.getByTestId('stage-bar-store').click();
+  await expect(page).toHaveURL(/stage=store/);
+  await page.getByTestId('stage-bar-menu').click();
+  await expect(page).toHaveURL(/stage=menu/);
+});

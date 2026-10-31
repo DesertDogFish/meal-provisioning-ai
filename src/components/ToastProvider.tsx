@@ -108,7 +108,12 @@ function ToastItem({ toast, onRemove }: { toast: Toast; onRemove: (id: string) =
           <h4 className="font-semibold text-sm">{toast.title}</h4>
           <p className="text-sm opacity-90 mt-0.5">{toast.message}</p>
         </div>
-        <button onClick={() => onRemove(toast.id)} className={iconColors[toast.type]}>
+        <button
+          type="button"
+          onClick={() => onRemove(toast.id)}
+          aria-label={`Закрыть уведомление: ${toast.title}`}
+          className={iconColors[toast.type]}
+        >
           <X size={16} />
         </button>
       </div>

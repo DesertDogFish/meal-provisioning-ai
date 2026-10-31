@@ -7,7 +7,7 @@
  *  4. Категория продукта — всегда строка (объект ProductCategoryDto → name).
  */
 import { describe, expect, it } from 'vitest';
-import { formatRub, formatPrice, formatQty, unitShortLabel, categoryName } from './format';
+import { formatRub, formatPrice, formatQty, formatNum, unitShortLabel, categoryName } from './format';
 
 // неразрывный пробел — разделитель тысяч в ru-RU
 const NBSP = '\u00A0';
@@ -74,6 +74,11 @@ describe('formatQty — количество с человеческой еди�
     expect(formatQty(1.25, 'L')).toBe('1,25 л');
   });
 
+  it('скрин-баг «6.53 л» (UX-осмотр 31.10, п.10): дробные количества — через запятую', () => {
+    expect(formatQty(6.53, 'L')).toBe('6,53 л');
+    expect(formatQty(6.53, 'KG')).toBe('6,53 кг');
+  });
+
   it('G/ML: целые', () => {
     expect(formatQty(150, 'G')).toBe('150 г');
     expect(formatQty(1.4, 'G')).toBe('1 г');
@@ -137,5 +142,29 @@ describe('categoryName — категория всегда строкой', () =
     expect(categoryName({ category: null })).toBe('');
     expect(categoryName({ category: {} })).toBe('');
     expect(categoryName({ category: 42 })).toBe('42');
+  });
+});
+
+/**
+ * UX-осмотр 31.10 (п.10): sweep локали — десятичная ЗАПЯТАЯ везде, включая
+ * неденежные числа (длительность синхронизации, объём файла), где раньше
+ * стоял `toFixed()` с точкой («1.5 с», «9.86»).
+ */
+describe('formatNum — десятичная запятая для неденежных чисел', () => {
+  it('фиксированная точность, разделитель — запятая', () => {
+    expect(formatNum(1.5)).toBe('1,5');
+    expect(formatNum(2)).toBe('2,0');
+    expect(formatNum(0.25, 2)).toBe('0,25');
+    expect(formatNum(98.6, 0)).toBe('99');
+  });
+
+  it('разделитель тысяч — неразрывный пробел (ru-RU)', () => {
+    expect(formatNum(1234.5)).toBe(`1${NBSP}234,5`);
+  });
+
+  it('null/undefined/NaN → «—»', () => {
+    expect(formatNum(null)).toBe('—');
+    expect(formatNum(undefined)).toBe('—');
+    expect(formatNum(NaN)).toBe('—');
   });
 });

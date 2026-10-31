@@ -111,34 +111,51 @@ function MobileCheckRow(props: MobileCheckRowProps) {
   const delta = calculateDelta(item.plannedCost, actualCostView);
   return (
     <div style={{ opacity: excluded ? 0.45 : 1 }} data-testid={`checkline-${item.ingredientId}`}>
-      <button
-        type="button"
-        className="checkline"
-        aria-expanded={open}
-        data-testid={`checkline-toggle-${item.ingredientId}`}
-        onClick={() => setOpen(v => !v)}
-      >
-        <span className="checkline__top">
-          <input
-            type="checkbox"
-            checked={bought}
-            onChange={() => onToggleBought()}
-            onClick={(e) => e.stopPropagation()}
-            aria-label={`Взято: ${item.ingredientName}`}
-            className="checklist-check cursor-pointer shrink-0"
-            style={{ accentColor: 'var(--w2)', width: 22, height: 22 }}
-          />
-          <span className="checkline__name" style={{ textDecoration: bought ? 'line-through' : 'none' }}>
-            {item.ingredientName}
-          </span>
+      {/* KB-31 (UX-осмотр 31.10, п.4): строка больше НЕ <button>. Раньше внешняя
+          кнопка-строка содержала <input type=checkbox> и <button class="fact-add">
+          — невалидный DOM (interactive внутри interactive), warning
+          validateDOMNesting и клики на stopPropagation вместо структуры.
+          Теперь: контейнер <div class="checkline"> + кнопка-раскрытие
+          .checkline__toggle, чья хит-зона растянута на всю строку (::after в
+          index.css), а чекбокс и ввод факта — СОСЕДИ с .checkline__hit
+          (position:relative + z-index) поверх этой хит-зоны. Тап по строке
+          по-прежнему раскрывает детали, но DOM валиден и клавиатура честная. */}
+      <div className="checkline">
+        <div className="checkline__top">
+          {/* UX-осмотр 31.10 (п.7): чекбокс 22×22 — промах пальцем. Хит-зону
+              даёт обёртка-<label> .check-hit (≥40px на pointer:coarse); псевдоэлемент
+              на <input> не работает, поэтому именно обёртка, а не ::after. */}
+          <label className="check-hit checkline__hit">
+            <input
+              type="checkbox"
+              checked={bought}
+              onChange={() => onToggleBought()}
+              aria-label={`Взято: ${item.ingredientName}`}
+              className="checklist-check cursor-pointer"
+              style={{ accentColor: 'var(--w2)', width: 22, height: 22 }}
+            />
+          </label>
+          <button
+            type="button"
+            className="checkline__toggle"
+            aria-expanded={open}
+            aria-controls={`checkline-details-${item.ingredientId}`}
+            aria-label={`Подробности позиции: ${item.ingredientName}`}
+            data-testid={`checkline-toggle-${item.ingredientId}`}
+            onClick={() => setOpen(v => !v)}
+          >
+            <span className="checkline__name" style={{ textDecoration: bought ? 'line-through' : 'none' }}>
+              {item.ingredientName}
+            </span>
+          </button>
           <span className="checkline__qty keep-num">
             {tookValue ? formatAmount(tookValue.amount, tookValue.unit) : formatAmount(item.totalAmount, item.unit)}
           </span>
-        </span>
-        <span className="checkline__fact">
+        </div>
+        <div className="checkline__fact">
           <span className="keep-pair">план <b className="keep-num" style={{ color: 'var(--text-2)' }}>{formatRub(item.plannedCost)}</b></span>
           <span aria-hidden>→</span>
-          <span onClick={(e) => e.stopPropagation()} className="inline-flex items-center gap-2">
+          <span className="checkline__hit inline-flex items-center gap-2">
             {actualTotal != null ? (
               <NumberField
                 value={actualTotal}
@@ -157,22 +174,34 @@ function MobileCheckRow(props: MobileCheckRowProps) {
                 disabled={!canEnterCheck}
                 data-testid={`fact-add-${item.ingredientId}`}
                 aria-label={`Ввести сумму из чека: ${item.ingredientName}`}
-                onClick={(e) => { e.stopPropagation(); setOpen(true); setEntering(true); }}
+                onClick={() => { setOpen(true); setEntering(true); }}
               >
                 + факт, ₽
               </button>
             )}
           </span>
-          <span className={`chip-delta keep-num ${getDeltaChipClass(delta)}`}>{formatDelta(delta)}</span>
-        </span>
-      </button>
+          {/* UX-осмотр 31.10 (п.10): до введённого чека отклонения нет — «—»,
+              а не «0%» (факт тогда равен копии плана) */}
+          <span
+            className={`chip-delta keep-num ${actualTotal != null ? getDeltaChipClass(delta) : 'dim'}`}
+            data-testid={`row-delta-${item.ingredientId}`}
+            title={actualTotal != null ? undefined : 'Чек по позиции не введён — отклонение появится после ввода факта'}
+          >
+            {actualTotal != null ? formatDelta(delta) : '—'}
+          </span>
+        </div>
+      </div>
       {open && (
-        <div className="checkline__details space-y-2" data-testid={`checkline-details-${item.ingredientId}`}>
+        <div
+          className="checkline__details space-y-2"
+          id={`checkline-details-${item.ingredientId}`}
+          data-testid={`checkline-details-${item.ingredientId}`}
+        >
           <div className="flex flex-wrap items-center justify-between gap-2">
             <span className="cap" style={{ color: 'var(--text-2)' }}>
               нужно <b className="keep-num">{formatAmount(item.totalAmount, item.unit)}</b>
             </span>
-            <span className="inline-flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+            <span className="inline-flex items-center gap-1.5">
               <span className="cap" style={{ color: 'var(--muted)' }}>взяли</span>
               <FreeAmountInput
                 value={tookValue}

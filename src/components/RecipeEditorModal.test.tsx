@@ -78,8 +78,9 @@ describe('RecipeEditorModal — создание', () => {
     renderEditor();
     await waitFor(() => expect(api.get).toHaveBeenCalled());
     fireEvent.click(screen.getByRole('button', { name: 'Создать блюдо' }));
-    expect(await screen.findByText(/must not be blank/)).toBeTruthy();
-    expect(screen.getByText(/at least one ingredient/)).toBeTruthy();
+    // UX-осмотр 31.10 (п.2): RU-копи вместо технических шаблонов Jakarta
+    expect(await screen.findByText(/Укажите название блюда/)).toBeTruthy();
+    expect(screen.getByText(/Добавьте хотя бы один ингредиент/)).toBeTruthy();
     expect(api.post).not.toHaveBeenCalled();
   });
 

@@ -131,6 +131,9 @@ export function deriveTripView(input: TripViewInput) {
         ...item,
         // Fix-2 (п.5): исключение дня — составной ключ, глобальное — по id
         excluded: isRowExcluded(shoppingExcluded, day.dayDate, item.ingredientId),
+        // UX-осмотр 31.10 (п.10): факт-цена дня видна view-модели («честный
+        // факт»: день без введённого чека не выдаёт план за факт)
+        actualUnitPrice: actualUnit,
         effectiveCost: actualUnit != null ? actualUnit * item.totalAmount : cost,
       };
     });

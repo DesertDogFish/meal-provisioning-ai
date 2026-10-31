@@ -114,11 +114,14 @@ export default function TripDetailPage() {
         onOpenReport={() => navigate(`/trips/${trip.id}/report`)}
       />
 
-      {/* Мобильный степпер-прогресс (подзадача 2); десктоп — .seg ниже */}
+      {/* Мобильный нижний таб-бар — ЕДИНСТВЕННЫЙ переключатель этапов на mobile
+          (UX-осмотр 31.10, п.5: степпер-дубль удалён, KB-33) */}
       <StageTabBar stage={stage} onStage={setActiveTab} done={done} />
 
-      {/* Десктоп: сегментированный контрол (.seg) из брендбука, 4 этапа */}
-      <div className="seg seg-scroll w-full overflow-x-auto hidden md:flex" role="tablist" aria-label="Этапы похода">
+      {/* Десктоп: сегментированный контрол (.seg) из брендбука, 4 этапа.
+          `seg-desktop-only` — явное скрытие на mobile: утилита `hidden` из
+          Tailwind проигрывала вне-слойному `.seg{display:inline-flex}` (KB-33). */}
+      <div className="seg seg-scroll seg-desktop-only w-full overflow-x-auto hidden md:flex" role="tablist" aria-label="Этапы похода" data-testid="desktop-stage-seg">
         {stageTabs.map(tab => (
           <button
             key={tab.id}

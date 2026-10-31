@@ -1,5 +1,8 @@
 import { ProblemDetail } from '../types/errors';
 import { getValidationErrors, getConflictInfo, getErrorMessage, getErrorColor, ErrorColor } from '../utils/errorHandler';
+// UX-осмотр 31.10 (п.2): список ошибок — человеческая RU-копи; техническое имя
+// поля остаётся в «Технических деталях (RFC 7807)» ниже (логи/отладка).
+import { humanizeFieldError } from '../utils/validationMessages';
 import { AlertCircle, X, AlertTriangle } from 'lucide-react';
 
 interface Props {
@@ -42,7 +45,7 @@ export function ProblemDetailAlert({ problemDetail, onClose, compact = false }: 
         <AlertCircle size={16} className={iconColorClasses[color]} />
         <div className="flex-1 text-sm">{message}</div>
         {onClose && (
-          <button onClick={onClose} className={iconColorClasses[color]}>
+          <button type="button" onClick={onClose} aria-label="Закрыть" className={iconColorClasses[color]}>
             <X size={16} />
           </button>
         )}
@@ -70,9 +73,7 @@ export function ProblemDetailAlert({ problemDetail, onClose, compact = false }: 
               <p className="text-xs font-medium opacity-75">Ошибки валидации:</p>
               <ul className="list-disc list-inside text-sm space-y-0.5">
                 {validationErrors.map((err, idx) => (
-                  <li key={idx}>
-                    <span className="font-medium">{err.field}:</span> {err.message}
-                  </li>
+                  <li key={idx}>{humanizeFieldError(err)}</li>
                 ))}
               </ul>
             </div>
@@ -104,7 +105,7 @@ export function ProblemDetailAlert({ problemDetail, onClose, compact = false }: 
         </div>
 
         {onClose && (
-          <button onClick={onClose} className={iconColorClasses[color]}>
+          <button type="button" onClick={onClose} aria-label="Закрыть" className={iconColorClasses[color]}>
             <X size={18} />
           </button>
         )}

@@ -170,8 +170,16 @@ export function useTripDetail() {
       console.error('Failed to load trip:', err);
       // ЗАДАЧА 3: тост; устаревшие данные не сбрасываем намеренно —
       // показываем ошибку поверх, страница похода остаётся читаемой.
-      setError('Не удалось загрузить данные');
-      showError(err?.detail || 'Не удалось загрузить данные похода');
+      // KB-34 (UX-осмотр 31.10, п.11): чужой поход неотличим от несуществующего —
+      // 404 (mock-паритет с TripService). Текст для 404 свой и на RU: detail из
+      // ProblemDetail английский («Trip 77 not found»), показывать его нельзя.
+      // status живёт в корне (mock бросает плоский объект) и в err.error (real:
+      // ApiClientError оборачивает ProblemDetail) — учитываем оба.
+      const status = Number(err?.status ?? err?.error?.status);
+      const notFound = status === 404;
+      const message = notFound ? 'Поход не найден или недоступен' : 'Не удалось загрузить данные';
+      setError(message);
+      showError(notFound ? message : (err?.detail || 'Не удалось загрузить данные похода'));
     } finally {
       setLoading(false);
     }

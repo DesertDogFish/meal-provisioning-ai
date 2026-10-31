@@ -5,6 +5,8 @@ import Modal from '../components/Modal';
 import { RefreshCw, X, AlertCircle } from 'lucide-react';
 import { api, ApiClientError } from '../api/client';
 import { Button } from '../components/Button';
+// UX-осмотр 31.10 (п.10): числа журнала — через единый ru-формат (запятая, а не toFixed)
+import { formatNum, formatPrice } from '../utils/format';
 
 import PageLoader from '../components/PageLoader';
 interface SyncLog {
@@ -191,7 +193,7 @@ export default function SyncLogsPage() {
 
   const formatDuration = (seconds: number | null) => {
     if (seconds === null) return '—';
-    return `${seconds.toFixed(1)} с`;
+    return `${formatNum(seconds, 1)} с`;
   };
 
   const getStatusChip = (status: string) => {
@@ -283,7 +285,7 @@ export default function SyncLogsPage() {
             запусков за 7 дней: {kpi.totalRuns}
           </div>
           <div className="chip-delta" style={{ background: 'var(--success-soft)', color: 'var(--wave-300)' }}>
-            успешность: {kpi.successRate.toFixed(0)}%
+            успешность: {formatNum(kpi.successRate, 0)}%
           </div>
           <div className="chip-delta" style={{ background: 'color-mix(in srgb, var(--wave-400) 14%, transparent)', color: 'var(--wave-300)' }}>
             обновлено строк: {kpi.totalUpdated}
@@ -429,7 +431,7 @@ export default function SyncLogsPage() {
               <h2 className="text-xl font-bold" style={{ color: 'var(--text)' }}>
                 Запуск #{selectedLog.id} · {selectedLog.type}
               </h2>
-              <button onClick={() => setSelectedLog(null)} className="p-2 rounded-lg hover:bg-white/5">
+              <button type="button" onClick={() => setSelectedLog(null)} aria-label="Закрыть" className="p-2 rounded-lg hover:bg-white/5">
                 <X size={20} style={{ color: 'var(--muted)' }} />
               </button>
             </div>
@@ -475,10 +477,10 @@ export default function SyncLogsPage() {
                       <td className="py-2" style={{ fontVariantNumeric: 'tabular-nums' }}>
                         {item.oldPrice !== null && item.newPrice !== null ? (
                           <>
-                            {item.oldPrice.toFixed(2)}
+                            {formatPrice(item.oldPrice)}
                             <span style={{ color: 'var(--muted)', padding: 'var(--sp-1) var(--sp-2)' }}>→</span>
                             <b style={{ color: item.newPrice > item.oldPrice ? 'var(--danger)' : 'var(--wave-300)' }}>
-                              {item.newPrice.toFixed(2)}
+                              {formatPrice(item.newPrice)}
                             </b>
                           </>
                         ) : (

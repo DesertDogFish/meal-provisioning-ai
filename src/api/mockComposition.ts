@@ -5,7 +5,7 @@
  */
 
 import type {  } from '../types';
-import { nextSubstitutionSeq, nextRemovedSeq, products, recipes, trips, substitutions, removedItems, allTripEdits, priceOf, r3, r2, editRecipeKey, editIngredientKey } from './mockState';
+import { nextSubstitutionSeq, nextRemovedSeq, products, recipes, substitutions, removedItems, allTripEdits, priceOf, r3, r2, editRecipeKey, editIngredientKey, findOwnTrip } from './mockState';
 import type { MockSubstitution } from './mockState';
 
 /**
@@ -75,7 +75,8 @@ export function mockKcalOf(qty: number, unit?: string, kcalPer100g?: number | nu
    */
 
 export function handleMealCompositionImpl(srv: any, method: string, tripId: string, mealId: string, body?: any): any {
-  const trip = trips.find(t => t.id === tripId);
+  // KB-34: состав приёма — тоже только своего похода (чужой → 404)
+  const trip = findOwnTrip(tripId);
   if (!trip) throw { status: 404, message: 'Not found', detail: `Trip ${tripId} not found` } as any;
   let day: any = null;
   let meal: any = null;

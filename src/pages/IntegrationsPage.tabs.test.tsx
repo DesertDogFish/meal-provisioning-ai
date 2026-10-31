@@ -39,7 +39,7 @@ const FULL_LOG = {
   id: 7, provider: 'ROSSTAT', type: 'PRICES', status: 'SUCCESS',
   triggeredBy: 'MANUAL', triggeredUserEmail: 'admin@provision.app',
   startedAt: '2026-10-30T10:00:00Z', finishedAt: '2026-10-30T10:00:05Z',
-  durationSeconds: 5, createdCount: 1, updatedCount: 2, errorCount: 0,
+  durationSeconds: 2.5, createdCount: 1, updatedCount: 2, errorCount: 0,
   details: { requestCount: 3, items: [], errors: [] },
 };
 
@@ -110,6 +110,9 @@ describe('IntegrationsPage: табы раздела (cleanup-п.2/3)', () => {
     const tab = await screen.findByTestId('sync-logs-tab');
     expect(within(tab).getByTestId('sync-kpi')).toBeTruthy();
     expect(within(tab).getByTestId('sync-log-row-7')).toBeTruthy();
+    // UX-осмотр 31.10 (п.10): длительность — через запятую («2,5 с», не «2.5 с»)
+    expect(within(tab).getAllByText('2,5 с').length).toBeGreaterThan(0);
+    expect(within(tab).queryByText('2.5 с')).toBeNull();
     // детали запуска — drawer
     await user.click(within(tab).getByTestId('sync-log-details-7'));
     expect(await screen.findByText(/Запуск #7/)).toBeTruthy();
@@ -174,8 +177,11 @@ describe('IntegrationsPage: табы раздела (cleanup-п.2/3)', () => {
 
     // постатейная таблица: старая → новая цена, чип действия, причина, «—» без цен
     expect(screen.getByText('Гречка')).toBeTruthy();
-    expect(screen.getByText('10.00')).toBeTruthy();
-    expect(screen.getByText('12.50')).toBeTruthy();
+    // UX-осмотр 31.10 (п.10): цены в журнале — ru-формат (запятая, formatPrice),
+    // раньше здесь стоял toFixed и тест фиксировал «10.00»/«12.50» через точку.
+    expect(screen.getByText('10,00')).toBeTruthy();
+    expect(screen.getByText('12,50')).toBeTruthy();
+    expect(screen.queryByText('10.00')).toBeNull();
     expect(screen.getByText('UPDATED')).toBeTruthy();
     expect(screen.getByText('Рост цены')).toBeTruthy();
     expect(screen.getByText('CREATED')).toBeTruthy();

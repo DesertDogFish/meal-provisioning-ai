@@ -23,16 +23,21 @@ export function ExclusionCheckbox({ ingredientId, dayDate, excluded, onToggle }:
   /** Fix-2 (п.5): key = ingredientId (весь поход) ИЛИ `${dayDate}::${ingredientId}` (только день). */
   const key = dayDate ? `${dayDate}::${ingredientId}` : ingredientId;
   const off = excluded.has(key) || (!!dayDate && excluded.has(ingredientId));
+  // UX-осмотр 31.10 (п.7): сам чекбокс ~20×20 — промах пальцем. Хит-зону даёт
+  // обёртка-<label> .check-hit (32px, на pointer:coarse — var(--touch-min)=40px);
+  // ::after на <input> не работает, поэтому именно label, а не псевдоэлемент.
   return (
-    <input
-      type="checkbox"
-      checked={!off}
-      onChange={() => onToggle(key)}
-      aria-label={off ? 'Включить в расчёт' : dayDate ? 'Исключить из этого дня' : 'Исключить из расчёта'}
-      title={off ? 'Включить в расчёт' : dayDate ? 'Не покупать в этот день (остальные дни не затрагиваются)' : 'Исключить из расчёта (не удаляя)'}
-      className="cursor-pointer"
-      style={{ accentColor: 'var(--w2)' }}
-    />
+    <label className="check-hit">
+      <input
+        type="checkbox"
+        checked={!off}
+        onChange={() => onToggle(key)}
+        aria-label={off ? 'Включить в расчёт' : dayDate ? 'Исключить из этого дня' : 'Исключить из расчёта'}
+        title={off ? 'Включить в расчёт' : dayDate ? 'Не покупать в этот день (остальные дни не затрагиваются)' : 'Исключить из расчёта (не удаляя)'}
+        className="cursor-pointer"
+        style={{ accentColor: 'var(--w2)' }}
+      />
+    </label>
   );
 }
 

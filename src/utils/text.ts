@@ -15,9 +15,30 @@ export const servingsWord = (count: number): string => pluralize(count, ['пор
 export const recipesWord = (count: number): string => pluralize(count, ['рецепт', 'рецепта', 'рецептов']);
 export const ingredientsWord = (count: number): string => pluralize(count, ['ингредиент', 'ингредиента', 'ингредиентов']);
 export const mealsWord = (count: number): string => pluralize(count, ['приём', 'приёма', 'приёмов']);
+export const daysWord = (count: number): string => pluralize(count, ['день', 'дня', 'дней']);
 // Release-1.0 (UI-consistency): «1 продукт / 2 продукта / 5 продуктов» — для чипов и подсказок
 export const productsWord = (count: number): string => pluralize(count, ['продукт', 'продукта', 'продуктов']);
 export const categoriesWord = (count: number): string => pluralize(count, ['категория', 'категории', 'категорий']);
+
+/**
+ * UX-осмотр 31.10 (подзадача 1): подпись-счётчик «N приёмов пищи».
+ *
+ * Раньше в `TripDaysList`/`TripPrintPage`/`TripsPage` форма слова была хардкодом
+ * («приёмов»), и день с двумя приёмами подписывался «2 приёмов пищи». Единственный
+ * источник формы — `mealsWord`, поэтому все экраны согласованы по построению.
+ *
+ * @param count число приёмов
+ * @param opts.short — короткая форма без «пищи» («2 приёма») для плотных строк печати
+ */
+export const mealsCountLabel = (count: number, opts?: { short?: boolean }): string =>
+  `${count} ${mealsWord(count)}${opts?.short ? '' : ' пищи'}`;
+
+/**
+ * Подзадача 1 (sweep): подпись-счётчик дней — «1 день / 2 дня / 5 дней»,
+ * короткая форма «2 дн.» для списков и печати.
+ */
+export const daysCountLabel = (count: number, opts?: { short?: boolean }): string =>
+  opts?.short ? `${count} дн.` : `${count} ${daysWord(count)}`;
 
 // P0-1/P0-3: Человекочитаемые единицы измерения и категории.
 const UNIT_HUMAN: Record<string, string> = { KG: 'кг', L: 'л', ML: 'мл', G: 'г', PCS: 'шт', PACK: 'уп' };

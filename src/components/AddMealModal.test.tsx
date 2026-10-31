@@ -1,6 +1,7 @@
 /// <reference types="vitest/globals" />
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
+import { namelessButtons } from '../test/a11y';
 import AddMealModal from './AddMealModal';
 import { ToastProvider } from './ToastProvider';
 
@@ -88,5 +89,60 @@ describe('AddMealModal — постоянный размер формы (Fix-8 �
     expect(slot.contains(preview)).toBe(true);
     // фиксированная высота слота живёт на превью выбранного блюда (Fix-8 п.4)
     expect(preview.className).toContain('h-32');
+  });
+});
+
+// UX-осмотр 31.10 (подзадача 6): в модалке «Добавить приём пищи» осмотр насчитал
+// 8 кнопок без accessible name (крестик, сегменты типа приёма, ссылка «Добавить
+// и настроить состав», очистка поиска). Probe — регресс-страж критерия приёмки.
+describe('AddMealModal — a11y: доступные имена кнопок (подзадача 6)', () => {
+  it('probe: кнопок без accessible name = 0', async () => {
+    renderModal();
+    await screen.findByTestId('meal-preview-slot');
+    expect(namelessButtons(document)).toEqual([]);
+  });
+
+  it('крестик закрытия объявляется как «Закрыть»', async () => {
+    renderModal();
+    await screen.findByTestId('meal-preview-slot');
+    expect(screen.getByLabelText('Закрыть')).toBeTruthy();
+  });
+});
+
+/**
+ * KB-29 (UX-осмотр 31.10, подзадача 13): deep-link «В меню похода…» открывает
+ * модалку с предвыбранным блюдом, а каталог блюд догружается АСИНХРОННО. Пока
+ * каталога нет, в слоте превью одна строка подсказки; когда блюдо нашлось —
+ * карточка h-32. Лист вырастал на ~110px уже после открытия, центрированная
+ * модалка «съезжала» на ~30–50px, и координатный клик по «Добавить» приходился
+ * мимо кнопки (pointerdown/pointerup на разных элементах → click не наш).
+ * Фикс: высота слота зарезервирована на всё время догрузки предвыбора.
+ */
+describe('AddMealModal — KB-29: лист не меняет высоту при догрузке предвыбранного блюда', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('deep-link (?recipe=): слот превью зарезервирован ДО загрузки каталога и после', async () => {
+    let release: (v: unknown) => void = () => {};
+    (getRecipes as any).mockReturnValue(new Promise(res => { release = res; }));
+    renderModal({ initialRecipeId: 'r1' });
+
+    const slot = await screen.findByTestId('meal-preview-slot');
+    expect(slot.className).toContain('meal-preview-slot--reserved');
+
+    release([RECIPE]);
+    const preview = await screen.findByTestId('meal-preview');
+    expect(slot.contains(preview)).toBe(true);
+    // высота та же: резерв не снят, лист не «поехал»
+    expect(slot.className).toContain('meal-preview-slot--reserved');
+  });
+
+  it('без deep-link подсказка остаётся компактной (резерв не включается)', async () => {
+    (getRecipes as any).mockResolvedValue([RECIPE]);
+    renderModal();
+    const slot = await screen.findByTestId('meal-preview-slot');
+    expect(screen.getByTestId('meal-preview-hint')).toBeTruthy();
+    expect(slot.className).not.toContain('meal-preview-slot--reserved');
   });
 });

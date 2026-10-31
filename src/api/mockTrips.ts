@@ -5,7 +5,7 @@
  */
 
 import type { Trip } from '../types';
-import { nextSubstitutionSeq, nextRemovedSeq, nextManualSeq, products, recipes, trips, priceOverrides, shoppingExcluded, substitutions, removedItems, manualItems, allTripEdits, applyTripEditsToRows, loadClientStage, users, UNIT_LABELS, r3, r2, editRecipeKey, editIngredientKey } from './mockState';
+import { nextSubstitutionSeq, nextRemovedSeq, nextManualSeq, products, recipes, trips, priceOverrides, shoppingExcluded, substitutions, removedItems, manualItems, allTripEdits, applyTripEditsToRows, loadClientStage, users, UNIT_LABELS, r3, r2, editRecipeKey, editIngredientKey, findOwnTrip, ownTripOr404 } from './mockState';
 import { tripPricesFor, ingredientEditsFor, tripsWithProgress, denormalizeOverrideKey } from './mockTripProgress'; // cleanup-п.8
 import type { MockSubstitution, MockManualItem } from './mockState';
 
@@ -16,7 +16,7 @@ export function handleTripsImpl(srv: any, method: string, path: string, body?: a
   // (legacy/сид-походы) — фолбэк на глобальный срез, как TripPriceController
   if (method === 'GET' && parts.length === 3 && parts[2] === 'prices') {
     const tripId = parts[1];
-    if (!trips.find(t => t.id === tripId)) {
+    if (!findOwnTrip(tripId)) {
       throw { status: 404, message: 'Not found', detail: `Trip ${tripId} not found` } as any;
     }
     // cleanup-п.8/п.9: логика среза цен — общий хелпер (mockTripProgress.tripPricesFor)
@@ -28,7 +28,7 @@ export function handleTripsImpl(srv: any, method: string, path: string, body?: a
   if (parts.length === 5 && parts[2] === 'days' && parts[4] === 'meals') {
     const tripId = parts[1];
     const dayId = parts[3];
-    const trip = trips.find(t => t.id === tripId);
+    const trip = findOwnTrip(tripId);
     if (!trip) {
       throw { status: 404, message: 'Not found', detail: `Trip ${tripId} not found` };
     }
@@ -69,7 +69,7 @@ export function handleTripsImpl(srv: any, method: string, path: string, body?: a
   // EXTRA-абсолюты фиксированы на приём — §3).
   if (parts.length === 4 && parts[2] === 'meals' && method === 'PATCH') {
     const tripId = parts[1];
-    const trip = trips.find(t => t.id === tripId);
+    const trip = findOwnTrip(tripId);
     if (!trip) throw { status: 404, message: 'Not found', detail: `Trip ${tripId} not found` } as any;
     let meal: any = null;
     for (const d of trip.days || []) {
@@ -93,7 +93,7 @@ export function handleTripsImpl(srv: any, method: string, path: string, body?: a
   // Mock-паритет: агрегируем composition-ответы всех приёмов похода в kcal/weight/cost.
   if (parts.length === 2 && parts[1] === 'summary' && method === 'GET') {
     const tripId = parts[0];
-    const trip = trips.find(t => t.id === tripId);
+    const trip = findOwnTrip(tripId);
     if (!trip) throw { status: 404, message: 'Not found', detail: `Trip ${tripId} not found` } as any;
     let kcal = 0, weightGrams = 0, plannedCost = 0, mealCount = 0;
     for (const d of trip.days || []) {
@@ -120,7 +120,7 @@ export function handleTripsImpl(srv: any, method: string, path: string, body?: a
 
   // DELETE /trips/:id/days/:dayId/meals/:mealId
   if (parts.length === 6 && parts[2] === 'days' && parts[4] === 'meals' && method === 'DELETE') {
-    const trip = trips.find(t => t.id === parts[1]);
+    const trip = findOwnTrip(parts[1]);
     const day = trip?.days?.find(d => d.id === parts[3]);
     if (!trip || !day) {
       throw { status: 404, message: 'Not found', detail: `Trip day ${parts[3]} not found` };
@@ -134,7 +134,8 @@ export function handleTripsImpl(srv: any, method: string, path: string, body?: a
   }
   
   // GET /trips — cleanup-п.8 (вариант A): список СРАЗУ с прогрессом карточек
-  // (паритет backend TripService.getUserTrips → TripProgressService)
+  // (паритет backend TripService.getUserTrips → TripProgressService).
+  // KB-34: только походы текущей сессии — как findByUserId на бэкенде.
   if (parts.length === 1 && method === 'GET') {
     return tripsWithProgress();
   }
@@ -145,7 +146,7 @@ export function handleTripsImpl(srv: any, method: string, path: string, body?: a
   // «Cannot change trip dates» в TripService.updateTrip и повторить эту семантику.
   if (parts.length === 2 && method === 'PUT') {
     const tripId = parts[1];
-    const trip = trips.find(t => t.id === tripId);
+    const trip = findOwnTrip(tripId);
     if (!trip) {
       throw { status: 404, message: 'Not found', detail: `Trip ${tripId} not found` } as any;
     }
@@ -200,7 +201,7 @@ export function handleTripsImpl(srv: any, method: string, path: string, body?: a
   // GET/POST /trips/:id/manual-items
   if (parts.length === 3 && parts[2] === 'manual-items' && (method === 'GET' || method === 'POST')) {
     const tripId = parts[1];
-    const trip = trips.find(t => t.id === tripId);
+    const trip = findOwnTrip(tripId);
     if (!trip) {
       throw { status: 404, message: 'Not found', detail: `Trip ${tripId} not found` } as any;
     }
@@ -242,6 +243,8 @@ export function handleTripsImpl(srv: any, method: string, path: string, body?: a
   // DELETE /trips/:id/manual-items/:itemId
   if (parts.length === 4 && parts[2] === 'manual-items' && method === 'DELETE') {
     const tripId = parts[1];
+    // KB-34: чужой поход — 404 до всякой мутации (раньше роут поход не резолвил)
+    ownTripOr404(tripId);
     const list = manualItems[tripId] || [];
     const idx = list.findIndex(x => x.id === parts[3]);
     if (idx === -1) {
@@ -254,7 +257,7 @@ export function handleTripsImpl(srv: any, method: string, path: string, body?: a
   // GET /trips/:id
   if (parts.length === 2 && method === 'GET') {
     const tripId = parts[1];
-    const trip = trips.find(t => t.id === tripId);
+    const trip = findOwnTrip(tripId);
     if (!trip) {
       throw { status: 404, message: 'Not found', detail: `Trip ${tripId} not found` };
     }
@@ -264,7 +267,7 @@ export function handleTripsImpl(srv: any, method: string, path: string, body?: a
   // V20: trip-scoped копии блюд похода (паритет с GET /api/v1/trips/{id}/recipes)
   if (parts.length === 3 && parts[2] === 'recipes' && method === 'GET') {
     const tripId = parts[1];
-    if (!trips.find(t => t.id === tripId)) {
+    if (!findOwnTrip(tripId)) {
       throw { status: 404, message: 'Not found', detail: `Trip ${tripId} not found` } as any;
     }
     return recipes
@@ -275,7 +278,7 @@ export function handleTripsImpl(srv: any, method: string, path: string, body?: a
   // GET /trips/:id/summary/shopping
   if (parts.length === 4 && parts[2] === 'summary' && parts[3] === 'shopping' && method === 'GET') {
     const tripId = parts[1];
-    const trip = trips.find(t => t.id === tripId);
+    const trip = findOwnTrip(tripId);
     if (!trip) {
       throw { status: 404, message: 'Not found', detail: `Trip ${tripId} not found` };
     }
@@ -457,7 +460,7 @@ export function handleTripsImpl(srv: any, method: string, path: string, body?: a
   // GET /substitutions отдаёт только «чистые» замены без количеств.
   if (parts.length === 3 && parts[2] === 'ingredient-edits' && method === 'GET') {
     const tripId = parts[1];
-    if (!trips.find(t => t.id === tripId)) {
+    if (!findOwnTrip(tripId)) {
       throw { status: 404, message: 'Not found', detail: `Trip ${tripId} not found` } as any;
     }
     // cleanup-п.8/п.9: обогащение правок — общий хелпер (mockTripProgress.ingredientEditsFor)
@@ -467,7 +470,7 @@ export function handleTripsImpl(srv: any, method: string, path: string, body?: a
   // GET /trips/:id/substitutions
   if (parts.length === 3 && parts[2] === 'substitutions' && method === 'GET') {
     const tripId = parts[1];
-    if (!trips.find(t => t.id === tripId)) {
+    if (!findOwnTrip(tripId)) {
       throw { status: 404, message: 'Not found', detail: `Trip ${tripId} not found` };
     }
     // U30 (список 26.10): обогащение имён/единиц — паритет с backend
@@ -501,7 +504,7 @@ export function handleTripsImpl(srv: any, method: string, path: string, body?: a
   // POST /trips/:id/substitutions — создать замену/добавление/мягкое удаление позиции
   if (parts.length === 3 && parts[2] === 'substitutions' && method === 'POST') {
     const tripId = parts[1];
-    const trip = trips.find(t => t.id === tripId);
+    const trip = findOwnTrip(tripId);
     if (!trip) {
       throw { status: 404, message: 'Not found', detail: `Trip ${tripId} not found` };
     }
@@ -556,7 +559,7 @@ export function handleTripsImpl(srv: any, method: string, path: string, body?: a
   // DELETE /trips/:id/substitutions/:subId
   if (parts.length === 4 && parts[2] === 'substitutions' && method === 'DELETE') {
     const tripId = parts[1];
-    if (!trips.find(t => t.id === tripId)) {
+    if (!findOwnTrip(tripId)) {
       throw { status: 404, message: 'Not found', detail: `Trip ${tripId} not found` };
     }
     const before = allTripEdits(tripId).length;
@@ -571,7 +574,7 @@ export function handleTripsImpl(srv: any, method: string, path: string, body?: a
   // Храним клиентскими ключами: '<id>' или '<dayDate>::<id>'.
   if (parts.length === 3 && parts[2] === 'shopping-exclusions' && method === 'PUT') {
     const tripId = parts[1];
-    if (!trips.find(t => t.id === tripId)) {
+    if (!findOwnTrip(tripId)) {
       throw { status: 404, message: 'Not found', detail: `Trip ${tripId} not found` };
     }
     const legacy = Array.isArray(body?.ingredientIds);
@@ -599,7 +602,7 @@ export function handleTripsImpl(srv: any, method: string, path: string, body?: a
   // GET /trips/:id/shopping-exclusions — Fix-5 / R2 (шаг 2): объекты {ingredientId, dayDate|null}
   if (parts.length === 3 && parts[2] === 'shopping-exclusions' && method === 'GET') {
     const tripId = parts[1];
-    if (!trips.find(t => t.id === tripId)) {
+    if (!findOwnTrip(tripId)) {
       throw { status: 404, message: 'Not found', detail: `Trip ${tripId} not found` };
     }
     return (shoppingExcluded[tripId] || []).map(k => {
@@ -613,7 +616,7 @@ export function handleTripsImpl(srv: any, method: string, path: string, body?: a
   // DELETE /trips/:id/shopping-exclusions/:ingredientId
   if (parts.length === 4 && parts[2] === 'shopping-exclusions' && method === 'DELETE') {
     const tripId = parts[1];
-    if (!trips.find(t => t.id === tripId)) {
+    if (!findOwnTrip(tripId)) {
       throw { status: 404, message: 'Not found', detail: `Trip ${tripId} not found` };
     }
     // Fix-5: DELETE по ingredientId снимает ВСЕ его исключения (глобальное и дневные)
@@ -627,7 +630,7 @@ export function handleTripsImpl(srv: any, method: string, path: string, body?: a
   // POST /trips/:id/ingredient-removals — мягкое удаление продукта из блюда в рамках похода
   if (parts.length === 3 && parts[2] === 'ingredient-removals' && method === 'POST') {
     const tripId = parts[1];
-    const trip = trips.find(t => t.id === tripId);
+    const trip = findOwnTrip(tripId);
     if (!trip) {
       throw { status: 404, message: 'Not found', detail: `Trip ${tripId} not found` };
     }
@@ -658,7 +661,7 @@ export function handleTripsImpl(srv: any, method: string, path: string, body?: a
   // DELETE /trips/:id/ingredient-removals/:removalId
   if (parts.length === 4 && parts[2] === 'ingredient-removals' && method === 'DELETE') {
     const tripId = parts[1];
-    if (!trips.find(t => t.id === tripId)) {
+    if (!findOwnTrip(tripId)) {
       throw { status: 404, message: 'Not found', detail: `Trip ${tripId} not found` };
     }
     removedItems[tripId] = (removedItems[tripId] || []).filter(r => r.id !== parts[3]);
@@ -668,7 +671,7 @@ export function handleTripsImpl(srv: any, method: string, path: string, body?: a
   // GET /trips/:id/summary/person
   if (parts.length === 4 && parts[2] === 'summary' && parts[3] === 'person' && method === 'GET') {
     const tripId = parts[1];
-    const trip = trips.find(t => t.id === tripId);
+    const trip = findOwnTrip(tripId);
     if (!trip) {
       throw { status: 404, message: 'Not found', detail: `Trip ${tripId} not found` };
     }
@@ -711,7 +714,7 @@ export function handleTripsImpl(srv: any, method: string, path: string, body?: a
   // PUT /trips/:id/price-overrides (bulk)
   if (parts.length === 3 && parts[2] === 'price-overrides' && method === 'PUT') {
     const tripId = parts[1];
-    const trip = trips.find(t => t.id === tripId);
+    const trip = findOwnTrip(tripId);
     if (!trip) {
       throw { status: 404, message: 'Not found', detail: `Trip ${tripId} not found` };
     }
@@ -747,7 +750,7 @@ export function handleTripsImpl(srv: any, method: string, path: string, body?: a
     const tripId = parts[1];
     // CONTRACT-P1: нормализация ключа ('ing1'→'1') — PUT принимает и id каталога, и старые фикстуры
     const ingredientId = String(parts[3]).replace(/^ing/, '');
-    const trip = trips.find(t => t.id === tripId);
+    const trip = findOwnTrip(tripId);
     if (!trip) {
       throw { status: 404, message: 'Not found', detail: `Trip ${tripId} not found` };
     }
@@ -777,7 +780,7 @@ export function handleTripsImpl(srv: any, method: string, path: string, body?: a
     const tripId = parts[1];
     // CONTRACT-P1: та же нормализация ключа, что и в PUT ('ing1'→'1')
     const ingredientId = String(parts[3]).replace(/^ing/, '');
-    const trip = trips.find(t => t.id === tripId);
+    const trip = findOwnTrip(tripId);
     if (!trip) {
       throw { status: 404, message: 'Not found', detail: `Trip ${tripId} not found` };
     }
@@ -792,7 +795,7 @@ export function handleTripsImpl(srv: any, method: string, path: string, body?: a
   // GET /trips/:id/price-overrides
   if (parts.length === 3 && parts[2] === 'price-overrides' && method === 'GET') {
     const tripId = parts[1];
-    const trip = trips.find(t => t.id === tripId);
+    const trip = findOwnTrip(tripId);
     if (!trip) {
       throw { status: 404, message: 'Not found', detail: `Trip ${tripId} not found` };
     }

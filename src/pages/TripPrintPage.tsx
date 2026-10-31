@@ -3,6 +3,8 @@ import { useParams } from 'react-router-dom';
 import { Printer, ArrowLeft } from 'lucide-react';
 import { formatAmount } from '../utils/calculations';
 import { formatRub } from '../utils/format' // cleanup-п.9: shim formatRub удалён;
+// UX-осмотр 31.10 (п.1): форма слова «N приёмов» — единый источник (utils/text)
+import { mealsWord, mealsCountLabel } from '../utils/text';
 import { loadBought, loadActualQty, type ChecklistActual } from '../utils/tripStaging';
 import { type TripManualItem } from '../api/tripManualItems';
 import { manualForDay, manualForTrip } from '../utils/manualItems';
@@ -192,7 +194,7 @@ export default function TripPrintPage() {
                 {fmtDate(day.dayDate, { weekday: 'long', day: 'numeric', month: 'long' })}
               </h2>
               <p className="print-muted" style={{ margin: '0 0 12px', fontSize: 12 }}>
-                {day.effectivePeople} чел. · {day.meals.length} приёмов
+                {day.effectivePeople} чел. · {mealsCountLabel(day.meals.length, { short: true })}
                 {dayRow ? ` · план ${formatRub(dayRow.planned)}${dayRow.actual !== dayRow.planned ? `, факт ${formatRub(dayRow.actual)}` : ''}` : ''}
               </p>
               {/* Fix-6 (п.3): меню СГРУППИРОВАНО по приёмам — «Завтрак», «Обед»,
@@ -286,9 +288,10 @@ export default function TripPrintPage() {
                     <th style={{ textAlign: 'right' }}>Нужно</th>
                     {/* Fix-5 (п.12/21): сколько реально взяли — из чеклиста/чека */}
                     <th style={{ textAlign: 'right' }}>Взяли</th>
-                    {/* Fix-6 (п.5/21): план — только пока чеки не закрыты; народный нейминг */}
-                    {!allFact && <th style={{ textAlign: 'right' }}>Думали ₽</th>}
-                    {(anyFact || allFact) && <th style={{ textAlign: 'right' }}>Заплатили ₽</th>}
+                    {/* Fix-6 (п.5/21): план — только пока чеки не закрыты.
+                        UX-осмотр 31.10 (п.10): единый словарь с экраном ④ — «План/Факт» */}
+                    {!allFact && <th style={{ textAlign: 'right' }}>План ₽</th>}
+                    {(anyFact || allFact) && <th style={{ textAlign: 'right' }}>Факт ₽</th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -343,16 +346,16 @@ export default function TripPrintPage() {
           <h2 style={{ fontSize: 18, fontWeight: 800, margin: '0 0 10px', color: '#0F7A6E' }}>Деньги: итоги и кто сколько должен</h2>
           <table style={{ marginBottom: 14 }}>
             <tbody>
-              {/* Fix-6 (п.5): чеки закрыты полностью — план не выводим: «Заплатили» и всё */}
+              {/* Fix-6 (п.5): чеки закрыты полностью — план не выводим: «Факт» и всё */}
               {!allFact && (
                 <tr>
-                  <td>Думали (план на поход)</td>
+                  <td>План (на поход)</td>
                   <td style={{ textAlign: 'right', fontWeight: 700 }}>{formatRub(kpi.totalPlanned)}</td>
                 </tr>
               )}
               {anyFact && (
                 <tr>
-                  <td>Заплатили (по введённым чекам)</td>
+                  <td>Факт (по введённым чекам)</td>
                   <td style={{ textAlign: 'right', fontWeight: 700 }}>{formatRub(kpi.totalActual)}</td>
                 </tr>
               )}
@@ -368,7 +371,7 @@ export default function TripPrintPage() {
                 <tr><td>Итого (план)</td><td style={{ textAlign: 'right', fontWeight: 700 }}>{formatRub(kpi.totalPlanned)}</td></tr>
               )}
               <tr><td>На одного человека ({realPeopleLabel} чел.)</td><td style={{ textAlign: 'right', fontWeight: 800 }}>{formatRub(kpi.perPerson)}</td></tr>
-              <tr><td>На один приём пищи ({kpi.personMeals} приёмов с людьми)</td><td style={{ textAlign: 'right', fontWeight: 700 }}>{formatRub(kpi.perPersonMeal)}</td></tr>
+              <tr><td>На один приём пищи ({kpi.personMeals} {mealsWord(kpi.personMeals)} с людьми)</td><td style={{ textAlign: 'right', fontWeight: 700 }}>{formatRub(kpi.perPersonMeal)}</td></tr>
             </tbody>
           </table>
 
@@ -378,8 +381,8 @@ export default function TripPrintPage() {
               <tr>
                 <th>День</th>
                 <th style={{ textAlign: 'right' }}>Людей</th>
-                {!allFact && <th style={{ textAlign: 'right' }}>Думали ₽</th>}
-                {anyFact && <th style={{ textAlign: 'right' }}>Заплатили ₽</th>}
+                {!allFact && <th style={{ textAlign: 'right' }}>План ₽</th>}
+                {anyFact && <th style={{ textAlign: 'right' }}>Факт ₽</th>}
                 <th style={{ textAlign: 'right' }}>На человека в день</th>
               </tr>
             </thead>

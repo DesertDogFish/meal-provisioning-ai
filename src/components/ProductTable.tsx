@@ -351,17 +351,19 @@ export function ProductTable({ products, filters, onEdit, onDelete, onResetFilte
                 <div className="flex items-center justify-end gap-1">
                   <button
                     onClick={() => onEdit(product)}
-                    className="p-1.5 rounded transition-colors"
+                    className="p-1.5 rounded transition-colors touch-hit"
                     style={{ color: 'var(--muted)' }}
                     title="Правка"
+                    aria-label={`Правка: ${product.name}`}
                   >
                     <Edit2 size={14} />
                   </button>
                   <button
                     onClick={() => onDelete(product)}
-                    className="p-1.5 rounded transition-colors"
+                    className="p-1.5 rounded transition-colors touch-hit"
                     style={{ color: 'var(--muted)' }}
                     title="Удалить"
+                    aria-label={`Удалить: ${product.name}`}
                   >
                     <Trash2 size={14} />
                   </button>

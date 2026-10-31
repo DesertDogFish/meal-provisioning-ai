@@ -1,5 +1,6 @@
 /// <reference types="vitest/globals" />
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import ChecklistTab from './ChecklistTab';
 import { checklistRowKey, collectChecklistKeys, type ChecklistGroup, type ChecklistRow } from '../utils/checklist';
@@ -69,7 +70,9 @@ describe('ChecklistTab — прогресс и отметки (подзадач�
 
   it('тап по строке переключает «взято» — ключ = позиция + потребность', () => {
     const props = setup();
-    fireEvent.click(screen.getByTestId('checklist-row-1'));
+    // UX-осмотр 31.10 (п.14): строка больше НЕ div[role=button] — тап-зону даёт
+    // настоящая кнопка-переключатель (хит-зона ::after на всю строку, паттерн KB-31)
+    fireEvent.click(screen.getByTestId('checklist-toggle-1'));
     expect(props.onToggleRow).toHaveBeenCalledWith('1@200000');
     expect(props.onToggleRow).toHaveBeenCalledWith(checklistRowKey(GROUPS[0].rows[0]));
   });
@@ -82,10 +85,28 @@ describe('ChecklistTab — прогресс и отметки (подзадач�
     expect(props.onToggleRow).toHaveBeenCalledWith('1@200000');
   });
 
-  it('Enter/Space на строке — то же действие (клавиатура)', () => {
+  it('Enter на строке — то же действие (клавиатура): переключатель — настоящий <button>', async () => {
+    const user = userEvent.setup();
     const props = setup();
-    fireEvent.keyDown(screen.getByTestId('checklist-row-1'), { key: 'Enter' });
+    const toggle = screen.getByTestId('checklist-toggle-1');
+    expect(toggle.tagName).toBe('BUTTON');
+    toggle.focus();
+    await user.keyboard('{Enter}');
     expect(props.onToggleRow).toHaveBeenCalledWith('1@200000');
+  });
+
+  it('нет интерактивного элемента внутри интерактивного (паттерн KB-31)', () => {
+    setup();
+    const interactive = 'a[href], button, input, select, textarea, [tabindex]:not([tabindex="-1"])';
+    const nested = Array.from(document.querySelectorAll(interactive))
+      .flatMap(el => Array.from(el.querySelectorAll(interactive)));
+    expect(nested).toEqual([]);
+  });
+
+  it('строка не объявляется кнопкой: role=button на контейнере строки убран', () => {
+    setup();
+    expect(screen.getByTestId('checklist-row-1').getAttribute('role')).toBeNull();
+    expect(screen.getByTestId('checklist-row-1').hasAttribute('tabindex')).toBe(false);
   });
 
   it('отмеченная позиция учитывается в прогрессе', () => {

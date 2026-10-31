@@ -364,6 +364,17 @@ h1, h2, h3, .logo-word, .font-display {
   box-shadow: var(--shadow-glow);
 }
 
+/* KB-33 (UX-осмотр 31.10, подзадача 5): десктопный переключатель этапов НЕ
+   должен быть виден на мобильном. Утилита Tailwind `hidden md:flex` здесь не
+   работает: весь index.css — ВНЕ слоёв, а unlayered-правила в каскаде выше
+   `@layer utilities`, поэтому `.seg { display:inline-flex }` перебивала
+   `display:none`. Явное правило с большей специфичностью (`.seg.seg-desktop-only`)
+   и source-order после `.seg` закрывает протечку без !important и без переноса
+   всего файла в @layer components (риск для :root/печатных правил). */
+@media (max-width: 767px) {
+  .seg.seg-desktop-only { display: none; }
+}
+
 /* transparency-п.2 (решение владельца 31.10 — «кликабельные чипы»): статусы
    готовности убраны из десктоп-.seg (класс .seg-badge удалён) — готовность
    этапов изображается ровно один раз: кликабельные чипы readiness-цепочки
@@ -1093,7 +1104,78 @@ input.compact-input {
   --fs-input: 14px;        /* поля ввода на десктопе */
   --fs-input-touch: 16px;  /* поля ввода на телефоне: <16px заставляет iOS зумить страницу */
   --touch-target: 44px;    /* минимальный размер тач-таргета (WCAG 2.5.5) */
+  --touch-min: 40px;       /* нижняя граница хит-зоны компактных контролов (WCAG 2.5.8,
+                              UX-осмотр 31.10 п.7: probe smallTargets <40px = 0) */
   --modal-pad: var(--sp-3);/* отступ оверлея модалки от краёв экрана */
+}
+
+/* UX-осмотр 31.10 (подзадача 7): компактные иконочные кнопки (правка/удаление в
+   таблице продуктов, иконки дня, крестик очистки даты) рисовались 28×28px —
+   probe smallTargets на тач-устройстве давал провал. Визуальный размер иконки
+   НЕ меняется: растёт невидимая хит-зона через ::after (тот же паттерн, что у
+   .infotip-trigger). Псевдоэлемент работает только на не-replaced элементах,
+   поэтому чекбоксы получают хит-зону обёрткой-<label>, а не этим классом. */
+.touch-hit { position: relative; }
+@media (pointer: coarse) {
+  .touch-hit::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: max(100%, var(--touch-min));
+    height: max(100%, var(--touch-min));
+    transform: translate(-50%, -50%);
+  }
+  /* сегменты (.seg) на тач — не меньше нижней границы таргета по высоте */
+  .seg-btn { min-height: var(--touch-min); }
+}
+
+/* KB-35 (UX-осмотр 31.10, подзадача 12): дев-бейдж режима — flow-элемент слота
+   над контентом, а не `fixed top-4 right-4` (перекрывал kebab действий похода и
+   кнопку темы, зона клика kebab была частично недоступна). Отступы живут на самом
+   бейдже: в прод-сборке компонент не рендерится, и слот схлопывается в 0px. */
+.dev-badge-slot { min-height: 0; }
+.dev-badge-flow { margin: var(--sp-4) 0 0 auto; }
+/* Иерархия мобильной шапки (п.12): на очень узком экране знак бренда важнее
+   дев-бейджа — текст бейджа скрывается, остаётся цветная точка-индикатор. */
+@media (max-width: 399px) {
+  .api-badge--inline .api-badge__text { display: none; }
+  .api-badge--inline { padding-inline: var(--sp-2); }
+}
+
+/* UX-осмотр 31.10 (подзадача 7): «Создать поход» на мобильном — FAB в правом
+   нижнем углу (конвенция), на десктопе остаётся иконочной кнопкой в шапке.
+   В DOM элемент ОДИН (меняется только позиционирование), поэтому e2e-локаторы
+   и accessible name не ломаются. Низ поднят над .scroll-top-btn (18px + 44px),
+   чтобы плавающие кнопки не перекрывались. */
+@media (max-width: 767px) {
+  .trips-fab {
+    position: fixed;
+    right: calc(16px + env(safe-area-inset-right, 0px));
+    bottom: calc(74px + env(safe-area-inset-bottom, 0px));
+    z-index: calc(var(--z-nav) - 6);
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    box-shadow: var(--shadow-1);
+  }
+  /* список походов не прячется под FAB */
+  .trips-list { padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px)); }
+}
+
+/* Хит-зона чекбокса: обёртка-<label> нужного размера, сам чекбокс — прежний
+   визуально. Клик по любому месту обёртки переключает input (нативный label). */
+.check-hit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  cursor: pointer;
+}
+@media (pointer: coarse) {
+  .check-hit { width: var(--touch-min); height: var(--touch-min); }
 }
 
 /* Связка «подпись + её иконка/значение»: инлайн-флекс, не разрывается.
@@ -1303,6 +1385,15 @@ textarea {
   border-top: 1px solid var(--line);
 }
 
+/* KB-29 (UX-осмотр 31.10, п.13): лист модалки не «прыгает» под курсором.
+   1) резерв высоты слота превью, пока deep-link догружает предвыбранное блюдо
+      (иначе лист вырастает на ~110px после открытия и центрированная модалка
+      съезжает — координатный клик по commit-кнопке глотался);
+   2) scroll anchoring выключен: догрузка контента ВЫШЕ точки просмотра не
+      должна прокручивать лист (тот же сдвиг между pointerdown и pointerup). */
+.meal-preview-slot--reserved { min-height: 8rem; }
+.modal-wrap > * { overflow-anchor: none; }
+
 /* ============================================================
    Подзадача 9 — каркас и навигация на мобильном.
    ============================================================ */
@@ -1334,19 +1425,37 @@ textarea {
   flex: none;
 }
 @media (pointer: coarse) {
-  /* «перчаточная» зона чекбокса без сдвига вёрстки */
-  .checklist-check { position: relative; }
-  .checklist-check::after {
-    content: "";
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    width: var(--touch-target);
-    height: var(--touch-target);
-    transform: translate(-50%, -50%);
-  }
+  /* «Перчаточная» зона чекбокса задаётся обёрткой-<label> .check-hit (п.7):
+     ::after на <input> браузеры не рисуют — прежнее правило было мёртвым. */
   .checklist-row { padding-top: var(--sp-3); padding-bottom: var(--sp-3); }
 }
+
+/* UX-осмотр 31.10 (п.14): строка чеклиста — контейнер, а переключатель «взято»
+   настоящая <button> (раньше div[role=button] с чекбоксом и полем ввода внутри —
+   interactive-в-interactive, паттерн KB-31). Хит-зона ::after растянута на всю
+   строку: «тап по строке» работает как раньше, а Enter/Space/фокус — нативные.
+   Соседние контролы (чекбокс, «беру») подняты над хит-зоной (.checklist-row__hit). */
+.checklist-row { position: relative; }
+.checklist-row__toggle {
+  display: block;
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.checklist-row__toggle::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  min-height: var(--touch-min, 40px);
+}
+.checklist-row__toggle:focus-visible { outline: 2px solid var(--amber-500); outline-offset: -2px; }
+.checklist-row__hit { position: relative; z-index: 1; }
 /* Липкая шапка чеклиста: прогресс «Взято N из M» и массовые действия видны всегда */
 .checklist-sticky {
   position: sticky;
@@ -1640,17 +1749,22 @@ textarea {
   text-align: left;
   cursor: pointer;
   min-height: var(--touch-target);
+  /* подзадача 8: узкий экран (360px) — дети переносятся, а не обрезаются */
+  flex-wrap: wrap;
 }
 .trip-strip:focus-visible { outline: 2px solid var(--amber-500); outline-offset: 2px; }
 .trip-strip__kpis {
   display: inline-flex;
   align-items: center;
-  flex-wrap: nowrap;
-  gap: var(--sp-1);
+  /* UX-осмотр 31.10 (подзадача 8): было nowrap + overflow:hidden — на 360–390px
+     последняя KPI молча обрезалась на «435 ₽/ч…» (единицы терялись). Теперь
+     ряд переносится целиком: `.keep-num` не рвёт пару «число + единица», а
+     overflow видим, поэтому «₽» и «/чел» остаются на экране при любой ширине. */
+  flex-wrap: wrap;
+  gap: var(--sp-1) var(--sp-2);
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow: visible;
+  row-gap: 2px;
 }
 .trip-strip__sep { color: var(--text-3); }
 .trip-strip__sum { color: var(--amber-300); font-weight: 800; }
@@ -1675,52 +1789,10 @@ textarea {
 .mini-step.done { background: color-mix(in srgb, var(--success) 22%, transparent); color: var(--success); }
 .mini-step.active { background: var(--grad-brand); color: var(--on-fire); }
 
-/* --- 2. Верхний степпер-прогресс со стрелками (мобильный) --- */
-.stage-stepper {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-1);
-  width: 100%;
-  overflow-x: auto;
-  flex-wrap: nowrap;
-  padding: 2px 0;
-  scrollbar-width: none;
-}
-.stage-stepper::-webkit-scrollbar { display: none; }
-.stage-stepper__item {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  flex: none;
-  border: 0;
-  background: transparent;
-  padding: 6px 2px;
-  color: var(--text-2);
-  font: 700 var(--fs-body)/1 var(--font-body);
-  white-space: nowrap;
-  cursor: pointer;
-}
-.stage-stepper__item:focus-visible { outline: 2px solid var(--amber-500); outline-offset: 2px; border-radius: 6px; }
-.stage-stepper__num {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  flex: none;
-  border-radius: 50%;
-  background: var(--elev);
-  color: var(--text-2);
-  font: 800 12px/1 var(--font-body);
-}
-.stage-stepper__item.done { color: var(--success); }
-.stage-stepper__item.done .stage-stepper__num { background: color-mix(in srgb, var(--success) 20%, transparent); color: var(--success); }
-.stage-stepper__item.active { color: var(--amber-300); }
-.stage-stepper__item.active .stage-stepper__num { background: var(--grad-brand); color: var(--on-fire); }
-.stage-stepper__arrow { color: var(--line-strong); flex: none; }
-@media (min-width: 768px) {
-  .stage-stepper { display: none; }
-}
+/* --- 2. Верхний степпер-прогресс УДАЛЁН (UX-осмотр 31.10, подзадача 5, KB-33):
+   на мобильном он был вторым кликабельным переключателем этапов и обрезался
+   справа. Единственная мобильная навигация этапов — нижний .stage-bar (2b);
+   прогресс — mini-steps липкой полосы сводки. См. DESIGN_MIGRATION.md. --- */
 
 /* --- 2b. Нижний таб-бар этапов (мобильный) --- */
 .stage-bar {
@@ -1924,18 +1996,45 @@ textarea {
   .checklist-row input[type="checkbox"] { width: 24px; height: 24px; }
 }
 
-/* --- 6. Чеки и итог: компактная мобильная строка --- */
+/* --- 6. Чеки и итог: компактная мобильная строка ---
+   KB-31 (UX-осмотр 31.10, п.4): строка — <div>, а не <button>: внутри неё
+   живут чекбокс «взято» и ввод факта, а interactive-в-interactive — невалидный
+   DOM. Раскрытие Details — отдельная кнопка .checkline__toggle, чья хит-зона
+   растянута на всю строку (::after), поэтому «тап по строке» работает как раньше.
+   Интерактив внутри строки поднят над хит-зоной через .checkline__hit. */
 .checkline {
+  position: relative;
   display: block;
   width: 100%;
   padding: var(--sp-3) var(--sp-4);
-  border: 0;
   border-top: 1px solid var(--border);
   background: transparent;
   text-align: left;
-  cursor: pointer;
   color: var(--text-1);
 }
+.checkline__toggle {
+  display: block;
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+/* Растянутая хит-зона: клик в любом месте строки (кроме поднятого интерактива)
+   раскрывает детали. Минимальная высота — тач-таргет ≥40px (подзадача 7). */
+.checkline__toggle::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  min-height: var(--touch-target, 40px);
+}
+.checkline__toggle:focus-visible { outline: 2px solid var(--amber-500); outline-offset: -2px; }
+/* Чекбокс/поле факта — поверх хит-зоны toggle, клики не «съедаются» строкой */
+.checkline__hit { position: relative; z-index: 1; }
 .checkline:focus-visible { outline: 2px solid var(--amber-500); outline-offset: -2px; }
 .checkline__top { display: flex; align-items: center; gap: var(--sp-3); }
 .checkline__name { font: 700 var(--fs-body)/1.2 var(--font-body); min-width: 0; flex: 1; }

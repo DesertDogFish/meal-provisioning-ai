@@ -138,3 +138,57 @@ describe('PriceOverridesTab — empty-state (navigation-п.3)', () => {
     expect(onGoToStore).toHaveBeenCalledTimes(1);
   });
 });
+
+/**
+ * UX-осмотр 31.10 (п.10): единый словарь этапов ②④ и «честный факт».
+ * Сводки говорят «План/Факт», а таблица чека — «Думали ₽/Заплатили ₽»:
+ * два имени одного числа в одном экране. Плюс при нуле введённых чеков
+ * факт показывал копию плана и «+0%» — выглядело как уже посчитанные деньги.
+ */
+describe('PriceOverridesTab — словарь «План/Факт» (UX-осмотр 31.10, п.10)', () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  it('заголовки таблицы: «План ₽»/«Факт ₽», старых «Думали/Заплатили» нет', async () => {
+    renderTab({}, { boughtSet: new Set(['k1']) });
+    expect((await screen.findAllByText('План ₽')).length).toBeGreaterThan(0);
+    expect((await screen.findAllByText('Факт ₽')).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/Думали/)).toBeNull();
+    expect(screen.queryByText(/Заплатили/)).toBeNull();
+  });
+
+  it('итоговая полоса при 0 чеков: «Факт — нет данных», дельта «—»', async () => {
+    renderTab({}, { boughtSet: new Set(['k1']) });
+    const strip = await screen.findByTestId('planfact-strip');
+    expect(strip.textContent).toContain('нет данных');
+    expect(screen.getByTestId('planfact-fact').textContent).toContain('нет данных');
+    expect(screen.getByTestId('planfact-delta').textContent).toBe('—');
+  });
+
+  it('липкий итог таблицы при 0 чеков: «Факт: нет данных»', async () => {
+    renderTab({}, { boughtSet: new Set(['k1']) });
+    const totals = await screen.findByTestId('checks-sticky-totals');
+    expect(totals.textContent).toContain('План:');
+    expect(totals.textContent).toContain('Факт: нет данных');
+  });
+
+  it('после первого чека суммы и дельта возвращаются', async () => {
+    renderTab({ draftOverrides: { i1: { price: 120, total: 120 } } }, { boughtSet: new Set(['k1']) });
+    const strip = await screen.findByTestId('planfact-strip');
+    expect(strip.textContent).not.toContain('нет данных');
+    expect(screen.getByTestId('planfact-delta').textContent).toBe('+20,0%');
+  });
+
+  it('строка без введённого чека: отклонение «—» (десктоп-таблица и моб. строка)', async () => {
+    renderTab({}, { boughtSet: new Set(['k1']) });
+    const chips = await screen.findAllByTestId('row-delta-i1');
+    expect(chips.length).toBeGreaterThanOrEqual(2);
+    for (const chip of chips) expect(chip.textContent).toBe('—');
+  });
+
+  it('таблица «по дням»: день без чека — «нет данных», день с чеком — сумма', async () => {
+    renderTab({}, { boughtSet: new Set(['k1']) });
+    const dayRows = await screen.findAllByTestId('dayfact-row-2026-07-01');
+    expect(dayRows.length).toBeGreaterThan(0);
+    expect(dayRows[0].textContent).toContain('нет данных');
+  });
+});

@@ -21,6 +21,8 @@ import BottomSheet from './BottomSheet';
 import { STAGES, type StageId } from './StageTabBar';
 import { formatRub } from '../utils/format' // cleanup-п.9: shim formatRub удалён; // Фаза 13: итоги — целые рубли
 import { pluralize } from '../utils/pluralize';
+// UX-осмотр 31.10 (п.1): форма слова «N приёмов» — единый источник (utils/text)
+import { mealsWord } from '../utils/text';
 import type { TripReadiness } from '../utils/readiness';
 import type { Trip } from '../types/tripDetail';
 
@@ -161,7 +163,7 @@ export function TripSummaryPanel({
         <span className="trip-strip__kpis">
           <span className="keep-num">{days} дн</span>
           <span className="trip-strip__sep" aria-hidden>·</span>
-          <span className="keep-num">{meals} {pluralize(meals, ['приём', 'приёма', 'приёмов'])}</span>
+          <span className="keep-num">{meals} {mealsWord(meals)}</span>
           <span className="trip-strip__sep" aria-hidden>·</span>
           <span className="trip-strip__sum keep-num">{formatRub(tripSummary.totalCost)}</span>
           <span className="trip-strip__sep" aria-hidden>·</span>

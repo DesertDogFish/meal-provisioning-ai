@@ -84,7 +84,20 @@ export function DateRange({
           disabled={!startDate}
           placeholder={endPlaceholder}
           id="end-date"
+          describedBy={!startDate ? 'end-date-hint' : undefined}
         />
+        {/* KB-32 (UX-осмотр 31.10, п.3): заблокированное поле окончания больше не
+            «молча неактивное» — видимая подпись + aria-describedby объясняют, что
+            нужно сделать. Подсказка занимает место всегда (пустая строка при
+            активной дате), чтобы форма не «прыгала» при разблокировке. */}
+        <p
+          id="end-date-hint"
+          className="dp-hint text-xs mt-1"
+          style={{ color: 'var(--text-3)', visibility: startDate ? 'hidden' : 'visible' }}
+          data-testid="end-date-hint"
+        >
+          Сначала укажите дату начала
+        </p>
       </div>
     </div>
   );

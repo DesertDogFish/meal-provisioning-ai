@@ -1,12 +1,18 @@
-import { BookOpen, ShoppingCart, ClipboardCheck, Receipt, ChevronRight, Check } from 'lucide-react';
+import { BookOpen, ShoppingCart, ClipboardCheck, Receipt } from 'lucide-react';
 
 /**
  * Plan plans/2026-10-30-mobile-workflow-ux.md (подзадача 2): продуктовый
  * сценарий похода линейный — ① Меню → ② Закупка → ③ Магазин → ④ Чеки и итог.
  * На мобильном — фиксированный нижний таб-бар (иконка + подпись + номер/
- * галочка, тач ≥56px, safe-area-inset-bottom) и горизонтальный степпер
- * со стрелками сверху (nowrap, не рвётся в столбик). На десктопе оба блока
- * скрыты — там прежний .seg из 4 пунктов (рендерит TripDetailPage).
+ * галочка, тач ≥56px, safe-area-inset-bottom). На десктопе блок скрыт —
+ * там прежний .seg из 4 пунктов (рендерит TripDetailPage).
+ *
+ * UX-осмотр 31.10 (подзадача 5, KB-33): верхний степпер-прогресс УДАЛЁН.
+ * На 390px он давал второй кликабельный переключатель этапов (третьим был
+ * протёкший из-под `hidden` десктопный .seg) и обрезался справа на 21px.
+ * Единственная мобильная навигация этапов — нижний таб-бар; прогресс показывают
+ * mini-steps липкой полосы сводки (TripSummaryPanel) и бейджи таб-бара.
+ * Решение — в DESIGN_MIGRATION.md (R11).
  *
  * Компонент презентационный: статусы этапов приходят props'ами из
  * готовности похода (utils/readiness) — дублей состояния нет.
@@ -57,28 +63,7 @@ export interface StageTabBarProps {
 export function StageTabBar({ stage, onStage, done, testId }: StageTabBarProps) {
   return (
     <>
-      {/* Верхний степпер-прогресс со стрелками (мобильный) */}
-      <nav className="stage-stepper" aria-label="Этапы похода" data-testid={testId ? `${testId}-stepper` : 'stage-stepper'}>
-        {STAGES.map((s, i) => (
-          <span key={s.id} className="inline-flex items-center gap-1 flex-none">
-            {i > 0 && <ChevronRight size={14} className="stage-stepper__arrow" aria-hidden />}
-            <button
-              type="button"
-              className={`stage-stepper__item ${done[s.id] ? 'done' : ''} ${stage === s.id ? 'active' : ''}`}
-              aria-current={stage === s.id ? 'step' : undefined}
-              data-testid={`stage-step-${s.id}`}
-              onClick={() => onStage(s.id)}
-            >
-              <span className="stage-stepper__num" aria-hidden>
-                {done[s.id] ? <Check size={13} /> : s.num}
-              </span>
-              {s.label}
-            </button>
-          </span>
-        ))}
-      </nav>
-
-      {/* Нижний таб-бар (мобильный) */}
+      {/* Нижний таб-бар (мобильный) — ЕДИНСТВЕННЫЙ переключатель этапов на mobile */}
       <nav className="stage-bar" aria-label="Этапы похода" data-testid={testId ?? 'stage-bar'}>
         {STAGES.map((s) => (
           <button

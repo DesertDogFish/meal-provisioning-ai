@@ -122,6 +122,17 @@ export default defineConfig({
         // navigation-п.5: sheet просмотра блюда из меню + резолв снепшота в каталог
         'src/components/RecipeViewSheet.tsx',
         'src/utils/recipeRef.ts',
+        // plan plans/done/2026-10-31-ux-audit-visual-inspection.md (R5): плюрализация
+        // подписей (п.1), единый маппинг field→RU-копи ошибок (п.2), контракт
+        // поля даты (п.3, KB-32)
+        'src/utils/text.ts',
+        'src/utils/validationMessages.ts',
+        'src/components/DatePicker.tsx',
+        'src/utils/dateInput.ts',
+        // того же плана п.13/п.14: иерархия оверлеев (Esc закрывает верхний) и
+        // фокус-ловушка модалок/шитов (Tab-цикл, возврат фокуса, preventScroll)
+        'src/utils/overlayStack.ts',
+        'src/utils/focusTrap.ts',
       ],
     },
   },

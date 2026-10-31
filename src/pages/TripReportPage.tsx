@@ -8,7 +8,7 @@ import { loadTripView } from '../utils/tripLoader'; // cleanup-п.6: едины�
 import type { TripView } from '../utils/tripDerived';
 import { formatRub, formatQty } from '../utils/format';
 import { pluralize } from '../utils/pluralize';
-import { mealsWord, mealTypeLabels } from '../utils/text'; // cleanup-п.9: лейблы из единого источника
+import { mealsWord, mealTypeLabels, daysCountLabel } from '../utils/text'; // cleanup-п.9: лейблы из единого источника
 import { WhoOwesBlock } from '../components/WhoOwesBlock'; // cleanup-п.9: без своего дубля «кто должен»
 import type { Trip } from '../types/tripDetail';
 
@@ -61,7 +61,7 @@ export default function TripReportPage() {
     const meals = view.menuByDays.reduce((a, d) => a + d.meals.length, 0);
     const lines = [
       `Поход «${trip.name}» ${new Date(trip.startDate).toLocaleDateString('ru-RU')} — ${new Date(trip.endDate).toLocaleDateString('ru-RU')}`,
-      `${days} ${pluralize(days, ['день', 'дня', 'дней'])} · ${meals} ${pluralize(meals, ['приём', 'приёма', 'приёмов'])} · ${view.realPeople.toLocaleString('ru-RU', { maximumFractionDigits: 1 })} чел.`,
+      `${daysCountLabel(days)} · ${meals} ${mealsWord(meals)} · ${view.realPeople.toLocaleString('ru-RU', { maximumFractionDigits: 1 })} чел.`,
       `Закупка: ${formatRub(view.tripSummary.totalCost)} · по ${formatRub(view.tripSummary.costPerDefaultPerson)} на человека`,
       '',
       'Кто сколько должен (поровну):',

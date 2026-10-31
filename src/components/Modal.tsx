@@ -1,5 +1,7 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
+import { pushOverlay, popOverlay, isTopOverlay, type OverlayEntry } from '../utils/overlayStack';
+import { trapTab } from '../utils/focusTrap';
 
 /**
  * FIX (модалки «уезжают вниз»): раньше .modal-overlay рендерился внутри
@@ -54,14 +56,43 @@ export default function Modal({
   /** Вызывается при клике по затемнённому фону и по Escape. */
   onClose?: () => void;
 }) {
+  /** Обёртка .modal-wrap — корень фокус-ловушки и держатель max-height/overflow. */
+  const wrapRef = useRef<HTMLDivElement>(null);
+  // UX-осмотр 31.10 (п.14): Esc закрывает только ВЕРХНИЙ оверлей — стек общий
+  // с <BottomSheet> (utils/overlayStack). Без него одно нажатие закрывало всю
+  // стопку: ConfirmDialog поверх модалки состава обнулял и несохранённый состав.
   useEffect(() => {
-    if (!onClose) return;
+    const entry: OverlayEntry = pushOverlay();
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key !== 'Escape' || !isTopOverlay(entry)) return;
+      onClose?.();
     };
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      popOverlay(entry);
+    };
   }, [onClose]);
+
+  // KB-29 + п.14: фокус заходит в лист и возвращается на триггер.
+  // focus() БЕЗ preventScroll делает scroll-into-view: переполненный лист
+  // (.modal-wrap > * — overflow-y:auto) прокручивался в момент фокуса, модалка
+  // «съезжала» на ~30px, и координатный клик приходился мимо кнопки
+  // (pointerdown и pointerup на разных элементах → click не синтезируется).
+  // Если внутри уже есть сфокусированный элемент (autoFocus поиска в
+  // AddMealModal) — не перехватываем: поведение потребителя важнее.
+  useEffect(() => {
+    const restoreTo = document.activeElement as HTMLElement | null;
+    const sheet = wrapRef.current?.firstElementChild as HTMLElement | null;
+    const active = document.activeElement;
+    if (sheet && !(active && active !== document.body && sheet.contains(active))) {
+      if (!sheet.hasAttribute('tabindex')) sheet.setAttribute('tabindex', '-1');
+      sheet.focus({ preventScroll: true });
+    }
+    return () => {
+      restoreTo?.focus?.({ preventScroll: true });
+    };
+  }, []);
 
   // Fix-7 (п.1): блокировка скролла фона на всё время жизни оверлея
   useEffect(() => {
@@ -74,6 +105,7 @@ export default function Modal({
       className="modal-overlay"
       data-testid="modal-overlay"
       onClick={onClose}
+      onKeyDown={(e) => trapTab(e, wrapRef.current)}
     >
       {/* Клик по самой карточке не должен закрывать окно (прежнее поведение).
           Подзадача 4 (plans/done/2026-10-29-ui-nowrap-and-mobile.md): обёртка
@@ -81,7 +113,7 @@ export default function Modal({
           скроллится ВНУТРИ и целиком влезает в экран телефона, а оверлей
           больше не скроллится (overflow-y:auto убран: он и был причиной
           «модалка не по центру, а где-то сбоку/снизу»). */}
-      <div className="modal-wrap" onClick={(e) => e.stopPropagation()}>{children}</div>
+      <div ref={wrapRef} className="modal-wrap" onClick={(e) => e.stopPropagation()}>{children}</div>
     </div>,
     document.body,
   );

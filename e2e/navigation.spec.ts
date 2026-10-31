@@ -5,10 +5,12 @@ import { test, expect, type Page } from '@playwright/test';
  * Сценарии:
  *  N-1 «блюдо → в меню → предвыбор → добавлено» (п.1);
  *  N-2 «① → CTA ② → CTA ③ → отметить всё → CTA ④ → отчёт → Поделиться-фолбэк» (п.2);
- *  N-3 «продукт → в рецептах → фильтр → рецепт → в меню похода» (п.6);
+ *  N-3a «продукт → в рецептах → фильтр» (п.6, админ-раздел) и
+ *  N-3b «рецепт → в меню похода → deep-link ①» (п.6; KB-34 — под владельцем похода);
  *  N-4 канон /trips и редиректы (п.8; полный набор легаси-маршрутов —
  *      cleanup-redirects.spec.ts, здесь — что внутренние переходы идут БЕЗ редиректа);
- *  N-5 пустые состояния всех этапов (п.3) + создание похода открывает этап ① (п.9).
+ *  N-5 пустые состояния всех этапов (п.3) + создание похода открывает этап ① (п.9);
+ *  N-6 клавиатурный контракт модалки приёма: Tab-цикл, Esc, возврат фокуса (п.14).
  * Прогон в песочнице агента — библиотечным chromium (KB-16), полный runner — CI (BL-32).
  */
 
@@ -47,12 +49,18 @@ test('N-1 блюдо → «В меню похода…» → предвыбор 
   await expect(overlay.getByTestId('meal-preview')).toContainText('Овсяная каша');
 
   const before = await page.locator('[aria-label="Состав приёма: Овсяная каша"]').count();
-  // Enter вместо координатного клика: в момент фокуса модалка смещается на ~30px
-  // (scroll-into-view переполненного оверлея), и клик мышью может попасть между
-  // pointerdown/up — commit не срабатывает (KB-29). Enter по фокусу независим от позиции.
+  // KB-29 ЗАКРЫТ (UX-осмотр 31.10, п.13): возвращён КООРДИНАТНЫЙ клик «сырой»
+  // мышью. Раньше здесь был обход `press('Enter')`: в момент фокуса лист модалки
+  // прокручивался (scroll-into-view) и одновременно дорастал при догрузке
+  // предвыбранного блюда — кнопка уезжала на ~30px между pointerdown и
+  // pointerup, click синтезировался на общем предке и commit не срабатывал.
+  // Фикс: focus({preventScroll}) + резерв высоты слота превью + overflow-anchor.
+  // Если сдвиг вернётся, этот клик промахнётся и приём не добавится.
   const addBtn = overlay.getByRole('button', { name: 'Добавить', exact: true });
   await expect(addBtn).toBeEnabled({ timeout: 10_000 });
-  await addBtn.press('Enter');
+  const box = await addBtn.boundingBox();
+  expect(box, 'commit-кнопка модалки обязана быть в экране').toBeTruthy();
+  await page.mouse.click(box!.x + box!.width / 2, box!.y + box!.height / 2);
   await expect(page.locator('.modal-overlay')).toHaveCount(0, { timeout: 10_000 });
   // день получил +1 приём: было «5 приёмов пищи» → «6 приёмов пищи» (свёрнутый день)
   if (before === 0) {
@@ -111,7 +119,7 @@ test('N-2 ① → CTA ② → CTA ③ → всё взято → CTA ④ → че
   await expect(page.getByText('Текст итога скопирован — вставьте в мессенджер')).toBeVisible({ timeout: 10_000 });
 });
 
-test('N-3 продукт → «В рецептах: N» → фильтр рецептов → «В меню похода…» без тупика (navigation-п.6)', async ({ page }) => {
+test('N-3a продукт → «В рецептах: N» → фильтр рецептов (navigation-п.6, админ-раздел)', async ({ page }) => {
   await login(page, ADMIN);
   await page.goto('/products');
   const usageLink = page.locator('[data-testid^="product-usage-link-"]').first();
@@ -124,20 +132,36 @@ test('N-3 продукт → «В рецептах: N» → фильтр рец�
   await expect(page).toHaveURL(/\/recipes\?ingredient=/, { timeout: 15_000 });
   await expect(page.getByTestId('recipes-ingredient-chip')).toBeVisible();
   await expect(page.locator('[data-testid^="recipe-to-menu-"]').first()).toBeVisible();
+});
 
-  // рецепт → «В меню похода…»: sheet со списком походов → день → deep-link ①
-  // с предвыбранным блюдом (тупика нет ни у пользователя с походами, ни без —
-  // второй случай покрыт юнит-тестом RecipesPage «Походов нет — создайте поход»)
-  await page.locator('[data-testid^="recipe-to-menu-"]').first().click();
+test('N-3b рецепт → «В меню похода…» → deep-link ① с предвыбранным блюдом (navigation-п.6)', async ({ page }) => {
+  // KB-34 (UX-осмотр 31.10, п.11): mock отдаёт только СВОИ походы — паритет с
+  // `GET /trips` = findByUserId и с 404 на чужой поход. Сценарий поэтому идёт под
+  // владельцем сида trip1 (user@provision.app), а не под админом: у админа своих
+  // походов нет, и лист «В меню какого похода?» закономерно пуст — это состояние
+  // покрыто юнит-тестом RecipesPage «Походов нет — создайте поход».
+  // Раньше N-3 был одним тестом под ADMIN: /products (adminOnly) и deep-link в
+  // чужой trip1 в одной сессии — в реальном API так не бывает (404), разделили.
+  await login(page, USER);
+  await page.goto('/recipes');
+  const toMenu = page.locator('[data-testid^="recipe-to-menu-"]').first();
+  await expect(toMenu).toBeVisible({ timeout: 15_000 });
+  // имя блюда берём из aria-label кнопки («Добавить «X» в меню похода») —
+  // список не фильтрован, поэтому порядок карточек не зашиваем в ожидание
+  const label = (await toMenu.getAttribute('aria-label')) ?? '';
+  const recipeName = label.replace(/^Добавить «(.+)» в меню похода$/, '$1');
+  expect(recipeName.length).toBeGreaterThan(0);
+  await toMenu.click();
+
   await expect(page.getByTestId('recipe-to-menu-sheet')).toBeVisible();
   await page.getByTestId('menu-sheet-trip-trip1').click();
   await page.getByTestId(/^menu-sheet-day-/).first().click();
   await expect(page).toHaveURL(/\/trips\/trip1\?stage=menu/, { timeout: 15_000 });
   const overlay3 = page.locator('.modal-overlay');
   await expect(overlay3.getByRole('heading', { name: 'Добавить приём пищи' })).toBeVisible();
-  await expect(overlay3.getByTestId('meal-preview')).toContainText('Гречка с тушёнкой');
-  // KB-29: Enter вместо клика — модалка смещается в момент фокуса
-  await overlay3.getByRole('button', { name: 'Отмена' }).press('Enter');
+  await expect(overlay3.getByTestId('meal-preview')).toContainText(recipeName);
+  // KB-29 закрыт: координатный клик вместо прежнего обхода press('Enter')
+  await overlay3.getByRole('button', { name: 'Отмена' }).click();
   await expect(page.locator('.modal-overlay')).toHaveCount(0, { timeout: 10_000 });
 });
 
@@ -196,4 +220,44 @@ test('N-5 создание похода → этап ①; пустые сост�
   await page.goBack();
   await expect(page).toHaveURL(/\/trips(\/?$|\?)/);
   await expect(page.getByText('Пустой поход').first()).toBeVisible({ timeout: 15_000 });
+});
+
+test('N-6 клавиатура в модалке приёма: Tab-цикл внутри, Esc закрывает, фокус на триггер (п.14)', async ({ page }) => {
+  await login(page, USER);
+  await page.goto('/trips/trip1?stage=menu');
+
+  const trigger = page.locator('button[aria-label="Добавить приём пищи"]').first();
+  await expect(trigger).toBeVisible({ timeout: 15_000 });
+  await trigger.click();
+
+  const overlay = page.locator('.modal-overlay');
+  await expect(overlay.getByRole('heading', { name: 'Добавить приём пищи' })).toBeVisible();
+
+  const insideOverlay = () => page.evaluate(() => {
+    const a = document.activeElement;
+    return Boolean(a && a.closest('.modal-overlay'));
+  });
+  // фокус зашёл внутрь диалога (перевод — с preventScroll, KB-29)
+  await expect.poll(insideOverlay).toBe(true);
+
+  // Tab-цикл замкнут: фокус ни разу не уходит под затемнение на страницу
+  for (let i = 0; i < 12; i += 1) {
+    await page.keyboard.press('Tab');
+    expect(await insideOverlay(), `Tab #${i + 1} увёл фокус из модалки`).toBe(true);
+  }
+  await page.keyboard.press('Shift+Tab');
+  expect(await insideOverlay(), 'Shift+Tab увёл фокус из модалки').toBe(true);
+
+  // модалка не «съехала» от переводов фокуса: commit-кнопка целиком в вьюпорте
+  const addBtn = overlay.getByRole('button', { name: 'Добавить', exact: true });
+  const box = await addBtn.boundingBox();
+  expect(box, 'commit-кнопка обязана иметь геометрию').toBeTruthy();
+  const vp = page.viewportSize() ?? { width: 1280, height: 720 };
+  expect(box!.y).toBeGreaterThanOrEqual(0);
+  expect(box!.y + box!.height).toBeLessThanOrEqual(vp.height);
+
+  // Esc закрывает ВЕРХНИЙ оверлей, фокус возвращается на триггер
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.modal-overlay')).toHaveCount(0, { timeout: 10_000 });
+  await expect(trigger).toBeFocused();
 });

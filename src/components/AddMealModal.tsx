@@ -126,6 +126,15 @@ export default function AddMealModal({
     [pool, catalog, recipeId],
   );
 
+  // KB-29 (UX-осмотр 31.10, п.13): deep-link «В меню похода…» открывает модалку
+  // с предвыбранным блюдом, а каталог блюд догружается АСИНХРОННО. Пока каталога
+  // нет, в слоте превью одна строка подсказки; когда блюдо нашлось — карточка
+  // h-32. Лист вырастал на ~110px уже после открытия, центрированная модалка
+  // «съезжала» на ~30–50px, и координатный клик по «Добавить» приходился мимо
+  // кнопки (pointerdown и pointerup на разных элементах → click не синтезируется).
+  // Резервируем высоту слота на время догрузки: после — её держит сама карточка.
+  const previewReserved = Boolean(selected) || (Boolean(initialRecipeId) && catalog.length === 0);
+
   const submit = async () => {
     if (!selected || submitting) return;
     setSubmitting(true);
@@ -205,7 +214,7 @@ export default function AddMealModal({
               hint: `${MEAL_TYPES.find(t => t.value === r.mealType)?.label ?? ''}${r.cookMinutes ? ` • готовка ${r.cookMinutes} мин` : ''}${n > 0 ? ` • ${n} ${productsWord(n)}` : ''}`,
             };
           })}
-          searchPlaceholder="Название блюда или продукта…"
+          searchPlaceholder="Блюдо или продукт…"
           placeholder="Начните вводить название блюда…"
           emptyText={searching ? 'Ищем…' : 'Блюдо не найдено'}
           ariaLabel="Поиск блюда"
@@ -218,7 +227,7 @@ export default function AddMealModal({
             высота, длинный состав скроллится внутри) — выбор блюда не меняет
             размер модалки: экран не «едет» ни при клике по поиску, ни при выборе. */}
         <div
-          className="mt-3 rounded-lg overflow-y-auto"
+          className={`mt-3 rounded-lg overflow-y-auto${previewReserved ? ' meal-preview-slot--reserved' : ''}`}
           style={{ background: 'var(--elev)', border: '1px solid var(--border)' }}
           data-testid="meal-preview-slot"
         >
@@ -306,22 +315,30 @@ export default function AddMealModal({
           </div>
         </div>
 
-        {/* Одна commit-кнопка + шорткат → Модалка B */}
-        <div className="modal-foot flex items-center justify-end gap-3 mt-6">
-          <Button variant="ghost" onClick={onClose} aria-label="Отмена">Отмена</Button>
-          <Button variant="primary" onClick={submit} disabled={!selected || submitting} aria-label="Добавить">
-            {submitting ? 'Добавляем…' : 'Добавить'}
-          </Button>
+        {/* Одна commit-кнопка + шорткат → Модалка B.
+            UX-осмотр 31.10 (п.7): шорткат стоял отдельным рядом ПОД футером и на
+            мобильном зарезался правым краем модалки. Теперь он — часть футера
+            (слева), ряд переносится (flex-wrap), край модалки ничего не режет. */}
+        <div className="modal-foot flex flex-wrap items-center justify-between gap-x-3 gap-y-2 mt-6">
+          <label className="flex items-center gap-1 text-sm cursor-pointer" style={{ color: 'var(--muted)' }}>
+            <span className="check-hit">
+              <input
+                type="checkbox"
+                checked={openB}
+                onChange={(e) => setOpenB(e.target.checked)}
+                aria-label="Добавить и настроить состав"
+                style={{ accentColor: 'var(--w2)' }}
+              />
+            </span>
+            Добавить и настроить состав
+          </label>
+          <span className="flex items-center gap-3">
+            <Button variant="ghost" onClick={onClose} aria-label="Отмена">Отмена</Button>
+            <Button variant="primary" onClick={submit} disabled={!selected || submitting} aria-label="Добавить">
+              {submitting ? 'Добавляем…' : 'Добавить'}
+            </Button>
+          </span>
         </div>
-        <label className="flex items-center gap-2 justify-end mt-3 text-sm cursor-pointer" style={{ color: 'var(--muted)' }}>
-          <input
-            type="checkbox"
-            checked={openB}
-            onChange={(e) => setOpenB(e.target.checked)}
-            aria-label="добавить и настроить состав"
-          />
-          добавить и настроить состав
-        </label>
       </div>
     </Modal>
   );

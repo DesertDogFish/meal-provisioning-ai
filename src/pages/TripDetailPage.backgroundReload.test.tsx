@@ -103,11 +103,14 @@ describe('Мутации без full-page мигания (transparency-п.5)', (
     expect(screen.queryByTestId('page-loader')).toBeNull();
   });
 
-  /** День по умолчанию свёрнут — раскрываем первый (карточки приёмов внутри). */
+  /** День по умолчанию свёрнут — раскрываем первый (карточки приёмов внутри).
+   *  UX-осмотр 31.10 (п.1): локатор — по data-testid шапки дня, а не по тексту
+   *  подписи: форма слова теперь зависит от числа приёмов («1 приём пищи»,
+   *  «2 приёма пищи», «5 приёмов пищи»), текстовый локатор был бы хрупким. */
   const expandFirstDay = async () => {
-    const headers = await screen.findAllByText(/приёмов пищи/);
+    const headers = await screen.findAllByTestId(/^day-header-/);
     // шапка дня — div с onClick (аккордеон), не button
-    fireEvent.click(headers[0].closest('.cursor-pointer')!);
+    fireEvent.click(headers[0]);
     await screen.findByLabelText('Состав приёма: Уха');
   };
 

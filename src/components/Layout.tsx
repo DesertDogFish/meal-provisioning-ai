@@ -226,9 +226,13 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           <ThemeToggle />
         </header>
         
-        {/* Бейдж режима API: на мобильном — в топбаре (см. выше), плавающий
-            фикс-экземпляр только для десктопа */}
-        <div className="hidden lg:block"><ApiModeBadge /></div>
+        {/* Бейдж режима API: на мобильном — в топбаре (см. выше), на десктопе —
+            flow-слот справа над контентом. KB-35 (UX-осмотр 31.10, п.12): раньше
+            здесь был `fixed top-4 right-4`, который наезжал на kebab/кнопку темы.
+            В прод-сборке ApiModeBadge возвращает null → слот нулевой высоты. */}
+        <div className="hidden lg:flex justify-end items-start px-4 md:px-6 lg:px-8 dev-badge-slot">
+          <ApiModeBadge />
+        </div>
         
         <main className="app-main flex-1 min-w-0 p-4 md:p-6 lg:p-8 overflow-auto">
           {/* Fix-7 (п.10): контент центрирован и оторван от краёв — max-width 1200px */}
