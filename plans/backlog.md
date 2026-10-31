@@ -484,3 +484,30 @@
   сервер на порту, который обещает README; `npm run test:e2e` работает без CLI-переопределения
   порта; dev-сервер и docker-стек поднимаются одновременно без конфликта. Источник: внешний аудит 30.10.2026, AU-30 (сводка 30 задач — `plans/done/2026-10-30-external-audit-p0-block.md`).
   Статус: READY
+
+## Гигиена репозитория и хвосты UX-осмотра 31.10.2026
+
+- **BL-60. Гигиена живых реестров и `plans/` после UX-аудитов 31.10** (S). Что сделать:
+  (1) удалить устаревшие дубли закрытых планов `plans/2026-10-31-ux-audit-navigation.md` и
+  `plans/2026-10-31-ux-audit-transparency.md` (в `plans/` лежат копии со `Status: IN_PROGRESS`,
+  канон — в `plans/done/`; нарушено §2 «git mv при закрытии» и «план в работе один»);
+  (2) перенести в `plans/done/knownbugs.md` закрытые, но оставшиеся живыми карточки KB-23 и
+  KB-30 и убрать дубль KB-28 из живого реестра (канон уже в архиве);
+  (3) перенести в `plans/done/backlog.md` запись BL-52 (статус ГОТОВО 31.10.2026).
+  Критерий приёмки: `ls plans/` без done даёт только `backlog.md`, `knownbugs.md` и планы со
+  статусом READY/IN_PROGRESS, которых реально нет в `plans/done/`; в живых реестрах нет записей
+  со статусами ГОТОВО/ЗАКРЫТ; номера не переиспользованы. Источник: UX-осмотр 31.10.2026,
+  `plans/2026-10-31-ux-audit-visual-inspection.md` (нарушение AGENTS §2).
+  Статус: READY
+
+- **BL-61. Удалить мёртвые страницы, которые план cleanup-dedup объявил удалёнными** (S).
+  Что сделать: `git rm src/pages/AdminPage.tsx src/pages/DashboardPage.tsx
+  src/pages/ErrorsDemoPage.tsx src/pages/SyncLogsPage.tsx` (~1437 строк; ноль нетестовых
+  импортов, маршруты /admin, /dashboard, /sync-logs, /errors-demo уже редиректы в App.tsx);
+  проверить, что vitest/tsc/eslint/build зелёные без них; в новом отчёте сослаться на расхождение
+  с «Результатами» закрытого плана `plans/done/2026-10-31-ux-audit-cleanup-dedup.md` (п.1:
+  «мёртвые DashboardPage/ErrorsDemoPage удалены» — файлы фактически жили в дереве и правились
+  коммитами «consist fix»; историю не переписываем, расхождение фиксирует эта запись).
+  Критерий приёмки: файлов нет; `grep -r "AdminPage\|DashboardPage\|ErrorsDemoPage\|SyncLogsPage" src/`
+  пуст; гейты зелёные. Источник: UX-осмотр 31.10.2026 (dead-code probe), предшественник BL-59.
+  Статус: READY
