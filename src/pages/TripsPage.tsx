@@ -5,36 +5,61 @@ import { useToast } from '../components/ToastProvider';
 import { TripForm, type TripFormData } from '../components/TripForm';
 import { useConfirm } from '../components/ConfirmDialog'; // Fix-6 (п.7): красивые подтверждения
 import { KebabMenu } from '../components/KebabMenu';
-import { api, getRecipes } from '../api/client';
-import { getTripRecipes } from '../api/client';
-import { getManualItems, type TripManualItem } from '../api/tripManualItems';
-import { getTripEdits, type TripIngredientEdit } from '../api/tripEdits';
-import { loadActualPrices, loadExcluded, loadBought } from '../utils/tripStaging';
-import { deriveTripView } from '../utils/tripDerived';
+import { api } from '../api/client';
+import { loadBought } from '../utils/tripStaging';
+import { tripReadiness } from '../utils/readiness';
+import type { Trip } from '../types/tripDetail'; // cleanup-п.9: общий тип (включая progress, п.8)
 import { STAGES, type StageId } from '../components/StageTabBar';
 import { getTripCover } from '../utils/getTripCover';
 import { pluralize } from '../utils/pluralize'; // ревизия скриншотов 29.10: «4 дней» → «4 дня»
 import { formatRub } from '../utils/format';
 import { Button } from '../components/Button';
+import { useAuth } from '../components/AuthProvider'; // cleanup-п.7: без своего /auth/me
 
 import PageLoader from '../components/PageLoader';
-interface Trip {
-  id: string;
-  userId: string;
-  name: string;
-  startDate: string;
-  endDate: string;
-  defaultPeople: number;
-  notes?: string;
-  days?: any[];
-}
+// cleanup-п.9: вместо локальных интерфейсов — общие типы (types/tripDetail)
 
-interface User {
-  id: string;
-  email: string;
-  firstName: string;
-  lastName: string;
-  role: string;
+/**
+ * cleanup-п.8: список походов без N+1 — прогресс карточек приходит В ОТВЕТЕ
+ * списка (один запрос GET /trips), клиент лишь накладывают локальный стейдж
+ * «взято» (localStorage, серверу недоступен) и уточняет shopping → store.
+ * Готовность — та же utils/readiness, что на странице похода.
+ */
+function buildProgressMap(tripsData: Trip[]): Record<string, TripProgress> {
+  const next: Record<string, TripProgress> = {};
+  for (const trip of tripsData) {
+    const p = trip.progress;
+    if (!p) continue; // best effort: карточка без строки этапа (как при ошибке расчёта раньше)
+    const bought = loadBought(trip.id).size;
+    const checklistTotal = p.checklistTotal ?? 0;
+    const facts = p.facts ?? 0;
+    const factsTotal = p.factsTotal ?? checklistTotal;
+    const meals = p.meals ?? (trip.days?.reduce((a: number, d: any) => a + (d.meals?.length || 0), 0) || 0);
+    const readiness = tripReadiness({
+      mealsCount: meals, checklistTotal, boughtCount: bought, factCount: facts, checksTotal: factsTotal,
+    });
+    let stage: StageId;
+    let done = 0;
+    let total = 0;
+    if (readiness.checks !== 'none' || facts > 0) {
+      stage = 'checks'; done = facts; total = factsTotal;
+    } else if (bought > 0) {
+      stage = 'store'; done = bought; total = checklistTotal;
+    } else if (checklistTotal > 0) {
+      stage = 'shopping'; done = 0; total = checklistTotal;
+    } else {
+      stage = 'menu'; done = meals; total = (trip.days?.length || 0) * 3;
+    }
+    next[trip.id] = {
+      stage,
+      ready: readiness.ready,
+      done, total,
+      totalCost: p.totalCost ?? 0,
+      costPerPerson: p.costPerPerson ?? 0,
+      meals, bought, checklistTotal, facts,
+    };
+  }
+  return next;
 }
 
 /**
@@ -72,7 +97,7 @@ export default function TripsPage() {
   // U36 (список 26.10): карандаш открывает редактирование похода (имя/описание/даты/люди)
   const [editingTrip, setEditingTrip] = useState<Trip | null>(null);
   const [trips, setTrips] = useState<Trip[]>([]);
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const { user: currentUser } = useAuth(); // cleanup-п.7: один /auth/me на сессию
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   // подзадача 4: прогресс этапа по каждой карточке (best effort, без блокировки списка)
@@ -82,16 +107,16 @@ export default function TripsPage() {
     try {
       setLoading(true);
       setError(null);
-      const [user, tripsData] = await Promise.all([
-        api.get<User>('/auth/me'),
-        api.get<Trip[]>('/trips')
-      ]);
-      setCurrentUser(user);
+      // cleanup-п.7/п.8: список — ОДИН запрос; пользователь уже в AuthContext
+      const tripsData = await api.get<Trip[]>('/trips');
       setTrips(tripsData);
+      // cleanup-п.8: прогресс — из того же ответа (без отдельных запросов на поход)
+      setProgress(buildProgressMap(tripsData));
     } catch (err: any) {
       console.error('Failed to load trips:', err);
       // ЗАДАЧА 3: тост + сброс устаревшего списка
       setTrips([]);
+      setProgress({});
       setError('Не удалось загрузить данные');
       showError(err?.detail || 'Не удалось загрузить список походов');
     } finally {
@@ -103,78 +128,6 @@ export default function TripsPage() {
     loadData();
   }, [loadData]);
 
-  // Прогресс карточек: deriveTripView по каждому походу (чистая функция — те же
-  // view-модели, что на странице похода). Ошибка расчёта прогресса НЕ роняет
-  // список: карточка остаётся без строки этапа.
-  useEffect(() => {
-    let cancelled = false;
-    if (trips.length === 0) {
-      setProgress({});
-      return;
-    }
-    (async () => {
-      const recipes = await getRecipes().catch(() => [] as any[]);
-      const next: Record<string, TripProgress> = {};
-      await Promise.all(trips.map(async (trip) => {
-        try {
-          const [tripRecipes, prices, manualItems, tripEdits] = await Promise.all([
-            getTripRecipes(trip.id).catch(() => [] as any[]),
-            api.get<any[]>(`/trips/${trip.id}/prices`).catch(() => [] as any[]),
-            getManualItems(trip.id).catch(() => [] as TripManualItem[]),
-            getTripEdits(trip.id).catch(() => [] as TripIngredientEdit[]),
-          ]);
-          const recipesMap = new Map<string, any>([...recipes, ...tripRecipes].map((r: any) => [String(r.id), r]));
-          const checklistBought = loadBought(trip.id);
-          const view = deriveTripView({
-            trip: trip as any,
-            recipes: recipes as any,
-            tripRecipes: tripRecipes as any,
-            recipesMap: recipesMap as any,
-            tripEdits,
-            prices: prices as any,
-            manualItems,
-            products: [],
-            draftOverrides: loadActualPrices(trip.id),
-            shoppingExcluded: loadExcluded(trip.id),
-            checklistBought,
-            sortSpec: { field: 'ingredientName', dir: 'asc' },
-          });
-          const meals = trip.days?.reduce((a: number, d: any) => a + (d.meals?.length || 0), 0) || 0;
-          const checklistTotal = view.checklistRowIds.length;
-          const bought = view.boughtInList;
-          const facts = view.factCount;
-          const daysCount = trip.days?.length || 0;
-          let stage: StageId;
-          let done = 0;
-          let total = 0;
-          if (view.readiness.checks !== 'none' || facts > 0) {
-            stage = 'checks'; done = facts; total = view.factsTotal;
-          } else if (bought > 0) {
-            stage = 'store'; done = bought; total = checklistTotal;
-          } else if (checklistTotal > 0) {
-            stage = 'shopping'; done = 0; total = checklistTotal;
-          } else {
-            stage = 'menu'; done = meals; total = daysCount * 3;
-          }
-          next[trip.id] = {
-            stage,
-            ready: view.readiness.ready,
-            done, total,
-            totalCost: view.tripSummary.totalCost,
-            costPerPerson: view.tripSummary.costPerDefaultPerson,
-            meals,
-            bought,
-            checklistTotal,
-            facts,
-          };
-        } catch {
-          /* прогресс — best effort */
-        }
-      }));
-      if (!cancelled) setProgress(next);
-    })();
-    return () => { cancelled = true; };
-  }, [trips]);
 
   // FIX: TripResponse бэкенда (/api/v1/trips) уже отфильтрован по текущему
   // пользователю и НЕ содержит поля userId — из-за строгого сравнения

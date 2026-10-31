@@ -25,6 +25,7 @@ public class TripService {
     private final UserRepository userRepository;
     private final RecipeRepository recipeRepository;
     private final TripCatalogSnapshotService snapshotService;
+    private final TripProgressService progressService; // cleanup-п.8: прогресс карточек списка
 
     @Transactional(readOnly = true)
     public List<TripResponse> getUserTrips(Long userId) {
@@ -44,8 +45,10 @@ public class TripService {
             tripRepository.findMealsWithRecipesByDayIds(dayIds);
         }
 
+        // cleanup-п.8 (вариант A): прогресс карточек — на сервере, в этом же
+        // запросе (клиент больше не делает N+1 запросов на список).
         return trips.stream()
-                .map(this::toResponse)
+                .map(t -> toResponse(t, progressService.computeForList(t)))
                 .toList();
     }
 
@@ -261,6 +264,10 @@ public class TripService {
     }
 
     private TripResponse toResponse(Trip trip) {
+        return toResponse(trip, null);
+    }
+
+    private TripResponse toResponse(Trip trip, TripProgressResponse progress) {
         List<TripDayResponse> days = trip.getDays().stream()
                 .map(this::toDayResponse)
                 .toList();
@@ -273,7 +280,8 @@ public class TripService {
                 trip.getDefaultPeople(),
                 trip.getNotes(),
                 trip.getCreatedAt(),
-                days
+                days,
+                progress
         );
     }
 

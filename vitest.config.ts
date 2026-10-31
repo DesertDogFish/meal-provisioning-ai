@@ -101,6 +101,27 @@ export default defineConfig({
         'src/components/TripPersonTab.tsx',
         'src/components/ExclusionCheckbox.tsx',
         'src/components/Modal.tsx',
+        // plan plans/2026-10-31-ux-audit-cleanup-dedup.md (R5): новые компоненты
+        // интеграций (п.2/п.3), AuthProvider (п.7), модель/компоненты этапа ④ (п.5),
+        // единый загрузчик и модель печати (п.6), прогресс списка (п.8)
+        'src/components/EmisSettingsTab.tsx',
+        'src/components/SyncLogsTab.tsx',
+        'src/components/CatalogImportTab.tsx',
+        'src/components/AuthProvider.tsx',
+        'src/components/ChecksModel.ts',
+        'src/components/ChecksTable.tsx',
+        'src/components/ChecksMobile.tsx',
+        'src/components/WhoOwesBlock.tsx',
+        'src/utils/tripLoader.ts',
+        'src/utils/printModel.ts',
+        'src/api/mockTripProgress.ts',
+        // plan plans/2026-10-31-ux-audit-navigation.md (R5): CTA «Далее» (п.2)
+        // и единое пустое состояние этапов (п.3)
+        'src/components/StageNextCta.tsx',
+        'src/components/EmptyState.tsx',
+        // navigation-п.5: sheet просмотра блюда из меню + резолв снепшота в каталог
+        'src/components/RecipeViewSheet.tsx',
+        'src/utils/recipeRef.ts',
       ],
     },
   },

@@ -32,6 +32,10 @@ interface Props {
   dayPeople?: number;
   /** Дефолт сегмента = тип кнопки, из которой открыта модалка */
   initialMealType?: MealType;
+  /** navigation-п.1: deep-link «В меню похода…» — блюдо предвыбрано (из ?recipe=).
+   * Тип приёма берётся из mealType блюда; если блюда нет в каталоге (удалено) —
+   * модалка открывается пустой с тостом-пояснением, поиск остаётся доступен. */
+  initialRecipeId?: string;
   onClose: () => void;
   /** Успешный POST: родитель обновляет данные; openComposition — шорткат → Модалка B */
   onAdded: (meal: { id: string }, opts: { openComposition: boolean }) => void;
@@ -64,11 +68,13 @@ export function parseAmount(value: string): number | null {
 }
 
 export default function AddMealModal({
-  tripId, tripName, defaultPeople, day, dayPeople, initialMealType = 'LUNCH', onClose, onAdded,
+  tripId, tripName, defaultPeople, day, dayPeople, initialMealType = 'LUNCH',
+  initialRecipeId, onClose, onAdded,
 }: Props) {
   const { showError } = useToast();
   const [mealType, setMealType] = useState<MealType>(initialMealType);
-  const [recipeId, setRecipeId] = useState('');
+  // navigation-п.1: предвыбор блюда из deep-link (параметр ?recipe=)
+  const [recipeId, setRecipeId] = useState(initialRecipeId ?? '');
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<Recipe[] | null>(null);
   const [searching, setSearching] = useState(false);
@@ -83,8 +89,19 @@ export default function AddMealModal({
   // Каталог блюд для превью/подсказок (один запрос на открытие модалки)
   useEffect(() => {
     let cancelled = false;
-    getRecipes().then((r) => { if (!cancelled) setCatalog(r); }).catch(() => {});
+    getRecipes().then((r) => {
+      if (cancelled) return;
+      setCatalog(r);
+      // navigation-п.1: deep-link с блюдом — сегмент типа приёма из mealType блюда;
+      // блюдо не найдено (удалено из каталога) — модалка пустая + тост-пояснение
+      if (initialRecipeId) {
+        const found = r.find((x) => String(x.id) === String(initialRecipeId));
+        if (found) setMealType(found.mealType);
+        else showError('Блюдо не найдено в каталоге — возможно, оно удалено. Выберите другое.');
+      }
+    }).catch(() => {});
     return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Серверный поиск с debounce (как в исходной странице), результаты — сверх каталога

@@ -33,6 +33,9 @@ import TripShoppingTab from '../components/TripShoppingTab';
 import TripDayShoppingTab from '../components/TripDayShoppingTab';
 import TripPersonTab from '../components/TripPersonTab';
 import StageTabBar, { type StageId } from '../components/StageTabBar';
+import { StageNextCta } from '../components/StageNextCta';
+import { RecipeViewSheet } from '../components/RecipeViewSheet';
+import { globalCatalogRecipeId } from '../utils/recipeRef'; // navigation-п.2: CTA «Далее»
 import { Button } from '../components/Button';
 import { manualForDay, manualForTrip } from '../utils/manualItems'; // U40
 import { useTripDetail } from './useTripDetail';
@@ -52,10 +55,16 @@ export default function TripDetailPage() {
   }
 
   if (error || !trip || !view) {
+    // navigation-п.4: у ошибки загрузки ОБЯЗАНА быть рабочая «Повторить»
+    // (баг: мёртвая кнопка в error-state этапа ④ — PriceOverridesTab.tsx:446
+    // до cleanup-п.5) и путь назад к списку походов.
     return (
       <div className="text-center py-12">
         <p style={{ color: 'var(--fire)' }}>{error || 'Поход не найден'}</p>
-        <Button variant="ghost" onClick={() => navigate('/trips')} className="mt-4">← Назад к походам</Button>
+        <div className="flex items-center justify-center gap-3 mt-4">
+          <Button variant="primary" onClick={() => void d.loadData()} data-testid="trip-error-retry">Повторить</Button>
+          <Button variant="ghost" onClick={() => navigate('/trips')}>← Назад к походам</Button>
+        </div>
       </div>
     );
   }
@@ -118,6 +127,15 @@ export default function TripDetailPage() {
           >
             {tab.icon}
             {tab.label}
+            {/* navigation-п.2: статусы готовности в десктоп-.seg — один визуальный
+                язык с мобильным StageTabBar (номер/галочка из той же `done`) */}
+            <span
+              className={`seg-badge ${done[tab.id] ? 'ok' : ''}`}
+              aria-hidden
+              data-testid={`seg-status-${tab.id}`}
+            >
+              {done[tab.id] ? '✓' : tab.id === 'menu' ? 1 : tab.id === 'shopping' ? 2 : tab.id === 'store' ? 3 : 4}
+            </span>
           </button>
         ))}
       </div>
@@ -139,6 +157,7 @@ export default function TripDetailPage() {
           onAddDayProduct={(dayId, dayLabel) => d.setManualCtx({ dayId, dayLabel })}
           onAddMeal={(ctx) => d.setAddMealCtx(ctx)}
           onOpenComposition={(dayId, mealId) => d.setCompositionMeal({ dayId, mealId })}
+          onViewRecipe={(recipeId) => d.setViewRecipeId(recipeId)}
           onDeleteMeal={(dayId, mealId, mealName, dayDate) => void d.handleDeleteMeal(dayId, mealId, mealName, dayDate)}
           onDeleteManual={(itemId, itemName) => void d.handleDeleteManual(itemId, itemName)}
           onAddTripProduct={() => d.setManualCtx({ dayId: null })}
@@ -173,6 +192,7 @@ export default function TripDetailPage() {
               missingIngredients={view.tripSummary.missingIngredients}
               excluded={d.shoppingExcluded}
               onToggleExcluded={d.toggleShoppingExcluded}
+              onGoToMenu={() => setActiveTab('menu')}
             />
           )}
           {shopView === 'days' && (
@@ -182,6 +202,7 @@ export default function TripDetailPage() {
               priceOf={view.manualPriceOf}
               excluded={d.shoppingExcluded}
               onToggleExcluded={d.toggleShoppingExcluded}
+              onGoToMenu={() => setActiveTab('menu')}
             />
           )}
           {shopView === 'person' && (
@@ -190,14 +211,30 @@ export default function TripDetailPage() {
               realPeople={view.realPeople}
               tripSummary={view.tripSummary}
               personSummary={view.personSummary}
+              onGoToMenu={() => setActiveTab('menu')}
             />
           )}
         </div>
       )}
 
-      {/* Этап ④: чеки и итог */}
+      {/* Этап ④: чеки и итог — данные и view-модели из общего пайплайна
+          страницы (cleanup-п.5): переход на этап НЕ делает сетевых запросов,
+          суммы ② и ④ идентичны по построению */}
       {stage === 'checks' && (
-        <PriceOverridesTab tripId={trip.id} />
+        <PriceOverridesTab
+          trip={trip}
+          view={view}
+          draftOverrides={d.draftOverrides}
+          excluded={d.shoppingExcluded}
+          boughtSet={d.checklistBought}
+          actualQty={d.actualQty}
+          onCommitActualTotal={d.commitCheckTotal}
+          onToggleExcluded={d.toggleShoppingExcluded}
+          onToggleBought={d.toggleBought}
+          onCommitTook={d.commitActualQty}
+          onGoToShopping={() => setActiveTab('shopping')}
+          onGoToStore={() => setActiveTab('store')}
+        />
       )}
 
       {/* Этап ③: магазин — чеклист «что беру» (U38: ЦЕЛЫЕ упаковки, группы по
@@ -210,8 +247,15 @@ export default function TripDetailPage() {
           onToggleRow={d.toggleBought}
           onCommitActualQty={d.commitActualQty}
           onSetAll={(on) => d.setAllBought(on, view.checklistRowIds)}
+          onGoToMenu={() => setActiveTab('menu')}
         />
       )}
+
+      {/* navigation-п.2: явный CTA «Далее» в конце каждого этапа — следующий шаг
+          одним кликом; на незаполненном этапе — подсказка, чего не хватает */}
+      <div className="stage-next-wrap">
+        <StageNextCta tripId={String(trip.id)} stage={stage} done={done} onStage={setActiveTab} />
+      </div>
 
       {/* Модалка A — «Добавить приём пищи» (FORM-spec §2.1): одна commit-кнопка,
           контекст дня, превью блюда; состав здесь НЕ редактируется.
@@ -226,6 +270,7 @@ export default function TripDetailPage() {
           }
           day={{ dayId: d.addMealCtx.dayId, dayDate: d.addMealCtx.dayDate, dayIndex: d.addMealCtx.dayIndex }}
           initialMealType={d.addMealCtx.mealType ?? 'LUNCH'}
+          initialRecipeId={d.addMealCtx.recipeId}
           onClose={() => d.setAddMealCtx(null)}
           onAdded={d.handleMealAdded}
         />
@@ -239,19 +284,44 @@ export default function TripDetailPage() {
           mealId={d.compositionMeal.mealId}
           isAdmin={d.isEditorAdmin === true}
           onClose={() => d.setCompositionMeal(null)}
-          onSaved={() => { void d.loadData(); }}
+          onSaved={() => { d.reloadInBackground(); }}
           onEditCatalogRecipe={(recipeId) => {
-            // Fix-2 (п.7): recipeId может быть trip-scoped снепшотом — резолвим
-            // в глобальный каталог (mock: суффикс '::t…'; real: snapshotOf копии),
-            // иначе /recipes?edit= не находит блюдо и редактор не открывается.
-            const snap = d.tripRecipes.find(r => String(r.id) === String(recipeId)) as any;
-            let globalId = String(recipeId);
-            if (snap?.snapshotOf != null) globalId = String(snap.snapshotOf);
-            else if (globalId.includes('::t')) globalId = globalId.split('::t')[0];
-            navigate(`/recipes?edit=${globalId}`);
+            // Fix-2 (п.7) + navigation-п.5: резолв снепшота в глобальный каталог —
+            // общая утилита recipeRef (иначе /recipes?edit= не находит блюдо).
+            navigate(`/recipes?edit=${globalCatalogRecipeId(recipeId, d.tripRecipes)}`);
           }}
         />
       )}
+
+      {/* navigation-п.5: sheet read-only просмотра блюда из меню — данные снепшота
+          (состав на людей приёма + ккал) и выход в каталог /recipes?view=<globalId>;
+          удалённое из каталога блюдо — нота вместо битой ссылки */}
+      {d.viewRecipeId && (() => {
+        const recipe = d.recipesMap.get(String(d.viewRecipeId));
+        if (!recipe) return null;
+        const mealRow = view.menuByDays
+          .flatMap(day => day.meals)
+          .find(m => String(m.recipeId) === String(d.viewRecipeId));
+        const globalId = globalCatalogRecipeId(d.viewRecipeId, d.tripRecipes);
+        const inCatalog = d.recipes.some(r => String(r.id) === globalId);
+        const ingredients = mealRow
+          ? mealRow.ingredients.map(i => ({ name: i.name, amount: i.amount, unit: i.unit }))
+          : (recipe.ingredients ?? []).map((ri: any) => ({
+              name: ri.ingredient?.name ?? 'Неизвестный',
+              amount: Number(ri.amount),
+              unit: ri.ingredient?.unit ?? 'PCS',
+            }));
+        return (
+          <RecipeViewSheet
+            recipe={recipe}
+            servings={mealRow?.servings ?? null}
+            ingredients={ingredients}
+            catalogRecipeId={inCatalog ? globalId : null}
+            onClose={() => d.setViewRecipeId(null)}
+            onOpenInCatalog={inCatalog ? () => navigate(`/recipes?view=${globalId}`) : undefined}
+          />
+        );
+      })()}
 
       {/* Fix-6 (п.7): брендовый диалог подтверждений */}
       {d.confirmDialog}

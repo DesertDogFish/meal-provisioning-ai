@@ -1,6 +1,6 @@
 # Plan: UX-аудит 31.10 — убрать дубляж: сирота /admin, двойной журнал синков, «отчёт» ×4, параллельные пайплайны данных
 
-Status: READY
+Status: DONE
 Created: 2026-10-31
 
 ## Цель
@@ -43,7 +43,7 @@ Created: 2026-10-31
 - Критерии приёмки: grep `DashboardPage|ErrorsDemoPage` в src пуст (комментарий в App.tsx
   обновлён); `npx tsc --noEmit` чисто; vitest по затронутым файлам зелёный; роуты
   `/dashboard`, `/errors-demo` ведут на список походов.
-- Статус: [ ] READY
+- Статус: [x] DONE
 
 ### 2. Демонтаж страницы-сироты `/admin` (AdminPage)
 - Файлы: `src/pages/AdminPage.tsx`, `src/App.tsx`, `src/pages/IntegrationsPage.tsx`,
@@ -60,7 +60,7 @@ Created: 2026-10-31
   работает из «Интеграций» (тест перенесённого компонента); grep `'/admin'` в src остаётся
   только в API-путях (`/admin/products` и т.п.); README обновлён в том же коммите (R11);
   tsc/lint/vitest затронутых файлов зелёные.
-- Статус: [ ] READY
+- Статус: [x] DONE
 
 ### 3. Журнал синков: один раздел вместо двух витрин
 - Файлы: `src/pages/IntegrationsPage.tsx`, `src/pages/SyncLogsPage.tsx`,
@@ -78,7 +78,7 @@ Created: 2026-10-31
 - Критерии приёмки: статус провайдера и запуск синка имеют одну витрину; `/sync-logs`
   редиректит; фильтр/KPI/детали лога сохранены (тесты SyncLogsPage перенесены и зелёные);
   скрин 390/1440 — табы читаемы; R5 на новый компонент таба.
-- Статус: [ ] READY
+- Статус: [x] DONE
 
 ### 4. «Отчёт» — одна словоформа, одно назначение
 - Файлы: `src/components/TripSummaryPanel.tsx`, `src/components/TripActions.tsx`,
@@ -92,7 +92,7 @@ Created: 2026-10-31
   вкладка)». Итог: слово «отчёт» везде = `/report`, слово «печать/PDF» = `/print`.
 - Критерии приёмки: grep «отчёт» в UI-строках — все входы ведут на `/report`; печать не
   изменилась (существующие тесты print зелёные); component-тест на новый target кнопки.
-- Статус: [ ] READY
+- Статус: [x] DONE
 
 ### 5. Этап ④ на общий пайплайн: PriceOverridesTab без своего state (поглощает BL-26)
 - Файлы: `src/components/PriceOverridesTab.tsx` (977 строк → ≤500, R8),
@@ -113,7 +113,7 @@ Created: 2026-10-31
   ручными позициями (юнит-тест на deriveTripView-пропсах); существующие тесты
   PriceOverridesTab/чеков зелёные без изменения ожидаемого поведения; файлы ≤500 строк;
   новые компоненты в coverage.include, lines ≥80%.
-- Статус: [ ] READY
+- Статус: [x] DONE
 
 ### 6. Единый загрузчик данных похода для report/print
 - Файлы: `src/pages/useTripDetail.tsx` (вынести loader), `src/pages/TripReportPage.tsx`,
@@ -128,7 +128,7 @@ Created: 2026-10-31
 - Критерии приёмки: один модуль-загрузчик, три потребителя; print-страница рендерит те же
   суммы, что этап ②/④ (скрин-сравнение PDF-эмуляцией на демо-походе); существующие тесты
   print/report зелёные; tsc чисто.
-- Статус: [ ] READY
+- Статус: [x] DONE
 
 ### 7. AuthContext: /auth/me один раз на сессию
 - Файлы: новый `src/components/AuthProvider.tsx` (или `src/api/authContext.tsx`),
@@ -143,7 +143,7 @@ Created: 2026-10-31
 - Критерии приёмки: на переход по сайдбару — не более одного `/auth/me` (assert счётчика
   в моках); смена роли (logout→login другим юзером) корректно обновляет admin-навигацию;
   существующие тесты ProtectedRoute/Layout/RecipesPage зелёные; coverage провайдера ≥80%.
-- Статус: [ ] READY
+- Статус: [x] DONE
 
 ### 8. Список походов без N+1: прогресс карточек одним запросом
 - Файлы: `backend/src/main/java/com/provision/...` (TripResponse/контроллер — по решению),
@@ -159,7 +159,7 @@ Created: 2026-10-31
 - Критерии приёмки: открытие списка = ≤2 запроса независимо от числа походов (assert в
   тесте на моках); цифры карточки совпадают с deriveTripView на демо-данных (юнит-тест
   паритета mock/real); contract-тесты зелёные в обоих направлениях.
-- Статус: [ ] READY
+- Статус: [x] DONE
 
 ### 9. Мелкий дубль-код: shim formatRub, лейблы, локальные типы
 - Файлы: `src/utils/formatRub.ts` (удалить), импортёры (`TripSummaryPanel`,
@@ -176,7 +176,7 @@ Created: 2026-10-31
 - Критерии приёмки: grep `from '../utils/formatRub'` пуст; grep `mealTypeLabels =` — одно
   определение; tsc/vitest/lint зелёные; визуальных изменений нет (скрин-сравнение ④ и
   отчёта).
-- Статус: [ ] READY
+- Статус: [x] DONE
 
 ### 10. Регрессия и документация
 - Файлы: `e2e/main-flow.spec.ts`, `e2e/mobile.spec.ts`, `DESIGN_MIGRATION.md` (если меняются
@@ -215,4 +215,70 @@ Created: 2026-10-31
 
 ## Результаты
 
-_Заполняется при закрытии._
+Закрыт 31.10.2026, ветка `ux-audit-31-10` (без коммита — владелец не запрашивал; все 10/10
+подзадач выполнены).
+
+**Что сделано (по подзадачам):**
+
+1. Мёртвый код: `DashboardPage.tsx`, `ErrorsDemoPage.tsx` удалены; `/dashboard`, `/errors-demo` →
+   редиректы на `/trips`; e2e-ссылки обновлены.
+2. `/admin` демонтирован: `AdminPage.tsx` удалён, стадинг «Импорт» переехал в `IntegrationsPage`
+   админ-табом (`CatalogImportTab.tsx` + `mockStaging.ts` в моке), `/admin` → `/integrations`.
+3. Один журнал синков: `SyncLogsPage.tsx`/`IntegrationSyncLogs.tsx` удалены, полный журнал —
+   таб «Журнал» (`SyncLogsTab.tsx`), `/sync-logs` → `/integrations?tab=logs`; единственный триггер
+   синка — в табе «Настройка».
+4. «Отчёт» — одна словоформа: in-app отчёт = `/trips/:id/report`, печать/PDF = `/trips/:id/print`;
+   десктопная кнопка готовности открывает `/print`, мобильная — `/report`.
+5. Этап ④ на общий пайплайн (поглощает BL-26, закрывает KB-14): `PriceOverridesTab.tsx` 977 → 137
+   строк, оркестратор без своего state и без сетевых запросов; выделены `ChecksModel.ts` (114),
+   `ChecksTable.tsx` (274), `ChecksMobile.tsx` (215), `WhoOwesBlock.tsx` (76). Инвариант
+   «суммы ② == ④ == KPI» зафиксирован тестом. Мёртвая кнопка «Повторить» (navigation-п.4) —
+   починена bug-test-first (`TripDetailPage.retry.test.tsx`).
+6. Единый загрузчик `utils/tripLoader.ts` (loadTripBundle/bundleToViewInput/loadTripView):
+   страница похода (`useTripDetail`), отчёт и печать — три потребителя одного пайплайна;
+   `TripPrintPage` переведён с сырых калькуляторов на view-модели (`utils/printModel.ts`,
+   печатная вёрстка не менялась), расхождения разрешены в пользу `deriveTripView` и зафиксированы
+   юнит-тестом на фикстуре (`printModel.test.ts`, 3).
+7. `AuthProvider.tsx`: один `GET /auth/me` на сессию (single-flight), 6 потребителей мигрированы;
+   тест 7/7 (счётчик запросов в моках).
+8. Список походов без N+1 (вариант A — решение владельца): backend `TripProgressService` +
+   `TripProgressResponse` (поле `progress` в `GET /trips`, только список; best-effort null);
+   mock-паритет — `mockTripProgress.buildTripProgress` через тот же `deriveTripView`;
+   `TripsPage` открывает список ОДНИМ запросом (компонентный тест), локальный стейдж «взято»
+   лишь уточняет stage shopping → store. Попутно починен round-trip серверных чеков в моке
+   (денормализация ключей `ing*` в `GET /trips/:id/price-overrides`).
+9. Дубль-код: shim `utils/formatRub.ts` удалён (5 импортёров переведены на `utils/format`);
+   `mealTypeLabels` — одна копия в `utils/text.ts` (3 дубля убраны); локальные интерфейсы
+   Trip/progress в `TripsPage`/`TripPrintPage` заменены типами `types/tripDetail`
+   (`TripProgressDto`); «Кто сколько должен» — один `WhoOwesBlock` (этап ④ + отчёт).
+10. Регрессия и документация: e2e `cleanup-redirects.spec.ts` (редиректы /admin, /sync-logs,
+    /errors-demo, /dashboard, catch-all); `ARCHITECTURE.md` (контракт progress), `backend/README.md`;
+    BL-26 → `plans/done/backlog.md` ГОТОВО; BL-56 → ГОТОВО в части (остаток — BL-59);
+    KB-14 → `plans/done/knownbugs.md` ЗАКРЫТ.
+
+**Гейты (что прогнано в песочнице):**
+
+- `tsc --noEmit` — чисто; `eslint .` — 0 ошибок (1 pre-existing warning `EmisLinkPicker`);
+  `vite build` — зелёный.
+- vitest: 652/652 (75 файлов), в т.ч. новые — `tripLoader.test.ts` (4), `printModel.test.ts` (3),
+  `tripListProgress.test.ts` (3), `TripsPage.progress.test.tsx` (4), `WhoOwesBlock.test.tsx` (3),
+  drawer-тест журнала в `IntegrationsPage.tabs.test.tsx`.
+- coverage R5 (perFile ≥80% lines): зелёный; новые файлы добавлены в `coverage.include`
+  (EmisSettingsTab, SyncLogsTab 93.5%, CatalogImportTab, AuthProvider 100%, ChecksModel 100%,
+  ChecksTable 98%, ChecksMobile 81%, WhoOwesBlock 100%, tripLoader 100%, printModel 98%,
+  mockTripProgress).
+- Контракты mock-направления: `contract.test.ts`, `contractExtension`, `stagingContract`,
+  `tripListProgress` — зелёные.
+- Backend: `mvn compile` зелёный; `TripProgressServiceTest` 8/8; регресс затронутых классов
+  (SummaryServiceTest, SummaryServiceFixtureTest, PriceOverrideTest, DetailedShoppingCalculationTest,
+  ShoppingListCostAggregationBugTest) — 34/34.
+
+**Честно не прогнано (лимиты песочницы):**
+
+- Полный `mvn test` — OOM (KB-10); `UserPricesIntegrationTest`, `EconomicConsistencyTest`,
+  `DockerStackSmokeTest` — не прогонялись из-за лимита памяти (не failures).
+- e2e Playwright (`npm run test:e2e`) — runner не стартует по памяти (KB-16); спеки написаны,
+  прогон в CI — BL-32.
+- Контракты real-направления (`CONTRACT_TARGET=real`) — нет поднятого backend-стека в песочнице;
+  серверная семантика покрыта `TripProgressServiceTest`.
+- Workflow run: нет, CI не проверено (нет gh/git-credentials из песочницы).

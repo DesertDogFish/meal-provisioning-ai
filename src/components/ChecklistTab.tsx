@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { ChevronDown, ChevronRight, Filter } from 'lucide-react';
+import { ChevronDown, ChevronRight, ClipboardList, Filter } from 'lucide-react';
 import InfoTip from './InfoTip';
 import FreeAmountInput from './FreeAmountInput';
 import { Button } from './Button';
@@ -8,6 +8,7 @@ import { useConfirm } from './ConfirmDialog';
 import { isActualLessThanNeeded, neededAsActual, type ActualAmount } from '../utils/checkUnits';
 import { formatAmount } from '../utils/calculations';
 import { checklistRowKey, type ChecklistGroup } from '../utils/checklist';
+import { EmptyState } from './EmptyState';
 import type { ChecklistActual } from '../utils/tripStaging';
 
 /**
@@ -46,10 +47,12 @@ export interface ChecklistTabProps {
   onCommitActualQty: (ingredientId: string, value: ActualAmount | null, needed?: number) => void;
   /** массовая отметка: true — «взято» всем, false — снять всё */
   onSetAll: (on: boolean) => void;
+  /** navigation-п.3: CTA пустого состояния — переключить этап на «Меню ①» */
+  onGoToMenu?: () => void;
 }
 
 export function ChecklistTab({
-  groups, bought, actualQty, onToggleRow, onCommitActualQty, onSetAll,
+  groups, bought, actualQty, onToggleRow, onCommitActualQty, onSetAll, onGoToMenu,
 }: ChecklistTabProps) {
   const { confirm, dialog: confirmDialog } = useConfirm();
   const [onlyMissing, setOnlyMissing] = useState(false);
@@ -167,10 +170,16 @@ export function ChecklistTab({
         </div>
       </div>
 
+      {/* navigation-п.3: пустой чеклист — тот же текст, но с выходом на этап ① */}
       {total === 0 && (
-        <div className="rounded-xl p-8 text-center text-sm" style={{ background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--muted)' }} data-testid="checklist-empty">
-          В закупке нет позиций — добавьте приёмы пищи или продукты к дню/походу.
-        </div>
+        <EmptyState
+          icon={<ClipboardList size={30} />}
+          title="В закупке нет позиций"
+          hint="Добавьте приёмы пищи или продукты к дню/походу — список появится здесь."
+          ctaLabel="К меню ①"
+          onCta={onGoToMenu}
+          testId="checklist-empty"
+        />
       )}
       {total > 0 && visibleGroups.length === 0 && (
         <div className="rounded-xl p-8 text-center text-sm" style={{ background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--muted)' }} data-testid="checklist-all-bought">

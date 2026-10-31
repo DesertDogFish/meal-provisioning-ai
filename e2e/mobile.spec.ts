@@ -21,7 +21,7 @@ async function login(page: Page, creds = USER) {
   await page.getByPlaceholder('you@example.com').fill(creds.email);
   await page.getByPlaceholder('••••••••').fill(creds.password);
   await page.getByRole('button', { name: 'Войти' }).click();
-  await expect(page).toHaveURL(/\/dashboard/, { timeout: 15_000 });
+  await expect(page).toHaveURL(/\/trips(\?|$/, { timeout: 15_000 });
 }
 
 /** Открыть сидовый поход с реальным меню (иначе чеклист пуст). */
@@ -47,7 +47,7 @@ test.beforeEach(async ({ page }) => {
 
 test('M-01 каркас: drawer открывается/закрывается, горизонтального скролла нет', async ({ page }) => {
   await login(page);
-  await expectNoHorizontalScroll(page, '/dashboard');
+  await expectNoHorizontalScroll(page, '/trips');
 
   const burger = page.getByRole('button', { name: 'Открыть меню навигации' });
   await expect(burger).toBeVisible();

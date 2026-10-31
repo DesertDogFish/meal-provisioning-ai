@@ -26,7 +26,7 @@
   --ok: var(--success);          /* семантика состояний из tokens.css */
   --r: var(--r-md);
 
-  /* DESIGN_MIGRATION 2.4: фоновые градиенты карточек «витрины» DashboardPage.
+  /* DESIGN_MIGRATION 2.4: фоновые градиенты карточек-«витрин» (список походов, обложки).
      В dark — прежние значения (визуал не меняется); в light — переопределены
      ниже по data-theme, чтобы поверхности не оставались «написанными под dark» (п.1.4).
      Значения — только отсылающие к токенам наслоения color-mix (hex вне токенов запрещён). */
@@ -362,6 +362,62 @@ h1, h2, h3, .logo-word, .font-display {
   background: var(--grad-brand);
   color: var(--on-fire);
   box-shadow: var(--shadow-glow);
+}
+
+/* navigation-п.2: статусы готовности в десктоп-.seg — один визуальный язык
+   с мобильным StageTabBar (номер этапа → галочка, когда этап закрыт). */
+.seg-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  margin-left: 2px;
+  border-radius: var(--r-pill);
+  background: color-mix(in srgb, var(--text-2) 16%, transparent);
+  color: var(--text-2);
+  font: 800 11px Manrope;
+  line-height: 1;
+}
+.seg-badge.ok {
+  background: color-mix(in srgb, var(--success) 26%, transparent);
+  color: var(--success);
+}
+.seg-btn.active .seg-badge {
+  background: color-mix(in srgb, var(--on-fire) 24%, transparent);
+  color: var(--on-fire);
+}
+
+/* navigation-п.2: CTA «Далее» в конце этапа — заметный, но не перекрывает
+   контент; подсказка на незаполненном этапе — тот же слот (без скачков вёрстки). */
+/* navigation-п.5: название блюда в карточке приёма — ссылка на рецепт */
+.meal-name-link {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+.meal-name-link:hover {
+  color: var(--w1) !important;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.stage-next-wrap {
+  display: flex;
+  justify-content: center;
+  padding: var(--sp-3) 0 calc(var(--sp-4) + env(safe-area-inset-bottom, 0px));
+}
+.stage-next-cta {
+  min-height: 44px; /* тач-цель ≥44px (DESIGN_MIGRATION §11) */
+}
+.stage-next-hint {
+  max-width: 34rem;
+  text-align: center;
+  margin: 0 auto;
 }
 
 /* Строки блюд с пунктирным бордером (.meal-row) */

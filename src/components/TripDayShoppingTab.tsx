@@ -4,10 +4,12 @@
  * применены в `deriveTripView`) + карточка позиций «На весь поход» (U40).
  * Компонент презентационный.
  */
+import { CalendarDays } from 'lucide-react';
 import TabHeader from './TabHeader';
 import ExclusionCheckbox from './ExclusionCheckbox';
+import { EmptyState } from './EmptyState';
 import { formatAmount } from '../utils/calculations';
-import { formatRub } from '../utils/formatRub';
+import { formatRub } from '../utils/format' // cleanup-п.9: shim formatRub удалён;
 import { manualForTrip } from '../utils/manualItems';
 import type { TripManualItem } from '../api/tripManualItems';
 import type { TripView } from '../utils/tripDerived';
@@ -21,10 +23,12 @@ export interface TripDayShoppingTabProps {
   priceOf: (ingredientId: string) => number | undefined;
   excluded: ReadonlySet<string>;
   onToggleExcluded: (key: string) => void;
+  /** navigation-п.3: CTA пустого состояния — переключить этап на «Меню ①» */
+  onGoToMenu?: () => void;
 }
 
 export function TripDayShoppingTab({
-  dayShopping, manualItems, priceOf, excluded, onToggleExcluded,
+  dayShopping, manualItems, priceOf, excluded, onToggleExcluded, onGoToMenu,
 }: TripDayShoppingTabProps) {
   const tripManual = manualForTrip(manualItems);
   return (
@@ -34,6 +38,17 @@ export function TripDayShoppingTab({
         title="Закупка по дням"
         subtitle={`Итого за поход: ${formatRub(dayShopping.reduce((a, d) => a + d.dayCost, 0))} · ${dayShopping.length} дн.`}
       />
+      {/* navigation-п.3: нет дней и ручных позиций — выход на этап ① */}
+      {dayShopping.length === 0 && tripManual.length === 0 && (
+        <EmptyState
+          icon={<CalendarDays size={30} />}
+          title="По дням пока пусто"
+          hint="Добавьте приёмы пищи в меню — закупка распределится по дням."
+          ctaLabel="К меню ①"
+          onCta={onGoToMenu}
+          testId="day-shopping-empty"
+        />
+      )}
       {dayShopping.map(day => (
         <div key={day.dayDate} className="rounded-xl overflow-hidden mob-scroll" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
           <div className="p-4 flex items-center justify-between" style={{ borderBottom: '1px solid var(--border)' }}>

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { Link } from 'react-router-dom'; // navigation-п.7: текст-инструкция → ссылка
 import { Search, X, Link2, Link2Off, AlertTriangle } from 'lucide-react';
 import { api } from '../api/client';
 import type { EmisProduct, UnitOfMeasure } from '../types';
@@ -198,7 +199,9 @@ export function EmisLinkPicker({
           ) : results.length === 0 ? (
             <p className="p-3 text-sm" style={{ color: 'var(--muted)' }}>
               Ничего не найдено. Если позиции нет в справочнике — сначала выполните
-              синхронизацию на странице «Интеграции».
+              синхронизацию на странице{' '}
+              {/* navigation-п.7: текст-инструкция → ссылка */}
+              <Link to="/integrations?tab=settings" style={{ color: 'var(--w1)' }} data-testid="link-integrations">«Интеграции»</Link>.
             </p>
           ) : (
             <ul className="max-h-64 overflow-y-auto" data-testid="emis-results">

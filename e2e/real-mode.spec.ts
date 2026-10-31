@@ -42,7 +42,7 @@ async function loginViaUi(page: Page, email: string, password: string) {
   await page.getByPlaceholder('you@example.com').fill(email);
   await page.getByPlaceholder('••••••••').fill(password);
   await page.getByRole('button', { name: 'Войти' }).click();
-  await expect(page).toHaveURL(/\/dashboard/, { timeout: 20_000 });
+  await expect(page).toHaveURL(/\/trips(\?|$/, { timeout: 20_000 });
 }
 
 test.describe('REAL mode (docker compose stack)', () => {

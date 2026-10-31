@@ -4,16 +4,13 @@ import { ArrowLeft, Share2, Printer } from 'lucide-react';
 import PageLoader from '../components/PageLoader';
 import { Button } from '../components/Button';
 import { useToast } from '../components/ToastProvider';
-import { api, getRecipes, getTripRecipes } from '../api/client';
-import { getManualItems, type TripManualItem } from '../api/tripManualItems';
-import { getTripEdits, type TripIngredientEdit } from '../api/tripEdits';
-import { loadActualPrices, loadExcluded, loadBought } from '../utils/tripStaging';
-import { deriveTripView } from '../utils/tripDerived';
+import { loadTripView } from '../utils/tripLoader'; // cleanup-п.6: единый загрузчик
+import type { TripView } from '../utils/tripDerived';
 import { formatRub, formatQty } from '../utils/format';
 import { pluralize } from '../utils/pluralize';
-import { mealsWord } from '../utils/text';
-import { mealTypeLabels } from '../components/TripMealCard';
-import type { Trip, Recipe, Price } from '../types/tripDetail';
+import { mealsWord, mealTypeLabels } from '../utils/text'; // cleanup-п.9: лейблы из единого источника
+import { WhoOwesBlock } from '../components/WhoOwesBlock'; // cleanup-п.9: без своего дубля «кто должен»
+import type { Trip } from '../types/tripDetail';
 
 /**
  * Plan plans/2026-10-30-mobile-workflow-ux.md (подзадача 7): in-app отчёт
@@ -31,7 +28,7 @@ export default function TripReportPage() {
   const navigate = useNavigate();
   const { showSuccess, showError } = useToast();
   const [trip, setTrip] = useState<Trip | null>(null);
-  const [view, setView] = useState<ReturnType<typeof deriveTripView> | null>(null);
+  const [view, setView] = useState<TripView | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -41,31 +38,10 @@ export default function TripReportPage() {
       try {
         setLoading(true);
         setError(null);
-        const [tripData, recipesData, pricesData, tripRecipesData, manualData, editsData] = await Promise.all([
-          api.get<Trip>(`/trips/${id}`),
-          getRecipes(),
-          api.get<Price[]>(`/trips/${id}/prices`).catch(() => [] as Price[]),
-          getTripRecipes(String(id)).catch(() => [] as Recipe[]),
-          getManualItems(String(id)).catch(() => [] as TripManualItem[]),
-          getTripEdits(String(id)).catch(() => [] as TripIngredientEdit[]),
-        ]);
-        const recipesMap = new Map<string, Recipe>(
-          [...recipesData, ...tripRecipesData].map(r => [String(r.id), r]),
-        );
-        const v = deriveTripView({
-          trip: tripData as any,
-          recipes: recipesData as any,
-          tripRecipes: tripRecipesData as any,
-          recipesMap: recipesMap as any,
-          tripEdits: editsData,
-          prices: pricesData as any,
-          manualItems: manualData,
-          products: [],
-          draftOverrides: loadActualPrices(String(id)),
-          shoppingExcluded: loadExcluded(String(id)),
-          checklistBought: loadBought(String(id)),
-          sortSpec: { field: 'ingredientName', dir: 'asc' },
-        });
+        // cleanup-п.6: те же данные и view-модели, что и на странице похода/печати —
+        // цифры отчёта не могут разойтись с цифрами вкладок. products не грузим:
+        // не-админ не имеет доступа к /admin/products (отчёту фасовка не нужна).
+        const { trip: tripData, view: v } = await loadTripView(String(id));
         if (cancelled) return;
         setTrip(tripData);
         setView(v);
@@ -156,16 +132,7 @@ export default function TripReportPage() {
           </div>
         </header>
 
-        <section className="who-owes" data-testid="report-owe">
-          <b style={{ color: 'var(--text)' }}>Итог: поровну</b>
-          {Array.from({ length: Math.max(1, Math.round(view.realPeople)) }, (_, i) => (
-            <div className="who-owes__row" key={i}>
-              <span className="avatar-chip" aria-hidden>{i + 1}</span>
-              <span className="flex-1">Участник {i + 1}</span>
-              <b className="keep-num" style={{ color: 'var(--text)' }}>{formatRub(view.tripSummary.costPerDefaultPerson)}</b>
-            </div>
-          ))}
-        </section>
+        <WhoOwesBlock variant="report" totalActual={factTotal} realPeople={view.realPeople} />
 
         {/* Меню по дням: одна колонка, день → приёмы списком (мок mock-06) */}
         <section className="rounded-xl overflow-hidden" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }} data-testid="report-menu">

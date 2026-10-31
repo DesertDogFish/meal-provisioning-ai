@@ -13,7 +13,7 @@ async function login(page: Page, creds = ADMIN) {
   await page.getByPlaceholder('you@example.com').fill(creds.email);
   await page.getByPlaceholder('••••••••').fill(creds.password);
   await page.getByRole('button', { name: 'Войти' }).click();
-  await expect(page).toHaveURL(/\/dashboard/, { timeout: 15_000 });
+  await expect(page).toHaveURL(/\/trips(\?|$/, { timeout: 15_000 });
 }
 
 test.beforeEach(async ({ page }) => {
@@ -31,8 +31,8 @@ test('E2E-01 логин админа → дашборд', async ({ page }) => {
 test('E2E-02 пользователь без прав на /products (redirect)', async ({ page }) => {
   await login(page, { email: 'user@provision.app', password: 'password123' });
   await page.goto('/products');
-  // ProtectedRoute adminOnly → <Navigate to="/dashboard" replace/>
-  await expect(page).toHaveURL(/\/dashboard/, { timeout: 15_000 });
+  // ProtectedRoute adminOnly → <Navigate to="/trips" replace/> (канон, navigation-п.8)
+  await expect(page).toHaveURL(/\/trips(\?|$/, { timeout: 15_000 });
 });
 
 test('E2E-03 продукт + предупреждение о дубле', async ({ page }) => {
@@ -124,7 +124,7 @@ test('E2E-08 очистка демо-кеша с подтверждением', 
 
 test('E2E-09 поход с сидами: открывается, имена блюд видны, добавление приёма (U6/U7)', async ({ page }) => {
   await login(page, { email: 'user@provision.app', password: 'password123' });
-  await page.goto('/dashboard');
+  await page.goto('/trips');
   // U6: сидовый поход (userId 2 = user@) открывается без белого экрана/краша
   await page.locator('[data-testid^="trip-card-"]', { hasText: 'Карельский' }).first().click();
   await expect(page).toHaveURL(/\/trips\/trip1/, { timeout: 15_000 });

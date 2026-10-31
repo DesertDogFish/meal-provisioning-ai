@@ -129,6 +129,15 @@
   `coverage.include` со 100% statements. Примечание: `e2e/main-flow.spec.ts` в песочнице
   не прогнаны (нет Docker/браузерного раннера) — регрессия подтверждена юнит-сььютом.
 
+- **BL-26. Декомпозиция `src/components/PriceOverridesTab.tsx`** (756→977 строк к моменту закрытия, R8)
+  — ГОТОВО 31.10.2026 (план `plans/done/2026-10-31-ux-audit-cleanup-dedup.md` п.5, ветка ux-audit-31-10):
+  вкладка этапа ④ стала оркестратором на 137 строк без собственного state и без сетевых запросов
+  (данные — из общего пайплайна deriveTripView страницы похода, BL-26 поглощает и расхождение сумм ②/④);
+  выделены `ChecksModel.ts` (114, чистая view-модель), `ChecksTable.tsx` (274, десктоп),
+  `ChecksMobile.tsx` (215, мобильные строки), `WhoOwesBlock.tsx` (76, «кто сколько должен» — общий
+  с отчётом, п.9). Все файлы ≤500 (R8), все в `coverage.include` (гейт R5 ≥80% perFile зелёный).
+  Тесты: `ChecksModel.test.ts` (5), `PriceOverridesTab.test.tsx` (5), `WhoOwesBlock.test.tsx` (3).
+
 ## Инфраструктура и CI
 
 - **BL-18. Явный `-Xmx`/`mem_limit` для backend** в `Dockerfile`/`docker-compose.yml`
@@ -167,3 +176,14 @@
   — СНЯТО 29.10.2026 решением владельца: KB-3 закрыт (владелец прогрузил файл выгрузки
   достаточного объёма вручную, данные в локальной копии есть). Если живой прогон всё же
   понадобится — задача восстанавливается под новым номером.
+
+## Внешний аудит 30.10.2026 (P1/P2/P3)
+
+- **BL-56. Вычистить мусор и мёртвый код из репозитория** — ГОТОВО в части 31.10.2026 (план
+  `plans/done/2026-10-31-ux-audit-cleanup-dedup.md` п.1–3): удалены мёртвые `ErrorsDemoPage.tsx`
+  (вместо маршрутизации под флагом — владелец выбрал удаление; `/errors-demo` → редирект на `/trips`,
+  e2e `cleanup-redirects.spec.ts`) и `DashboardPage.tsx`; демонтирована страница-сирота `AdminPage.tsx`
+  (стадийный «Импорт» переехал в `IntegrationsPage`, `/admin` → редирект) и дубли витрины журнала
+  `SyncLogsPage.tsx`/`IntegrationSyncLogs.tsx` (`/sync-logs` → `/integrations?tab=logs`).
+  Остаток (мусор `provisions/`, `git filter-repo` для крупных PNG, `fix-encoding.ps1`, CI-шаг
+  `npx depcheck`) оформлен в живом реестре как **BL-59**.

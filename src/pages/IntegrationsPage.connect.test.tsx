@@ -7,6 +7,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import React from 'react';
+import { MemoryRouter } from 'react-router-dom'; // cleanup-п.3: страница с табами (?tab=) и ссылками
 
 const showError = vi.fn();
 const showSuccess = vi.fn();
@@ -49,7 +50,7 @@ describe('IntegrationsPage: handleConnect (ROSSTAT)', () => {
       return null;
     });
 
-    render(<IntegrationsPage />);
+    render(<MemoryRouter><IntegrationsPage /></MemoryRouter>);
     const connectBtn = await screen.findByRole('button', { name: /подключить/i });
     await userEvent.click(connectBtn);
 
@@ -73,7 +74,7 @@ describe('IntegrationsPage: handleConnect (ROSSTAT)', () => {
       return null;
     });
 
-    render(<IntegrationsPage />);
+    render(<MemoryRouter><IntegrationsPage /></MemoryRouter>);
     const connectBtn = await screen.findByRole('button', { name: /подключить/i });
     await userEvent.click(connectBtn);
 
@@ -100,7 +101,7 @@ describe('IntegrationsPage: handleConnect (ROSSTAT)', () => {
       return null;
     });
 
-    render(<IntegrationsPage />);
+    render(<MemoryRouter><IntegrationsPage /></MemoryRouter>);
     const connectBtn = await screen.findByRole('button', { name: /подключить/i });
     await userEvent.click(connectBtn);
 

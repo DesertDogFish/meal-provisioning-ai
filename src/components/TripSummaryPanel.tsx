@@ -19,7 +19,7 @@ import InfoTip from './InfoTip';
 import { Button } from './Button';
 import BottomSheet from './BottomSheet';
 import { STAGES, type StageId } from './StageTabBar';
-import { formatRub } from '../utils/formatRub'; // Фаза 13: итоги — целые рубли
+import { formatRub } from '../utils/format' // cleanup-п.9: shim formatRub удалён; // Фаза 13: итоги — целые рубли
 import { pluralize } from '../utils/pluralize';
 import type { TripReadiness } from '../utils/readiness';
 import type { Trip } from '../types/tripDetail';

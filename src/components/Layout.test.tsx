@@ -4,6 +4,7 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import Layout from './Layout';
 import { ToastProvider } from './ToastProvider';
+import { AuthProvider } from './AuthProvider'; // cleanup-п.7: профиль из контекста
 
 vi.mock('../api/client', () => ({
   api: {
@@ -12,6 +13,7 @@ vi.mock('../api/client', () => ({
     put: vi.fn(),
     del: vi.fn(),
     getMode: () => 'mock',
+    onSessionLost: vi.fn(() => () => {}), // cleanup-п.7: подписка AuthProvider
   },
 }));
 
@@ -33,11 +35,13 @@ import { api } from '../api/client';
 function renderLayout() {
   return render(
     <MemoryRouter>
-      <ToastProvider>
-        <Layout>
-          <div data-testid="page-content">Контент страницы</div>
-        </Layout>
-      </ToastProvider>
+      <AuthProvider>
+        <ToastProvider>
+          <Layout>
+            <div data-testid="page-content">Контент страницы</div>
+          </Layout>
+        </ToastProvider>
+      </AuthProvider>
     </MemoryRouter>
   );
 }

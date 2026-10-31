@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
+import { useAuth } from '../components/AuthProvider'; // cleanup-п.7
 import { Mail, Lock, User, Eye, EyeOff } from 'lucide-react';
 import BrandMark from '../components/BrandMark';
 import { Button } from '../components/Button';
@@ -21,26 +22,15 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  // cleanup-п.7: проверка сессии при монтировании — в AuthProvider (один /auth/me);
+  // страница просто уходит на канон, когда контекст сообщает о валидной сессии.
+  const { user, refresh } = useAuth();
 
   useEffect(() => {
-    // Проверка авторизации при монтировании
-    const token = localStorage.getItem('accessToken');
-    if (token) {
-      api.get('/auth/me')
-        .then(() => {
-          setIsAuthenticated(true);
-          navigate('/dashboard');
-        })
-        .catch(() => {
-          // Токен невалиден, очищаем
-          localStorage.removeItem('accessToken');
-          localStorage.removeItem('refreshToken');
-        });
-    }
-  }, [navigate]);
+    if (user) navigate('/trips');
+  }, [user, navigate]);
 
-  if (isAuthenticated) {
+  if (user) {
     return null;
   }
 
@@ -67,8 +57,8 @@ export default function LoginPage() {
 
         localStorage.setItem('accessToken', regResponse.accessToken);
         localStorage.setItem('refreshToken', regResponse.refreshToken);
-        setIsAuthenticated(true);
-        navigate('/dashboard');
+        await refresh(); // cleanup-п.7: контекст узнаёт пользователя ОДНИМ запросом
+        navigate('/trips');
       } else {
         if (!email || !password) {
           setError('Введите email и пароль');
@@ -79,8 +69,8 @@ export default function LoginPage() {
         const response = await api.post<AuthResponse>('/auth/login', { email, password });
         localStorage.setItem('accessToken', response.accessToken);
         localStorage.setItem('refreshToken', response.refreshToken);
-        setIsAuthenticated(true);
-        navigate('/dashboard');
+        await refresh(); // cleanup-п.7: контекст узнаёт пользователя ОДНИМ запросом
+        navigate('/trips');
       }
     } catch (err: any) {
       setError(err.detail || err.message || 'Ошибка авторизации');

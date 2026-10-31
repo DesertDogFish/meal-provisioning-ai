@@ -6,6 +6,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import RecipesPage from './RecipesPage';
 import { ToastProvider } from '../components/ToastProvider';
 import { ErrorBoundary } from '../components/ErrorBoundary';
+import { AuthProvider } from '../components/AuthProvider'; // cleanup-п.7
 import { mockServer } from '../api/mockServer';
 
 beforeEach(() => {
@@ -27,11 +28,13 @@ describe('repro: редактирование занятого блюда', () =
 
     render(
       <MemoryRouter initialEntries={[`/recipes?edit=${used.id}`]}>
-        <ErrorBoundary>
-          <ToastProvider>
-            <RecipesPage />
-          </ToastProvider>
-        </ErrorBoundary>
+        <AuthProvider>
+          <ErrorBoundary>
+            <ToastProvider>
+              <RecipesPage />
+            </ToastProvider>
+          </ErrorBoundary>
+        </AuthProvider>
       </MemoryRouter>
     );
 

@@ -36,6 +36,8 @@ export interface TripDaysListProps {
   /** FORM-meal-composition-spec §2.1: модалка «Добавить приём пищи» */
   onAddMeal: (ctx: AddMealDayContext) => void;
   onOpenComposition: (dayId: string, mealId: string) => void;
+  /** navigation-п.5: название блюда в карточке приёма — просмотр рецепта */
+  onViewRecipe?: (recipeId: string) => void;
   onDeleteMeal: (dayId: string, mealId: string, mealName: string, dayDate: string) => void;
   onDeleteManual: (itemId: string, itemName: string) => void;
   /** U40: добавить продукт ко всему походу */
@@ -46,7 +48,7 @@ export function TripDaysList(props: TripDaysListProps) {
   const {
     menuByDays, trip, manualItems, expandedDays, editingDay, dayPeopleOverride,
     onToggleDay, onStartEditDay, onDayPeopleChange, onSaveDayPeople, onCancelEditDay,
-    onAddDayProduct, onAddMeal, onOpenComposition, onDeleteMeal, onDeleteManual,
+    onAddDayProduct, onAddMeal, onOpenComposition, onDeleteMeal, onDeleteManual, onViewRecipe,
     onAddTripProduct,
   } = props;
   return (
@@ -142,6 +144,7 @@ export function TripDaysList(props: TripDaysListProps) {
                       meal={meal}
                       tripMeal={tripMeal ?? null}
                       onOpenComposition={(mealId) => onOpenComposition(tripDay.id, mealId)}
+                      onViewRecipe={onViewRecipe}
                       onDelete={(mealId, mealName) => void onDeleteMeal(tripDay.id, mealId, mealName, tripDay.dayDate)}
                     />
                   );

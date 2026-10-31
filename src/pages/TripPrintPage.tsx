@@ -1,22 +1,16 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { Printer, ArrowLeft } from 'lucide-react';
-import { api, getRecipes, getTripRecipes } from '../api/client';
-import {
-  calculateMenuByDays, calculateShoppingList, calculateDayShopping,
-  calculatePersonSummary, formatAmount, realTripPeople, getEffectivePeople,
-  dayScopedExclusions, isRowExcluded, findPriceForDate,
-} from '../utils/calculations';
-import { formatRub } from '../utils/formatRub';
-import { loadActualPrices, loadExcluded, loadBought, loadActualQty, type ChecklistActual } from '../utils/tripStaging';
-import { getTripEdits, type TripIngredientEdit } from '../api/tripEdits';
-import { getManualItems, type TripManualItem } from '../api/tripManualItems';
-import { mergeManualIntoShopping, manualForDay, manualForTrip } from '../utils/manualItems';
-import { buildEffectiveRecipesMap } from '../utils/recipeEdits'; // Fix-6 (п.22/25)
-import { buildChecklist, type ChecklistProductInfo } from '../utils/checklist';
-import { categoryName } from '../utils/format';
-import { totalFromUnit, roundMoney } from '../utils/checkInput';
-import type { IngredientPrice, MealType } from '../types';
+import { formatAmount } from '../utils/calculations';
+import { formatRub } from '../utils/format' // cleanup-п.9: shim formatRub удалён;
+import { loadBought, loadActualQty, type ChecklistActual } from '../utils/tripStaging';
+import { type TripManualItem } from '../api/tripManualItems';
+import { manualForDay, manualForTrip } from '../utils/manualItems';
+import { loadTripBundle, bundleToViewInput } from '../utils/tripLoader'; // cleanup-п.6: единый загрузчик
+import { deriveTripView } from '../utils/tripDerived';
+import { buildPrintModel, type PrintModel } from '../utils/printModel';
+import type { MealType } from '../types';
+import type { Trip } from '../types/tripDetail'; // cleanup-п.9
 
 /**
  * Fix-4 (список 26.10, п.6): печатная версия похода — «красивый PDF» вместо
@@ -29,9 +23,9 @@ import type { IngredientPrice, MealType } from '../types';
  *  3. Деньги и выводы — итоги план/факт/Δ, на человека, на человеко-приём,
  *     разбивка по дням «кто сколько должен» (день / люди / сумма / на человека).
  *
- * Данные — тот же клиентский конвейер, что на странице похода (единый источник
- * цифр): trip + snowshot-рецепты + цены + серверные правки состава + ручные
- * позиции + стейдж фактов/исключений/отметок чеклиста.
+ * Данные — cleanup-п.6: ЕДИНЫЙ загрузчик `utils/tripLoader` + общие view-модели
+ * `deriveTripView` (как у страницы похода, этапа ④ и отчёта); документ — чистый
+ * маппинг `utils/printModel`. Суммы печати больше не могут разойтись с приложением.
  */
 
 // Fix-6 (п.3): цвета групп приёмов — те же оттенки, что у бейджей в приложении
@@ -46,11 +40,7 @@ const MEAL_LABELS: Record<MealType, string> = {
   BREAKFAST: 'Завтрак', LUNCH: 'Обед', DINNER: 'Ужин', SNACK: 'Перекус',
 };
 
-interface Trip {
-  id: string; name: string; startDate: string; endDate: string;
-  defaultPeople: number; notes?: string;
-  days?: Array<{ id: string; dayDate: string; peopleOverride?: number; meals?: unknown[] }>;
-}
+// cleanup-п.9: вместо локального интерфейса — общий тип Trip (types/tripDetail)
 
 const fmtDate = (iso: string, opts?: Intl.DateTimeFormatOptions) =>
   new Date(`${iso}T00:00:00`).toLocaleDateString('ru-RU', opts ?? { day: 'numeric', month: 'long' });
@@ -61,14 +51,14 @@ export default function TripPrintPage() {
   const [error, setError] = useState<string | null>(null);
 
   const [trip, setTrip] = useState<Trip | null>(null);
-  const [menu, setMenu] = useState<ReturnType<typeof calculateMenuByDays>>([]);
+  const [menu, setMenu] = useState<PrintModel['menu']>([]);
   const [shopping, setShopping] = useState<Array<{
     ingredientId: string; ingredientName: string; unit: string;
     totalAmount: number; plannedCost?: number; actualCost?: number; excluded: boolean; manual?: boolean;
     /** Fix-6 (п.5): чек по позиции ВВЕДЁН — план в отчёте больше не нужен */
     hasFact?: boolean;
   }>>([]);
-  const [checklist, setChecklist] = useState<ReturnType<typeof buildChecklist>>([]);
+  const [checklist, setChecklist] = useState<PrintModel['checklist']>([]);
   const [days, setDays] = useState<Array<{
     dayDate: string; people: number; planned: number; actual: number;
   }>>([]);
@@ -87,134 +77,34 @@ export default function TripPrintPage() {
     void (async () => {
       try {
         const tripKey = String(id);
-        const [tripData, recipesData, tripRecipesData, pricesData, editsData, manualData, productsData] = await Promise.all([
-          api.get<Trip>(`/trips/${id}`),
-          getRecipes(),
-          getTripRecipes(tripKey).catch(() => []),
-          api.get<IngredientPrice[]>(`/trips/${id}/prices`),
-          getTripEdits(tripKey).catch(() => [] as TripIngredientEdit[]),
-          getManualItems(tripKey).catch(() => [] as TripManualItem[]),
-          api.get<unknown>('/admin/products', { params: { size: '1000' } }).catch(() => null),
-        ]);
+        // cleanup-п.6: один загрузчик на страницу похода, отчёт и печать;
+        // view-модели — те же, что у этапа ②/④ (серверные оверрайды и
+        // серверные исключения печать теперь тоже видит).
+        const bundle = await loadTripBundle(tripKey, { withProducts: true });
+        const v = deriveTripView(await bundleToViewInput(bundle, tripKey));
         if (cancelled) return;
-        const recipesMap = new Map([...recipesData, ...tripRecipesData].map((r) => [String(r.id), r]));
-        const excluded = loadExcluded(tripKey);
-        const overrides = loadActualPrices(tripKey);
+        // Отметки чеклиста/факт-количества — локальный стейдж (для колонок «Взяли»)
         const bought = loadBought(tripKey);
         const actualQtyData = loadActualQty(tripKey);
 
-        // --- Меню с overlay серверных правок состава (Fix-2 п.3/U30) ---
-        const snapshotOfMap = new Map<string, string>();
-        for (const r of tripRecipesData) {
-          const so = (r as { snapshotOf?: string | number | null }).snapshotOf;
-          if (so != null) snapshotOfMap.set(String(r.id), String(so));
-        }
-        // Fix-6 (п.22/25): правки состава — в самом источнике расчётов (меню и закупка)
-        const effectiveRecipesMap = buildEffectiveRecipesMap(recipesMap, editsData as never, snapshotOfMap);
-        const menuDays = calculateMenuByDays(tripData as never, effectiveRecipesMap);
-
-        // --- Закупка: блюда + ручные позиции, факт из стейджа ---
-        const manualPriceOf = (ingId: string): number | undefined => {
-          const rows = pricesData.filter(pr => String(pr.ingredientId) === String(ingId));
-          return rows.length ? findPriceForDate(rows as never, tripData.endDate)?.pricePerUnit : undefined;
-        };
-        const base = mergeManualIntoShopping(
-          calculateShoppingList(tripData as never, effectiveRecipesMap, pricesData, dayScopedExclusions(excluded)),
-          manualData,
-          manualPriceOf,
-        );
-        const shoppingRows = base.map(item => {
-          const planned = item.estimatedCost ?? undefined;
-          const plannedUnit = planned != null && item.totalAmount > 0 ? planned / item.totalAmount : undefined;
-          // Fix-8 (п.6): факты чека попадают в отчёт при любой потребности —
-          // цена за единицу применяется к текущему количеству
-          const ov = overrides[String(item.ingredientId)];
-          const actualUnit = ov?.price ?? plannedUnit;
-          return {
-            ingredientId: String(item.ingredientId),
-            ingredientName: item.ingredientName,
-            unit: item.unit,
-            totalAmount: item.totalAmount,
-            plannedCost: planned,
-            actualCost: roundMoney(totalFromUnit(actualUnit, item.totalAmount)) ?? planned,
-            excluded: excluded.has(String(item.ingredientId)),
-            manual: (item as { manual?: boolean }).manual,
-            hasFact: ov?.price != null,
-          };
-        });
-
-        // --- Чеклист (категории/упаковки) из НЕисключённых позиций ---
-        const productInfo = new Map<string, ChecklistProductInfo>();
-        for (const r of [...recipesData, ...tripRecipesData]) {
-          for (const ri of (r.ingredients ?? []) as unknown as Array<Record<string, unknown>>) {
-            const ing = ((ri as { ingredient?: Record<string, unknown> }).ingredient ?? ri) as unknown as { id?: string | number; packSize?: number; roundToPacks?: boolean; category?: string };
-            if (ing?.id != null && !productInfo.has(String(ing.id))) {
-              productInfo.set(String(ing.id), { packSize: ing.packSize, roundToPacks: ing.roundToPacks, category: categoryName(ing) });
-            }
-          }
-        }
-        const prodList = Array.isArray(productsData) ? productsData : ((productsData as { content?: Array<Record<string, unknown>> } | null)?.content ?? []);
-        for (const p of prodList as Array<Record<string, unknown>>) {
-          productInfo.set(String(p.id), {
-            packSize: p.packSize as number, roundToPacks: p.roundToPacks as boolean, category: categoryName(p),
-          });
-        }
-        const checklistGroups = buildChecklist(
-          shoppingRows.filter(r => !r.excluded).map(r => ({
-            ingredientId: r.ingredientId, ingredientName: r.ingredientName, unit: r.unit, totalAmount: r.totalAmount,
-          })),
-          productInfo,
-        );
-
-        // --- По дням: план/факт и люди (для «кто сколько должен») ---
-        const dayRows = calculateDayShopping(tripData as never, effectiveRecipesMap, pricesData)
-          .map(d => {
-            const merged = mergeManualIntoShopping(
-              d.items,
-              manualForDay(manualData, (tripData.days ?? []).find(x => x.dayDate === d.dayDate)?.id ?? ''),
-            );
-            let planned = 0, actual = 0;
-            for (const it of merged) {
-              if (isRowExcluded(excluded, d.dayDate, it.ingredientId)) continue;
-              const p = it.estimatedCost ?? 0;
-              // Fix-8 (п.6): факт-цена применяется к текущему количеству дня
-              const ovDay = overrides[String(it.ingredientId)];
-              const unit = ovDay?.price;
-              planned += p;
-              actual += unit != null ? unit * it.totalAmount : p;
-            }
-            const tripDay = (tripData.days ?? []).find(x => x.dayDate === d.dayDate);
-            const people = tripDay ? getEffectivePeople(tripData as never, tripDay as never) : tripData.defaultPeople;
-            return { dayDate: d.dayDate, people, planned, actual };
-          });
-
-        const included = shoppingRows.filter(r => !r.excluded);
-        const totalPlanned = included.reduce((a, r) => a + (r.plannedCost ?? 0), 0);
-        const totalActual = included.reduce((a, r) => a + (r.actualCost ?? 0), 0);
-        const realPeople = realTripPeople(tripData as never);
-        const { tripSummary } = calculatePersonSummary(tripData as never, effectiveRecipesMap, pricesData, realPeople, excluded, manualData, manualPriceOf);
+        // Модель документа — чистый маппинг view-моделей (utils/printModel)
+        const model = buildPrintModel(bundle.trip, v);
 
         // ручные позиции для меню-страниц
         const byDay: Record<string, TripManualItem[]> = {};
-        for (const d of tripData.days ?? []) byDay[d.id] = manualForDay(manualData, d.id);
+        for (const d of bundle.trip.days ?? []) byDay[d.id] = manualForDay(bundle.manualItems, d.id);
 
-        setTrip(tripData);
-        setMenu(menuDays);
-        setShopping(shoppingRows);
-        setChecklist(checklistGroups);
-        setDays(dayRows);
-        setKpi({
-          totalPlanned, totalActual,
-          perPerson: totalActual / Math.max(1, realPeople),
-          perPersonMeal: totalActual / Math.max(1, tripSummary.totalPersonMeals || 1),
-          personMeals: tripSummary.totalPersonMeals,
-          realPeople,
-        });
-        setBoughtCount([...bought].length);
+        setTrip(bundle.trip);
+        setMenu(model.menu);
+        setShopping(model.shopping);
+        setChecklist(model.checklist);
+        setDays(model.days);
+        setKpi(model.kpi);
+        setBoughtCount(bought.size);
         setBoughtKeys(bought);
         setActualQty(actualQtyData);
         setManualByDay(byDay);
-        setTripManual(manualForTrip(manualData));
+        setTripManual(manualForTrip(bundle.manualItems));
       } catch (err) {
         console.error('Print view failed:', err);
         if (!cancelled) setError('Не удалось подготовить печатную версию');

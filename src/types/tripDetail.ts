@@ -20,6 +20,25 @@ export interface Trip {
   defaultPeople: number;
   notes?: string;
   days?: TripDay[];
+  /** cleanup-п.8 (вариант A): прогресс карточки — только в ответе списка
+   * GET /trips (backend TripProgressService / mock mockTripProgress);
+   * в одиночном GET /trips/{id} — null/отсутствует. */
+  progress?: TripProgressDto | null;
+}
+
+/**
+ * Серверный прогресс карточки похода (контракт backend `TripProgressResponse`,
+ * cleanup-п.8). Отметки «взято» — локальный стейдж клиента, серверный stage
+ * поэтому ∈ {menu, shopping, checks}, а клиент уточняет shopping → store.
+ */
+export interface TripProgressDto {
+  stage: 'menu' | 'shopping' | 'checks';
+  meals: number;
+  checklistTotal: number;
+  facts: number;
+  factsTotal: number;
+  totalCost: number;
+  costPerPerson: number;
 }
 
 export interface TripDay {

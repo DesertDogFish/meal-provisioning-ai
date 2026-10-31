@@ -8,6 +8,7 @@ import TripDaysList from './TripDaysList';
 import TripShoppingTab from './TripShoppingTab';
 import TripDayShoppingTab from './TripDayShoppingTab';
 import TripPersonTab from './TripPersonTab';
+import ChecklistTab from './ChecklistTab';
 import ExclusionCheckbox from './ExclusionCheckbox';
 import { deriveTripView, type TripViewInput } from '../utils/tripDerived';
 import { tripReadiness } from '../utils/readiness';
@@ -468,5 +469,83 @@ describe('TripPersonTab', () => {
         tripSummary={view.tripSummary} personSummary={view.personSummary} />
     );
     expect(screen.getByText(/ккал/)).toBeTruthy();
+  });
+});
+
+/** Navigation-п.3: пустые состояния этапов ②/③ с CTA «К меню ①» */
+describe('Empty-state этапов (navigation-п.3)', () => {
+  it('② «Суммарно»: нет строк → empty-state + CTA «К меню ①»', () => {
+    const onGoToMenu = vi.fn();
+    render(
+      <TripShoppingTab rows={[]} sortSpec={{ field: 'ingredientName', dir: 'asc' }}
+        onSortField={vi.fn()} total={0} excludedCount={0} hasMissingPrices={false}
+        missingIngredients={[]} excluded={new Set()} onToggleExcluded={vi.fn()}
+        onGoToMenu={onGoToMenu} />
+    );
+    expect(screen.getByTestId('shopping-empty')).toBeTruthy();
+    fireEvent.click(screen.getByTestId('shopping-empty-cta'));
+    expect(onGoToMenu).toHaveBeenCalledTimes(1);
+  });
+
+  it('② «По дням»: нет дней и ручных позиций → empty-state + CTA', () => {
+    const onGoToMenu = vi.fn();
+    render(
+      <TripDayShoppingTab dayShopping={[]} manualItems={[]} priceOf={() => undefined}
+        excluded={new Set()} onToggleExcluded={vi.fn()} onGoToMenu={onGoToMenu} />
+    );
+    expect(screen.getByTestId('day-shopping-empty')).toBeTruthy();
+    fireEvent.click(screen.getByTestId('day-shopping-empty-cta'));
+    expect(onGoToMenu).toHaveBeenCalledTimes(1);
+  });
+
+  it('② «На человека»: нет продуктов → empty-state + CTA', () => {
+    const onGoToMenu = vi.fn();
+    const view = deriveTripView(viewInput({ trip: { ...trip, days: [] }, recipes: [], recipesMap: new Map() }));
+    render(
+      <TripPersonTab trip={{ ...trip, days: [] }} realPeople={view.realPeople}
+        tripSummary={view.tripSummary} personSummary={[]} onGoToMenu={onGoToMenu} />
+    );
+    expect(screen.getByTestId('person-empty')).toBeTruthy();
+    fireEvent.click(screen.getByTestId('person-empty-cta'));
+    expect(onGoToMenu).toHaveBeenCalledTimes(1);
+  });
+
+  it('③ чеклист: нет позиций → empty-state + CTA «К меню ①»', () => {
+    const onGoToMenu = vi.fn();
+    render(
+      <ChecklistTab groups={[]} bought={new Set()} actualQty={{}} onToggleRow={vi.fn()}
+        onCommitActualQty={vi.fn()} onSetAll={vi.fn()} onGoToMenu={onGoToMenu} />
+    );
+    expect(screen.getByTestId('checklist-empty')).toBeTruthy();
+    fireEvent.click(screen.getByTestId('checklist-empty-cta'));
+    expect(onGoToMenu).toHaveBeenCalledTimes(1);
+  });
+});
+
+/** Navigation-п.5: название блюда в карточке приёма — ссылка на просмотр рецепта */
+describe('TripMealCard — ссылка на рецепт (navigation-п.5)', () => {
+  const meal = {
+    mealType: 'LUNCH' as MealType, recipeName: 'Уха', servings: 2, recipeId: 'r9',
+    ingredients: [],
+  };
+
+  it('название — кнопка: клик → onViewRecipe(recipeId)', () => {
+    const onViewRecipe = vi.fn();
+    render(
+      <TripMealCard meal={meal}
+        tripMeal={{ id: 'm9', tripDayId: 'd1', mealType: 'LUNCH', recipeId: 'r9', sortOrder: 1 }}
+        onOpenComposition={vi.fn()} onDelete={vi.fn()} onViewRecipe={onViewRecipe} />
+    );
+    fireEvent.click(screen.getByTestId('meal-recipe-link'));
+    expect(onViewRecipe).toHaveBeenCalledWith('r9');
+  });
+
+  it('без onViewRecipe название — обычный текст (обратная совместимость)', () => {
+    render(
+      <TripMealCard meal={meal} tripMeal={null}
+        onOpenComposition={vi.fn()} onDelete={vi.fn()} />
+    );
+    expect(screen.queryByTestId('meal-recipe-link')).toBeNull();
+    expect(screen.getByText('Уха')).toBeTruthy();
   });
 });

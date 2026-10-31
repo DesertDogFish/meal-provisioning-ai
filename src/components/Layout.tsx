@@ -1,27 +1,20 @@
 import { NavLink, useNavigate } from 'react-router-dom';
-import { ChevronUp, History, LogOut, Menu, Mountain, Package, RefreshCw, UtensilsCrossed } from 'lucide-react';
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { ChevronUp, LogOut, Menu, Mountain, Package, RefreshCw, UtensilsCrossed } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
 import ApiModeBadge from './ApiModeBadge';
 import BrandMark from './BrandMark';
 import ThemeToggle from './ThemeToggle';
 import ScrollTopButton from './ScrollTopButton';
 import { lockBodyScroll, unlockBodyScroll } from './Modal'; // подзадача 9: фон не скроллится под открытым drawer
-import { api } from '../api/client';
 import { useToast } from './ToastProvider';
-
-interface User {
-  id: string;
-  email: string;
-  firstName: string;
-  lastName: string;
-  role: 'USER' | 'ADMIN';
-}
+import { useAuth } from './AuthProvider'; // cleanup-п.7: профиль — из общего контекста
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
   const { showError } = useToast();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  // cleanup-п.7: пользователь и роль — из AuthContext (один /auth/me на сессию)
+  const { user: currentUser, isAdmin, profileError, logout } = useAuth();
   // U29: поповер профиля («Выйти» — внутри меню, а не отдельная крайняя кнопка)
   const [profileOpen, setProfileOpen] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
@@ -40,22 +33,11 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     };
   }, [profileOpen]);
 
-  const loadUser = useCallback(async () => {
-    try {
-      const user = await api.get<User>('/auth/me');
-      setCurrentUser(user);
-    } catch (error) {
-      console.error('Failed to load user:', error);
-      // ЗАДАЧА 3: сбой загрузки профиля должен быть виден пользователю,
-      // UI при этом остаётся в состоянии «не авторизован» (currentUser = null).
-      setCurrentUser(null);
-      showError('Не удалось загрузить профиль пользователя');
-    }
-  }, [showError]);
-
+  // ЗАДАЧА 3 + cleanup-п.7: сбой загрузки профиля виден пользователю (тост),
+  // но сообщается из ОДНОГО места — провайдер держит profileError.
   useEffect(() => {
-    loadUser();
-  }, [loadUser]);
+    if (profileError) showError('Не удалось загрузить профиль пользователя');
+  }, [profileError, showError]);
 
   /* Подзадача 9 (plans/done/2026-10-29-ui-nowrap-and-mobile.md): мобильный drawer —
      Esc закрывает верхний оверлей (жёсткое правило дизайн-пака), фон под ним не
@@ -77,24 +59,16 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     };
   }, [sidebarOpen]);
 
-  // FIX: нормализация роли — бэкенд отдаёт 'ADMIN', но защита от регистра-расхождений
-  const isAdmin = currentUser?.role?.toUpperCase() === 'ADMIN';
-
+  // cleanup-п.7: logout — в провайдере (инвалидирует контекст и чистит токены);
+  // локальный выход выполняется даже при сбое серверного (finally провайдера).
   const handleLogout = async () => {
     try {
-      const refreshToken = localStorage.getItem('refreshToken');
-      if (refreshToken) {
-        await api.post('/auth/logout', { refreshToken });
-      }
+      await logout();
     } catch (error) {
       console.error('Logout error:', error);
-      // ЗАДАЧА 3: локальный выход всё равно выполнится (finally), но пользователю
-      // честно сообщаем, что серверная сессия (refresh-токен) не была отозвана.
+      // ЗАДАЧА 3: честно сообщаем, что серверная сессия не была отозвана.
       showError('Не удалось завершить сессию на сервере, выполнен локальный выход');
     } finally {
-      localStorage.removeItem('accessToken');
-      localStorage.removeItem('refreshToken');
-      setCurrentUser(null);
       navigate('/login');
     }
   };
@@ -103,13 +77,14 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   // множественном числе («Походы / Блюда / Продукты»), у каждого своя осмысленная
   // иконка (раньше: «Каталог блюд» с корабликом и три раздела с гамбургером).
   const navItems = [
-    { to: '/dashboard', label: 'Походы', icon: <Mountain size={20} /> },
+    { to: '/trips', label: 'Походы', icon: <Mountain size={20} /> },
     { to: '/recipes', label: 'Блюда', icon: <UtensilsCrossed size={20} /> },
     // U35 (список 26.10): «Ошибки (демо)» скрыты из навигации (роут редиректит)
     ...(isAdmin ? [
       { to: '/products', label: 'Продукты', icon: <Package size={20} /> },
+      // cleanup-п.3 (31.10.2026): «Журнал синков» — таб раздела «Интеграции»
+      // (/integrations?tab=logs), отдельный пункт сайдбара убран (дубль витрины).
       { to: '/integrations', label: 'Интеграции', icon: <RefreshCw size={20} /> },
-      { to: '/sync-logs', label: 'Журнал синков', icon: <History size={20} /> }
     ] : []),
   ];
 

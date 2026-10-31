@@ -9,17 +9,20 @@
  */
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
-import { api, getRecipes, getTripRecipes } from '../api/client';
+import { api } from '../api/client';
 import { useToast } from '../components/ToastProvider';
 import { useConfirm } from '../components/ConfirmDialog'; // Fix-6 (п.7)
-import { loadActualPrices, loadExcluded, setExcluded as persistExcluded, loadBought, setBought as persistBought, loadActualQty, setActualQty, onTripStageChange, type ChecklistActual, type ActualPriceDraft } from '../utils/tripStaging'; // U32 + Fix-2(п.6) + Fix-5(п.21) + Fix-8(п.6)
-import { getTripEdits, type TripIngredientEdit } from '../api/tripEdits'; // U30
+import { loadActualPrices, saveActualPrice, loadExcluded, setExcluded as persistExcluded, loadBought, setBought as persistBought, loadActualQty, setActualQty, onTripStageChange, type ChecklistActual, type ActualPriceDraft } from '../utils/tripStaging'; // U32 + Fix-2(п.6) + Fix-5(п.21) + Fix-8(п.6)
+import { unitFromTotal } from '../utils/checkInput'; // cleanup-п.5: чек-мутация переехала со вкладки на страницу
+import type { CheckRow } from '../components/ChecksModel';
+import { type TripIngredientEdit } from '../api/tripEdits'; // U30
 import { getManualItems, deleteManualItem, type TripManualItem } from '../api/tripManualItems'; // U40
 import { nextDir, type SortDir } from '../utils/rowSort'; // U26–U28
 import { getServerExclusions, syncServerExclusions } from '../api/shoppingExclusions'; // Fix-3 / R2
-import { categoryName } from '../utils/format';
 import { deriveTripView } from '../utils/tripDerived';
+import { loadTripBundle } from '../utils/tripLoader'; // cleanup-п.6: единый загрузчик
 import { parseStage } from '../components/StageTabBar';
+import { useAuth } from '../components/AuthProvider'; // cleanup-п.7: роль — из контекста
 import type { AddMealDayContext } from '../components/AddMealModal';
 import type { MealType } from '../types';
 import type { ActualAmount } from '../utils/checkUnits';
@@ -54,6 +57,8 @@ export function useTripDetail() {
   const [dayPeopleOverride, setDayPeopleOverride] = useState('');
   const [trip, setTrip] = useState<Trip | null>(null);
   const [recipes, setRecipes] = useState<Recipe[]>([]);
+  // navigation-п.5: read-only просмотр блюда из меню (sheet на данных снепшота)
+  const [viewRecipeId, setViewRecipeId] = useState<string | null>(null);
   // V20: копии блюд похода (snowshot) — нужны для рендера меню и расчётов
   const [tripRecipes, setTripRecipes] = useState<Recipe[]>([]);
   // V20: меню ищет блюдо и по глобальному id (пикер), и по id копии (приёмы пищи)
@@ -67,9 +72,10 @@ export function useTripDetail() {
   const [error, setError] = useState<string | null>(null);
 
   // ===== FORM-meal-composition-spec §2: Модалка A (добавление приёма) + Модалка B (состав) =====
-  const [isEditorAdmin, setIsEditorAdmin] = useState<boolean | null>(null);
+  // cleanup-п.7: роль редактора — из AuthContext (без своего /auth/me)
+  const { isAdmin: isEditorAdmin } = useAuth();
   /** A: { dayId, dayIndex, mealType } — контекст карточки дня (§2.1) */
-  const [addMealCtx, setAddMealCtx] = useState<(AddMealDayContext & { mealType?: MealType }) | null>(null);
+  const [addMealCtx, setAddMealCtx] = useState<(AddMealDayContext & { mealType?: MealType; recipeId?: string }) | null>(null);
   /** B: существующий приём (id + день) — состав редактируется только для него (§2.2) */
   const [compositionMeal, setCompositionMeal] = useState<{ dayId: string; mealId: string } | null>(null);
 
@@ -85,6 +91,10 @@ export function useTripDetail() {
   // событие, sync() ниже обновляет оба набора — зависимые экраны перерисовываются.
   const tripKey = String(id ?? '');
   const [draftOverrides, setDraftOverrides] = useState<Record<string, ActualPriceDraft>>({});
+  // cleanup-п.5: серверные оверрайды факт-цен (GET /trips/:id/price-overrides) —
+  // фолбэк-источник чека, введённого в другой сессии. Загружает СТРАНИЦА (единый
+  // пайплайн), этап ④ своих запросов больше не делает.
+  const [serverOverrides, setServerOverrides] = useState<Record<string, ActualPriceDraft>>({});
   const [shoppingExcluded, setShoppingExcluded] = useState<Set<string>>(new Set());
   const [checklistBought, setChecklistBought] = useState<Set<string>>(new Set());
   // Fix-6 (п.8): сколько РЕАЛЬНО берём — {amount, unit} свободно (г/кг/мл/л/шт/уп),
@@ -136,36 +146,26 @@ export function useTripDetail() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
-  const loadData = async () => {
+  /**
+   * transparency-п.5: `background=true` — перечитка после мутаций БЕЗ снятия
+   * контента (никакого full-page мигания): loading не взводим, контент этапа
+   * остаётся на месте, данные обновляются по ответу.
+   */
+  const loadData = async (background = false) => {
     try {
-      setLoading(true);
+      if (!background) setLoading(true);
       setError(null);
-      const [tripData, recipesData, pricesData, tripRecipesData, editsData, manualData, productsData] = await Promise.all([
-        api.get<Trip>(`/trips/${id}`),
-        getRecipes(),
-        // V20: цены КОНКРЕТНОГО похода (trip-scoped копии продуктов, замороженный план);
-        // глобальный справочник цен — GET /prices (экраны админа/каталога)
-        api.get<Price[]>(`/trips/${id}/prices`),
-        // V20: trip-scoped копии блюд (меню похода ссылается на них).
-        // Release-1.0: через getTripRecipes — нормализация плоских DTO снапшотов
-        // (иначе в меню/закупке «Unknown» и единица «шт» по умолчанию).
-        getTripRecipes(String(id)).catch(() => [] as Recipe[]),
-        // U30: серверные правки состава — overlay на карточки меню
-        getTripEdits(String(id)).catch(() => [] as TripIngredientEdit[]),
-        // U40: ручные позиции закупки (продукты к дню/походу)
-        getManualItems(String(id)).catch(() => [] as TripManualItem[]),
-        // U38/U40: фасовка и категории продуктов для чеклиста/модалки (best effort:
-        // в real-режиме не-админ может не иметь доступа — тогда чеклист без упаковок)
-        api.get<any>('/admin/products', { params: { size: '1000' } }).catch(() => null),
-      ]);
-      setTrip(tripData);
-      setRecipes(recipesData);
-      setTripRecipes(tripRecipesData);
-      setPrices(pricesData);
-      setTripEdits(editsData);
-      setManualItems(manualData);
-      const prodList = Array.isArray(productsData) ? productsData : (productsData?.content ?? []);
-      setProducts(prodList.map((p: any) => ({ ...p, category: categoryName(p) })));
+      // cleanup-п.6: ЕДИНЫЙ загрузчик данных похода (utils/tripLoader) —
+      // те же запросы, что и у отчёта/печати; один пайплайн на три потребителя.
+      const b = await loadTripBundle(String(id), { withProducts: true });
+      setTrip(b.trip);
+      setRecipes(b.recipes);
+      setTripRecipes(b.tripRecipes);
+      setPrices(b.prices);
+      setTripEdits(b.tripEdits);
+      setManualItems(b.manualItems);
+      setProducts(b.products);
+      setServerOverrides(b.serverOverrides);
     } catch (err: any) {
       console.error('Failed to load trip:', err);
       // ЗАДАЧА 3: тост; устаревшие данные не сбрасываем намеренно —
@@ -176,22 +176,6 @@ export function useTripDetail() {
       setLoading(false);
     }
   };
-
-  // Роль пользователя — подгружается один раз: нужна для ссылки админа в
-  // справочник из Модалки B (T7). Сам справочник продуктов модалка грузит сама.
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const me = localStorage.getItem('accessToken')
-          ? await api.get<{ role?: string }>('/auth/me').catch(() => null)
-          : null;
-        if (cancelled) return;
-        setIsEditorAdmin(String(me?.role ?? '').toUpperCase() === 'ADMIN');
-      } catch { /* не критично: ссылка админа просто не появится */ }
-    })();
-    return () => { cancelled = true; }
-  }, []);
 
   const toggleDay = (dayId: string) => {
     const next = new Set(expandedDays);
@@ -208,7 +192,8 @@ export function useTripDetail() {
     const dayId = addMealCtx.dayId;
     setAddMealCtx(null);
     void (async () => {
-      await loadData();
+      // transparency-п.5: после мутации — фоновая перечитка (контент не гаснет)
+      await loadData(true);
       if (opts.openComposition) setCompositionMeal({ dayId, mealId: meal.id });
     })();
   };
@@ -229,7 +214,7 @@ export function useTripDetail() {
     if (!ok) return;
     try {
       await api.del(`/trips/${trip.id}/days/${dayId}/meals/${mealId}`);
-      await loadData();
+      await loadData(true); // transparency-п.5: фоновая перечитка
     } catch (err: any) {
       console.error('Failed to delete meal:', err);
       showError(err?.detail || 'Не удалось удалить приём пищи');
@@ -245,7 +230,7 @@ export function useTripDetail() {
       });
       setEditingDay(null);
       setDayPeopleOverride('');
-      await loadData();
+      await loadData(true); // transparency-п.5: фоновая перечитка
     } catch (err: any) {
       console.error('Failed to update day:', err);
       // ЗАДАЧА 3: действие пользователя должно давать видимый отклик
@@ -288,6 +273,30 @@ export function useTripDetail() {
     }
   };
 
+  /**
+   * cleanup-п.5: фиксация факт-цены этапа ④ — сумма чека за позицию → цена за
+   * единицу (Fix-3 п.5). Мутация живёт на странице: локальный стейдж (событие
+   * перерисует ② без дублей) + серверный PUT price-overrides (best effort).
+   * Fix-8 (п.6): факт не сбрасывается при изменении потребности — neededAt не пишем.
+   */
+  const commitCheckTotal = async (row: CheckRow, total: number | null) => {
+    if (total == null || Number.isNaN(total)) {
+      saveActualPrice(tripKey, row.ingredientId, null);
+    } else {
+      const unit = unitFromTotal(total, row.totalAmount);
+      if (unit == null) return; // нулевое количество — вводить некуда
+      saveActualPrice(tripKey, row.ingredientId, { price: unit, total });
+    }
+    setDraftOverrides(loadActualPrices(tripKey));
+    try {
+      const unit = total == null || Number.isNaN(total) ? null : unitFromTotal(total, row.totalAmount);
+      await api.put(`/trips/${tripKey}/price-overrides/${row.ingredientId}`, {
+        actualPrice: unit,
+        comment: unit == null ? undefined : 'чек',
+      });
+    } catch { /* нет роута/прав — локальный стейдж уже сохранён */ }
+  };
+
   const toggleBought = (key: string) => {
     const next = new Set(checklistBought);
     if (next.has(key)) next.delete(key); else next.add(key);
@@ -316,12 +325,19 @@ export function useTripDetail() {
       : { field, dir: 'asc' });
   };
 
+  // cleanup-п.5: факт-цены = локальный стейдж поверх серверных оверрайдов —
+  // ЕДИНЫЙ источник для всех этапов (②, ④, отчёт): цифры не могут разъехаться.
+  const effectiveOverrides = useMemo(
+    () => ({ ...serverOverrides, ...draftOverrides }),
+    [serverOverrides, draftOverrides],
+  );
+
   // Производные view-модели — чистый модуль (тот же порядок вычислений, что
   // раньше был в теле страницы). До загрузки похода считать нечего.
   const view = trip
     ? deriveTripView({
         trip, recipes, tripRecipes, recipesMap, tripEdits, prices, manualItems,
-        products, draftOverrides, shoppingExcluded, checklistBought, sortSpec,
+        products, draftOverrides: effectiveOverrides, shoppingExcluded, checklistBought, sortSpec,
       })
     : null;
 
@@ -330,14 +346,17 @@ export function useTripDetail() {
     const dayId = searchParams.get('addMeal');
     if (!dayId) return;
     addMealHandled.current = true;
+    // navigation-п.1: «В меню похода…» переносит выбранное блюдо (?recipe=<id>)
+    const recipeId = searchParams.get('recipe') ?? undefined;
     const idx = (trip.days ?? []).findIndex((d) => String(d.id) === dayId);
     if (idx >= 0) {
       const d = trip.days![idx];
-      setAddMealCtx({ dayId: String(d.id), dayDate: d.dayDate, dayIndex: idx });
+      setAddMealCtx({ dayId: String(d.id), dayDate: d.dayDate, dayIndex: idx, recipeId });
     }
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev);
       next.delete('addMeal');
+      next.delete('recipe'); // оба параметра одноразовые — URL остаётся shareable
       return next;
     }, { replace: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -350,9 +369,11 @@ export function useTripDetail() {
     addMealCtx, setAddMealCtx, compositionMeal, setCompositionMeal,
     manualCtx, setManualCtx, isEditorAdmin,
     tripRecipes, manualItems, products, sortSpec,
+    recipes, recipesMap, viewRecipeId, setViewRecipeId,
     checklistBought, actualQty, draftOverrides, shoppingExcluded,
     view, confirmDialog,
-    loadData, toggleDay, handleMealAdded, handleDeleteMeal, handleUpdateDayPeople,
+    loadData, reloadInBackground: () => loadData(true), commitCheckTotal,
+    toggleDay, handleMealAdded, handleDeleteMeal, handleUpdateDayPeople,
     handleSortField, toggleShoppingExcluded, refreshManual, handleDeleteManual,
     toggleBought, commitActualQty, setAllBought,
   };

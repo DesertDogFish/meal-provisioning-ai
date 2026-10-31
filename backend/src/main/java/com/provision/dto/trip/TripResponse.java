@@ -12,5 +12,10 @@ public record TripResponse(
     Integer defaultPeople,
     String notes,
     LocalDateTime createdAt,
-    List<TripDayResponse> days
+    List<TripDayResponse> days,
+    /**
+     * План cleanup-п.8 (вариант A): прогресс карточки — заполняется ТОЛЬКО в
+     * списке GET /trips (TripProgressService); в одиночных ответах — null.
+     */
+    TripProgressResponse progress
 ) {}

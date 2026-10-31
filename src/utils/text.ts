@@ -1,4 +1,14 @@
 import { pluralize } from './pluralize';
+import type { MealType } from '../types';
+
+// cleanup-п.9: ЕДИНАЯ копия лейблов приёмов пищи (раньше три дубля:
+// TripMealCard, RecipesPage, CatalogImportTab).
+export const mealTypeLabels: Record<MealType, string> = {
+  BREAKFAST: 'Завтрак',
+  LUNCH: 'Обед',
+  DINNER: 'Ужин',
+  SNACK: 'Перекус',
+};
 
 // Удобные обёртки для часто используемых слов
 export const servingsWord = (count: number): string => pluralize(count, ['порция', 'порции', 'порций']);

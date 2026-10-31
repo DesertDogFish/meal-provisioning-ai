@@ -5,7 +5,8 @@
  */
 
 import type { Trip } from '../types';
-import { nextSubstitutionSeq, nextRemovedSeq, nextManualSeq, products, recipes, trips, prices, priceOverrides, shoppingExcluded, substitutions, removedItems, manualItems, allTripEdits, applyTripEditsToRows, loadClientStage, users, UNIT_LABELS, r3, r2, editRecipeKey, editIngredientKey } from './mockState';
+import { nextSubstitutionSeq, nextRemovedSeq, nextManualSeq, products, recipes, trips, priceOverrides, shoppingExcluded, substitutions, removedItems, manualItems, allTripEdits, applyTripEditsToRows, loadClientStage, users, UNIT_LABELS, r3, r2, editRecipeKey, editIngredientKey } from './mockState';
+import { tripPricesFor, ingredientEditsFor, tripsWithProgress, denormalizeOverrideKey } from './mockTripProgress'; // cleanup-п.8
 import type { MockSubstitution, MockManualItem } from './mockState';
 
 export function handleTripsImpl(srv: any, method: string, path: string, body?: any): any {
@@ -18,16 +19,8 @@ export function handleTripsImpl(srv: any, method: string, path: string, body?: a
     if (!trips.find(t => t.id === tripId)) {
       throw { status: 404, message: 'Not found', detail: `Trip ${tripId} not found` } as any;
     }
-    const snapIds = new Set(products.filter(p => (p as any).tripId === tripId).map(p => p.id));
-    const rows = snapIds.size === 0
-      ? prices.filter(pr => products.find(p => p.id === pr.ingredientId && !(p as any).tripId))
-      : prices.filter(pr => snapIds.has(pr.ingredientId));
-    const latestByIng = new Map<string, any>();
-    for (const pr of rows) {
-      const cur = latestByIng.get(pr.ingredientId);
-      if (!cur || pr.effectiveFrom >= cur.effectiveFrom) latestByIng.set(pr.ingredientId, pr);
-    }
-    return [...latestByIng.values()];
+    // cleanup-п.8/п.9: логика среза цен — общий хелпер (mockTripProgress.tripPricesFor)
+    return tripPricesFor(tripId);
   }
 
   // CONTRACT-P1 (E2E): POST/DELETE /trips/:id/days/:dayId/meals — раньше роута не
@@ -140,9 +133,10 @@ export function handleTripsImpl(srv: any, method: string, path: string, body?: a
     return null;
   }
   
-  // GET /trips
+  // GET /trips — cleanup-п.8 (вариант A): список СРАЗУ с прогрессом карточек
+  // (паритет backend TripService.getUserTrips → TripProgressService)
   if (parts.length === 1 && method === 'GET') {
-    return trips;
+    return tripsWithProgress();
   }
   
   // PUT /trips/:id — U36 (список 26.10): полноценное редактирование похода.
@@ -466,25 +460,8 @@ export function handleTripsImpl(srv: any, method: string, path: string, body?: a
     if (!trips.find(t => t.id === tripId)) {
       throw { status: 404, message: 'Not found', detail: `Trip ${tripId} not found` } as any;
     }
-    const nameOf = (id: string | null): { name: string | null; unit: string | null } => {
-      if (id == null) return { name: null, unit: null };
-      const pr = products.find(x => x.id === String(id))
-        ?? products.find(x => x.id === editIngredientKey(id));
-      return { name: pr?.name ?? null, unit: pr?.unit ?? null };
-    };
-    return allTripEdits(tripId).map((sub) => {
-      const from = nameOf(sub.fromIngredientId);
-      const to = nameOf(sub.toIngredientId);
-      const rec = recipes.find(r => editRecipeKey(r.id) === editRecipeKey(sub.recipeId));
-      return {
-        ...sub,
-        recipeName: rec?.name ?? null,
-        fromIngredientName: from.name,
-        toIngredientName: to.name,
-        fromUnit: from.unit,
-        toUnit: to.unit,
-      };
-    });
+    // cleanup-п.8/п.9: обогащение правок — общий хелпер (mockTripProgress.ingredientEditsFor)
+    return ingredientEditsFor(tripId);
   }
 
   // GET /trips/:id/substitutions
@@ -821,8 +798,11 @@ export function handleTripsImpl(srv: any, method: string, path: string, body?: a
     }
     
     const overrides = priceOverrides[tripId] || {};
+    // cleanup-п.8: ключи хранилища нормализованы CONTRACT-P1 ('ing1'→'1');
+    // отдаём id каталога, чтобы клиентский пайплайн (deriveTripView/tripLoader)
+    // матчил серверные чеки с позициями закупки (паритет real-режима).
     return Object.entries(overrides).map(([ingredientId, data]) => ({
-      ingredientId,
+      ingredientId: denormalizeOverrideKey(ingredientId),
       ...data
     }));
   }

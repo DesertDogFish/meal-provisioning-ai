@@ -209,8 +209,18 @@ public class SummaryService {
     public ShoppingComputation computeShopping(Long tripId, Long userId) {
         Trip trip = tripRepository.findByIdWithDaysAndMeals(tripId, userId)
                 .orElseThrow(() -> new com.provision.exception.NotFoundException("Trip not found or access denied"));
+        return computeShoppingForTrip(trip);
+    }
+
+    /**
+     * План cleanup-п.8: расчёт закупки по УЖЕ загруженному графу похода —
+     * для TripProgressService (список походов: days/meals уже в persistence
+     * context batch-запросами TripService.getUserTrips, повторный fetch не нужен).
+     */
+    @Transactional(readOnly = true)
+    public ShoppingComputation computeShoppingForTrip(Trip trip) {
         TripCalculationContext ctx = loadCalculationContext(trip);
-        return shoppingListCalculator.compute(trip, ctx, tripId, manualItemRepository);
+        return shoppingListCalculator.compute(trip, ctx, trip.getId(), manualItemRepository);
     }
 
     public List<MenuByDayResponse> getMenuByDays(Long tripId, Long userId) {

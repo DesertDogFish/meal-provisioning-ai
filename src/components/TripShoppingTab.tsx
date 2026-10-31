@@ -4,11 +4,12 @@
  * позиции (Фаза 13 п.5, Fix-2 п.5) + бейдж фактической цены из чека (Fix-7).
  * Компонент презентационный: строки и итоги приходят из `deriveTripView`.
  */
-import { ArrowUpDown } from 'lucide-react';
+import { ArrowUpDown, ShoppingBasket } from 'lucide-react';
 import TabHeader from './TabHeader';
+import { EmptyState } from './EmptyState';
 import ExclusionCheckbox from './ExclusionCheckbox';
 import { formatAmount } from '../utils/calculations';
-import { formatRub } from '../utils/formatRub';
+import { formatRub } from '../utils/format' // cleanup-п.9: shim formatRub удалён;
 import type { SortDir } from '../utils/rowSort';
 import type { TripView } from '../utils/tripDerived';
 import type { ShoppingSortField } from '../types/tripDetail';
@@ -29,11 +30,13 @@ export interface TripShoppingTabProps {
   /** ключи исключений для чекбоксов */
   excluded: ReadonlySet<string>;
   onToggleExcluded: (key: string) => void;
+  /** navigation-п.3: CTA пустого состояния — переключить этап на «Меню ①» */
+  onGoToMenu?: () => void;
 }
 
 export function TripShoppingTab({
   rows, sortSpec, onSortField, total, excludedCount, hasMissingPrices,
-  missingIngredients, excluded, onToggleExcluded,
+  missingIngredients, excluded, onToggleExcluded, onGoToMenu,
 }: TripShoppingTabProps) {
   return (
     <div className="space-y-3 max-w-4xl">
@@ -50,6 +53,18 @@ export function TripShoppingTab({
           </>
         }
       />
+      {/* navigation-п.3: пустая закупка — не «пустая таблица без слов», а выход на ① */}
+      {rows.length === 0 && (
+        <EmptyState
+          icon={<ShoppingBasket size={30} />}
+          title="Закупка пуста"
+          hint="Добавьте приёмы пищи в меню — список закупки соберётся автоматически."
+          ctaLabel="К меню ①"
+          onCta={onGoToMenu}
+          testId="shopping-empty"
+        />
+      )}
+      {rows.length > 0 && (
       <div className="rounded-xl overflow-hidden mob-scroll table-cards" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
       {/* Fix-6 (п.23): без внутреннего скролла — как в чеклисте, полная высота */}
         <table className="w-full text-sm">
@@ -110,6 +125,7 @@ export function TripShoppingTab({
           </tbody>
         </table>
       </div>
+      )}
     </div>
   );
 }

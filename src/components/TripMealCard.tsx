@@ -8,13 +8,9 @@ import { formatAmount } from '../utils/calculations';
 import { servingsWord } from '../utils/text';
 import type { MealType, MenuDay } from '../types';
 import type { TripMeal } from '../types/tripDetail';
+import { mealTypeLabels } from '../utils/text'; // cleanup-п.9
 
-export const mealTypeLabels: Record<MealType, string> = {
-  BREAKFAST: 'Завтрак',
-  LUNCH: 'Обед',
-  DINNER: 'Ужин',
-  SNACK: 'Перекус',
-};
+// cleanup-п.9: лейблы — из utils/text (единый источник)
 
 // Бейджи приёмов пищи в палитре «Провиант» (wave/teal + amber)
 // Fix-4 (п.7): четыре РАЗЛИЧИМЫХ цвета приёмов (раньше обед/ужин/перекус сливались
@@ -36,9 +32,11 @@ export interface TripMealCardProps {
   onOpenComposition: (mealId: string) => void;
   /** удалить приём (подтверждение — на стороне страницы) */
   onDelete: (mealId: string, mealName: string) => void;
+  /** navigation-п.5: название блюда — ссылка на read-only просмотр рецепта */
+  onViewRecipe?: (recipeId: string) => void;
 }
 
-export function TripMealCard({ meal, tripMeal, onOpenComposition, onDelete }: TripMealCardProps) {
+export function TripMealCard({ meal, tripMeal, onOpenComposition, onDelete, onViewRecipe }: TripMealCardProps) {
   return (
     <div className="meal-row px-4 py-3 pl-12">
       <div className="flex items-center justify-between">
@@ -46,7 +44,21 @@ export function TripMealCard({ meal, tripMeal, onOpenComposition, onDelete }: Tr
           <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${mealTypeColors[meal.mealType]}`}>
             {mealTypeLabels[meal.mealType]}
           </span>
-          <span className="font-medium" style={{ color: 'var(--text)' }}>{meal.recipeName}</span>
+          {/* navigation-п.5: название блюда открывает рецепт (все роли, 1 тап) */}
+          {onViewRecipe && meal.recipeId ? (
+            <button
+              type="button"
+              className="meal-name-link font-medium"
+              data-testid="meal-recipe-link"
+              onClick={() => onViewRecipe(String(meal.recipeId))}
+              title="Открыть рецепт блюда"
+              style={{ color: 'var(--text)' }}
+            >
+              {meal.recipeName}
+            </button>
+          ) : (
+            <span className="font-medium" style={{ color: 'var(--text)' }}>{meal.recipeName}</span>
+          )}
           <span className="text-xs" style={{ color: 'var(--muted)' }}>({meal.servings} {servingsWord(meal.servings)})</span>
         </div>
         <div className="flex items-center gap-1">

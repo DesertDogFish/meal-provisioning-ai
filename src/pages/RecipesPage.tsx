@@ -3,7 +3,7 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Pencil, Plus, Search, Trash2, Utensils, X } from 'lucide-react';
 import { MealType } from '../types';
 import { formatAmount } from '../utils/calculations';
-import { humanizeCategory, servingsWord, ingredientsWord } from '../utils/text';
+import { humanizeCategory, servingsWord, ingredientsWord, mealTypeLabels } from '../utils/text';
 import CustomSelect from '../components/CustomSelect'; // Fix-5 (п.19): «Все категории» — как везде
 import { api, getRecipes } from '../api/client';
 import { useToast } from '../components/ToastProvider';
@@ -14,6 +14,7 @@ import FilterSheet from '../components/FilterSheet';
 import BottomSheet from '../components/BottomSheet';
 import { Flame } from 'lucide-react';
 import { Button } from '../components/Button';
+import { useAuth } from '../components/AuthProvider'; // cleanup-п.7: роль — из контекста
 
 import PageLoader from '../components/PageLoader';
 interface Recipe {
@@ -28,12 +29,7 @@ interface Recipe {
   ingredients: any[];
 }
 
-const mealTypeLabels: Record<MealType, string> = {
-  BREAKFAST: 'Завтрак',
-  LUNCH: 'Обед',
-  DINNER: 'Ужин',
-  SNACK: 'Перекус',
-};
+// cleanup-п.9: mealTypeLabels — из utils/text (единый источник)
 
 export default function RecipesPage() {
   const { showError, showSuccess } = useToast();
@@ -55,17 +51,11 @@ export default function RecipesPage() {
   const [menuTrip, setMenuTrip] = useState<any | null>(null);
   const navigate = useNavigate();
   const [visibleCount, setVisibleCount] = useState(24);
-  const [isAdmin, setIsAdmin] = useState(false);
+  // cleanup-п.7: роль для админ-действий каталога — из AuthContext
+  // (ошибка /auth/me означает «не админ», а не поломку страницы — как раньше).
+  const { isAdmin } = useAuth();
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingRecipe, setEditingRecipe] = useState<Recipe | null>(null);
-
-  // Роль нужна для админ-действий каталога (создание/правка/удаление блюд).
-  // Ошибка /auth/me означает «не админ», а не поломку страницы.
-  useEffect(() => {
-    api.get<{ role?: string }>('/auth/me')
-      .then(u => setIsAdmin((u?.role ?? '').toUpperCase() === 'ADMIN'))
-      .catch(() => setIsAdmin(false));
-  }, []);
 
   const openCreate = () => {
     setEditingRecipe(null);
@@ -137,6 +127,22 @@ export default function RecipesPage() {
     setSearchParams({}, { replace: true });
     if (target) openEdit(target);
     else showError('Блюдо для редактирования не найдено в каталоге');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, recipes, loading]);
+
+  // navigation-п.5: ?view=<id> — открыть карточку блюда (deep-link из меню похода:
+  // sheet снепшота → «В справочнике»). Резолв тот же, что у ?edit= (U37): прямой id,
+  // mock-суффикс '::t…', snapshotOf-копия. Параметр чистим сразу (replace).
+  useEffect(() => {
+    const viewId = searchParams.get('view');
+    if (!viewId || loading || recipes.length === 0) return;
+    const base = viewId.includes('::t') ? viewId.split('::t')[0] : viewId;
+    const target = recipes.find(r => String(r.id) === viewId)
+      ?? recipes.find(r => String(r.id) === base)
+      ?? recipes.find(r => String((r as any).snapshotOf ?? '') === viewId);
+    setSearchParams({}, { replace: true });
+    if (target) setSelectedRecipe(target.id);
+    else showError('Блюдо не найдено в каталоге');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams, recipes, loading]);
 
@@ -467,7 +473,8 @@ export default function RecipesPage() {
                         onClick={() => {
                           const dayId = String(d.id);
                           setMenuSheet(null);
-                          navigate(`/trips/${menuTrip.id}?stage=menu&addMeal=${dayId}`);
+                          // navigation-п.1: блюдо переносится в модалку приёма (?recipe=)
+                          navigate(`/trips/${menuTrip.id}?stage=menu&addMeal=${dayId}${menuSheet ? `&recipe=${menuSheet.id}` : ''}`);
                         }}>
                   {new Date(d.dayDate).toLocaleDateString('ru-RU', { weekday: 'short', day: 'numeric', month: 'long' })}
                   <span className="cap" style={{ color: 'var(--text-2)' }}>день {i + 1}</span>

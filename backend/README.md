@@ -84,7 +84,7 @@ Swagger: http://localhost:8080/swagger-ui.html (dev). Health: `GET /api/v1/meta`
 - `POST /api/v1/auth/register|login|refresh|logout`, `GET /api/v1/auth/me`
 
 ### Походы (владелец)
-- `GET|POST /api/v1/trips`, `GET|PUT|DELETE /api/v1/trips/{id}`
+- `GET|POST /api/v1/trips`, `GET|PUT|DELETE /api/v1/trips/{id}` — в списке `GET /api/v1/trips` каждый элемент несёт `progress` (`TripProgressResponse`: stage/meals/checklistTotal/facts/factsTotal/totalCost/costPerPerson, cleanup-п.8 — карточки без клиентского N+1; в одиночном GET поле null; считается `TripProgressService` best-effort)
 - `PUT /api/v1/trips/{tripId}/days/{dayId}`; `POST|PUT|DELETE .../days/{dayId}/meals[/{mealId}]`
   — `POST .../meals` создаёт **снепшот** блюда и задействованных продуктов для похода (V20)
 

@@ -8,6 +8,7 @@
 
 import { normalizeEmisCodeImpl, tryEmisRoutes } from './mockEmis';
 import { handleIntegrationsImpl, trySyncRoutes } from './mockSync';
+import { tryStagingRoutes } from './mockStaging'; // cleanup-п.2: стагинг импорта каталога (R3 mock-паритет)
 import { latestPerIngredientImpl, snapProductForTripImpl, snapRecipeForTripImpl } from './mockSnapshot';
 import { tryPriceRoutes } from './mockPrices';
 import { applyCompositionPutImpl, buildCompositionResponseImpl, handleMealCompositionImpl } from './mockComposition';
@@ -63,6 +64,9 @@ export const mockServer = {
     if (syncRoute.hit) return syncRoute.result;
     const emisRoute = tryEmisRoutes<T>(method, pathWithoutQuery, path);
     if (emisRoute.hit) return emisRoute.result;
+    // cleanup-п.2: /admin/staging — «Импорт каталога» переехал из /admin в «Интеграции»
+    const stagingRoute = tryStagingRoutes<T>(method, pathWithoutQuery, path, body);
+    if (stagingRoute.hit) return stagingRoute.result;
 
     // CONTRACT-P1: CRUD рецептов админа живёт в handleRecipes (POST/PUT/DELETE /admin/recipes)
     if (pathWithoutQuery.startsWith('/admin/recipes')) {

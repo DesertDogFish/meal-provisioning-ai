@@ -14,11 +14,21 @@
 
 ## Активные
 
-_Активных планов нет (30.10.2026). Следующая задача берётся из
-[Backlog](plans/backlog.md) (`BL-n`); при старте создаётся новый файл плана — `AGENTS.md` §2–3._
+- [UX-аудит 31.10 — навигация и связность](plans/2026-10-31-ux-audit-navigation.md) — IN_PROGRESS
+  (10 подзадач: deep-link «+ блюдо» из каталога в меню похода, CTA «Далее» по этапам, EmptyState
+  этапов ②③④, мёртвая «Повторить» — DONE (п.4), блюдо меню → просмотр рецепта, кликабельное
+  «В рецептах: N», админ-перелинковки, канонический URL списка, создание похода → этап ①,
+  e2e-регрессия навигации)
+- [UX-аудит 31.10 — прозрачность и честность состояний](plans/2026-10-31-ux-audit-transparency.md) — READY
+  (8 подзадач: readiness shopping→store, одно представление этапа на десктопе, предупреждение
+  о сбросе чеков при правке состава, демо-режим/мок-индикация — решение владельца B (явный баннер),
+  мутации без полноэкранного лоадера, честный прогресс этапа ①, непонятные подписи, регрессия)
+
+Порядок выполнения фиксирован аудитом: cleanup (закрыт 31.10) → navigation → transparency.
 
 ## Архив
 
+- [UX-аудит 31.10 — убрать дубляж: сирота /admin, двойной журнал синков, «отчёт» ×4, параллельные пайплайны данных](plans/done/2026-10-31-ux-audit-cleanup-dedup.md) — DONE 31.10.2026 (10/10 подзадач: мёртвые DashboardPage/ErrorsDemoPage удалены; /admin демонтирован — стадинг «Импорт» табом в IntegrationsPage, /sync-logs → /integrations?tab=logs (один журнал); «отчёт» = /report, печать = /print; этап ④ на общий пайплайн deriveTripView — PriceOverridesTab 977→137 строк + ChecksModel/ChecksTable/ChecksMobile/WhoOwesBlock (поглощает BL-26, закрывает KB-14); единый загрузчик utils/tripLoader (страница похода/отчёт/печать), печать через utils/printModel с инвариантом сумм; AuthProvider — один /auth/me на сессию; список походов без N+1 — backend TripProgressService + progress в GET /trips (вариант A), mock-паритет через deriveTripView; shim formatRub/дубли mealTypeLabels/локальные типы устранены; vitest 652/652, coverage R5 зелёный, tsc/eslint/build зелёные, backend 34/34 per-class; не прогнано: полный mvn test (KB-10), e2e runner (KB-16), CONTRACT_TARGET=real; Workflow run: нет, CI не проверено)
 - [Мобильный UX: перегруппировка в воркфлоу «4 этапа похода»](plans/done/2026-10-30-mobile-workflow-ux.md) — DONE 30.10.2026 (10/10 подзадач: sticky trip-strip + bottom-sheet KPI вместо плиток, 6 вкладок → 4 этапа с нижним таб-баром и степпером + `?stage=`, «По дням»/«На человека» видами внутри ②, карточка похода целиком с kebab и строкой прогресса + фикс «4 дня», первый рабочий экран чеклиста с `UnitChip` и sheet единиц, компактные строки чеков со sticky «План/Факт/Δ» и «Кто сколько должен» сверху, in-app отчёт `/trips/:id/report` с Web Share/clipboard-фолбэком и «PDF»→print, футеры модалок и плейсхолдеры «ДД.ММ.ГГГГ»/«Исключить», ru-RU и «₽» везде, `FilterSheet` + карточки-строки в Рецептах/Продуктах; vitest 605/605, lint/tsc/build зелёные, coverage R5: новые компоненты ≥90% lines; скрин-регресс библиотечным chromium: этап ④ 4868→2865 px на 390, список походов и этап ① — 1 экран, sticky проверен проворотом; e2e `mobile.spec.ts` M-01…M-13 в песочнице не запускались — KB-16, прогон в CI — BL-32; `DESIGN_MIGRATION.md` §11, макеты-референсы — владельцу дизайн-пака)
 - [Внешний аудит 30.10.2026 — P0-блок (5 фиксов) и переоформление 30 задач](plans/done/2026-10-30-external-audit-p0-block.md) — DONE 30.10.2026 (7/7 подзадач: **AU-04** потолок `LoginAttemptService` 50 000 ключей + эвакуация без снятия блокировок, **AU-14** обработчики 413/409/409-lock без утечки внутренностей, **AU-03** миграция V31 — частичный уникальный индекс `uq_sync_logs_running` и 409 `SYNC_ALREADY_RUNNING` на гонку, **AU-05** загрузка выгрузки ЕМИСС потоком (`Path` вместо `byte[]`, guard до чтения тела, удаление временного файла в `finally`, очередь пула 100 → 2), **AU-02** remedy `spring.flyway.ignore-migration-patterns: "*:missing"` + `FlywayUpgradeIntegrationTest` 4/4 + CI-job `migration-upgrade`; 30 задач аудита переоформлены в `BL-33…BL-57` и `KB-17…KB-27`; проверено 219 unit-тестов и 75 Spring-тестов (батчами, KB-10), job `migration-upgrade` в CI не запускался — из песочницы нет доступа к GitHub Actions)
 - [Полное ревью application meal-provisioning-ai](plans/done/2026-10-29-full-audit.md) — DONE 30.10.2026 (30/30 подзадач: security 30 findings, SOLID/SRP R8, scalability N+1/async/indexing, best practices metrics/rate-limit/validation, code smells, frontend decomp, testing KB-9; >10 подзадач сознательно по просьбе владельца; закрыт 30.10.2026 при переоформлении внешнего аудита — риск «миграция на существующей БД не проверена» снят AU-02)

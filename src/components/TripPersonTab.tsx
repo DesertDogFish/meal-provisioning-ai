@@ -4,10 +4,12 @@
  * таблица продуктов на одного участника. Компонент презентационный:
  * факт-цены и исключения уже применены в `deriveTripView`.
  */
+import { Users } from 'lucide-react';
 import TabHeader from './TabHeader';
 import InfoTip from './InfoTip';
+import { EmptyState } from './EmptyState';
 import { formatAmount } from '../utils/calculations';
-import { formatRub } from '../utils/formatRub';
+import { formatRub } from '../utils/format' // cleanup-п.9: shim formatRub удалён;
 import type { TripView } from '../utils/tripDerived';
 import type { Trip } from '../types/tripDetail';
 
@@ -22,9 +24,11 @@ export interface TripPersonTabProps {
   };
   /** U28: строки отсортированы по алфавиту; факт-цены применены */
   personSummary: TripView['personSummary'];
+  /** navigation-п.3: CTA пустого состояния — переключить этап на «Меню ①» */
+  onGoToMenu?: () => void;
 }
 
-export function TripPersonTab({ trip, realPeople, tripSummary, personSummary }: TripPersonTabProps) {
+export function TripPersonTab({ trip, realPeople, tripSummary, personSummary, onGoToMenu }: TripPersonTabProps) {
   return (
     <div className="space-y-4 max-w-4xl">
       {/* Fix-5 (п.2/3/4/6): единая шапка + человеческие названия вместо
@@ -88,7 +92,19 @@ export function TripPersonTab({ trip, realPeople, tripSummary, personSummary }: 
         </div>
       </div>
 
+      {/* navigation-п.3: нет продуктов — выход на этап ① (пустая таблица не подсказывает) */}
+      {personSummary.length === 0 && (
+        <EmptyState
+          icon={<Users size={30} />}
+          title="Нет продуктов для расчёта"
+          hint="Добавьте приёмы пищи в меню — сводка на человека посчитается автоматически."
+          ctaLabel="К меню ①"
+          onCta={onGoToMenu}
+          testId="person-empty"
+        />
+      )}
       {/* Per person products */}
+      {personSummary.length > 0 && (
       <div className="rounded-xl overflow-hidden mob-scroll table-cards" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
         <div className="p-4" style={{ borderBottom: '1px solid var(--border)' }}>
           <h3 className="font-bold" style={{ color: 'var(--text)' }}>Продукты на человека</h3>
@@ -132,6 +148,7 @@ export function TripPersonTab({ trip, realPeople, tripSummary, personSummary }: 
             </tbody>
           </table>
       </div>
+      )}
     </div>
   );
 }

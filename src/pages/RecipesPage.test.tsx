@@ -1,12 +1,13 @@
 /// <reference types="vitest/globals" />
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import RecipesPage from './RecipesPage';
 import { ToastProvider } from '../components/ToastProvider';
+import { AuthProvider } from '../components/AuthProvider'; // cleanup-п.7: роль из контекста
 
 vi.mock('../api/client', () => ({
-  api: { get: vi.fn(), post: vi.fn(), put: vi.fn(), del: vi.fn() },
+  api: { get: vi.fn(), post: vi.fn(), put: vi.fn(), del: vi.fn(), onSessionLost: vi.fn(() => () => {}) },
   getRecipes: vi.fn(),
   humanize: (n: number, u: string) => `${n} ${u}`,
   formatMoney: (v: number) => String(v),
@@ -30,14 +31,18 @@ const recipeStub = {
 const renderPage = (route = '/recipes') =>
   render(
     <MemoryRouter initialEntries={[route]}>
-      <ToastProvider>
-        <RecipesPage />
-      </ToastProvider>
+      <AuthProvider>
+        <ToastProvider>
+          <RecipesPage />
+        </ToastProvider>
+      </AuthProvider>
     </MemoryRouter>
   );
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // cleanup-п.7: AuthProvider грузит /auth/me только при наличии токена
+  localStorage.setItem('accessToken', 'mock-access-token-1');
   (getRecipes as any).mockResolvedValue([recipeStub]);
   (api.del as any).mockResolvedValue(null);
   (api.get as any).mockImplementation((path: string) => {
@@ -129,5 +134,61 @@ describe('RecipesPage — кнопка «В меню» на карточке (Fi
     expect(btn.className).toContain('shrink-0');
     // текст — единая строка без разрывов
     expect(btn.textContent?.trim()).toBe('В меню похода…');
+  });
+});
+
+// navigation-п.1: «В меню похода…» переносит выбранное блюдо в deep-link (?recipe=)
+describe('RecipesPage — «В меню похода…» переносит блюдо (navigation-п.1)', () => {
+  function LocationProbe() {
+    const loc = useLocation();
+    return <div data-testid="loc">{`${loc.pathname}${loc.search}`}</div>;
+  }
+
+  it('после выбора похода/дня navigate ведёт на ?stage=menu&addMeal=<dayId>&recipe=<id>', async () => {
+    (api.get as any).mockImplementation((path: string) => {
+      if (path === '/auth/me') return Promise.resolve({ role: 'ADMIN' });
+      if (path === '/trips') return Promise.resolve([
+        { id: 't1', name: 'Алтай', startDate: '2026-07-10', endDate: '2026-07-11', defaultPeople: 2,
+          days: [{ id: 'd1', dayDate: '2026-07-10', meals: [] }] },
+      ]);
+      return Promise.resolve([]);
+    });
+    render(
+      <MemoryRouter initialEntries={['/recipes']}>
+        <AuthProvider>
+          <ToastProvider>
+            <Routes>
+              <Route path="/recipes" element={<RecipesPage />} />
+              <Route path="/trips/:id" element={<LocationProbe />} />
+            </Routes>
+          </ToastProvider>
+        </AuthProvider>
+      </MemoryRouter>
+    );
+    await screen.findByText('Уха из рыбных консервов');
+    fireEvent.click(screen.getByTestId('recipe-to-menu-r1'));
+    fireEvent.click(await screen.findByTestId('menu-sheet-trip-t1'));
+    fireEvent.click(await screen.findByTestId('menu-sheet-day-d1'));
+    await waitFor(() => {
+      const loc = screen.getByTestId('loc').textContent ?? '';
+      expect(loc).toContain('/trips/t1');
+      expect(loc).toContain('stage=menu');
+      expect(loc).toContain('addMeal=d1');
+      expect(loc).toContain('recipe=r1');
+    });
+  });
+});
+
+/** Navigation-п.5: /recipes?view=<id> открывает карточку рецепта (deep-link из похода) */
+describe('RecipesPage — ?view= (navigation-п.5)', () => {
+  it('открывает карточку блюда по id', async () => {
+    renderPage('/recipes?view=r1');
+    expect(await screen.findByRole('dialog', { name: 'Блюдо: Уха из рыбных консервов' })).toBeTruthy();
+  });
+
+  it('неизвестный id — тост «не найдено», карточка не открывается', async () => {
+    renderPage('/recipes?view=r-gone');
+    expect(await screen.findByText(/не найдено/i)).toBeTruthy();
+    expect(screen.queryByRole('dialog')).toBeNull();
   });
 });

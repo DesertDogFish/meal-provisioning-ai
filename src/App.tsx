@@ -5,6 +5,7 @@ import { ToastProvider } from './components/ToastProvider';
 import Layout from './components/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
 import PageLoader from './components/PageLoader';
+import { AuthProvider } from './components/AuthProvider'; // cleanup-п.7: один /auth/me на сессию
 import LoginPage from './pages/LoginPage';
 
 /**
@@ -19,31 +20,31 @@ const TripDetailPage = lazy(() => import('./pages/TripDetailPage'));
 const TripPrintPage = lazy(() => import('./pages/TripPrintPage'));
 const TripReportPage = lazy(() => import('./pages/TripReportPage'));
 const RecipesPage = lazy(() => import('./pages/RecipesPage'));
-const AdminPage = lazy(() => import('./pages/AdminPage'));
 const IntegrationsPage = lazy(() => import('./pages/IntegrationsPage'));
 const ProductsPage = lazy(() => import('./pages/ProductsPage'));
-const SyncLogsPage = lazy(() => import('./pages/SyncLogsPage'));
 
 function App() {
   return (
     <ErrorBoundary>
       <ToastProvider>
           <BrowserRouter>
+            <AuthProvider>
             <Suspense fallback={<PageLoader />}>
             <Routes>
               <Route path="/login" element={<LoginPage />} />
-              {/* Список багов 25.10: страница-дашборд «Мои походы» со статистикой
-                  временно скрыта (статистика считалась из пустого списка — бэкенд
-                  не отдаёт userId в TripResponse, «моих походов» не было видно).
-                  /dashboard остаётся точкой входа после логина и рендерит список
-                  походов (TripsPage); DashboardPage.tsx сохранён до возвращения. */}
-              <Route path="/dashboard" element={
+              {/* План plans/2026-10-31-ux-audit-cleanup-dedup.md (п.1) +
+                  plans/2026-10-31-ux-audit-navigation.md (п.8, решение владельца —
+                  вариант A): канон списка походов — /trips («Походы» = /trips,
+                  URL совпадает со смыслом пункта сайдбара). /dashboard — легаси
+                  точка входа после логина, редирект. Мёртвый DashboardPage.tsx
+                  (не рендерился с 25.10) удалён; возврат страницы-дашборда со
+                  статистикой — из git-истории, см. Backlog плана cleanup. */}
+              <Route path="/trips" element={
                 <ProtectedRoute>
                   <Layout><TripsPage /></Layout>
                 </ProtectedRoute>
               } />
-              {/* /trips — прежний адрес списка; теперь ведёт на /dashboard */}
-              <Route path="/trips" element={<Navigate to="/dashboard" replace />} />
+              <Route path="/dashboard" element={<Navigate to="/trips" replace />} />
               {/* Fix-4 (п.6): печатная версия похода (меню по дням + закупка +
                   итоги «кто сколько должен») — без Layout, открывается в новой
                   вкладке и сохраняется в PDF через диалог печати.
@@ -73,11 +74,11 @@ function App() {
                   <Layout><RecipesPage /></Layout>
                 </ProtectedRoute>
               } />
-          <Route path="/admin" element={
-            <ProtectedRoute adminOnly>
-              <Layout><AdminPage /></Layout>
-            </ProtectedRoute>
-          } />
+          {/* cleanup-п.2 (31.10.2026): страница-сирота /admin демонтирована —
+              вкладки «Цены»/«Рецепты» дублировали ProductsPage/RecipesPage,
+              «Импорт» переехал в «Интеграции» (таб «Импорт каталога»).
+              Редирект сохраняет старые закладки. */}
+          <Route path="/admin" element={<Navigate to="/integrations" replace />} />
           <Route path="/products" element={
             <ProtectedRoute adminOnly>
               <Layout><ProductsPage /></Layout>
@@ -88,18 +89,16 @@ function App() {
               <Layout><IntegrationsPage /></Layout>
             </ProtectedRoute>
           } />
-          <Route path="/sync-logs" element={
-            <ProtectedRoute adminOnly>
-              <Layout><SyncLogsPage /></Layout>
-            </ProtectedRoute>
-          } />
-          {/* U35 (список 26.10): страница «Ошибки (демо)» скрыта — не нужна ни
-              пользователю, ни админу. Файл ErrorsDemoPage.tsx сохранён; старый
-              адрес редиректит на список походов. */}
-          <Route path="/errors-demo" element={<Navigate to="/dashboard" replace />} />
+          {/* cleanup-п.3: журнал синков — таб раздела «Интеграции»; роут
+              редиректит с сохранением deep-link (?tab=logs из тостов/доков). */}
+          <Route path="/sync-logs" element={<Navigate to="/integrations?tab=logs" replace />} />
+          {/* U35 (список 26.10): страница «Ошибки (демо)» скрыта; cleanup-п.1
+              (31.10.2026): мёртвый ErrorsDemoPage.tsx удалён, редирект оставлен. */}
+          <Route path="/errors-demo" element={<Navigate to="/trips" replace />} />
           <Route path="*" element={<Navigate to="/login" replace />} />
             </Routes>
             </Suspense>
+            </AuthProvider>
           </BrowserRouter>
         </ToastProvider>
     </ErrorBoundary>
