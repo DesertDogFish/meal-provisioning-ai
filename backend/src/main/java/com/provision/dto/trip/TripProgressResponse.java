@@ -13,9 +13,12 @@ import java.math.BigDecimal;
  * по-дневные, V23), totalCost = Σ effectiveCost НЕисключённых позиций,
  * costPerPerson = totalCost / realPeople (среднее эффективных людей по дням).
  *
- * Отметки «взято» (чеклист) живут в localStorage клиента — сервер о них не
- * знает, поэтому серверный stage ∈ {menu, shopping, checks}, а клиент
- * уточняет shopping → store по локальным отметкам (TripProgressService, п.8).
+ * Отметки «взято» (чеклист) хранятся на СЕРВЕРЕ — таблица trip_checklist_bought
+ * (KB-15, миграции V32/V33), эндпоинты GET/PUT
+ * /api/v1/trips/{tripId}/checklist-bought; сервер — источник истины, localStorage
+ * клиента — кэш и буфер офлайн-записи. Сам progress считается без учёта отметок,
+ * поэтому серверный stage ∈ {menu, shopping, checks}, а клиент уточняет
+ * shopping → store по тем же серверным отметкам (TripProgressService, п.8).
  */
 public record TripProgressResponse(
     /** menu | shopping | checks (клиент уточняет shopping → store) */

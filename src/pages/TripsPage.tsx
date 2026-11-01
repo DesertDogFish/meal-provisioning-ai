@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Mountain, Calendar, Users, Trash2, Edit2, Check } from 'lucide-react';
 import { useToast } from '../components/ToastProvider';
@@ -6,7 +6,7 @@ import { TripForm, type TripFormData } from '../components/TripForm';
 import { useConfirm } from '../components/ConfirmDialog'; // Fix-6 (п.7): красивые подтверждения
 import { KebabMenu } from '../components/KebabMenu';
 import { api } from '../api/client';
-import { loadBought } from '../utils/tripStaging';
+import { loadBought, refreshBoughtFromServer, BOUGHT_SYNC_SOFT_TIMEOUT_MS } from '../utils/tripStaging';
 import { tripReadiness } from '../utils/readiness';
 import type { Trip } from '../types/tripDetail'; // cleanup-п.9: общий тип (включая progress, п.8)
 import { STAGES, type StageId } from '../components/StageTabBar';
@@ -23,10 +23,38 @@ import PageLoader from '../components/PageLoader';
 
 /**
  * cleanup-п.8: список походов без N+1 — прогресс карточек приходит В ОТВЕТЕ
- * списка (один запрос GET /trips), клиент лишь накладывают локальный стейдж
- * «взято» (localStorage, серверу недоступен) и уточняет shopping → store.
- * Готовность — та же utils/readiness, что на странице похода.
+ * списка (один запрос GET /trips), клиент лишь накладывает отметки «взято» и
+ * уточняет shopping → store. Готовность — та же utils/readiness, что на
+ * странице похода.
+ *
+ * KB-15: отметки «взято» теперь серверные; локальный стейдж — только кэш
+ * (см. loadData: гидрация параллельно после отрисовки списка).
  */
+/**
+ * KB-15: сколько гидраций «взято» держим в полёте одновременно. Список может
+ * содержать десятки походов — выпускать все GET сразу значит упираться в
+ * браузерный лимит соединений и душить сам список (GET /trips идёт первым, но
+ * дальше вкладки/модалки конкурируют за те же сокеты).
+ */
+const BOUGHT_HYDRATE_CONCURRENCY = 4;
+
+/**
+ * Гидрация отметок «взято» с ограниченной параллельностью (≤4): те же
+ * BOUGHT_SYNC_SOFT_TIMEOUT_MS на каждый поход, без новых сетевых вызовов —
+ * по одному лёгкому GET /trips/:id/checklist-bought на показанный поход.
+ */
+async function hydrateBoughtBounded(tripIds: string[]): Promise<void> {
+  let next = 0;
+  const worker = async () => {
+    while (next < tripIds.length) {
+      const tripId = tripIds[next++];
+      await refreshBoughtFromServer(tripId, { timeoutMs: BOUGHT_SYNC_SOFT_TIMEOUT_MS }).catch(() => null);
+    }
+  };
+  const workers = Math.min(BOUGHT_HYDRATE_CONCURRENCY, tripIds.length);
+  await Promise.all(Array.from({ length: workers }, () => worker()));
+}
+
 function buildProgressMap(tripsData: Trip[]): Record<string, TripProgress> {
   const next: Record<string, TripProgress> = {};
   for (const trip of tripsData) {
@@ -115,9 +143,18 @@ export default function TripsPage() {
       setError(null);
       // cleanup-п.7/п.8: список — ОДИН запрос; пользователь уже в AuthContext
       const tripsData = await api.get<Trip[]>('/trips');
+      if (!aliveRef.current) return;
       setTrips(tripsData);
       // cleanup-п.8: прогресс — из того же ответа (без отдельных запросов на поход)
       setProgress(buildProgressMap(tripsData));
+      // KB-15: «взято» — серверный источник истины, а на новом устройстве LS
+      // пуст (0 отметок). Гидратируем отметки показываемых походов (не больше
+      // 4 GET одновременно) и пересчитываем счётчики, когда всё уляжется.
+      // Список при этом уже отрисован и НЕ ждёт сеть: refresh гасит
+      // ошибки/таймауты внутри, до завершения карточки живут на локальном кэше.
+      void hydrateBoughtBounded(tripsData.map(t => String(t.id))).then(() => {
+        if (aliveRef.current) setProgress(buildProgressMap(tripsData));
+      });
     } catch (err: any) {
       console.error('Failed to load trips:', err);
       // ЗАДАЧА 3: тост + сброс устаревшего списка
@@ -130,8 +167,11 @@ export default function TripsPage() {
     }
   }, [showError]);
 
+  const aliveRef = useRef(true);
   useEffect(() => {
+    aliveRef.current = true;
     loadData();
+    return () => { aliveRef.current = false; };
   }, [loadData]);
 
 

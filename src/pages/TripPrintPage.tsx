@@ -5,7 +5,7 @@ import { formatAmount } from '../utils/calculations';
 import { formatRub } from '../utils/format' // cleanup-п.9: shim formatRub удалён;
 // UX-осмотр 31.10 (п.1): форма слова «N приёмов» — единый источник (utils/text)
 import { mealsWord, mealsCountLabel } from '../utils/text';
-import { loadBought, loadActualQty, type ChecklistActual } from '../utils/tripStaging';
+import { loadBought, loadActualQty, refreshBoughtFromServer, forgetTripBoughtSyncState, BOUGHT_SYNC_SOFT_TIMEOUT_MS, type ChecklistActual } from '../utils/tripStaging';
 import { type TripManualItem } from '../api/tripManualItems';
 import { manualForDay, manualForTrip } from '../utils/manualItems';
 import { loadTripBundle, bundleToViewInput } from '../utils/tripLoader'; // cleanup-п.6: единый загрузчик
@@ -79,13 +79,21 @@ export default function TripPrintPage() {
     void (async () => {
       try {
         const tripKey = String(id);
+        // KB-15: отметки «взято» живут на сервере, в LS — только кэш. Гидрация
+        // ДО чтения loadBought/построения view: иначе на новом устройстве
+        // (пустой LS) документ печатался с «взято 0» и без ✓ в закупке.
+        // Стартует параллельно загрузке бандла; сеть не блокирует печать —
+        // по мягкому таймауту работаем на локальном кэше.
+        const boughtReady = refreshBoughtFromServer(tripKey, { timeoutMs: BOUGHT_SYNC_SOFT_TIMEOUT_MS });
         // cleanup-п.6: один загрузчик на страницу похода, отчёт и печать;
         // view-модели — те же, что у этапа ②/④ (серверные оверрайды и
         // серверные исключения печать теперь тоже видит).
         const bundle = await loadTripBundle(tripKey, { withProducts: true });
-        const v = deriveTripView(await bundleToViewInput(bundle, tripKey));
+        await boughtReady; // skipBoughtRefresh ниже — гидрация уже сделана здесь
+        const v = deriveTripView(await bundleToViewInput(bundle, tripKey, { skipBoughtRefresh: true }));
         if (cancelled) return;
-        // Отметки чеклиста/факт-количества — локальный стейдж (для колонок «Взяли»)
+        // Отметки чеклиста/факт-количества — локальный кэш поверх серверного
+        // набора (гидратирован выше, до построения view).
         const bought = loadBought(tripKey);
         const actualQtyData = loadActualQty(tripKey);
 
@@ -114,7 +122,12 @@ export default function TripPrintPage() {
         if (!cancelled) setLoading(false);
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+      // KB-15: in-memory seq/очередь похода не должны течь по числу открытых
+      // экранов (LS-кэш и dirty-флаг остаются — они переживают перезагрузку).
+      if (id != null) forgetTripBoughtSyncState(String(id));
+    };
   }, [id]);
 
   // Fix-5 (п.13): НЕ открываем диалог печати автоматически — только по кнопке.

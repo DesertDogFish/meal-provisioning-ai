@@ -26,6 +26,18 @@ export const priceOverrides: Record<string, Record<string, { actualPrice: number
 // Фаза 13 (п.5): soft-disable позиций закупки в рамках похода (не удаляя продукт)
 export const shoppingExcluded: Record<string, string[]> = {};
 
+// KB-15: серверные отметки «взято» чеклиста похода (tripId -> [{ingredientId, neededStamp}]).
+// Клиентский ключ — '<ingredientId>@<neededStamp>' (utils/checklist.checklistRowKey),
+// localStorage остаётся локальным кэшем/буфером офлайн-записи на клиенте.
+export interface MockChecklistBoughtItem {
+  /** id продукта: backend `ChecklistBoughtDtos.Item.ingredientId` — Long,
+   * mock-каталог использует строковые id ('ing1'), поэтому принимаем оба. */
+  ingredientId: string | number;
+  /** neededStamp = needed * 1000 (клиентский ключ '<id>@<stamp>') */
+  neededStamp: number;
+}
+export const checklistBought: Record<string, MockChecklistBoughtItem[]> = {};
+
 // Фаза 13 (п.6): пер-походные замещения ингредиентов (TripIngredientSubstitution).
 // Хранят дельту черновика состава блюда относительно каталога: from/to/ratio и
 // добавленные вручную позиции (added=true). Закупка/дни/человек считают с ними.

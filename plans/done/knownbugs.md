@@ -364,3 +364,11 @@
   важнее дев-бейджа). В prod-сборке компонент не рендерится, слот схлопывается в 0 px — поведение
   BL-52 не задето. Тесты: `ApiModeBadge.test.tsx`.
 - Статус: ЗАКРЫТ
+
+### KB-15. Отметки «взято» и факт чеклиста живут в localStorage
+
+- Закрыт 01.11.2026 реализацией (2 Coder'а, 4 цикла ревью).
+- Бэкенд: `GET/PUT /api/v1/trips/{id}/checklist-bought`, таблица `trip_checklist_bought` (V32), FK ON DELETE CASCADE (V33), `@PositiveOrZero Long neededStamp`, интеграционные тесты CB-01..CB-12 (12/12).
+- Фронт: payload `ingredientId: number|string` (mock-паритет), `neededStamp=0` валиден, нецелые/отрицательные штампы отбракованы и вычищены из кэша, `enqueueBoughtPut` чистит неотправляемые ДО раннего `!res.ok`, `withSoftTimeout` на refresh, bounded concurrency 4, seq-очистка при размонтировании. tsc 0, vitest 886 passed / 2 предсущ.
+- Документация: `ARCHITECTURE.md` §Database/§API (V1–V33, таблица, эндпоинт), `backend/README.md` V1–V33, `README.md` V1–V33, javadoc `TripProgressResponse`, `plans/knownbugs.md` (KB-15 описание + R12).
+→ KB-15 ЗАКРЫТ 01.11.2026.

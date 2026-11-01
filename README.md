@@ -43,7 +43,7 @@ docker compose up --build
 - Health API: http://localhost:8080/api/v1/meta (`"db":"ok"`; 503 при недоступной БД)
 - Swagger: http://localhost:8080/swagger-ui.html (profile `dev`)
 
-Порт PostgreSQL проброшен только на `127.0.0.1:5432`. Миграции Flyway (V1–V30) применяются при старте бэкенда, каталог сеется автоматически.
+Порт PostgreSQL проброшен только на `127.0.0.1:5432`. Миграции Flyway (V1–V33) применяются при старте бэкенда, каталог сеется автоматически.
 
 ### Первый вход и демо-данные
 
@@ -126,7 +126,7 @@ build-флагу: `vercel.json → build.env.VITE_ENABLE_MOCK=true` — демо
 
 ## Технологический стек
 
-- **Backend:** Java 17, Spring Boot 3.2.5 (Web, Security, Data JPA, Validation), PostgreSQL 15 + Flyway (V1–V20), JJWT, springdoc-openapi, MapStruct-free (ручные DTO), JUnit 5 + AssertJ + Mockito + Testcontainers/LocalPgFallback
+- **Backend:** Java 17, Spring Boot 3.2.5 (Web, Security, Data JPA, Validation), PostgreSQL 15 + Flyway (V1–V33), JJWT, springdoc-openapi, MapStruct-free (ручные DTO), JUnit 5 + AssertJ + Mockito + Testcontainers/LocalPgFallback
 - **Frontend:** React 18 + TypeScript + Vite, Tailwind 4, React Router, lucide-react, react-datepicker; раздаётся nginx
 - **Инфраструктура:** Docker Compose (postgres + backend + frontend), GitHub Actions (CI, Docker Stack Smoke, contract parity nightly, e2e nightly)
 

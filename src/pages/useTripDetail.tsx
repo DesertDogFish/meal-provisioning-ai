@@ -12,7 +12,7 @@ import { useParams, useSearchParams } from 'react-router-dom';
 import { api } from '../api/client';
 import { useToast } from '../components/ToastProvider';
 import { useConfirm } from '../components/ConfirmDialog'; // Fix-6 (п.7)
-import { loadActualPrices, saveActualPrice, loadExcluded, setExcluded as persistExcluded, loadBought, setBought as persistBought, loadActualQty, setActualQty, onTripStageChange, type ChecklistActual, type ActualPriceDraft } from '../utils/tripStaging'; // U32 + Fix-2(п.6) + Fix-5(п.21) + Fix-8(п.6)
+import { loadActualPrices, saveActualPrice, loadExcluded, setExcluded as persistExcluded, loadBought, setBought as persistBought, loadActualQty, setActualQty, onTripStageChange, refreshBoughtFromServer, forgetTripBoughtSyncState, type ChecklistActual, type ActualPriceDraft } from '../utils/tripStaging'; // U32 + Fix-2(п.6) + Fix-5(п.21) + Fix-8(п.6)
 import { unitFromTotal } from '../utils/checkInput'; // cleanup-п.5: чек-мутация переехала со вкладки на страницу
 import type { CheckRow } from '../components/ChecksModel';
 import { type TripIngredientEdit } from '../api/tripEdits'; // U30
@@ -128,6 +128,23 @@ export function useTripDetail() {
       if (changed) persistExcluded(String(id), merged);
     })();
     return () => { cancelled = true; };
+  }, [id]);
+
+  // KB-15: отметки «взято» чеклиста — сервер источник истины, localStorage остаётся
+  // кэшем/буфером офлайн-записи. Сервер недоступен (null) → локальный набор не трогаем.
+  useEffect(() => {
+    if (!id) return;
+    let cancelled = false;
+    void (async () => {
+      await refreshBoughtFromServer(String(id));
+      if (!cancelled) setChecklistBought(loadBought(String(id)));
+    })();
+    return () => {
+      cancelled = true;
+      // KB-15: снимаем in-memory состояние синхронизации похода при размонтировании
+      // (LS-кэш и dirty-флаг остаются — офлайн-правки должны пережить перезагрузку).
+      forgetTripBoughtSyncState(String(id));
+    };
   }, [id]);
 
   // ===== Патч «UX-список 26.10»: серверные правки состава (U30), ручные позиции (U40),

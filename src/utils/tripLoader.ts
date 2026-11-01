@@ -18,7 +18,7 @@ import { api, getRecipes, getTripRecipes } from '../api/client';
 import { getManualItems, type TripManualItem } from '../api/tripManualItems';
 import { getTripEdits, type TripIngredientEdit } from '../api/tripEdits';
 import { getServerExclusions } from '../api/shoppingExclusions';
-import { loadActualPrices, loadExcluded, loadBought, type ActualPriceDraft } from './tripStaging';
+import { loadActualPrices, loadExcluded, loadBought, refreshBoughtFromServer, BOUGHT_SYNC_SOFT_TIMEOUT_MS, type ActualPriceDraft } from './tripStaging';
 import { categoryName } from './format';
 import { deriveTripView, type TripView, type TripViewInput } from './tripDerived';
 import type { Trip, Recipe, Price } from '../types/tripDetail';
@@ -74,8 +74,18 @@ export async function loadTripBundle(tripId: string, opts: LoadTripOptions = {})
   return { trip, recipes, tripRecipes, prices, tripEdits, manualItems, products, serverOverrides };
 }
 
+export interface BundleToViewOptions {
+  /** Гидрацию отметок «взято» уже сделал вызывающий (например, печать — параллельно
+   * с загрузкой бандла): не дублировать GET /checklist-bought. */
+  skipBoughtRefresh?: boolean;
+}
+
 /** Вход deriveTripView из бандла + клиентский стейдж (факты/исключения/отметки). */
-export async function bundleToViewInput(b: TripBundle, tripId: string): Promise<TripViewInput> {
+export async function bundleToViewInput(
+  b: TripBundle,
+  tripId: string,
+  opts: BundleToViewOptions = {},
+): Promise<TripViewInput> {
   const key = String(tripId);
   const recipesMap = new Map<string, Recipe>(
     [...b.recipes, ...b.tripRecipes].map(r => [String(r.id), r]),
@@ -86,6 +96,13 @@ export async function bundleToViewInput(b: TripBundle, tripId: string): Promise<
   try {
     for (const k of await getServerExclusions(key)) excluded.add(k);
   } catch { /* best effort: локальный стейдж остаётся источником */ }
+  // KB-15: отметки «взято» — сервер источник истины, LS — кэш. Гидрация до
+  // чтения loadBought: иначе на новом устройстве/в новой сессии чеклист и
+  // печать показывали 0 отметок. Ждём не больше BOUGHT_SYNC_SOFT_TIMEOUT_MS:
+  // без сети дорисовываем на локальном кэше (ошибки/таймаут гасятся внутри).
+  if (!opts.skipBoughtRefresh) {
+    await refreshBoughtFromServer(key, { timeoutMs: BOUGHT_SYNC_SOFT_TIMEOUT_MS });
+  }
   // Факт-цены: локальные черновики поверх серверных оверрайдов (единый источник ②/④/отчёт).
   const draftOverrides = { ...b.serverOverrides, ...loadActualPrices(key) };
   return {
@@ -110,6 +127,6 @@ export async function loadTripView(
   opts: LoadTripOptions = {},
 ): Promise<{ trip: Trip; view: TripView }> {
   const bundle = await loadTripBundle(tripId, opts);
-  const input = await bundleToViewInput(bundle, tripId);
+  const input = await bundleToViewInput(bundle, tripId); // гидрация отметок — внутри
   return { trip: bundle.trip, view: deriveTripView(input) };
 }

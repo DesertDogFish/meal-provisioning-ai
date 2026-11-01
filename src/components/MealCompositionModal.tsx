@@ -16,7 +16,7 @@ import type { CompositionItem, CompositionPutRequest, CompositionResponse } from
 import type { Ingredient, MealType, UnitOfMeasure } from '../types';
 import { parseAmount } from './AddMealModal';
 import AmountInput from './AmountInput';
-import { loadActualPrices, loadBought, loadActualQty } from '../utils/tripStaging'; // transparency-п.3
+import { loadActualPrices, loadBought, loadActualQty, refreshBoughtFromServer, BOUGHT_SYNC_SOFT_TIMEOUT_MS } from '../utils/tripStaging'; // transparency-п.3 + KB-15
 import { pluralize } from '../utils/pluralize';
 
 /**
@@ -126,6 +126,14 @@ export default function MealCompositionModal({
   }, [tripId, mealId]);
 
   useEffect(() => { void reload(); }, [reload]);
+
+  // KB-15: отметки «взято» — серверные, LS — кэш. На новом устройстве/в новой
+  // сессии кэш пуст, и предупреждение «Сбросить введённый чек?» не видело бы
+  // реальных отметок. Гидратируем набор при открытии модалки (фоном: офлайн и
+  // таймаут гасятся внутри, UI не блокируется — save() читает LS уже после).
+  useEffect(() => {
+    void refreshBoughtFromServer(tripId, { timeoutMs: BOUGHT_SYNC_SOFT_TIMEOUT_MS });
+  }, [tripId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -495,6 +503,7 @@ export default function MealCompositionModal({
     for (const s of substitutes) ids.add(String(s.fromIngredientId));
     if (ids.size === 0) return [];
     const prices = loadActualPrices(tripId);
+    // LS-кэш отметок; серверный набор гидрирован при открытии модалки (KB-15)
     const bought = loadBought(tripId);
     const qty = loadActualQty(tripId);
     const touched = (id: string) =>

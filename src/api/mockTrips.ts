@@ -5,9 +5,21 @@
  */
 
 import type { Trip } from '../types';
-import { nextSubstitutionSeq, nextRemovedSeq, nextManualSeq, products, recipes, trips, priceOverrides, shoppingExcluded, substitutions, removedItems, manualItems, allTripEdits, applyTripEditsToRows, loadClientStage, users, UNIT_LABELS, r3, r2, editRecipeKey, editIngredientKey, findOwnTrip, ownTripOr404 } from './mockState';
+import { nextSubstitutionSeq, nextRemovedSeq, nextManualSeq, products, recipes, trips, priceOverrides, shoppingExcluded, checklistBought, substitutions, removedItems, manualItems, allTripEdits, applyTripEditsToRows, loadClientStage, users, UNIT_LABELS, r3, r2, editRecipeKey, editIngredientKey, findOwnTrip, ownTripOr404 } from './mockState';
 import { tripPricesFor, ingredientEditsFor, tripsWithProgress, denormalizeOverrideKey } from './mockTripProgress'; // cleanup-п.8
-import type { MockSubstitution, MockManualItem } from './mockState';
+import type { MockSubstitution, MockManualItem, MockChecklistBoughtItem } from './mockState';
+
+/** KB-15: предел размера «полной замены» набора отметок (паритет с backend-лимитом). */
+const MAX_CHECKLIST_BOUGHT_ITEMS = 2000;
+
+/**
+ * Монотонный счётчик созданных в моке походов. `trip-${Date.now()}` не уникален:
+ * в одном процессе (vitest threads) два теста/файла могут создать поход в одну
+ * миллисекунду, получить ОДИН id и поделить `substitutions[tripId]` — отсюда
+ * ложные 409 «position already has a trip-level edit». id в моке — непрозрачная
+ * строка, формат никем не проверяется, поэтому суффикс безопасен.
+ */
+let mockTripSeq = 0;
 
 export function handleTripsImpl(srv: any, method: string, path: string, body?: any): any {
   const parts = path.split('/').filter(Boolean);
@@ -568,6 +580,63 @@ export function handleTripsImpl(srv: any, method: string, path: string, body?: a
     return allTripEdits(tripId).length === before ? null : { status: 'deleted' };
   }
 
+  // KB-15: GET/PUT /trips/:id/checklist-bought — отметки «взято» чеклиста похода.
+  // Паритет с backend ChecklistBought: PUT — идемпотентная ПОЛНАЯ замена набора,
+  // GET — та же форма [{ingredientId, neededStamp}] (neededStamp = needed*1000).
+  // Валидация — как у сервера: неизвестный продукт → 404 (ingredientRepository
+  // .findById(...).orElseThrow(NotFoundException)), кривой neededStamp → 400
+  // (@NotNull @PositiveOrZero Long: null/дробное/отрицательное не проходят, а
+  // 0 — ЛЕГАЛЬНО: нулевая потребность, ключ '<id>@0' из «взять всё»; Number(null)
+  // === 0, поэтому null проверяем явно), слишком большой набор → 400 (защита от
+  // «полной замены» на 10^5 строк).
+  if (parts.length === 3 && parts[2] === 'checklist-bought') {
+    const tripId = parts[1];
+    if (!findOwnTrip(tripId)) {
+      throw { status: 404, message: 'Not found', detail: `Trip ${tripId} not found` };
+    }
+    if (method === 'PUT') {
+      const items = body?.items;
+      if (!Array.isArray(items)) {
+        throw { status: 400, message: 'Bad request', detail: 'Expected { items: [{ingredientId, neededStamp}] }' };
+      }
+      if (items.length > MAX_CHECKLIST_BOUGHT_ITEMS) {
+        throw {
+          status: 400, message: 'Bad request',
+          detail: `Too many items: ${items.length} (max ${MAX_CHECKLIST_BOUGHT_ITEMS})`,
+        };
+      }
+      const desired: MockChecklistBoughtItem[] = [];
+      for (const it of items) {
+        const ingredientId = it?.ingredientId;
+        const stamp = Number(it?.neededStamp);
+        // backend: @NotNull @PositiveOrZero Long neededStamp → null/''/дробное/
+        // отрицательное = 400; 0 валиден (нулевая потребность).
+        if (ingredientId == null || String(ingredientId).trim() === ''
+          || it?.neededStamp == null || !Number.isInteger(stamp) || stamp < 0) {
+          throw {
+            status: 400, message: 'Bad request',
+            detail: 'Each item requires ingredientId and integer neededStamp >= 0',
+          };
+        }
+        desired.push({ ingredientId, neededStamp: stamp });
+      }
+      // backend ищет продукт по id и отдаёт 404, если его нет
+      for (const it of desired) {
+        if (!products.some(p => String(p.id) === String(it.ingredientId))) {
+          throw {
+            status: 404, message: 'Not found',
+            detail: `Ingredient ${it.ingredientId} not found`,
+          };
+        }
+      }
+      const byKey = new Map<string, MockChecklistBoughtItem>();
+      for (const it of desired) byKey.set(`${it.ingredientId}@${it.neededStamp}`, it);
+      checklistBought[tripId] = [...byKey.values()];
+      return checklistBought[tripId];
+    }
+    if (method === 'GET') return checklistBought[tripId] || [];
+  }
+
   // PUT /trips/:id/shopping-exclusions — идемпотентная замена набора.
   // Fix-5 / R2 (шаг 2): принимаем и legacy {ingredientIds: []} (глобальные),
   // и канон {items: [{ingredientId, dayDate|null}]} — по-дневные исключения.
@@ -821,7 +890,7 @@ export function handleTripsImpl(srv: any, method: string, path: string, body?: a
     const tokenMatch = token.match(/mock-access-token-(\d+)$/);
     const sessionUser = tokenMatch && users.find(u => u.id === tokenMatch[1]);
     const newTrip: Trip = {
-      id: `trip-${Date.now()}`,
+      id: `trip-${Date.now()}-${++mockTripSeq}`,
       userId: body?.userId ?? (sessionUser ? sessionUser.id : users[0].id),
       name: body.name,
       startDate: body.startDate,

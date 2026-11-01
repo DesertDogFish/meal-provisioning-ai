@@ -1,5 +1,5 @@
 /// <reference types="vitest/globals" />
-import { render, screen } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import TripsPage from './TripsPage';
@@ -57,11 +57,19 @@ beforeEach(() => {
 });
 
 describe('TripsPage — прогресс из ответа списка (cleanup-п.8)', () => {
-  it('ровно ОДИН запрос данных: GET /trips (никаких per-trip N+1)', async () => {
+  it('прогресс — ОДИН запрос GET /trips (никаких per-trip N+1); KB-15 добирает только отметки', async () => {
     renderPage();
     await screen.findByTestId('trip-progress-t1');
     const dataCalls = (api.get as any).mock.calls.filter((c: any[]) => c[0] !== '/auth/me');
-    expect(dataCalls).toEqual([['/trips']]);
+    // прогресс считается из ответа списка — per-trip роутов для него нет
+    expect(dataCalls.filter((c: any[]) => !/\/checklist-bought$/.test(c[0]))).toEqual([['/trips']]);
+    // KB-15: отметки «взято» серверные → РОВНО по одному лёгкому GET на
+    // показанный поход (не «сколько получилось»): ни дублей, ни пропусков.
+    const boughtCalls = dataCalls.filter((c: any[]) => /\/checklist-bought$/.test(c[0]));
+    expect(boughtCalls).toEqual([['/trips/t1/checklist-bought'], ['/trips/t2/checklist-bought']]);
+    expect(boughtCalls).toHaveLength(tripsFixture.length);
+    const boughtTripIds = boughtCalls.map((c: any[]) => String(c[0]).split('/')[2]);
+    expect(boughtTripIds).toHaveLength(new Set(boughtTripIds).size); // все tripId уникальны
   });
 
   it('карточка ② «Закупка»: этап и позиции из серверного прогресса', async () => {
@@ -115,5 +123,56 @@ describe('TripsPage — честный прогресс этапа ① (transpar
     expect(row.textContent).toContain('2 приёма');
     expect(row.textContent).not.toContain('2/12');
     expect(row.querySelector('.trip-card__bar')).toBeNull();
+  });
+});
+
+describe('TripsPage — гидрация «взято» с ограниченной параллельностью (KB-15)', () => {
+  /** 6 походов: без лимита ушли бы 6 одновременных GET (упираемся в сокеты). */
+  const manyTrips = Array.from({ length: 6 }, (_, i) => ({
+    id: `m${i + 1}`, userId: '1', name: `Поход ${i + 1}`,
+    startDate: '2026-07-01', endDate: '2026-07-02', defaultPeople: 2,
+    days: [{ id: `md${i + 1}`, dayDate: '2026-07-01', meals: [{}] }],
+    progress: { stage: 'shopping', meals: 1, checklistTotal: 5, facts: 0, factsTotal: 5, totalCost: 0, costPerPerson: 0 },
+  }));
+
+  it('не больше 4 одновременных GET /checklist-bought (и ни одного лишнего вызова)', async () => {
+    const pending: Array<() => void> = [];
+    let inFlight = 0;
+    let maxInFlight = 0;
+    let boughtCalls = 0;
+
+    (api.get as any).mockImplementation((path: string) => {
+      if (path === '/auth/me') return Promise.resolve({ id: '1', email: 'a@b.c', role: 'ADMIN' });
+      if (path === '/trips') return Promise.resolve(manyTrips);
+      if (/\/checklist-bought$/.test(path)) {
+        boughtCalls += 1;
+        inFlight += 1;
+        maxInFlight = Math.max(maxInFlight, inFlight);
+        return new Promise(resolve => {
+          pending.push(() => { inFlight -= 1; resolve([]); });
+        });
+      }
+      return Promise.reject({ status: 404, detail: `unexpected ${path}` });
+    });
+
+    renderPage();
+    await screen.findByTestId('trip-progress-m1');
+
+    // первый «батч» — ровно 4 запроса, остальные ждут освобождения слота
+    await waitFor(() => expect(pending).toHaveLength(4));
+    expect(maxInFlight).toBe(4);
+    // новых сетевых вызовов кроме одного GET /trips не появилось
+    expect(boughtCalls).toBe(4);
+
+    // отпускаем всё, что висит, чтобы воркеры доели очередь (по одному GET на поход)
+    await act(async () => {
+      for (let guard = 0; guard < 20 && pending.length > 0; guard++) {
+        for (const release of pending.splice(0)) release();
+        await Promise.resolve();
+        await new Promise(r => setTimeout(r, 0));
+      }
+    });
+    expect(maxInFlight).toBeLessThanOrEqual(4);
+    expect(boughtCalls).toBe(manyTrips.length);   // ни дублей, ни пропусков
   });
 });
