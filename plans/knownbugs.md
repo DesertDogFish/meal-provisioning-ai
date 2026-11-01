@@ -168,4 +168,92 @@
 - Статус: OWNER TASK (01.11.2026)
   Branch protection, required status checks, Conventional Commits — требуют GitHub Admin access. Агент не пушит в main без согласия владельца.
 
+### KB-36. Backend не стартует: Flyway «Found more than one migration with version 30»
+
+- Симптом: в `backend/src/main/resources/db/migration/` два файла версии 30 —
+  `V30__ingredient_prices_latest_index.sql` (в дереве с 29.10.2026, применён на
+  существующих БД) и `V30__optimistic_locking_version.sql` (добавлен коммитом `ebb3a1b`
+  01.11.2026). Flyway падает на resolve ДО применения: `FlywayException: Found more than
+  one migration with version 30`; bean `flywayInitializer` не создаётся, контекст Spring
+  не поднимается. Замер в песочнице 01.11.2026: `SnapshotIsolationIntegrationTest` 3/3
+  ERROR (лог: `BeanCreationException ... flywayInitializer`). docker-стек не стартует,
+  CI job'ы `backend` и `migration-upgrade` красные. Второй скрытый дефект той же партии:
+  `@Version` добавлен в 8 сущностей (включая `TripChecklistBought`), а колонка `version`
+  миграцией — только в 7 таблиц: у `trip_checklist_bought` (V32) её нет → после устранения
+  дубля старт упадёт на `ddl-auto=validate` (missing column [version]).
+- Влияние: HEAD `75a8e1c` непригоден к запуску: backend не стартует ни локально, ни в
+  compose, ни в CI; интеграционные тесты не выполняются; миграции не накатываются.
+- Обход: рабочего нет (только не запускать backend; фронтенд в mock-режиме не затрагивается).
+- Источник: аудит 02.11.2026, подзадача 1 плана `plans/2026-11-02-audit-security-usability-ui.md`;
+  остаток KB-24, закрытой 01.11.2026 преждевременно (карточка в архиве утверждает
+  «@Version добавлен…», фактически работа не запускается). Нарушен `AGENTS.md` §11
+  (новый номер = max + 1).
+- Статус: ВЗЯТ В РАБОТУ — plans/2026-11-02-audit-security-usability-ui.md
+
+### KB-37. CI-гейт «Coverage gate (JaCoCo lines >= 60%)» не измеряет покрытие и падает не по делу
+
+- Симптом: шаг в `.github/workflows/ci.yml` (job `backend`, ~строка 95) вызывает
+  `mvn -B -ntp jacoco:check@coverage-gate`, но в `backend/pom.xml` execution с goal `check`
+  имеет id `coverage-check` и находится в профиле `coverage-gate`, который CI не активирует
+  (`-P` отсутствует). Замер той же командой в песочнице 01.11.2026:
+  `[ERROR] Failed to execute goal org.jacoco:jacoco-maven-plugin:0.8.12:check (coverage-gate)
+  ... The parameters 'rules' for goal ... are missing or invalid`. Даже при активации профиля
+  селектор `@coverage-gate` не совпадает с id `coverage-check`; кроме того
+  `<threshold>60</threshold>` при `counter=LINE` трактуется JaCoCo как COVEREDRATIO=60
+  (6000 %; шкала 0.0–1.0) — корректно вызванный гейт не проходил бы никогда.
+- Влияние: гейт покрытия backend — фикция: шаг либо краснит CI по неверной причине, либо
+  (при «починке» вызова без порога) молча пропускает всё. KB-25 (архив, 01.11.2026)
+  отрапортовала «гейт добавлен» — фактически он не работал ни дня.
+- Обход: нет; до починки шаг будет красным после того, как тесты снова смогут запускаться.
+- Источник: аудит 02.11.2026, подзадача 2 плана `plans/2026-11-02-audit-security-usability-ui.md`;
+  остаток KB-25, закрытой 01.11.2026 преждевременно.
+- Статус: ВЗЯТ В РАБОТУ — plans/2026-11-02-audit-security-usability-ui.md
+
+### KB-38. Prod-представление: CSP блокирует брендовые шрифты, Vercel без security-заголовков, манифест PWA в чужой палитре
+
+- Симптом: (1) CSP в `nginx.conf` — `style-src 'self' 'unsafe-inline'; font-src 'self'`,
+  а `index.html` (~строки 41–47) грузит стили и файлы шрифтов с `fonts.googleapis.com` /
+  `fonts.gstatic.com` → в docker-prod оба запроса блокируются (CSP violation в консоли),
+  Unbounded/Manrope не применяются, UI откатывается на системные шрифты — не соответствует
+  дизайн-паку; (2) во вложенном `location /assets/ ... { location ~* ... }` из-за правил
+  наследования `add_header` server-заголовки не действуют, а вручную добавлены 4 из 5 —
+  CSP там отсутствует (в т.ч. для SVG); (3) `vercel.json` не содержит секции `headers` —
+  публичное демо на Vercel отдаётся без CSP/X-Frame-Options/nosniff/Referrer-Policy
+  (nginx-заголовки туда не попадают); (4) `src/pwa/manifest.json`:
+  `background_color: #1a1a2e`, `theme_color: #16213e` — цвета вне токенов дизайн-пака
+  (dark `--bg-0` = #0B141B): splash/статус-бар PWA вне бренда.
+- Влияние: prod-сборка визуально не соответствует дизайн-системе; Vercel-демо лишено
+  базовой защиты (clickjacking, MIME-sniffing); PWA-брендинг нарушен.
+- Обход: частичное — в dev (vite) CSP nginx не действует и шрифты грузятся; проверка
+  дизайна в dev-режиме маскирует дефект.
+- Источник: аудит 02.11.2026, подзадача 5 плана `plans/2026-11-02-audit-security-usability-ui.md`;
+  смежно с задачей nginx-hardening внешнего аудита 30.10.2026 (AU-12) — данная карточка
+  фиксирует дефекты ТЕКУЩЕЙ сборки, а не будущие улучшения.
+- Статус: ВЗЯТ В РАБОТУ — plans/2026-11-02-audit-security-usability-ui.md
+
+### KB-39. Реестры plans/ недостоверны: дубли BL-48/BL-51 в двух файлах, архивные «ГОТОВО» опровергнуты HEAD, BL-63 не была зарегистрирована
+
+- Симптом: (1) BL-48 и BL-51 присутствуют одновременно в живом `plans/backlog.md`
+  (READY) и в `plans/done/backlog.md` («ГОТОВО 01.11.2026») — нарушено `AGENTS.md` §2
+  («номер всегда однозначно находится в одном из двух файлов»); (2) архивные записи не
+  соответствуют репозиторию: `eslint.config.js` и `.github/dependabot.yml` никогда не
+  существовали в истории (`git log --all -- eslint.config.js .github/dependabot.yml` пуст),
+  `.eslintrc.cjs` + eslint ^8.55 + отсутствие jsx-a11y на месте, `trivy-action@master` не
+  заменён тегом, `runs-on: ubuntu-latest` не заменён; (3) номер BL-63 назначен закрытым
+  планом `plans/done/2026-10-31-ux-audit-visual-inspection.md` и упомянут в `PLAN.md`
+  («открыты BL-62/BL-63»), но карточка отсутствовала в обоих реестрах до 02.11.2026;
+  (4) KB-24/KB-25 закрыты 01.11.2026, однако заявленная работа не функционирует
+  (остатки перерегистрированы как KB-36/KB-37); (5) KB-22 дублируется: живая карточка
+  (OWNER TASK) и копия в `plans/done/knownbugs.md` со статусом «не закрыт» — в архиве
+  закрытых карточка лежит незакрытой.
+- Влияние: реестры показывают работу, которой нет; планирование по ним пропускает
+  реально открытые задачи (ESLint 9 + jsx-a11y, Dependabot, trivy-тег); нарушен R6
+  (отчёты «ГОТОВО» без проверки фактов) — тот же класс, что урок BL-20/KB-14 из §2.
+- Обход: перед взятием «закрытого» в работу сверять утверждения карточки с HEAD
+  (`ls`/`grep`/`git log --all`); аудит 02.11.2026 такую сверку выполнил.
+- Источник: аудит 02.11.2026, подзадача 9 плана `plans/2026-11-02-audit-security-usability-ui.md`;
+  связано с коммитами 01.11.2026 (`ebb3a1b`, `75a8e1c`).
+- Статус: ВЗЯТ В РАБОТУ — plans/2026-11-02-audit-security-usability-ui.md
+
+
 
