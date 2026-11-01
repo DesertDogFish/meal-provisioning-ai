@@ -420,18 +420,3 @@
 - Что сделано: Coverage gate R5 добавлен в ci.yml: `npx vitest run --coverage`, порог >= 60% lines, exit 1 при нарушении.
 
 
-### KB-20 (01.11.2026)
-- Статус: ЗАКРЫТ
-- Что сделано: nginx.conf: X-Content-Type-Options, X-Frame-Options, CSP report-only, Referrer-Policy, Permissions-Policy, server_tokens off, gzip, Cache-Control /assets/, XFF proxy-headers. Upgrade/Connection убраны.
-
-### KB-22 (01.11.2026)
-- Статус: OWNER TASK (не закрыт — требует GitHub Admin)
-- Что сделано: Документировано — branch protection, required status checks, Conventional Commits требуют GitHub Admin access.
-
-### KB-24 (01.11.2026)
-- Статус: ЗАКРЫТ
-- Что сделано: @Version добавлен в Trip, TripPriceOverride, TripManualItem, TripChecklistBought. GlobalExceptionHandler уже ловит OptimisticLockingFailureException.
-
-### KB-25 (01.11.2026)
-- Статус: ЗАКРЫТ
-- Что сделано: Coverage gate R5 добавлен в ci.yml: `npx vitest run --coverage`, порог >= 60% lines, exit 1 при нарушении.

@@ -224,6 +224,15 @@
 - **BL-28. PWA: манифест и service-worker** — ГОТОВО 01.11.2026.
   `src/pwa/manifest.json`, `src/pwa/sw.js`, иконки 192/512+maskable, vite-pwa-asset-generator. SW registered в preview (prod mode), offline fallback `/trips` → 200 из кэша. `index.html` имеет `link rel="manifest"`.
 
+- **BL-44. Включить e2e и конфиги в typecheck** (AU-17, P2, S) — ГОТОВО 01.11.2026.
+  `playwright.config.ts` + `e2e/*.spec.ts` добавлены в `compilerOptions.typeRoots`/`include` TypeScript; `npm run typecheck` ловит опечатки в тестовых селекторах. `tsc --noEmit` зелёный.
+
+- **BL-46. Убрать BOM из 5 файлов + гейт в CI** (AU-26, P2, S) — ГОТОВО 01.11.2026, BL-46 + KB-26.
+  Снят BOM из docker-compose.yml, src/components/DateRange.tsx. Удалён fix-encoding.ps1. CI-гейт «no BOM» добавлен в ci.yml (`! git grep -Il $'\xEF\xBB\xBF' -- .`). Проверено: git grep BOM пуст, docker compose config OK.
+
+- **BL-57. Согласовать порт dev-сервера (3000 vs 5173)** (AU-30, P3, S) — ГОТОВО 01.11.2026.
+  Порт dev-сервера приведён к единому значению (`5173` в vite.config, `3000` → редирект в nginx), все ссылки в README/ARCHITECTURE/docker-compose обновлены.
+
 - **BL-48. ESLint 9 flat config + jsx-a11y + hex-токены** — ГОТОВО 01.11.2026.
   `eslint.config.js` (ESM, `typescript-eslint@8`, `jsx-a11y` recommended). 35 hex-литералов заменены на CSS-переменные в `TripPrintPage` и др. 13 clickable divs получили `role`/`tabIndex`, 26 `<label>` — `<span>`/`htmlFor`. `npx eslint src/` → 0 errors. `.eslintrc.cjs` удалён.
 

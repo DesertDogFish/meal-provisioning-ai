@@ -105,40 +105,7 @@
 - Статус: ENVIRONMENT LIMIT (01.11.2026)
   Тяжёлые интеграционные сьюты не запускаются в песочнице агента (ограничение среды, не дефект кода).
 
-### KB-15. Отметки «взято» и факт чеклиста живут в localStorage
 
-- Симптом: состояние чеклиста (что куплено, фактическое количество) хранится в
-  `src/utils/tripStaging.ts` (localStorage), а не на сервере.
-- Влияние: долг R1/R2 (`AGENTS.md` §12 — данные похода только на сервере). Отметки не
-  переживают смену устройства/браузера и не видны другим участникам похода; расширять это
-  хранилище нельзя.
-- Обход: ключ отметки стабилен и собирается в одном месте (`src/utils/checklist.ts`,
-  `boughtKey`), поведение покрыто тестами (`ChecklistTab.test.tsx`); офлайн-сценарий
-  «в магазине нет связи» при этом работает — отметки не теряются при перезагрузке страницы.
-- Решение (KB-15, 31.10/01.11.2026): отметки «взято» переехали на сервер
-  (`GET/PUT /trips/:id/checklist-bought`, сервер — источник истины), `localStorage`
-  остался локальным кэшем и буфером офлайн-записи. Отдельный LS-ключ
-  `trip-checklist-bought-dirty-{tripId}` (значение — литерал `'1'`) **не нарушает
-  AGENTS §12**: это флаг СОСТОЯНИЯ СИНХРОНИЗАЦИИ, а не сущность данных похода — он не
-  описывает ни одной позиции чеклиста, не читается как доменное состояние и нужен
-  ровно для того, чтобы после перезагрузки без сети офлайн-отметки не были приняты за
-  устаревший кэш и не затёрты серверным снимком («сервер побеждает» применяется только
-  к чистому кэшу). Сами отметки по-прежнему лежат в `trip-checklist-bought-{tripId}`.
-- Уточнение контракта (аудит 01.11.2026, два MAJOR): `neededStamp = 0` — ВАЛИДНОЕ
-  значение (нулевая потребность: «взять всё» одним кликом кладёт ключ `<id>@0`; backend
-  валидирует `@PositiveOrZero`), поэтому клиент не отбрасывает 0, а неотправляемыми
-  считает только НЕЦЕЛЫЕ и ОТРИЦАТЕЛЬНЫЕ штампы и вычищает их из кэша после успешного
-  PUT (иначе они держали бы dirty вечно). `ingredientId` отправляется как есть: числовые
-  id — числом (backend `Long`), строковые (`'ing7'` в mock-каталоге) — строкой, иначе
-  набор ручных позиций/замен был неотправляем, а смешанный набор «частично отправленным»
-  и следующая гидрация молча стирала строковые отметки.
-- Отложенное улучшение: `boughtCount` (число отметок «взято») в ответе `GET /trips`
-  вместо N per-trip `GET /trips/:id/checklist-bought` при открытии списка — сейчас
-  гидрация ограничена 4 одновременными запросами (`TripsPage`), но при десятках походов
-  это всё ещё N вызовов; вынести счётчик в `TripResponse` и оставить per-trip GET только
-  для экрана самого похода.
-- Источник: `plans/done/2026-10-29-ui-nowrap-and-mobile.md` (секция `Known bugs`).
-- Статус: ЗАКРЫТ (01.11.2026, 4 цикла ревью, 319/0 бэкенд + 886/2 фронт, перенесено в plans/done/knownbugs.md)
 
 ### KB-16. Playwright test-runner не стартует в песочнице агента (OOM)
 
@@ -180,72 +147,13 @@
 - Статус: XL (01.11.2026)
   Spring Boot 4.x upgrade — мажорный апгрейд, требует отдельного плана по §3.
 
-### KB-18. E2E-nightly красный, real-mode-регрессия не выполнялась ни разу
 
-- Симптом: в `e2e-nightly.yml` шаг `Run e2e` падает, из-за чего `Start docker compose stack`
-  и `Run e2e REAL mode (P0-3 regression)` уходят в **skip** (run 40856616349 от 29.10.2026
-  и прогон 28.10 — то же). `retries: 0` в `playwright.config.ts` валит прогон на любом flake;
-  трейсы не сохраняются (`retain-on-failure`), уведомлений о красном nightly нет.
-- Влияние: регрессия реального режима и паритета mock↔real (R3) фактически не проверяется;
-  заявить «e2e зелёные» нельзя (R6); красный nightly не расследуется — локально не
-  воспроизвести (KB-16).
-- Обход: e2e-сценарии проверялись библиотечным запуском chromium (см. KB-16), паритет
-  эндпоинтов покрывает `contract-nightly.yml`.
-- Источник: внешний аудит 30.10.2026, AU-06.
-- Статус: ЗАКРЫТ (01.11.2026, e2e-nightly real-mode job добавлен в ci.yml)
-  Job e2e-nightly: cron Пн 06:00 UTC, services postgres, backend integration tests, frontend e2e real-mode.
-  Семантические сканеры (Semgrep, Dependency Review, Trivy) переведены в blocking (continue-on-error убран).
 
-### KB-19. Security-сканы в CI не блокируют, compose и образы без hardening
 
-- Симптом: в job'е `Security Scans` (`.github/workflows/ci.yml`) все три шага идут с
-  `continue-on-error: true` — Semgrep, Dependency Review, Trivy (к тому же `@master`, а не
-  релизный тег); TODO «перевести в blocking» не закрыт. `docker-compose.yml` без
-  `security_opt: no-new-privileges`, `cap_drop`, `read_only`+`tmpfs`, `pids_limit` и лимитов
-  логов; frontend-образ работает под root; базовые образы не запинены по digest.
-- Влияние: находки сканеров видны только в логе и не мешают мержу; контейнеры имеют
-  избыточные привилегии, состав образов может измениться без ведома (плавающие теги).
-- Обход: критичные находки разбираются вручную по факту (CVE — KB-21); Semgrep частично
-  снимается правками nginx (KB-20: Upgrade-заголовки без WebSocket — его «H2C»-находка).
-- Источник: внешний аудит 30.10.2026, AU-09 и AU-25.
-- Статус: ЗАКРЫТ (01.11.2026, security scans blocking: Semgrep, Dependency Review, Trivy убраны continue-on-error из ci.yml)
 
-### KB-20. nginx без CSP и security-заголовков, XFF не передаётся, кэш ассетов не настроен
 
-- Симптом: в `nginx.conf` нет `X-Content-Type-Options`, `X-Frame-Options`/CSP `frame-ancestors`,
-  `Referrer-Policy`, `Permissions-Policy`, `server_tokens off`; CSP отсутствует даже в
-  report-only; нет gzip; нет `Cache-Control: public, immutable` для `/assets/` и `no-store`
-  для `index.html`; нет `X-Forwarded-For`/`X-Forwarded-Proto` и
-  `server.forward-headers-strategy` в бэкенде; `proxy_read_timeout` дефолтный при 96-МБ
-  загрузке и фоновом синке; присутствуют `Upgrade`/`Connection`-заголовки, хотя WebSocket
-  в приложении нет.
-- Влияние: кликджекинг и MIME-sniffing не затруднены; после деплоя клиент может получить
-  старый `index.html` со ссылками на удалённые чанки; бэкенд видит адрес прокси, поэтому
-  блокировка по IP (второй эшелон к rate limiting `/auth/*`) невозможна; большие загрузки
-  рискуют оборваться по таймауту; трафик не сжат.
-- Обход: токен передаётся в заголовке (не cookie), CORS — whitelist; заголовки безопасности
-  уже заявлены как открытая задача в `ARCHITECTURE.md §Security`.
-- Источник: внешний аудит 30.10.2026, AU-12.
-- Статус: ЗАКРЫТ (01.11.2026, nginx.conf: X-Content-Type-Options, X-Frame-Options, CSP report-only, Referrer-Policy, Permissions-Policy, server_tokens off, gzip, Cache-Control /assets/, XFF proxy-headers. Upgrade/Connection убраны.)
   Branch protection, required status checks, Conventional Commits — требуют GitHub Admin access.
   Обход: агент не пушит в main без согласия владельца. 
-
-### KB-21. CVE во frontend-зависимостях, Dependabot и `npm audit` отсутствуют
-- Симптом: `npm audit` сообщает об уязвимостях `react-router-dom` (open redirect через
-  backslash в `<Link>`; SSR-hydration-вектор `deserializeErrors()` к SPA не относится) и
-  `uuid` (пакет не используется вовсе). Dependabot не настроен ни для одной
-  экосистемы, `npm audit` в CI отсутствует, дрейф maven-зависимостей не отслеживается.
-- Влияние: известные CVE живут в прод-сборке; обновления приходят только вручную и несвоевременно.
-- Обход: `<Link to>` не строится из пользовательских данных (при закрытии — проверить grep'ом
-  по `src/`); `uuid` в код не импортируется.
-- Источник: внешний аудит 30.10.2026, AU-10.
-- Статус: ЗАКРЫТ (01.11.2026, BL-36: `uuid` удалён из зависимостей)
-  `uuid` и `@types/uuid` убраны из `package.json` и `package-lock.json` (`npm ls uuid` — пусто);
-  CVE по `uuid` ушёл вместе с пакетом. Импортов `uuid`/`uuidv4` в `src/` не было ни одного
-  (проверено `grep -rni uuid src/` и `git log -S uuidv4 -- src`), поэтому замена на
-  `crypto.randomUUID()` не потребовалась — ни в `src/api/mockTrips.ts`, ни где-либо ещё.
-  Проверено: `npx tsc --noEmit` — 0 ошибок; `npx vitest run` — 886 passed / 2 failed
-  (обе предсуществующие в `src/api/mockTripsUpdate.test.ts`, не связаны с правкой).
 
 ### KB-22. Нет branch protection: прямой push в основную ветку, красный CI не блокирует
 - Симптом: все 610 прогонов CI — прямой `push` в `main`; required PR и required status checks
@@ -259,77 +167,5 @@
 - Источник: внешний аудит 30.10.2026, AU-28.
 - Статус: OWNER TASK (01.11.2026)
   Branch protection, required status checks, Conventional Commits — требуют GitHub Admin access. Агент не пушит в main без согласия владельца.
-
-### KB-24. Нет оптимистичных блокировок: конкурентная запись молча перезаписывает данные
-
-- Симптом: на изменяемых агрегатах (`Trip`, сущности правок состава, `trip_price_overrides`)
-  нет `@Version`; конкурентный batch-PUT завершается по правилу «последняя запись победила».
-- Влияние: правки двух вкладок/устройств теряются без уведомления; экономические расчёты
-  считаются от незаметно перезаписанных данных (инварианты сумм при этом формально сходятся).
-- Обход: с 30.10.2026 `GlobalExceptionHandler` отвечает 409 `CONCURRENT_MODIFICATION` на
-  `OptimisticLockingFailureException` (AU-14, подзадача 2 плана
-  `plans/done/2026-10-30-external-audit-p0-block.md`), но без `@Version` исключение не
-  возникает — обработчик есть, повода пока нет. Диалога «данные изменились, обновите» в UI нет.
-- Источник: внешний аудит 30.10.2026, AU-13.
-- Статус: ЗАКРЫТ (01.11.2026, @Version добавлен в 7 сущностей: Trip, TripDay, TripMeal, TripManualItem, TripPriceOverride, TripShoppingExclusion, TripIngredientSubstitution. Flyway V30__optimistic_locking_version.sql — migration для 7 таблиц. GlobalExceptionHandler возвращает 409 с текстом «Данные изменены другим пользователем — обновите страницу и повторите». 2 новых теста: GlobalExceptionHandlerOptimisticLockTest, OptimisticLockingIntegrationTest. 195 тестов зелёные.)
-
-### KB-25. Coverage-гейт R5 не выполняется в CI, whitelist покрывает 44 файла из 102
-
-- Симптом: `vitest.config.ts` держит `coverage.include` из 44 файлов (при 102 в `src/`) с
-  порогом 80% lines; шага `npm run test:coverage` в `ci.yml` нет, поэтому публикуемые
-  98.95% относятся только к whitelist'у, а не к проекту. `thresholds.branches` не задан
-  (branch-покрытие 86.54%).
-- Влияние: правило R5 («новое и изменённое покрыто ≥80% per-file») держится на дисциплине,
-  а не на гейте; реальное покрытие проекта неизвестно; новый файл в `src/utils|api|components`
-  можно не добавить в `include` — CI не заметит.
-- Обход: в сессиях покрытие проверяется локально (так закрыты подзадачи 24/26 внутреннего
-  аудита `plans/done/2026-10-29-full-audit.md`); для backend покрытие не измеряется вовсе
-  (JaCoCo не подключён вовсе).
-
-- Статус: ЗАКРЫТ (01.11.2026). Двойной гейт: backend — JaCoCo `mvn jacoco:check@coverage-gate` (lines >= 60%); frontend — `npx vitest run --coverage` с порогом 60% в ci.yml. Реальное backend-покрытие: lines 64.37%, instructions 61.91%, branches 57.55% — 193 теста зелёные. `vitest.config.ts`: thresholds.lines=80, perFile=true, include: src/api/*.ts, src/utils/*.ts, src/components/*.tsx.
-
-### KB-26. BOM в 5 файлах и `fix-encoding.ps1` в дереве
-- Симптом: пять файлов содержат UTF-8 BOM (в том числе `docker-compose.yml` — BOM стоит перед
-  `services:`), в корне лежит `fix-encoding.ps1`; гейта на BOM в CI нет.
-- Влияние: риск mojibake и отказа инструментов, которые не ждут BOM (§0: кириллица + PowerShell —
-  задокументированный источник повреждений); compose с BOM читается не всеми версиями docker.
-- Обход: правки вносятся только UTF-8-инструментами (инструменты агента edit/write, Python
-  `open(encoding='utf-8')`), PowerShell для файлов с кириллицей не используется (§0).
-- Источник: внешний аудит 30.10.2026, AU-26 (удаление самого скрипта — AU-23).
-- Статус: ЗАКРЫТ (01.11.2026, BL-46 + KB-26)
-  Снят BOM из docker-compose.yml, src/components/DateRange.tsx. Удалён fix-encoding.ps1. CI-гейт «no BOM» добавлен в ci.yml. Проверено: git grep BOM пуст, docker compose config OK.
-
-### KB-27. В prod `detail` может отдать внутреннее сообщение исключения
-
-- Симптом: `GlobalExceptionHandler` кладёт в `detail` текст `IllegalArgumentException`/
-  `IllegalStateException` независимо от профиля; заявленная в README санитизация «в prod ошибок
-  без detail» для внутренних исключений не реализована. AU-14 (30.10.2026) закрыл только
-  утечки из `DataIntegrityViolationException` и `MaxUploadSizeExceededException`.
-- Влияние: в prod-ответе видны внутренние сообщения (состояния, имена методов) — информация
-  для атакующего и шум для пользователя; `traceId` в теле ошибки нет, сопоставление с логом
-  ручное.
-- Обход: доменные исключения (`ValidationException`, `NotFoundException`, `ConflictException`)
-  пишутся для пользователя — их текст безопасен; три новых обработчика AU-14 отдают стабильные
-  коды без внутренностей (проверено `GlobalExceptionHandlerErrorCodeTest`: в ответах нет
-  `users_email_key`, `commons-fileupload`, `SECRET-INTERNAL`).
-- Источник: внешний аудит 30.10.2026, AU-27 (traceId — AU-15).
-- Статус: ЗАКРЫТ (01.11.2026, KB-27)
-  В `GlobalExceptionHandler` внедрён `Environment` и одна политика `detail` (`internalDetail`):
-  в профиле `prod` внутренние исключения отдают стабильный safe-код — `IllegalArgumentException`
-  → `BAD_REQUEST: Некорректный запрос — проверьте параметры и повторите.`,
-  `HttpRequestMethodNotSupportedException` → `METHOD_NOT_ALLOWED: …` (перечень поддерживаемых
-  методов не утекает); в `dev` и без активного профиля текст исключения отдаётся как раньше.
-  Доменные (`NotFoundException`, `ConflictException`, `ProductInUseConflictException`,
-  `ForbiddenException`, `UnauthorizedException`, `ValidationException`,
-  `TooManyRequestsException`) сохраняют пользовательский текст в обоих профилях — его читает UI.
-  Пустое сообщение исключения даёт safe-текст в любом профиле (непустой `detail` — контракт
-  `ErrorResponse`, поэтому «пустой» вариант заменён на safe-сообщение). `IllegalStateException`
-  в prod и раньше был безопасен — уходит в `handleGeneric` с нейтральным
-  «An unexpected error occurred». Проверено: `GlobalExceptionHandlerProfileDetailTest` 6/6
-  (prod прячет `SECRET-INTERNAL` и `PUT`, dev показывает, доменный 404 сохранён, пустое
-  сообщение → safe), `GlobalExceptionHandlerErrorCodeTest` 4/4, `EmisControllerTest` 5/5
-  (совет собирается с `Environment` в реальном WebMvc-контексте). Остаток вне этой правки:
-  `traceId` в теле ошибки (`extensions`) — ведётся отдельной задачей; строка README про
-  профили уточнена под фактическое поведение.
 
 
