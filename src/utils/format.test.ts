@@ -7,7 +7,7 @@
  *  4. Категория продукта — всегда строка (объект ProductCategoryDto → name).
  */
 import { describe, expect, it } from 'vitest';
-import { formatRub, formatPrice, formatQty, formatNum, unitShortLabel, categoryName } from './format';
+import { formatRub, formatPrice, formatUnitPrice, formatQty, formatNum, unitShortLabel, categoryName } from './format';
 
 // неразрывный пробел — разделитель тысяч в ru-RU
 const NBSP = '\u00A0';
@@ -56,6 +56,35 @@ describe('formatPrice — цена за единицу, 2 знака, запят
     expect(formatPrice(null)).toBe('—');
     expect(formatPrice(undefined)).toBe('—');
     expect(formatPrice(NaN)).toBe('—');
+  });
+});
+
+/**
+ * BL-10 (01.11.2026): ₽ в `trip_price_overrides` — это цена за ОДНУ учётную
+ * единицу. Без «/кг» цифра «350» читалась как сумма позиции.
+ */
+describe('formatUnitPrice — цена за единицу с единицей измерения (BL-10)', () => {
+  it('₽/ед: «350,00 ₽/кг», «87,50 ₽/шт» (2 знака, запятая, неразрывный пробел)', () => {
+    expect(formatUnitPrice(350, 'KG')).toBe(`350,00${NBSP}₽/кг`);
+    expect(formatUnitPrice(87.5, 'PCS')).toBe(`87,50${NBSP}₽/шт`);
+    expect(formatUnitPrice(120, 'PACK')).toBe(`120,00${NBSP}₽/уп`);
+    expect(formatUnitPrice(45, 'L')).toBe(`45,00${NBSP}₽/л`);
+  });
+
+  it('копейки не теряются (цена чека пересчитана в цену за единицу)', () => {
+    expect(formatUnitPrice(123.456, 'KG')).toBe(`123,46${NBSP}₽/кг`);
+    expect(formatUnitPrice('99.9', 'KG')).toBe(`99,90${NBSP}₽/кг`);
+  });
+
+  it('без единицы — просто рубли; null/NaN → «—»', () => {
+    expect(formatUnitPrice(350)).toBe(`350,00${NBSP}₽`);
+    expect(formatUnitPrice(350, null)).toBe(`350,00${NBSP}₽`);
+    expect(formatUnitPrice(null, 'KG')).toBe('—');
+    expect(formatUnitPrice(NaN, 'KG')).toBe('—');
+  });
+
+  it('неизвестный код единицы сохраняется как есть (не «ед.»)', () => {
+    expect(formatUnitPrice(10, 'TLSP')).toBe(`10,00${NBSP}₽/TLSP`);
   });
 });
 

@@ -24,8 +24,8 @@ export default defineConfig({
        gpu-process) — на обоих проектах и на чистом HEAD, т.е. это ограничение
        среды, а не дефект спеков. Библиотечный `chromium.launch()` в той же
        среде работает — им и проверяли мобильную вёрстку (см. план, «Результаты»). */
-    chromiumSandbox: false,
     launchOptions: {
+      chromiumSandbox: false,
       args: ['--disable-dev-shm-usage', '--no-sandbox', '--disable-setuid-sandbox'],
     },
   },
@@ -43,7 +43,7 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: 'npm run dev -- --port 5173 --strictPort',
+    command: 'npm run dev', // порт берётся из vite.config.js (5173, strictPort)
     url: 'http://localhost:5173',
     reuseExistingServer: true,
     timeout: 60_000,

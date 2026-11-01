@@ -21,7 +21,7 @@ async function login(page: Page, creds = USER) {
   await page.getByPlaceholder('you@example.com').fill(creds.email);
   await page.getByPlaceholder('••••••••').fill(creds.password);
   await page.getByRole('button', { name: 'Войти' }).click();
-  await expect(page).toHaveURL(/\/trips(\?|$/, { timeout: 15_000 });
+  await expect(page).toHaveURL(/\/trips(\?|$)/, { timeout: 15_000 });
 }
 
 /** Открыть сидовый поход с реальным меню (иначе чеклист пуст). */

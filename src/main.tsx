@@ -11,3 +11,15 @@ import App from "./App.tsx";
 initTheme();
 
 ReactDOM.createRoot(document.getElementById("root")!).render(<App />);
+
+// BL-28: PWA. Регистрируем service worker только в прод-сборке — в dev он кэшировал
+// бы HMR-модули и «залипал» на старых чанках. Файл отдаёт плагин pwa-assets
+// (src/pwa/sw.js → /sw.js при build). Ошибки регистрации не ломают приложение:
+// PWA — улучшение, а не обязательный слой.
+if (import.meta.env.PROD && "serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").catch(() => {
+      /* офлайн-режим недоступен — приложение работает как обычный сайт */
+    });
+  });
+}

@@ -17,8 +17,6 @@ module.exports = {
         'src/data/mockData.ts',
         'src/components/ToastProvider.tsx',
         'src/components/ErrorBoundary.tsx',
-        'src/pages/ErrorsDemoPage.tsx',
-        'src/pages/SyncLogsPage.tsx',
       ],
       rules: {
         'no-restricted-imports': ['error', {

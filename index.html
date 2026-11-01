@@ -17,6 +17,17 @@
     <!-- DESIGN_MIGRATION 2.6: знак v4 из design-pack assets/, инлайн-SVG favicon убран -->
     <link rel="icon" type="image/svg+xml" href="/src/assets/favicon.svg">
 
+    <!-- BL-28: PWA. Манифест и service worker отдаёт плагин pwa-assets (src/pwa/*):
+         build → корень dist, dev → middleware. sw.js в корне сайта — иначе его
+         scope не покрывает всё приложение. Иконки — из design-pack app-icon.svg
+         (public/icons/), apple-touch-icon для «На экран Домой» на iOS. -->
+    <link rel="manifest" href="/manifest.json">
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+    <meta name="application-name" content="Провиант">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="Провиант">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
     <!-- DESIGN_MIGRATION 0.1: токены дизайн-кода подключаются ПЕРВЫМИ (единственный
          источник правды), до инлайн-стилов и до src/index.css -->
     <link rel="stylesheet" href="/provisions/design-pack/tokens.css">

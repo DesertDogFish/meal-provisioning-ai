@@ -35,6 +35,21 @@ export function formatPrice(value: number | string | null | undefined): string {
   return val.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+/**
+ * BL-10 (01.11.2026): цена за единицу С единицей — «350,00 ₽/кг», «87,50 ₽/шт».
+ * Единицы в `trip_price_overrides` — это ₽ за учётную единицу продукта
+ * (`actualPrice` в ответе API), и без подписи «₽/кг» пользователь читал 350 как
+ * сумму, а не как цену за килограмм. Два знака (копейки), запятая, неразрывный
+ * пробел перед ₽ и внутри «₽/ед»; неизвестная/пустая единица → просто «350,00 ₽».
+ */
+export function formatUnitPrice(value: number | string | null | undefined, unit?: string | null): string {
+  const price = formatPrice(value);
+  if (price === '—') return price;
+  // `formatPrice` уже отдаёт «350,00» без валюты; единица — короткая человеческая
+  const raw = String(unit ?? '').trim();
+  return raw ? `${price}\u00A0₽/${unitShortLabel(raw)}` : `${price}\u00A0₽`;
+}
+
 /** Короткая человеческая единица: KG→кг, PCS→шт, PACK→уп… пусто → 'ед.' */
 export function unitShortLabel(unit: string | null | undefined): string {
   return humanizeUnit(unit) || 'ед.';

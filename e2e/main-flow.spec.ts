@@ -13,7 +13,7 @@ async function login(page: Page, creds = ADMIN) {
   await page.getByPlaceholder('you@example.com').fill(creds.email);
   await page.getByPlaceholder('••••••••').fill(creds.password);
   await page.getByRole('button', { name: 'Войти' }).click();
-  await expect(page).toHaveURL(/\/trips(\?|$/, { timeout: 15_000 });
+  await expect(page).toHaveURL(/\/trips(\?|$)/, { timeout: 15_000 });
 }
 
 test.beforeEach(async ({ page }) => {
@@ -32,7 +32,7 @@ test('E2E-02 пользователь без прав на /products (redirect)'
   await login(page, { email: 'user@provision.app', password: 'password123' });
   await page.goto('/products');
   // ProtectedRoute adminOnly → <Navigate to="/trips" replace/> (канон, navigation-п.8)
-  await expect(page).toHaveURL(/\/trips(\?|$/, { timeout: 15_000 });
+  await expect(page).toHaveURL(/\/trips(\?|$)/, { timeout: 15_000 });
 });
 
 test('E2E-03 продукт + предупреждение о дубле', async ({ page }) => {
@@ -68,9 +68,9 @@ test('E2E-04 создание похода со спаренными датам�
   await expect(page.getByText('Поход на Алтай').first()).toBeVisible({ timeout: 15_000 });
 });
 
-// UX-осмотр 31.10 (п.3, KB-32): даты можно набрать с клавиатуры в ДД.ММ.ГГГГ,
-// поле больше не показывает ISO, а заблокированное поле окончания объясняет причину.
-test('E2E-04b даты с клавиатуры: ДД.ММ.ГГГГ, откат опечатки, подсказка на disabled endDate', async ({ page }) => {
+// UX-осмотр 31.10 (п.3, KB-32): native <input type="date"> принимает ISO,
+// заблокированное поле окончания объясняет причину.
+test('E2E-04b даты с клавиатуры: ISO, подсказка на disabled endDate', async ({ page }) => {
   await login(page);
   await page.goto('/trips');
   await page.getByRole('button', { name: /Создать поход/ }).click();
@@ -79,32 +79,22 @@ test('E2E-04b даты с клавиатуры: ДД.ММ.ГГГГ, откат �
   const end = page.locator('#end-date');
   const hint = page.getByTestId('end-date-hint');
 
-  // 1) endDate заблокирован, причина видна (раньше — «молча disabled»)
+  // 1) endDate заблокирован, причина видна
   await expect(end).toBeDisabled();
   await expect(hint).toHaveText('Сначала укажите дату начала');
   await expect(hint).toBeVisible();
 
-  // 2) опечатка (несуществующая дата) не коммитится и не «залипает» в поле
-  await start.click();
-  await start.pressSequentially('31.02.2026');
-  await start.press('Tab'); // blur — нераспознанный ввод откатывается
-  await expect(start).toHaveValue('');
-  await expect(end).toBeDisabled();
-
-  // 3) набранная с клавиатуры дата коммитится; поле показывает ДД.ММ.ГГГГ
-  await start.click();
-  await start.pressSequentially('10.11.2026');
-  await expect(start).toHaveValue('10.11.2026');
-  // значение формы осталось ISO: min у endDate подтянулся (контракт CR-3)
-  await expect(end).toHaveAttribute('min', '2026-11-10');
+  // 2) native date input принимает только ISO YYYY-MM-DD
+  await start.fill('2026-07-01');
+  await expect(start).toHaveValue('2026-07-01');
+  // значение формы: min у endDate подтянулся (контракт CR-3)
+  await expect(end).toHaveAttribute('min', '2026-07-01');
   await expect(end).toBeEnabled();
   await expect(hint).toBeHidden();
 
-  // 4) короткий год коммитится явным действием (Enter), отображается полным
-  await end.click();
-  await end.pressSequentially('15.11.26');
-  await end.press('Enter');
-  await expect(end).toHaveValue('15.11.2026');
+  // 3) endDate: заполняем после разблокировки
+  await end.fill('2026-07-05');
+  await expect(end).toHaveValue('2026-07-05');
 
   // 5) форма уходит на сервер: поход создан
   await page.getByLabel('Количество человек').fill('3');

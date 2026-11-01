@@ -4,6 +4,8 @@ import com.provision.dto.error.ErrorResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.env.Environment;
+import org.springframework.core.env.Profiles;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
@@ -17,9 +19,40 @@ import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import java.time.LocalDateTime;
 import java.util.List;
 
+/**
+ * Единая точка маппинга исключений в Problem Details.
+ *
+ * <p><b>Политика {@code detail} (KB-27).</b> Текст исключения — внутренние данные: в нём
+ * встречаются имена полей и состояний, значения идентификаторов, URL внешних сервисов и
+ * фрагменты SQL. Поэтому сообщения разделены на два класса:</p>
+ * <ul>
+ *   <li><b>доменные</b> — {@link NotFoundException}, {@link ConflictException},
+ *       {@code ProductInUseConflictException}, {@link ForbiddenException},
+ *       {@link UnauthorizedException}, {@link ValidationException},
+ *       {@code TooManyRequestsException}: текст пишется для пользователя, UI показывает его
+ *       как есть, поэтому он уходит клиенту в любом профиле;</li>
+ *   <li><b>внутренние</b> — {@link IllegalArgumentException} и ошибки каркаса Spring MVC
+ *       ({@code HttpRequestMethodNotSupportedException}): в профиле {@code prod} наружу
+ *       уходит только стабильное safe-сообщение с кодом ошибки, полный текст остаётся в логе
+ *       (в каждой строке есть {@code traceId} — {@code TraceIdFilter}); в {@code dev} текст
+ *       исключения отдаётся как есть, чтобы отладка и e2e не теряли диагностику.</li>
+ * </ul>
+ *
+ * <p>Ответ 500 ({@link #handleGeneric}) в обоих профилях нейтрален: подробности
+ * непредвиденной ошибки клиенту не помогают, а атакующему — помогают.</p>
+ */
 @RestControllerAdvice
 @Slf4j
 public class GlobalExceptionHandler {
+
+    /** Профиль, в котором внутренние сообщения исключений наружу не отдаются. */
+    private static final String PROD_PROFILE = "prod";
+
+    /** Safe-тексты внутренних ошибок для prod-профиля: стабильный код + действие. */
+    private static final String SAFE_BAD_REQUEST =
+            "BAD_REQUEST: Некорректный запрос — проверьте параметры и повторите.";
+    private static final String SAFE_METHOD_NOT_ALLOWED =
+            "METHOD_NOT_ALLOWED: Метод не поддерживается для этого адреса.";
 
     /**
      * Предел размера загружаемого файла — для текста 413 (AU-14). Берём из той же
@@ -28,6 +61,18 @@ public class GlobalExceptionHandler {
      */
     @Value("${spring.servlet.multipart.max-file-size:96MB}")
     private String maxFileSize;
+
+    /**
+     * Нужен для выбора политики {@code detail} по активному профилю (KB-27). Именно
+     * {@link Environment}, а не {@code @Value("${spring.profiles.active}")}: активных
+     * профилей может быть несколько, и {@code acceptsProfiles} корректно разбирает
+     * и список, и профиль-группы.
+     */
+    private final Environment environment;
+
+    public GlobalExceptionHandler(Environment environment) {
+        this.environment = environment;
+    }
 
     @ExceptionHandler(NotFoundException.class)
     public ResponseEntity<ErrorResponse> handleNotFound(
@@ -255,11 +300,12 @@ public class GlobalExceptionHandler {
             HttpServletRequest request
     ) {
         log.warn("Illegal argument: {}", ex.getMessage());
+        // KB-27: сообщение IAE — внутреннее (имена полей/состояний), в prod наружу не отдаём.
         ErrorResponse error = new ErrorResponse(
                 "about:blank",
                 "Bad Request",
                 HttpStatus.BAD_REQUEST.value(),
-                ex.getMessage(),
+                internalDetail(ex, SAFE_BAD_REQUEST),
                 request.getRequestURI(),
                 LocalDateTime.now(),
                 null,
@@ -322,11 +368,12 @@ public class GlobalExceptionHandler {
             HttpServletRequest request
     ) {
         log.warn("Method not supported for {}: {}", request.getRequestURI(), ex.getMessage());
+        // KB-27: текст ошибки каркаса (перечень поддерживаемых методов) — внутренний.
         ErrorResponse error = new ErrorResponse(
                 "about:blank",
                 "Method Not Allowed",
                 HttpStatus.METHOD_NOT_ALLOWED.value(),
-                ex.getMessage(),
+                internalDetail(ex, SAFE_METHOD_NOT_ALLOWED),
                 request.getRequestURI(),
                 LocalDateTime.now(),
                 null,
@@ -399,6 +446,31 @@ public class GlobalExceptionHandler {
                 "CONCURRENT_MODIFICATION: Данные изменились, пока вы их редактировали. "
                         + "Обновите страницу и повторите правку.",
                 request);
+    }
+
+    /**
+     * {@code detail} для <b>внутренних</b> исключений (KB-27): в профиле {@code prod} —
+     * только {@code safeMessage} со стабильным кодом, иначе — текст исключения.
+     *
+     * <p>Пустое сообщение не отдаём никогда: клиент (и e2e-контракты) ждут непустой
+     * {@code detail}, поэтому при {@code ex.getMessage() == null} в dev тоже уходит
+     * {@code safeMessage}.</p>
+     */
+    private String internalDetail(Throwable ex, String safeMessage) {
+        if (isProdProfile()) {
+            return safeMessage;
+        }
+        String message = ex.getMessage();
+        return message == null || message.isBlank() ? safeMessage : message;
+    }
+
+    /**
+     * Активен ли профиль {@code prod}. {@code environment == null} (unit-тест, собранный
+     * вручную без Spring-контекста) считается не-prod: санитизация — свойство боевого
+     * окружения, а не значение по умолчанию.
+     */
+    private boolean isProdProfile() {
+        return environment != null && environment.acceptsProfiles(Profiles.of(PROD_PROFILE));
     }
 
     /**

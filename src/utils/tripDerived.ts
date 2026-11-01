@@ -22,7 +22,7 @@ import { buildEffectiveRecipesMap } from './recipeEdits';
 import { buildChecklist, collectChecklistKeys, type ChecklistProductInfo } from './checklist';
 import { sortRows, compareRu, type SortDir } from './rowSort';
 import { tripReadiness } from './readiness';
-import { categoryName } from './format';
+import { categoryName, unitShortLabel } from './format';
 import type { ActualPriceDraft } from './tripStaging';
 import type { TripIngredientEdit } from '../api/tripEdits';
 import type { TripManualItem } from '../api/tripManualItems';
@@ -104,6 +104,10 @@ export function deriveTripView(input: TripViewInput) {
       excluded: false, // перекрывается ниже visibleShopping (shoppingExcluded)
       plannedUnitPrice: cost > 0 && item.totalAmount > 0 ? cost / item.totalAmount : undefined,
       actualUnitPrice: actualUnit,
+      // BL-10 (01.11.2026): единица цены видна вью-модели — «₽/кг», «₽/шт».
+      // Без неё `actualUnitPrice` из `trip_price_overrides` читался как сумма
+      // («350») вместо цены за килограмм («350,00 ₽/кг»).
+      unitLabel: unitShortLabel(item.unit),
       // Fix-7 (п.28): введённая в чеке цена делает позицию «с ценой» — даже если
       // в справочнике цены нет («нет цены» при уже введённом чеке больше не пишем)
       hasPrice: item.hasPrice || actualUnit != null,
@@ -134,6 +138,8 @@ export function deriveTripView(input: TripViewInput) {
         // UX-осмотр 31.10 (п.10): факт-цена дня видна view-модели («честный
         // факт»: день без введённого чека не выдаёт план за факт)
         actualUnitPrice: actualUnit,
+        // BL-10: та же единица цены, что и в закупке на поход — «₽/кг», «₽/шт»
+        unitLabel: unitShortLabel(item.unit),
         effectiveCost: actualUnit != null ? actualUnit * item.totalAmount : cost,
       };
     });

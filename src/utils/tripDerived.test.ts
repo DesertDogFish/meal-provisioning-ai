@@ -94,6 +94,25 @@ describe('deriveTripView — меню и базовая закупка', () => {
     expect(v.factCount).toBe(0);
   });
 
+  /**
+   * BL-10 (01.11.2026): цены в закупке/чеке — это ₽ за учётную единицу продукта.
+   * Вью-модель обязана отдавать единицу цены рядом с ценой, иначе «350» в UI
+   * читается как сумма позиции, а не как цена за килограмм.
+   */
+  it('единицы цены: unitLabel рядом с planned/actualUnitPrice (BL-10)', () => {
+    const v = deriveTripView(input({ draftOverrides: { i1: { price: 120, total: 0 } } }));
+    const grechka = rowByName(v.visibleShopping, 'Гречка');
+    expect(grechka.unit).toBe('KG');
+    expect(grechka.unitLabel).toBe('кг');
+    expect(grechka.plannedUnitPrice).toBe(100);   // 100 ₽ / 1 кг
+    expect(grechka.actualUnitPrice).toBe(120);    // чек: 120 ₽/кг
+    const tushenka = rowByName(v.visibleShopping, 'Тушёнка');
+    expect(tushenka.unitLabel).toBe('шт');
+    // день несёт ту же единицу — «Закупка по дням» и чек не расходятся в подписи
+    const dayRow = rowByName(v.dayShopping[0].items, 'Гречка');
+    expect(dayRow.unitLabel).toBe('кг');
+  });
+
   it('«на человека»: суммы и сортировка по алфавиту (U28/U33)', () => {
     const v = deriveTripView(input());
     expect(v.realPeople).toBe(2);

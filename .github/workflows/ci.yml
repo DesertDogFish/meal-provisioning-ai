@@ -10,6 +10,38 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # BL-46 / KB-26: гейт на UTF-8 BOM. `fix-encoding.ps1` удалён — BOM в дереве больше
+  # нет, а регрессию (PowerShell Out-File, редактор с «UTF-8 with BOM») ловит этот
+  # блокирующий шаг: любой отслеживаемый файл, начинающийся с EF BB BF, валит сборку.
+  # Проверяются именно первые три байта файла (а не вхождение байтов в тексте), чтобы
+  # не ловить легитимный U+FEFF внутри содержимого.
+  hygiene:
+    name: Repo Hygiene (no BOM)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: No UTF-8 BOM in tracked files
+        run: |
+          set -euo pipefail
+          bad=()
+          while IFS= read -r -d '' f; do
+            [ -f "$f" ] || continue
+            if [ "$(head -c 3 -- "$f" | od -An -tx1 | tr -d '[:space:]')" = "efbbbf" ]; then
+              bad+=("$f")
+            fi
+          done < <(git ls-files -z)
+          if [ "${#bad[@]}" -gt 0 ]; then
+            echo "::error::UTF-8 BOM найден в отслеживаемых файлах:"
+            for f in "${bad[@]}"; do echo "  $f"; done
+            echo "Снять BOM: удалить первые три байта EF BB BF (сохранить файл как UTF-8 без BOM)."
+            echo "PowerShell Out-File добавляет BOM — для исходников использовать другой инструмент."
+            exit 1
+          fi
+          echo "OK: BOM не найден, проверено $(git ls-files | wc -l) файлов"
+
   backend:
     name: Backend Tests
     runs-on: ubuntu-latest
@@ -60,6 +92,16 @@ jobs:
         env:
           JWT_SECRET: ci-test-secret-key-for-jwt-tokens-must-be-at-least-256-bits-long-hs256-ok
         run: mvn -B -ntp test
+      - name: Coverage gate (JaCoCo lines >= 60%)
+        working-directory: backend
+        run: mvn -B -ntp jacoco:check@coverage-gate
+      - name: Upload JaCoCo report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-jacoco
+          path: backend/target/site/jacoco/
+          if-no-files-found: ignore
       
       - name: Upload surefire reports
         if: failure()
@@ -258,6 +300,19 @@ jobs:
       
       - name: Frontend tests
         run: npm run test
+      - name: Coverage gate
+        run: |
+          coverage=$(npx vitest run --coverage 2>&1 | grep 'Line coverage' | awk '{print $3}' | tr -d '%')
+          if [ -z "$coverage" ]; then
+            echo "::error::Coverage step failed to run"
+            exit 1
+          fi
+          echo "Coverage: ${coverage}%"
+          if [ "$coverage" -lt 60 ]; then
+            echo "::error::Coverage ${coverage}% below R5 minimum 60%"
+            exit 1
+          fi
+          echo "✅ Coverage gate passed: ${coverage}% >= 60%"
       
       - name: Check MD files (non-blocking)
         continue-on-error: true  # TODO: через неделю перевести в blocking (exit 1)
@@ -309,19 +364,101 @@ jobs:
       - uses: actions/checkout@v4
       
       - name: Semgrep (non-blocking)
-        continue-on-error: true  # TODO: починить docker-compose security_opt/read_only и nginx H2C, затем вернуть blocking
         run: |
           pip install semgrep
           semgrep scan --config auto
       
       - name: Dependency Review
         uses: actions/dependency-review-action@v4
-        continue-on-error: true  # Dependency graph может быть отключён в приватных репо
       
       - name: Trivy FS scan
         uses: aquasecurity/trivy-action@master
-        continue-on-error: true  # Rate limit 429 от Maven Central — временная проблема CI
         with:
           scan-type: fs
           ignore-unfixed: true
           severity: CRITICAL,HIGH
+
+  # KB-18: E2E-nightly real-mode regression
+  e2e-nightly:
+    name: E2E Nightly (real-mode)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' && github.ref == 'refs/heads/main'
+    schedule:
+      - cron: '0 6 * * 1'  # Пн 06:00 UTC
+    timeout-minutes: 45
+
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: provision
+          POSTGRES_USER: provision
+          POSTGRES_PASSWORD: e2e-ci-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U provision"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      SPRING_PROFILES_ACTIVE: test
+      SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/provision
+      SPRING_DATASOURCE_USERNAME: provision
+      SPRING_DATASOURCE_PASSWORD: e2e-ci-password
+      JWT_SECRET: e2e-nightly-secret-key-at-least-256-bits-hs256-ok
+      PLAYWRIGHT_SKIP_DOWNLOAD: 1
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+
+      - name: Install PostgreSQL 15 (for integration tests)
+        run: |
+          set -o pipefail
+          sudo apt-get update -qq
+          if ! apt-cache show postgresql-15 >/dev/null 2>&1; then
+            sudo apt-get install -yq --no-install-recommends curl ca-certificates gnupg
+            sudo install -d -m 0755 /etc/apt/keyrings
+            curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+              | sudo gpg --dearmor -o /etc/apt/keyrings/postgresql-pgdg.gpg
+            echo "deb [signed-by=/etc/apt/keyrings/postgresql-pgdg.gpg] http://apt.postgresql.org/pub/repos/apt $(. /etc/os-release && echo $VERSION_CODENAME)-pgdg main" \
+              | sudo tee /etc/apt/sources.list.d/pgdg.list
+            sudo apt-get update -qq
+          fi
+          if apt-cache show postgresql-15 >/dev/null 2>&1; then
+            sudo apt-get install -yq --no-install-recommends postgresql-15
+          else
+            sudo apt-get install -yq --no-install-recommends postgresql
+          fi
+          psql --version || true
+
+      - name: Backend integration tests (real-mode)
+        working-directory: backend
+        run: mvn -B -ntp verify
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Frontend e2e tests (real API)
+        run: |
+          npm ci
+          npx playwright test --project=real
+
+      - name: Upload e2e artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-nightly-logs
+          path: |
+            backend/target/surefire-reports/
+            backend/target/test-classes/**/logs/
+            playwright-report/

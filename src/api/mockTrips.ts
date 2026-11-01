@@ -21,6 +21,18 @@ const MAX_CHECKLIST_BOUGHT_ITEMS = 2000;
  */
 let mockTripSeq = 0;
 
+/**
+ * Дата в формате YYYY-MM-DD по ЛОКАЛЬНОМУ календарю (не UTC).
+ * `toISOString()` даёт UTC — в TZ UTC+3 полночь 01.06 превращалась в
+ * «2026-05-31», и дни похода генерировались со сдвигом на день назад
+ * (`mockTripsUpdate.test.ts` падал вне UTC-системы).
+ */
+function isoDay(d: Date): string {
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${d.getFullYear()}-${m}-${day}`;
+}
+
 export function handleTripsImpl(srv: any, method: string, path: string, body?: any): any {
   const parts = path.split('/').filter(Boolean);
 
@@ -190,7 +202,7 @@ export function handleTripsImpl(srv: any, method: string, path: string, body?: a
         return m ? Math.max(mx, Number(m[1]) + 1) : mx;
       }, oldDays.length);
       for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-        const iso = d.toISOString().slice(0, 10);
+        const iso = isoDay(d);
         if (!keptDates.has(iso)) {
           kept.push({ id: `d-${trip.id}-${seq++}`, tripId: trip.id, dayDate: iso, meals: [] });
         }
@@ -873,10 +885,19 @@ export function handleTripsImpl(srv: any, method: string, path: string, body?: a
     // cleanup-п.8: ключи хранилища нормализованы CONTRACT-P1 ('ing1'→'1');
     // отдаём id каталога, чтобы клиентский пайплайн (deriveTripView/tripLoader)
     // матчил серверные чеки с позициями закупки (паритет real-режима).
-    return Object.entries(overrides).map(([ingredientId, data]) => ({
-      ingredientId: denormalizeOverrideKey(ingredientId),
-      ...data
-    }));
+    // BL-10: паритет с TripPriceOverrideResponse — единица продукта и валюта
+    // рядом с actualPrice (цена за единицу), чтобы клиент писал «350,00 ₽/кг».
+    return Object.entries(overrides).map(([ingredientId, data]) => {
+      const publicId = denormalizeOverrideKey(ingredientId);
+      const product = products.find(p => p.id === publicId) ?? products.find(p => p.id === ingredientId);
+      return {
+        ingredientId: publicId,
+        ingredientName: product?.name,
+        unit: product?.unit ?? null,
+        currency: 'RUB',
+        ...data,
+      };
+    });
   }
 
   // POST /trips — создание похода (E2E-04/05: раньше роут отсутствовал,
@@ -907,7 +928,7 @@ export function handleTripsImpl(srv: any, method: string, path: string, body?: a
       days.push({
         id: `d-${newTrip.id}-${i}`,
         tripId: newTrip.id,
-        dayDate: d.toISOString().slice(0, 10),
+        dayDate: isoDay(d),
         meals: [],
       });
     }

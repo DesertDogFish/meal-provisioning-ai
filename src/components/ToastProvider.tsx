@@ -73,7 +73,12 @@ function ToastContainer({ toasts, onRemove }: { toasts: Toast[]; onRemove: (id: 
   if (toasts.length === 0) return null;
 
   return (
-    <div className="fixed top-4 left-1/2 -translate-x-1/2 space-y-2 w-full max-w-md px-4" style={{ zIndex: 'var(--z-toast)' }}>
+    <div
+      className="fixed top-4 left-1/2 -translate-x-1/2 space-y-2 w-full max-w-md px-4"
+      style={{ zIndex: 'var(--z-toast)' }}
+      role="region"
+      aria-label="Уведомления"
+    >
       {toasts.map(toast => (
         <ToastItem key={toast.id} toast={toast} onRemove={onRemove} />
       ))}
@@ -83,38 +88,30 @@ function ToastContainer({ toasts, onRemove }: { toasts: Toast[]; onRemove: (id: 
 
 function ToastItem({ toast, onRemove }: { toast: Toast; onRemove: (id: string) => void }) {
   const icons = {
-    error: <AlertCircle size={20} />,
-    success: <CheckCircle size={20} />,
-    info: <Info size={20} />,
-  };
-
-  const colors: Record<ToastType, string> = {
-    error: 'bg-red-50 border-red-200 text-red-900',
-    success: 'bg-emerald-50 border-emerald-200 text-emerald-900',
-    info: 'bg-blue-50 border-blue-200 text-blue-900',
-  };
-
-  const iconColors: Record<ToastType, string> = {
-    error: 'text-red-600',
-    success: 'text-emerald-600',
-    info: 'text-blue-600',
+    error: <AlertCircle size={14} aria-hidden="true" />,
+    success: <CheckCircle size={14} aria-hidden="true" />,
+    info: <Info size={14} aria-hidden="true" />,
   };
 
   return (
-    <div className={`rounded-lg border ${colors[toast.type]} p-4 shadow-lg animate-slide-in`}>
+    <div
+      className={`toast toast--${toast.type} animate-slide-in`}
+      // Ошибка прерывает скринридер (роль alert), остальные типы — вежливо (status).
+      role={toast.type === 'error' ? 'alert' : 'status'}
+    >
       <div className="flex items-start gap-3">
-        <div className={iconColors[toast.type]}>{icons[toast.type]}</div>
+        <span className="toast__icon">{icons[toast.type]}</span>
         <div className="flex-1">
-          <h4 className="font-semibold text-sm">{toast.title}</h4>
-          <p className="text-sm opacity-90 mt-0.5">{toast.message}</p>
+          <h4 className="toast__title">{toast.title}</h4>
+          <p className="toast__msg">{toast.message}</p>
         </div>
         <button
           type="button"
           onClick={() => onRemove(toast.id)}
           aria-label={`Закрыть уведомление: ${toast.title}`}
-          className={iconColors[toast.type]}
+          className="toast__close"
         >
-          <X size={16} />
+          <X size={16} aria-hidden="true" />
         </button>
       </div>
     </div>

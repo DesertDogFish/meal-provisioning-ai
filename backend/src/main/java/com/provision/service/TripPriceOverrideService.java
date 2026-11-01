@@ -111,10 +111,16 @@ public class TripPriceOverrideService {
     }
 
     private TripPriceOverrideResponse toResponse(TripPriceOverride override) {
+        // BL-10: единица продукта — часть контракта: actualPrice это ₽/единица,
+        // и клиент форматирует её как «350,00 ₽/кг», а не как сумму «350 ₽».
+        String unit = override.getIngredient() != null && override.getIngredient().getUnit() != null
+                ? override.getIngredient().getUnit().name()
+                : null;
         return new TripPriceOverrideResponse(
                 override.getId(),
                 override.getIngredient().getId(),
                 override.getIngredient().getName(),
+                unit,
                 override.getActualPrice(),
                 override.getCurrency(),
                 override.getComment(),

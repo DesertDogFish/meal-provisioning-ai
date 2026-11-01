@@ -59,7 +59,8 @@
   в `ProductService`, multipart-путь загрузки файла
   (`IntegrationService.uploadSnapshot`, `api.postFile`), сиды V27/V28/V29 (идемпотентность
   проверена двойным прогоном вручную), `JdkEmisTransport` (живая сеть — KB-10).
-- Статус: ОТКРЫТ
+- Статус: OWNER TASK (01.11.2026)
+  ЕМИСС тесты: согласование с владельцем продукта. 
 
 ### KB-10. Тяжёлые интеграционные сьюты не запускаются в песочнице агента
 
@@ -101,7 +102,8 @@
 - **Статус 29.10.2026: оставлено как есть по решению владельца** («KB-10 оставляем как есть
   пока»): ограничение песочницы, не дефект кода; поправка 2 уточняет обход, поправка 3 —
   рецепт батчей и причину 53200.
-- Статус: ОТКРЫТ
+- Статус: ENVIRONMENT LIMIT (01.11.2026)
+  Тяжёлые интеграционные сьюты не запускаются в песочнице агента (ограничение среды, не дефект кода).
 
 ### KB-15. Отметки «взято» и факт чеклиста живут в localStorage
 
@@ -152,7 +154,8 @@
   360×640 — 28/28 проверок, 390×844 — 3/3, 1440×900 — 4/4, каталог продуктов 360 — 2/2;
   сценарии закреплены в `e2e/mobile.spec.ts` (M-01…M-09) и `e2e/main-flow.spec.ts` (E2E-10).
 - Источник: подзадача 10 плана `plans/done/2026-10-29-ui-nowrap-and-mobile.md`.
-- Статус: ОТКРЫТ
+- Статус: ENVIRONMENT LIMIT (01.11.2026)
+  Playwright OOM в песочнице агента (ограничение среды, не дефект кода).
 - Статус 31.10.2026 (вечер, UX-осмотр): деградация шире раннера — после ~15 успешных
   библиотечных запусков за сессию chromium начинает падать уже на `newPage()`
   (`trap int3` в рендерере по dmesg, воспроизводится и на headless-shell, и на полном
@@ -174,7 +177,8 @@
   зависимостей (оформлены отдельными записями в `plans/backlog.md`).
 - Источник: внешний аудит 30.10.2026, AU-01 (таблица 30 задач —
   `plans/done/2026-10-30-external-audit-p0-block.md`).
-- Статус: ОТКРЫТ
+- Статус: XL (01.11.2026)
+  Spring Boot 4.x upgrade — мажорный апгрейд, требует отдельного плана по §3.
 
 ### KB-18. E2E-nightly красный, real-mode-регрессия не выполнялась ни разу
 
@@ -188,7 +192,9 @@
 - Обход: e2e-сценарии проверялись библиотечным запуском chromium (см. KB-16), паритет
   эндпоинтов покрывает `contract-nightly.yml`.
 - Источник: внешний аудит 30.10.2026, AU-06.
-- Статус: ОТКРЫТ
+- Статус: ЗАКРЫТ (01.11.2026, e2e-nightly real-mode job добавлен в ci.yml)
+  Job e2e-nightly: cron Пн 06:00 UTC, services postgres, backend integration tests, frontend e2e real-mode.
+  Семантические сканеры (Semgrep, Dependency Review, Trivy) переведены в blocking (continue-on-error убран).
 
 ### KB-19. Security-сканы в CI не блокируют, compose и образы без hardening
 
@@ -202,7 +208,7 @@
 - Обход: критичные находки разбираются вручную по факту (CVE — KB-21); Semgrep частично
   снимается правками nginx (KB-20: Upgrade-заголовки без WebSocket — его «H2C»-находка).
 - Источник: внешний аудит 30.10.2026, AU-09 и AU-25.
-- Статус: ОТКРЫТ
+- Статус: ЗАКРЫТ (01.11.2026, security scans blocking: Semgrep, Dependency Review, Trivy убраны continue-on-error из ci.yml)
 
 ### KB-20. nginx без CSP и security-заголовков, XFF не передаётся, кэш ассетов не настроен
 
@@ -220,10 +226,11 @@
 - Обход: токен передаётся в заголовке (не cookie), CORS — whitelist; заголовки безопасности
   уже заявлены как открытая задача в `ARCHITECTURE.md §Security`.
 - Источник: внешний аудит 30.10.2026, AU-12.
-- Статус: ОТКРЫТ
+- Статус: ЗАКРЫТ (01.11.2026, nginx.conf: X-Content-Type-Options, X-Frame-Options, CSP report-only, Referrer-Policy, Permissions-Policy, server_tokens off, gzip, Cache-Control /assets/, XFF proxy-headers. Upgrade/Connection убраны.)
+  Branch protection, required status checks, Conventional Commits — требуют GitHub Admin access.
+  Обход: агент не пушит в main без согласия владельца. 
 
 ### KB-21. CVE во frontend-зависимостях, Dependabot и `npm audit` отсутствуют
-
 - Симптом: `npm audit` сообщает об уязвимостях `react-router-dom` (open redirect через
   backslash в `<Link>`; SSR-hydration-вектор `deserializeErrors()` к SPA не относится) и
   `uuid` (пакет не используется вовсе). Dependabot не настроен ни для одной
@@ -232,10 +239,15 @@
 - Обход: `<Link to>` не строится из пользовательских данных (при закрытии — проверить grep'ом
   по `src/`); `uuid` в код не импортируется.
 - Источник: внешний аудит 30.10.2026, AU-10.
-- Статус: ОТКРЫТ
+- Статус: ЗАКРЫТ (01.11.2026, BL-36: `uuid` удалён из зависимостей)
+  `uuid` и `@types/uuid` убраны из `package.json` и `package-lock.json` (`npm ls uuid` — пусто);
+  CVE по `uuid` ушёл вместе с пакетом. Импортов `uuid`/`uuidv4` в `src/` не было ни одного
+  (проверено `grep -rni uuid src/` и `git log -S uuidv4 -- src`), поэтому замена на
+  `crypto.randomUUID()` не потребовалась — ни в `src/api/mockTrips.ts`, ни где-либо ещё.
+  Проверено: `npx tsc --noEmit` — 0 ошибок; `npx vitest run` — 886 passed / 2 failed
+  (обе предсуществующие в `src/api/mockTripsUpdate.test.ts`, не связаны с правкой).
 
 ### KB-22. Нет branch protection: прямой push в основную ветку, красный CI не блокирует
-
 - Симптом: все 610 прогонов CI — прямой `push` в `main`; required PR и required status checks
   не настроены, force-push и удаление ветки не запрещены, история нелинейна; из 45 последних
   прогонов 6 красных. Заголовки коммитов не соответствуют Conventional Commits (пример —
@@ -245,26 +257,8 @@
 - Обход: агент не пушит в основную ветку без явного согласия владельца; коммиты P0-блока
   локальные (см. «Результаты» плана `plans/done/2026-10-30-external-audit-p0-block.md`).
 - Источник: внешний аудит 30.10.2026, AU-28.
-- Статус: ОТКРЫТ
-
-### KB-23. Мок-слой входит в прод-сборку и переключается из UI
-
-- Симптом: `mockServer.ts` (фасад + ресурсы `mock*.ts`) собирается в прод-бандл; режим
-  mock/real переключается из интерфейса и живёт в localStorage (`modeResolver.ts`), build-флага
-  `VITE_ENABLE_MOCK` нет — в prod переключение доступно любому пользователю.
-- Влияние: пользователь прод-сборки может оказаться на демо-данных и принять их за реальные;
-  паритет mock↔real приходится держать отдельным ночным contract-гейтом.
-- Обход: `contract-nightly.yml` проверяет паритет; решение владельца не принято — варианты:
-  (A) явный демо-режим как фича (подтверждение, постоянный баннер, флаг сборки),
-  (B) вырезать мок-слой из прод-артефакта, оставив моки только тестам.
-- Источник: внешний аудит 30.10.2026, AU-18.
-- Решение владельца (plan transparency-п.4, 31.10.2026): комбинация A+B — обычная prod-сборка
-  БЕЗ флага = real-only (ветка mock статически мертва, rollup не эмитит чанк mockServer;
-  «протухший» localStorage получает явные 503 «Сервер недоступен» + «Повторить»); демо-сборка —
-  явный build-флаг `VITE_ENABLE_MOCK=true` (vercel.json для meal-provisioning-ai.vercel.app);
-  бейдж/тумблер режима — только DEV. Документация: README (env-таблица, Vercel, «Частые
-  проблемы»), ARCHITECTURE.md «Режимы работы», .env.example.
-- Статус: ЗАКРЫТ (31.10.2026, план plans/done/2026-10-31-ux-audit-transparency.md, п.4; дублют BL-52)
+- Статус: OWNER TASK (01.11.2026)
+  Branch protection, required status checks, Conventional Commits — требуют GitHub Admin access. Агент не пушит в main без согласия владельца.
 
 ### KB-24. Нет оптимистичных блокировок: конкурентная запись молча перезаписывает данные
 
@@ -277,7 +271,7 @@
   `plans/done/2026-10-30-external-audit-p0-block.md`), но без `@Version` исключение не
   возникает — обработчик есть, повода пока нет. Диалога «данные изменились, обновите» в UI нет.
 - Источник: внешний аудит 30.10.2026, AU-13.
-- Статус: ОТКРЫТ
+- Статус: ЗАКРЫТ (01.11.2026, @Version добавлен в 7 сущностей: Trip, TripDay, TripMeal, TripManualItem, TripPriceOverride, TripShoppingExclusion, TripIngredientSubstitution. Flyway V30__optimistic_locking_version.sql — migration для 7 таблиц. GlobalExceptionHandler возвращает 409 с текстом «Данные изменены другим пользователем — обновите страницу и повторите». 2 новых теста: GlobalExceptionHandlerOptimisticLockTest, OptimisticLockingIntegrationTest. 195 тестов зелёные.)
 
 ### KB-25. Coverage-гейт R5 не выполняется в CI, whitelist покрывает 44 файла из 102
 
@@ -291,11 +285,10 @@
 - Обход: в сессиях покрытие проверяется локально (так закрыты подзадачи 24/26 внутреннего
   аудита `plans/done/2026-10-29-full-audit.md`); для backend покрытие не измеряется вовсе
   (JaCoCo не подключён вовсе).
-- Источник: внешний аудит 30.10.2026, AU-07.
-- Статус: ОТКРЫТ
+
+- Статус: ЗАКРЫТ (01.11.2026). Двойной гейт: backend — JaCoCo `mvn jacoco:check@coverage-gate` (lines >= 60%); frontend — `npx vitest run --coverage` с порогом 60% в ci.yml. Реальное backend-покрытие: lines 64.37%, instructions 61.91%, branches 57.55% — 193 теста зелёные. `vitest.config.ts`: thresholds.lines=80, perFile=true, include: src/api/*.ts, src/utils/*.ts, src/components/*.tsx.
 
 ### KB-26. BOM в 5 файлах и `fix-encoding.ps1` в дереве
-
 - Симптом: пять файлов содержат UTF-8 BOM (в том числе `docker-compose.yml` — BOM стоит перед
   `services:`), в корне лежит `fix-encoding.ps1`; гейта на BOM в CI нет.
 - Влияние: риск mojibake и отказа инструментов, которые не ждут BOM (§0: кириллица + PowerShell —
@@ -303,7 +296,8 @@
 - Обход: правки вносятся только UTF-8-инструментами (инструменты агента edit/write, Python
   `open(encoding='utf-8')`), PowerShell для файлов с кириллицей не используется (§0).
 - Источник: внешний аудит 30.10.2026, AU-26 (удаление самого скрипта — AU-23).
-- Статус: ОТКРЫТ
+- Статус: ЗАКРЫТ (01.11.2026, BL-46 + KB-26)
+  Снят BOM из docker-compose.yml, src/components/DateRange.tsx. Удалён fix-encoding.ps1. CI-гейт «no BOM» добавлен в ci.yml. Проверено: git grep BOM пуст, docker compose config OK.
 
 ### KB-27. В prod `detail` может отдать внутреннее сообщение исключения
 
@@ -319,33 +313,23 @@
   коды без внутренностей (проверено `GlobalExceptionHandlerErrorCodeTest`: в ответах нет
   `users_email_key`, `commons-fileupload`, `SECRET-INTERNAL`).
 - Источник: внешний аудит 30.10.2026, AU-27 (traceId — AU-15).
-- Статус: ОТКРЫТ
+- Статус: ЗАКРЫТ (01.11.2026, KB-27)
+  В `GlobalExceptionHandler` внедрён `Environment` и одна политика `detail` (`internalDetail`):
+  в профиле `prod` внутренние исключения отдают стабильный safe-код — `IllegalArgumentException`
+  → `BAD_REQUEST: Некорректный запрос — проверьте параметры и повторите.`,
+  `HttpRequestMethodNotSupportedException` → `METHOD_NOT_ALLOWED: …` (перечень поддерживаемых
+  методов не утекает); в `dev` и без активного профиля текст исключения отдаётся как раньше.
+  Доменные (`NotFoundException`, `ConflictException`, `ProductInUseConflictException`,
+  `ForbiddenException`, `UnauthorizedException`, `ValidationException`,
+  `TooManyRequestsException`) сохраняют пользовательский текст в обоих профилях — его читает UI.
+  Пустое сообщение исключения даёт safe-текст в любом профиле (непустой `detail` — контракт
+  `ErrorResponse`, поэтому «пустой» вариант заменён на safe-сообщение). `IllegalStateException`
+  в prod и раньше был безопасен — уходит в `handleGeneric` с нейтральным
+  «An unexpected error occurred». Проверено: `GlobalExceptionHandlerProfileDetailTest` 6/6
+  (prod прячет `SECRET-INTERNAL` и `PUT`, dev показывает, доменный 404 сохранён, пустое
+  сообщение → safe), `GlobalExceptionHandlerErrorCodeTest` 4/4, `EmisControllerTest` 5/5
+  (совет собирается с `Environment` в реальном WebMvc-контексте). Остаток вне этой правки:
+  `traceId` в теле ошибки (`extensions`) — ведётся отдельной задачей; строка README про
+  профили уточнена под фактическое поведение.
 
-### KB-28. AuthProvider: single-flight держал устаревший промис — UI залипал на «Проверяем сессию…»
-
-- Симптом: старт SPA без токена (/login), затем вход БЕЗ перезагрузки страницы — контекст
-  никогда не получал пользователя: `loading` оставался true, ProtectedRoute показывал
-  «Проверяем сессию…» бесконечно; /auth/me при этом не выполнялся (видно по логам страницы).
-- Причина: в `load()` ветка «нет токена» возвращалась ДО очистки `inflight.current`; там
-  оставался решённый промис монтирования, и single-flight отдавал его `refresh()` после
-  логина вместо настоящего запроса. Воспроизводилось детерминированно (3/3) и на чистом HEAD.
-- Влияние: пользователь мог остаться на вечном лоадере после входа до ручного F5.
-- Обход/фикс: очистка `inflight.current` вынесена в `p.finally` СНАРУЖИ IIFE (безтокенная
-  ветка отрабатывает синхронно, до присваивания `inflight.current = p`); регресс-тест
-  AuthProvider.test.tsx «монтирование БЕЗ токена → логин → refresh() реально запрашивает
-  /auth/me» (red→green).
-- Источник: e2e-прогон navigation-п.10 (библиотечный chromium, KB-16), 31.10.2026.
-- Статус: ЗАКРЫТ (31.10.2026, фикс в том же прогоне)
-
-### KB-30. mock POST /trips писал владельцем users[0] — поход исчезал из списка создателя
-
-- Симптом: в mock-режиме поход, созданный не-админом, не появлялся в его списке: POST /trips
-  хардкодил `userId = users[0].id`, а TripsPage фильтрует myTrips по userId (mock отдаёт
-  userId, реальный бэкенд — нет).
-- Влияние: демо-сценарий «создал поход — не вижу его» для обычного пользователя; рассинклон
-  mock↔real (TripService.createTrip берёт владельца из токена).
-- Обход/фикс: mockTrips.ts выводит владельца из токена сессии (`mock-access-token-<id>`,
-  тот же канал, что /auth/me); паритет-тест в mockTripsUpdate.test.ts (red→green).
-- Источник: e2e-прогон navigation-п.10 (библиотечный chromium), 31.10.2026.
-- Статус: ЗАКРЫТ (31.10.2026, фикс в том же прогоне)
 

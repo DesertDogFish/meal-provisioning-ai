@@ -4,6 +4,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.mock.env.MockEnvironment;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -44,7 +45,8 @@ class GlobalExceptionHandlerErrorCodeTest {
 
     @BeforeEach
     void setUp() {
-        GlobalExceptionHandler advice = new GlobalExceptionHandler();
+        // Профиль не активен → политика detail как в dev (санитизация — только в prod, KB-27).
+        GlobalExceptionHandler advice = new GlobalExceptionHandler(new MockEnvironment());
         ReflectionTestUtils.setField(advice, "maxFileSize", MAX_FILE_SIZE);
         mockMvc = MockMvcBuilders.standaloneSetup(new ProbeController())
                 .setControllerAdvice(advice)

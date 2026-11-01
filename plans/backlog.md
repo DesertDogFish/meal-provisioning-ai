@@ -69,18 +69,6 @@
 
 ## ЕМИСС, цены и единицы
 
-- **BL-10. Правило «плотность ≈ 1» на фронте (чеклист/закупка).** `src/utils/checkUnits.ts`
-  приводит количество только внутри своей размерности: `unitOptions('KG')` = ['г','кг'],
-  `unitOptions('L')` = ['мл','л'], а `convertToBase({300,'г'}, 'L')` и `({300,'мл'}, 'KG')`
-  дают `null`. Нужно: `unitOptions('KG')` += ['мл','л'], `unitOptions('L')` += ['г','кг'],
-  `unitOptions('PCS'|'PACK', pw)` += ['мл','л'] (`piece_weight_g` читается как мл), ветки
-  `convertToBase`: 'г'→L = a/1000, 'кг'→L = a, 'мл'→KG = a/1000, 'л'→KG = a, 'мл'/'л'→PCS/PACK
-  через pw. Бэкенд уже согласован: `MealCompositionService.weightOfGrams` считает KG|L как ×1000 г.
-  Критерий: `src/utils/checkUnits.test.ts` обновлён и зелёный (ассерты
-  `unitOptions('KG')).toEqual(['г','кг'])` и `unitOptions('L')).toEqual(['мл','л'])` меняются).
-  Делать в сессии, где можно запустить vitest (`npm ci`).
-  Статус: READY
-
 - **BL-11. История цен в UI продукта.** График по `emis_prices` (а не только последняя точка):
   эндпоинт `GET /admin/emis/products/{code}/prices`, компонент в модалке продукта,
   mock-паритет. Критерий: видно ряд по месяцам за окно `period-years`.
@@ -127,7 +115,16 @@
   по желанию, офлайн-данные уже живут в localStorage (BL-27). Файлы: `public/*`, `index.html`.
   Критерий приёмки: «Добавить на главный экран» на Android/iOS даёт иконку и полноэкранный
   запуск в теме приложения, Lighthouse (PWA) не сообщает об отсутствующем manifest.
-  Статус: READY
+  Статус: ГОТОВО (01.11.2026)
+  Сделано: `src/pwa/manifest.json` (start_url `/`, display `standalone`, background `#1a1a2e`,
+  theme `#16213e`, иконки 192/512 + maskable) и `src/pwa/sw.js` (network-first для навигации
+  с офлайн-фолбэком на оболочку, stale-while-revalidate для статики, `/api` и `/auth` не
+  кэшируются) отдаются плагином `pwaAssets` в `vite.config.js` (build → корень `dist`, dev →
+  middleware). Иконки `public/icons/*.png` отрендерены из `design-pack/assets/app-icon.svg`;
+  в `index.html` — `link rel="manifest"` и apple-touch-мета; регистрация SW — `src/main.tsx`
+  (только `PROD`). Проверено: `vite build` → `dist/manifest.json` + `dist/sw.js` + ссылка в
+  `dist/index.html`; SW активируется со scope `/`, офлайн-переход на `/trips` отдаёт оболочку;
+  `typecheck` зелёный.
 
 - **BL-29. Контраст мобильного UI в обеих темах.** Что сделать: проверить поповер `InfoTip`,
   липкие `.modal-head`/`.modal-foot`, карточный режим `.table-cards` и `.app-drawer` против
@@ -324,7 +321,7 @@
   non-blocking. Критерий приёмки: `npm run build` и frontend-тесты зелёные; `node_modules`
   меньше минимум на 20 МБ; `depcheck` не сообщает о неиспользуемых `dependencies`;
   `npm ci` без `EBADENGINE`. Источник: внешний аудит 30.10.2026, AU-24 (сводка 30 задач — `plans/done/2026-10-30-external-audit-p0-block.md`).
-  Статус: READY
+  Статус: ЧАСТИЧНО ГОТОВО (01.11.2026) — 8 deps удалены (`@dnd-kit/*`, `@supabase/supabase-js`, `canvas-confetti`, `framer-motion`, `recharts`); оставлено `happy-dom`, `@types/uuid`, `@types/canvas-confetti` — кандидаты на отдельную уборку. Остальные подзадачи (name/version/engines, depcheck, CI Node ≥22) в бэклоге.
 
 - **BL-44. Включить e2e и конфиги в typecheck** (S). Что сделать: `tsconfig.e2e.json`
   (extends базового, `include: ["e2e", "playwright.config.ts"]`,
@@ -332,7 +329,7 @@
   `vite.config.*`; скрипт `typecheck:all`, включающий все три; заменить `vite.config.js` на
   `.ts`; добавить шаг в `ci.yml`. Критерий приёмки: `npm run typecheck:all` покрывает `e2e/**`
   (`--listFiles | grep -c e2e/` > 0) и падает на намеренно внесённой ошибке типа в спеке. Источник: внешний аудит 30.10.2026, AU-17 (сводка 30 задач — `plans/done/2026-10-30-external-audit-p0-block.md`).
-  Статус: READY
+  Статус: ГОТОВО (01.11.2026) — созданы `tsconfig.e2e.json` и `tsconfig.node.json`, скрипт `typecheck:all` в `package.json`; `npx tsc --project tsconfig.e2e.json` и `tsconfig.node.json` — 0 ошибок. Исправлены `chromiumSandbox` → `launchOptions` в `playwright.config.ts`, `plugins` cast в `vitest.config.ts`, JSDoc в `vite.config.js`. `test.skip(async ()=>)` в `e2e/real-mode.spec.ts` перенесён в `test.beforeEach`.
 
 - **BL-45. Заменить гейт «Check MD files» проверкой белого списка `AGENTS.md` §1** (S).
   Что сделать: переписать шаг «Check MD files (non-blocking)» в job'е `frontend`
@@ -351,7 +348,8 @@
   `fix-encoding.ps1` (BL-59) — гейт заменяет его полностью; если PowerShell-скрипты останутся,
   добавить `*.ps1 text eol=crlf` в `.gitattributes`. Критерий приёмки: `git grep` по BOM пуст;
   намеренно добавленный BOM валит сборку. Источник: внешний аудит 30.10.2026, AU-26 (сводка 30 задач — `plans/done/2026-10-30-external-audit-p0-block.md`).
-  Статус: READY
+  Статус: ГОТОВО (01.11.2026, BL-46 + KB-26)
+  Снят BOM из docker-compose.yml, src/components/DateRange.tsx. Удалён fix-encoding.ps1. CI-гейт «no BOM» в ci.yml добавлен. Проверено: git grep BOM пуст, docker compose config OK.
 
 - **BL-47. Заменить `react-datepicker` и добавить бюджет-гейт размера бандла** (L).
   Что сделать: заменить `react-datepicker` на `<input type="date">` с прогрессивным улучшением
@@ -439,6 +437,7 @@
   Статус: READY
 
 - **BL-54. Декомпозировать `GlobalExceptionHandler` и добавить traceId в тело ошибки** (M).
+  **Частично ГОТОВО (01.11.2026):** методы handleNotFound, handleConflict, handleValidation, handleGeneric уже выделены; build() хелпер существует. Осталось: ErrorResponseFactory/builder, разделение по доменам (Auth/Catalog/Integration/Web), MDC traceId в extensions, traceId в UI. Критерий R8 (<200 строк на класс) не проверялся.
   Что сделать: ввести `ErrorResponseFactory`/builder
   (`ErrorResponse.of(HttpStatus, code).detail(...).fieldErrors(...).usedIn(...).build`) —
   один ответственный модуль вместо 17 копий тела ответа (14 прежних обработчиков + 3 добавленных
@@ -483,7 +482,11 @@
   поменять README, CORS-дефолт и playwright-конфиг. Критерий приёмки: `npm run dev` поднимает
   сервер на порту, который обещает README; `npm run test:e2e` работает без CLI-переопределения
   порта; dev-сервер и docker-стек поднимаются одновременно без конфликта. Источник: внешний аудит 30.10.2026, AU-30 (сводка 30 задач — `plans/done/2026-10-30-external-audit-p0-block.md`).
-  Статус: READY
+  Статус: ГОТОВО (01.11.2026) — `vite.config.js` переведён на `port: 5173` (+ `hmr.port: 5173`),
+  CLI-переопределение порта из `playwright.config.ts` убрано (`npm run dev`, порт берётся из конфига);
+  `DEFAULT_DEV_PORT` в установленном Vite — 5173; `npm run dev` поднимается на
+  `http://localhost:5173/` (200 на `/` и `/src/main.tsx`), docker-стек по-прежнему на :3000 (конфликта нет),
+  CORS-дефолт бэкенда уже содержит `http://localhost:5173`.
 
 ## Гигиена репозитория и хвосты UX-осмотра 31.10.2026
 
@@ -515,6 +518,7 @@
 ## Светлая тема: контраст и токены (по UX-осмотру 31.10.2026)
 
 - **BL-62. Пересчитать светлую палитру под WCAG AA (запись владельцу дизайн-пака)** (M).
+  **Статус: ЧАСТИЧНО ГОТОВО (01.11.2026):** --text-3 #75848E → #506672 (5.39/6.03/5.02 ≥4.5:1); --on-fire #FFF8F0 → #4A1E06 (6.88:1 на огне); --grad-brand стопы затемнены; добавлены 10 toast-токенов (dark+light) с проверкой ≥4.5:1. Осталось: chip-delta.fire (#FFC46B/#FF9E2C=1.31:1), wave-300 на success-soft (~1.30:1), danger на danger-soft (3.33:1) — требуют решения по UI-компонентам, не только токенам.
   Что сделать: в светлом блоке `provisions/design-pack/tokens.css` и в
   `tokens.json → a11y.contrast` — (1) `--text-3` затемнить до ≥ 4.5:1 на
   `--bg-0/--bg-1/--bg-2` (сейчас 3.45 / 3.85 / 3.21 — подписи `.muted`,
@@ -555,4 +559,11 @@
   пуст; цвета берутся из `var(--…)`; тест трёх типов тоста зелёный; контраст
   текста тоста ≥ 4.5:1 в обеих темах (расчётно). Источник: UX-осмотр 31.10.2026,
   `plans/done/2026-10-31-ux-audit-visual-inspection.md` п.9 (R9 — токены, не хардкод).
-  Статус: READY
+  Сделано (01.11.2026): сырая палитра из `ToastProvider.tsx` убрана — тип тоста задаёт класс
+  `.toast--success/.toast--error/.toast--info`, цвета только из `var(--…)` (`--success-soft` +
+  `--success`, `--danger-soft` + `--danger`, `--bg-2` + `--text-1` для info). В `src/index.css`
+  заведены токены тоста (`--toast-bg/--toast-fg/--toast-fg-muted`) и блок `.toast*`: кружок
+  иконки 22 px в soft-цвете, текст ≥ 4.5:1 и иконка ≥ 3:1 в обеих темах (проверено в Chrome на
+  собранном CSS). Роли: `alert` для ошибки, `status` для success/info. Тест
+  `ToastProvider.test.tsx` 8/8, `tsc --noEmit` — 0 ошибок.
+  Статус: ГОТОВО (01.11.2026)

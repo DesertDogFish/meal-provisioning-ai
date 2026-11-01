@@ -2,12 +2,17 @@ import { describe, it, expect } from 'vitest';
 import { unitOptions, defaultUnit, convertToBase, isActualLessThanNeeded, neededAsActual } from './checkUnits';
 
 describe('checkUnits (Fix-6, п.8) — свободные единицы факта', () => {
-  it('опции единиц: KG → г/кг; L → мл/л; PCS → шт (+г/кг при известном весе)', () => {
-    expect(unitOptions('KG')).toEqual(['г', 'кг']);
-    expect(unitOptions('L')).toEqual(['мл', 'л']);
+  // BL-10: «плотность ≈ 1» — весовым продуктам доступен объём и наоборот,
+  // штучным/фасовочным объём считается через piece_weight_g (как мл).
+  it('опции единиц: KG → г/кг + мл/л; L → мл/л + г/кг; PCS/PACK → + мл/л при весе', () => {
+    expect(unitOptions('KG')).toEqual(['г', 'кг', 'мл', 'л']);
+    expect(unitOptions('L')).toEqual(['мл', 'л', 'г', 'кг']);
     expect(unitOptions('PCS')).toEqual(['шт']);
-    expect(unitOptions('PCS', 25)).toEqual(['шт', 'г', 'кг']);
-    expect(unitOptions('PACK', 600)).toEqual(['уп', 'г', 'кг']);
+    expect(unitOptions('PCS', 25)).toEqual(['шт', 'г', 'кг', 'мл', 'л']);
+    expect(unitOptions('PACK', 600)).toEqual(['уп', 'г', 'кг', 'мл', 'л']);
+    // без веса штуки объём не предлагаем — пересчитать нечем
+    expect(unitOptions('PACK')).toEqual(['уп']);
+    expect(unitOptions('PCS', 0)).toEqual(['шт']);
   });
 
   it('defaultUnit — учётная единица продукта', () => {
@@ -30,6 +35,27 @@ describe('checkUnits (Fix-6, п.8) — свободные единицы фак�
   it('convertToBase: несопоставимое (шт без веса для кг) → null', () => {
     expect(convertToBase({ amount: 3, unit: 'шт' }, 'KG', null)).toBeNull();
     expect(convertToBase(null, 'KG')).toBeNull();
+  });
+
+  // BL-10: плотность ≈ 1 — объём и вес взаимозаменяемы (1 мл ≈ 1 г, 1 л ≈ 1 кг)
+  it('convertToBase: «плотность ≈ 1» — г↔мл, кг↔л', () => {
+    expect(convertToBase({ amount: 300, unit: 'г' }, 'L')).toBeCloseTo(0.3);
+    expect(convertToBase({ amount: 300, unit: 'мл' }, 'KG')).toBeCloseTo(0.3);
+    expect(convertToBase({ amount: 1, unit: 'кг' }, 'L')).toBe(1);
+    expect(convertToBase({ amount: 2, unit: 'л' }, 'KG')).toBe(2);
+    expect(convertToBase({ amount: 500, unit: 'мл' }, 'L')).toBeCloseTo(0.5);
+  });
+
+  it('convertToBase: мл/л → штуки через вес штуки (piece_weight_g как мл)', () => {
+    expect(convertToBase({ amount: 100, unit: 'мл' }, 'PCS', 25)).toBeCloseTo(4);
+    expect(convertToBase({ amount: 1, unit: 'л' }, 'PACK', 250)).toBeCloseTo(4);
+    // без веса штуки объём в штуки не переводится
+    expect(convertToBase({ amount: 1, unit: 'л' }, 'PCS', null)).toBeNull();
+  });
+
+  it('isActualLessThanNeeded: «взяли 0,5 л» для продукта в кг — сравнимо', () => {
+    expect(isActualLessThanNeeded({ amount: 0.5, unit: 'л' }, 0.64, 'KG')).toBe(true);
+    expect(isActualLessThanNeeded({ amount: 900, unit: 'мл' }, 0.64, 'KG')).toBe(false);
   });
 
   it('isActualLessThanNeeded: подсветка «куплено меньше»', () => {

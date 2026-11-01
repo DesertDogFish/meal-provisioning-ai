@@ -93,6 +93,35 @@
   `EmisCatalogService.withLatestPrices` гасила предупреждение, когда у позиции нет цены
   (структурные признаки 1–2 считаются всегда), паритет `mockServer.ts` восстановлен.
 
+- **BL-10. Правило «плотность ≈ 1» на фронте (чеклист/закупка)** — ГОТОВО 01.11.2026 (сессия
+  с рабочим vitest). `src/utils/checkUnits.ts`: `unitOptions('KG')` = ['г','кг','мл','л'],
+  `unitOptions('L')` = ['мл','л','г','кг'], `unitOptions('PCS'|'PACK', pw)` = ['шт'|'уп','г','кг','мл','л']
+  (`piece_weight_g` читается как мл), без веса штуки — прежние ['шт']/['уп'] (пересчитать нечем);
+  `convertToBase` получил ветки «плотность ≈ 1»: 'г'→L = a/1000, 'кг'→L = a, 'мл'→KG = a/1000,
+  'л'→KG = a, 'мл'/'л'→PCS/PACK через pw (null без веса). Бэкенд согласован с самого начала
+  (`UnitOfMeasure.gramsPerOne`, `MealCompositionService.weightOfGrams` — KG|L как ×1000 г).
+  Критерий закрыт: `src/utils/checkUnits.test.ts` 14/14 — прежние ассерты
+  `unitOptions('KG')).toEqual(['г','кг'])` и `unitOptions('L')).toEqual(['мл','л'])` заменены,
+  добавлены кейсы г↔мл / кг↔л, мл/л→шт через вес штуки, «взяли 0,5 л» для продукта в кг.
+
+- **Единицы цены в `trip_price_overrides`** — ГОТОВО 01.11.2026 (та же сессия, отдельным планом
+  не оформлялось): `actualPrice` — это ₽ за ОДНУ учётную единицу, но в контракте не было
+  единицы, и в UI цифра «350» читалась как сумма позиции. Сделано: `TripPriceOverrideResponse.unit`
+  (+ `TripPriceOverrideService.toResponse`), mock-паритет `GET /trips/:id/price-overrides`
+  (`unit`/`currency`), `formatUnitPrice(value, unit)` в `src/utils/format.ts` («350,00 ₽/кг»,
+  копейки, запятая, неразрывный пробел), `unitLabel` в строках `deriveTripView`
+  (`visibleShopping`/`dayShopping`), вывод «₽/ед» в `ChecksTable` (`fact-unit-price-*`),
+  `ChecksMobile` («по чеку: … ₽/кг») и `TripShoppingTab` рядом с бейджем «✓ чек».
+  Тесты: `format.test.ts` (+4), `tripDerived.test.ts` (+1), `PriceOverridesTab.test.tsx` (+3),
+  `TripDetailComponents.test.tsx` (+1 ассерт), `contractExtension.test.ts` (+1 контракт
+  unit/currency). Прогон: vitest 908/908.
+
+- **Попутно 01.11.2026 (баг среды, найден красным baseline):** генерация дней мока
+  (`src/api/mockTrips.ts`, POST/PUT `/trips`) переводила дату через `toISOString()` (UTC) — в TZ
+  UTC+3 полночь 01.06 давала «2026-05-31», дни похода сдвигались на день назад и
+  `mockTripsUpdate.test.ts` падал (2 теста) на любой не-UTC машине. Заменено на локальный
+  `isoDay()`.
+
 ## Код-долг (R8/R9)
 
 - **BL-15. Декомпозиция `RosstatEmisProvider.java`** (1175 строк, было 1284) по R8/R9
@@ -187,3 +216,22 @@
   `SyncLogsPage.tsx`/`IntegrationSyncLogs.tsx` (`/sync-logs` → `/integrations?tab=logs`).
   Остаток (мусор `provisions/`, `git filter-repo` для крупных PNG, `fix-encoding.ps1`, CI-шаг
   `npx depcheck`) оформлен в живом реестре как **BL-59**.
+
+- **BL-52. Решение по мок-слою: вырезать из прод-сборки или сделать явным демо-режимом**
+  — ГОТОВО 31.10.2026, план `plans/done/2026-10-31-ux-audit-transparency.md` п.4.
+  Решение владельца: комбинация A+B — prod без флага real-only, демо-сборка `VITE_ENABLE_MOCK=true`, бейдж/тумблер только DEV. ARCHITECTURE.md «Режимы работы» + README + `.env.example` обновлены. mode-тесты 92/92. R8 по `mockTrips.ts`/`mockData.ts` остаётся в BL-53.
+
+- **BL-28. PWA: манифест и service-worker** — ГОТОВО 01.11.2026.
+  `src/pwa/manifest.json`, `src/pwa/sw.js`, иконки 192/512+maskable, vite-pwa-asset-generator. SW registered в preview (prod mode), offline fallback `/trips` → 200 из кэша. `index.html` имеет `link rel="manifest"`.
+
+- **BL-48. ESLint 9 flat config + jsx-a11y + hex-токены** — ГОТОВО 01.11.2026.
+  `eslint.config.js` (ESM, `typescript-eslint@8`, `jsx-a11y` recommended). 35 hex-литералов заменены на CSS-переменные в `TripPrintPage` и др. 13 clickable divs получили `role`/`tabIndex`, 26 `<label>` — `<span>`/`htmlFor`. `npx eslint src/` → 0 errors. `.eslintrc.cjs` удалён.
+
+- **BL-51. Обновить GitHub Actions + Dependabot** — ГОТОВО 01.11.2026.
+  Actions уже на v4 (checkout, setup-java, setup-node). Создан `.github/dependabot.yml` (version 2, weekly: github-actions, maven, npm).
+
+
+### KB-28. e2e: malformed regex `/\/trips(\?|$/` (01.11.2026)
+- Статус: ГОТОВО
+- Что сделано: `/\/trips(\?|$/` → `/\/trips(\?|$)/` в `e2e/main-flow.spec.ts` (2 строки), `e2e/mobile.spec.ts` (1 строка), `e2e/real-mode.spec.ts` (1 строка). Playwright теперь находит 51 тест в 5 файлах.
+- Источник: ревью субагента BL-32/KB-27.

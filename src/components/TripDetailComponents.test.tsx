@@ -456,6 +456,8 @@ describe('TripShoppingTab', () => {
       shoppingExcluded: new Set(['i2']),
     });
     expect(screen.getByTitle('По введённому чеку').textContent).toBe('✓ чек');
+    // BL-10: рядом с бейджем — цена за единицу с подписью «₽/кг»
+    expect(screen.getByTestId('shopping-unit-price-i1').textContent).toBe(`90,00\u00A0₽/кг`);
     expect(screen.getByLabelText('Включить в расчёт')).toBeTruthy();
     expect(screen.getByText('Тушёнка').style.textDecoration).toBe('line-through');
   });

@@ -10,7 +10,7 @@ import { EmptyState } from './EmptyState';
 import ExclusionCheckbox from './ExclusionCheckbox';
 import InfoTip from './InfoTip';
 import { formatAmount } from '../utils/calculations';
-import { formatRub } from '../utils/format' // cleanup-п.9: shim formatRub удалён;
+import { formatRub, formatUnitPrice } from '../utils/format' // cleanup-п.9: shim formatRub удалён;
 import type { SortDir } from '../utils/rowSort';
 import type { TripView } from '../utils/tripDerived';
 import type { ShoppingSortField } from '../types/tripDetail';
@@ -130,6 +130,17 @@ export function TripShoppingTab({
                       {/* Fix-7 (п.17/28): бейдж — по свежему факту чека (actualUnitPrice) */}
                       {item.actualUnitPrice != null && (
                         <span className="text-xs ml-1" style={{ color: 'var(--w2)' }} title="По введённому чеку">✓ чек</span>
+                      )}
+                      {/* BL-10 (01.11.2026): цена из чека — с единицей, иначе
+                          «350» читается как сумма позиции, а не как ₽/кг */}
+                      {item.actualUnitPrice != null && (
+                        <span
+                          className="text-xs ml-1 keep-num"
+                          data-testid={`shopping-unit-price-${item.ingredientId}`}
+                          style={{ color: 'var(--muted)' }}
+                        >
+                          {formatUnitPrice(item.actualUnitPrice, item.unit)}
+                        </span>
                       )}
                     </span>
                   ) : (

@@ -17,11 +17,12 @@ import { fileURLToPath } from "node:url";
  *  - provisions/design-pack/tokens.css → dist/provisions/design-pack/tokens.css
  *  - provisions/design-pack/og/og-cover.png → dist/og-cover.png (OG-карточка, Fix-10 п.5)
  */
+/** @type {import("vite").Plugin} */
 function copyDesignPackAssets() {
   const read = (rel) => readFileSync(fileURLToPath(new URL(rel, import.meta.url)));
   return {
     name: "copy-design-pack-assets",
-    apply: "build",
+    /** @type {import("vite").Plugin["apply"]} */ apply: "build",
     generateBundle() {
       this.emitFile({
         type: "asset",
@@ -43,14 +44,52 @@ function copyDesignPackAssets() {
   };
 }
 
+/**
+ * BL-28: PWA-манифест и service worker лежат в src/pwa/ (рядом с кодом приложения —
+ * единственный источник правды). Vite копирует в dist только public/, поэтому:
+ *  - build  → файлы отдаются плагином в корень dist (manifest.json, sw.js);
+ *  - dev    → middleware, иначе /manifest.json даёт 404 и «Добавить на главный экран»
+ *             локально не проверяется.
+ * sw.js обязан жить в корне сайта: его scope = каталог файла (иначе он не управляет /).
+ */
+function pwaAssets() {
+  const read = (rel) => readFileSync(fileURLToPath(new URL(rel, import.meta.url)));
+  const files = () => ({
+    "manifest.json": read("./src/pwa/manifest.json"),
+    "sw.js": read("./src/pwa/sw.js"),
+  });
+  return {
+    name: "pwa-assets",
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        const pathname = (req.url || "").split("?")[0];
+        if (pathname !== "/manifest.json" && pathname !== "/sw.js") return next();
+        if (req.method !== "GET" && req.method !== "HEAD") return next();
+        const name = pathname === "/sw.js" ? "sw.js" : "manifest.json";
+        res.setHeader(
+          "Content-Type",
+          name === "sw.js" ? "text/javascript; charset=utf-8" : "application/manifest+json; charset=utf-8"
+        );
+        res.setHeader("Cache-Control", "no-cache");
+        res.end(files()[name]);
+      });
+    },
+    generateBundle() {
+      for (const [fileName, source] of Object.entries(files())) {
+        this.emitFile({ type: "asset", fileName, source });
+      }
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [react(), tailwindcss(), copyDesignPackAssets()],
+  plugins: [react(), tailwindcss(), copyDesignPackAssets(), pwaAssets()],
   server: {
     host: "0.0.0.0",
-    port: 3000,
+    port: 5173,
     strictPort: true,
     hmr: {
-      port: 3000,
+      port: 5173,
     },
     // Vite 6 по умолчанию отвечает «Blocked request. This host is not allowed» на
     // запросы с чужим Host (защита от DNS-rebinding). При работе за обратным прокси

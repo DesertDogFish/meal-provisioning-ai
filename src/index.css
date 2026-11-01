@@ -250,6 +250,95 @@ h1, h2, h3, .logo-word, .font-display {
   animation: slide-in var(--t-slow) var(--ease);
 }
 
+/* ============================================================
+   BL-63: тосты — на токенах дизайн-пака, без сырой палитры Tailwind.
+   Фон тоста непрозрачный: soft-тинт состояния (--success-soft /
+   --danger-soft) кладётся поверх --bg-2, поэтому контраст текста не
+   зависит от того, что проскроллено под тостом. Цвета берутся только
+   из var(--…): обе темы переключаются автоматически (WCAG AA:
+   текст ≥ 4.5:1, иконка ≥ 3:1 — расчёт в BL-63).
+   ============================================================ */
+:root {
+  --toast-bg: var(--bg-2);         /* поверхность тоста (непрозрачная подложка) */
+  --toast-fg: var(--text-1);       /* заголовок и основной текст */
+  --toast-fg-muted: var(--text-2); /* текст сообщения и крестик */
+}
+
+.toast {
+  --toast-tint: transparent;       /* soft-цвет типа поверх --toast-bg */
+  --toast-accent: var(--text-2);   /* иконка типа */
+  --toast-icon-bg: var(--bg-3);    /* кружок под иконкой 22 px */
+
+  background: linear-gradient(var(--toast-tint), var(--toast-tint)), var(--toast-bg);
+  color: var(--toast-fg);
+  border: 1px solid color-mix(in srgb, var(--toast-accent) 32%, var(--line));
+  border-radius: var(--r-md);
+  padding: var(--sp-4);
+  box-shadow: var(--shadow-1);
+}
+
+.toast--success {
+  --toast-tint: var(--success-soft);
+  --toast-accent: var(--success);
+  --toast-icon-bg: var(--success-soft);
+}
+
+.toast--error {
+  --toast-tint: var(--danger-soft);
+  --toast-accent: var(--danger);
+  --toast-icon-bg: var(--danger-soft);
+}
+
+.toast--info {
+  --toast-tint: transparent;
+  --toast-accent: var(--text-2);
+  --toast-icon-bg: var(--bg-3);
+}
+
+.toast__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 22px;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--r-pill);
+  background: var(--toast-icon-bg);
+  /* иконка — тот же семантический цвет, смешанный с текстом темы на 18 %:
+     в светлой теме тёмный текст усиливает акцент, в тёмной — светлый.
+     Контраст иконки к кружку (расчётно, WCAG 1.4.11 ≥ 3:1):
+     success 5.24 / 4.22, error 4.34 / 3.85, info 6.84 / 5.59 (dark / light). */
+  color: color-mix(in srgb, var(--toast-accent) 82%, var(--toast-fg));
+}
+
+.toast__title {
+  color: var(--toast-fg);
+  font-weight: 600;
+  font-size: var(--fs-body);
+}
+
+.toast__msg {
+  color: var(--toast-fg-muted);
+  font-size: var(--fs-small);
+  margin-top: 2px;
+  overflow-wrap: anywhere;
+}
+
+.toast__close {
+  flex: 0 0 auto;
+  color: var(--toast-fg-muted);
+  transition: color var(--t-fast) var(--ease);
+}
+
+.toast__close:hover,
+.toast__close:focus-visible {
+  color: var(--toast-fg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toast__close { transition: none; }
+}
+
 /* Midnight Harbor theme classes */
 .bg-midnight { background: var(--bg); }
 .bg-surface { background: var(--surface); }

@@ -6,7 +6,7 @@
  */
 import { useState } from 'react';
 import { formatAmount } from '../utils/calculations';
-import { formatRub } from '../utils/format';
+import { formatRub, formatUnitPrice } from '../utils/format';
 import { NumberField } from './NumberField';
 import FreeAmountInput from './FreeAmountInput';
 import { neededAsActual, type ActualAmount } from '../utils/checkUnits';
@@ -201,6 +201,16 @@ function MobileCheckRow(props: MobileCheckRowProps) {
             <span className="cap" style={{ color: 'var(--text-2)' }}>
               нужно <b className="keep-num">{formatAmount(item.totalAmount, item.unit)}</b>
             </span>
+            {/* BL-10: введённая сумма чека = цена за единицу — подписываем единицу */}
+            {item.enteredUnitPrice != null && (
+              <span
+                className="cap keep-num"
+                data-testid={`fact-unit-price-mobile-${item.ingredientId}`}
+                style={{ color: 'var(--muted)' }}
+              >
+                по чеку: <b style={{ color: 'var(--text-2)' }}>{formatUnitPrice(item.enteredUnitPrice, item.unit)}</b>
+              </span>
+            )}
             <span className="inline-flex items-center gap-1.5">
               <span className="cap" style={{ color: 'var(--muted)' }}>взяли</span>
               <FreeAmountInput

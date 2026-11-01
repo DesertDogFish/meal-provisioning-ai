@@ -199,6 +199,28 @@ describe('CONTRACT-P1-04: поля контракта в сводках', () => 
     expect(typeof sub.substitutedFrom).toBe('string');
   });
 
+  /**
+   * BL-10 (01.11.2026): `actualPrice` в `trip_price_overrides` — цена за ОДНУ
+   * учётную единицу продукта. Ответ GET обязан нести `unit` (и `currency`),
+   * иначе клиент не отформатирует «350,00 ₽/кг» и покажет 350 как сумму.
+   */
+  it('price-overrides отдают unit/currency — цена подписана единицей (BL-10)', () => {
+    // отдельный продукт (не Гречка) — чтобы не влиять на соседний тест actualCost
+    mockServer.handleRequest('PUT', '/trips/trip1/price-overrides/ing2', {
+      actualPrice: 333,
+      comment: 'unit contract',
+    });
+    const list = mockServer.handleRequest<any[]>('GET', '/trips/trip1/price-overrides', null);
+    const row = list.find((r: any) => String(r.ingredientId) === 'ing2');
+    expect(row).toBeDefined();
+    expect(row.actualPrice).toBe(333);
+    expect(row.currency).toBe('RUB');
+    const products = mockServer.handleRequest<any>('GET', '/admin/products', null);
+    const product = products.content.find((p: any) => String(p.id) === 'ing2');
+    expect(row.unit).toBe(product.unit); // паритет с TripPriceOverrideResponse.unit
+    mockServer.handleRequest('DELETE', '/trips/trip1/price-overrides/ing2', null);
+  });
+
   it('price-overrides реально меняют actualCost (Задача 3 плана)', () => {
     const before = mockServer.handleRequest<any>('GET', '/trips/trip1/summary/shopping', null);
     const grechka = before.items.find((i: any) => i.ingredientName === 'Гречка');

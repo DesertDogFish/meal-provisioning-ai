@@ -5,7 +5,7 @@
  * мутации (факт-цена, «взяли», исключение) — колбэки страницы похода.
  */
 import { formatAmount } from '../utils/calculations';
-import { formatRub } from '../utils/format';
+import { formatRub, formatUnitPrice } from '../utils/format';
 import { NumberField } from './NumberField';
 import InfoTip from './InfoTip';
 import FreeAmountInput from './FreeAmountInput';
@@ -276,6 +276,18 @@ function GroupRows(props: GroupRowsProps) {
                 testId={`actual-input-${item.ingredientId}`}
                 ariaLabel={`Сумма из чека (₽): ${item.ingredientName}, куплено ${formatAmount(item.totalAmount, item.unit)}`}
               />
+              {/* BL-10 (01.11.2026): чек вводится СУММОЙ, а хранится ценой за
+                  единицу — показываем её с единицей («350,00 ₽/кг»), иначе
+                  цифра в price_overrides не читается (₽ или ₽/кг?). */}
+              {item.enteredUnitPrice != null && (
+                <div
+                  className="keep-num pt-0.5"
+                  data-testid={`fact-unit-price-${item.ingredientId}`}
+                  style={{ color: 'var(--muted)', fontSize: 'var(--fs-caption)' }}
+                >
+                  {formatUnitPrice(item.enteredUnitPrice, item.unit)}
+                </div>
+              )}
             </td>
             <td className="px-2 py-2.5 text-right" data-label="Отклонение">
               <span

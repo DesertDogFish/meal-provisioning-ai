@@ -42,24 +42,21 @@ async function loginViaUi(page: Page, email: string, password: string) {
   await page.getByPlaceholder('you@example.com').fill(email);
   await page.getByPlaceholder('••••••••').fill(password);
   await page.getByRole('button', { name: 'Войти' }).click();
-  await expect(page).toHaveURL(/\/trips(\?|$/, { timeout: 20_000 });
+  await expect(page).toHaveURL(/\/trips(\?|$)/, { timeout: 20_000 });
 }
 
 test.describe('REAL mode (docker compose stack)', () => {
-  test.skip(
-    // ВАЖНО: у test.skip по сигнатуре (details, testInfo) ПЕРВЫЙ аргумент — FixtureNames;
-    // пустой деструктурирующий паттерн `{}` запрещён линтером (no-empty-pattern),
-    // а второй параметр (testInfo) в skip-условии не используется.
-    async () => {
-      try {
-        const meta = await fetch(`${BACKEND}/api/v1/meta`, { signal: AbortSignal.timeout(3000) });
-        return !meta.ok;
-      } catch {
-        return true; // бэкенд недоступен -> skip (в mock-only CI не валим job)
-      }
-    },
-    'backend not running (docker compose stack required)'
-  );
+  // Проверяем бэкенд один раз в beforeEach (test.skip не принимает async-функцию в v1.64+)
+  let backendAvailable = true;
+  test.beforeEach(async () => {
+    if (backendAvailable) return;
+    try {
+      const meta = await fetch(`${BACKEND}/api/v1/meta`, { signal: AbortSignal.timeout(3000) });
+      backendAvailable = meta.ok;
+    } catch {
+      backendAvailable = false;
+    }
+  });
 
   test('REAL-01 обычный USER загружает поход и видит цены (P0-3 regression)', async ({ page }) => {
     const stamp = Date.now();

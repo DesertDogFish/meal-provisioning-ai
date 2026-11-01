@@ -372,3 +372,66 @@
 - Фронт: payload `ingredientId: number|string` (mock-паритет), `neededStamp=0` валиден, нецелые/отрицательные штампы отбракованы и вычищены из кэша, `enqueueBoughtPut` чистит неотправляемые ДО раннего `!res.ok`, `withSoftTimeout` на refresh, bounded concurrency 4, seq-очистка при размонтировании. tsc 0, vitest 886 passed / 2 предсущ.
 - Документация: `ARCHITECTURE.md` §Database/§API (V1–V33, таблица, эндпоинт), `backend/README.md` V1–V33, `README.md` V1–V33, javadoc `TripProgressResponse`, `plans/knownbugs.md` (KB-15 описание + R12).
 → KB-15 ЗАКРЫТ 01.11.2026.
+
+### KB-23. Мок-слой входит в прод-сборку и переключается из UI
+
+- ЗАКРЫТ 31.10.2026, план `plans/done/2026-10-31-ux-audit-transparency.md` п.4 (дублют BL-52).
+- Решение владельца: комбинация A+B — prod без флага real-only (чанк mockServer статически мёртв), демо-сборка через `VITE_ENABLE_MOCK=true`, бейдж/тумблер только DEV. Документация: README, ARCHITECTURE.md «Режимы работы», `.env.example`.
+
+### KB-30. mock POST /trips писал владельцем users[0] — поход исчезал из списка создателя
+
+- ЗАКРЫТ 31.10.2026, фикс в прогоне UX-аудита навигации.
+- mockTrips.ts выводит владельца из токена сессии (`mock-access-token-<id>`), паритет-тест в `mockTripsUpdate.test.ts`.
+
+### KB-28. AuthProvider: single-flight держал устаревший промис — UI залипал на «Проверяем сессию…»
+
+- ЗАКРЫТ 31.10.2026, фикс в прогоне UX-аудита навигации.
+- Очистка `inflight.current` вынесена в `p.finally` СНАРУЖИ IIFE. Регресс-тест в AuthProvider.test.tsx.
+
+### KB-21. CVE во frontend-зависимостях, Dependabot и `npm audit` отсутствуют
+
+- ЗАКРЫТ 01.11.2026, BL-36.
+- Удалён `uuid` из `package.json` (не импортировался нигде), `@types/uuid` из devDeps. `npm audit --omit=dev` → 2 moderate `react-router-dom` advisories остаются.
+
+
+### KB-18 (01.11.2026)
+- Статус: ЗАКРЫТ
+- Что сделано: Job `e2e-nightly` добавлен в ci.yml (cron Пн 06:00 UTC), services postgres, backend integration tests + frontend e2e real-mode.
+- Семантические сканеры (Semgrep, Dependency Review, Trivy) переведены в blocking.
+
+### KB-19 (01.11.2026)
+- Статус: ЗАКРЫТ
+- Что сделано: Семантические сканеры (Semgrep, Dependency Review, Trivy) убраны `continue-on-error: true` из ci.yml. Теперь блокируют CI.
+
+### KB-20 (01.11.2026)
+- Статус: ЗАКРЫТ
+- Что сделано: nginx.conf — X-Content-Type-Options, X-Frame-Options, CSP report-only, Referrer-Policy, Permissions-Policy, server_tokens off, gzip, Cache-Control /assets/, XFF proxy-headers. Upgrade/Connection убраны.
+
+### KB-22 (01.11.2026)
+- Статус: OWNER TASK (не закрыт — требует GitHub Admin)
+- Что сделано: Документировано — branch protection, required status checks, Conventional Commits требуют GitHub Admin access.
+
+### KB-24 (01.11.2026)
+- Статус: ЗАКРЫТ
+- Что сделано: @Version добавлен в Trip, TripPriceOverride, TripManualItem, TripChecklistBought. GlobalExceptionHandler уже ловит OptimisticLockingFailureException и отдаёт 409.
+
+### KB-25 (01.11.2026)
+- Статус: ЗАКРЫТ
+- Что сделано: Coverage gate R5 добавлен в ci.yml: `npx vitest run --coverage`, порог >= 60% lines, exit 1 при нарушении.
+
+
+### KB-20 (01.11.2026)
+- Статус: ЗАКРЫТ
+- Что сделано: nginx.conf: X-Content-Type-Options, X-Frame-Options, CSP report-only, Referrer-Policy, Permissions-Policy, server_tokens off, gzip, Cache-Control /assets/, XFF proxy-headers. Upgrade/Connection убраны.
+
+### KB-22 (01.11.2026)
+- Статус: OWNER TASK (не закрыт — требует GitHub Admin)
+- Что сделано: Документировано — branch protection, required status checks, Conventional Commits требуют GitHub Admin access.
+
+### KB-24 (01.11.2026)
+- Статус: ЗАКРЫТ
+- Что сделано: @Version добавлен в Trip, TripPriceOverride, TripManualItem, TripChecklistBought. GlobalExceptionHandler уже ловит OptimisticLockingFailureException.
+
+### KB-25 (01.11.2026)
+- Статус: ЗАКРЫТ
+- Что сделано: Coverage gate R5 добавлен в ci.yml: `npx vitest run --coverage`, порог >= 60% lines, exit 1 при нарушении.

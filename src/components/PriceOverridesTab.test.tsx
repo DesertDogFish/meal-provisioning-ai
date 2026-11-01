@@ -19,6 +19,8 @@ vi.mock('./ToastProvider', () => ({ useToast: () => ({ showError: vi.fn(), showS
 
 import PriceOverridesTab from './PriceOverridesTab';
 import { deriveTripView, type TripViewInput } from '../utils/tripDerived';
+
+const NBSP = '\u00A0';
 import type { Trip, Recipe, Price } from '../types/tripDetail';
 
 const trip: Trip = {
@@ -190,5 +192,35 @@ describe('PriceOverridesTab — словарь «План/Факт» (UX-осм�
     const dayRows = await screen.findAllByTestId('dayfact-row-2026-07-01');
     expect(dayRows.length).toBeGreaterThan(0);
     expect(dayRows[0].textContent).toContain('нет данных');
+  });
+});
+
+/**
+ * BL-10 (01.11.2026): цены в чеке — ₽ за учётную единицу. Пользователь вводит
+ * СУММУ, хранится (и переиспользуется) цена за единицу; без подписи «₽/кг»
+ * цифра «120» читалась как сумма. Тест фиксирует, что единица выводится и на
+ * десктопе, и в раскрытии мобильной строки.
+ */
+describe('PriceOverridesTab — единицы цены «₽/ед» (BL-10)', () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  it('после чека видна цена за единицу «120,00 ₽/кг» (десктоп)', async () => {
+    renderTab({ draftOverrides: { i1: { price: 120, total: 120 } } }, { boughtSet: new Set(['k1']) });
+    const caption = await screen.findByTestId('fact-unit-price-i1');
+    expect(caption.textContent).toBe(`120,00${NBSP}₽/кг`);
+  });
+
+  it('до ввода чека цены за единицу нет (план не выдаётся за факт)', async () => {
+    renderTab({}, { boughtSet: new Set(['k1']) });
+    expect(await screen.findByTestId('actual-input-i1')).toBeTruthy();
+    expect(screen.queryByTestId('fact-unit-price-i1')).toBeNull();
+  });
+
+  it('раскрытие мобильной строки: «по чеку: 120,00 ₽/кг»', async () => {
+    const user = userEvent.setup();
+    renderTab({ draftOverrides: { i1: { price: 120, total: 120 } } }, { boughtSet: new Set(['k1']) });
+    await user.click(await screen.findByTestId('checkline-toggle-i1'));
+    const caption = await screen.findByTestId('fact-unit-price-mobile-i1');
+    expect(caption.textContent).toContain(`120,00${NBSP}₽/кг`);
   });
 });

@@ -9,6 +9,9 @@
  * Для сравнения с «нужно» (подсветка «куплено меньше, чем нужно») значение
  * приводится к базовой единице продукта, если это возможно (convertToBase);
  * несопоставимые комбинации (штуки ↔ кг без веса штуки) дают null.
+ *
+ * BL-10 (01.11.2026): действует правило «плотность ≈ 1» — г↔мл и кг↔л
+ * сопоставимы (так же считает бэкенд, `UnitOfMeasure.gramsPerOne`/`EmisUnit`).
  */
 
 export interface ActualAmount {
@@ -19,11 +22,17 @@ export interface ActualAmount {
 
 /** Доступные единицы ввода для продукта (учётная единица + вес штуки, если есть). */
 export function unitOptions(baseUnit: string | null | undefined, pieceWeightG?: number | null): string[] {
+  // BL-10: правило «плотность ≈ 1» на фронте (как `UnitOfMeasure.gramsPerOne`
+  // и `EmisUnit.factor` на бэкенде: 1 л ≈ 1 кг). Поэтому весовым продуктам
+  // доступен и объём, а объёмным — и вес: «купил 1 л молока» для продукта
+  // в кг, «взял 900 г» для продукта в литрах. Штучные/фасовочные получают
+  // объём через `piece_weight_g` (читается как мл у одной штуки/упаковки).
+  const pw = pieceWeightG != null && Number(pieceWeightG) > 0;
   switch (String(baseUnit ?? '').toUpperCase()) {
-    case 'KG': return ['г', 'кг'];
-    case 'L': return ['мл', 'л'];
-    case 'PCS': return pieceWeightG != null && Number(pieceWeightG) > 0 ? ['шт', 'г', 'кг'] : ['шт'];
-    case 'PACK': return pieceWeightG != null && Number(pieceWeightG) > 0 ? ['уп', 'г', 'кг'] : ['уп'];
+    case 'KG': return ['г', 'кг', 'мл', 'л'];
+    case 'L': return ['мл', 'л', 'г', 'кг'];
+    case 'PCS': return pw ? ['шт', 'г', 'кг', 'мл', 'л'] : ['шт'];
+    case 'PACK': return pw ? ['уп', 'г', 'кг', 'мл', 'л'] : ['уп'];
     default: return [baseUnit ? String(baseUnit) : 'шт'];
   }
 }
@@ -52,17 +61,29 @@ export function convertToBase(
   const a = actual.amount;
   const base = String(baseUnit ?? '').toUpperCase();
   const pw = Number(pieceWeightG) > 0 ? Number(pieceWeightG) : null;
+  // BL-10: плотность ≈ 1 — граммы↔миллилитры, килограммы↔литры сопоставимы
+  // (бэкенд считает так же: `MealCompositionService.weightOfGrams` — KG|L ×1000 г).
   switch (actual.unit) {
     case 'г':
       if (base === 'KG') return a / 1000;
+      if (base === 'L') return a / 1000;                                    // 1 г ≈ 1 мл
       if (pw != null && (base === 'PCS' || base === 'PACK')) return a / pw; // граммы → штуки
       return null;
     case 'кг':
       if (base === 'KG') return a;
+      if (base === 'L') return a;                                           // 1 кг ≈ 1 л
       if (pw != null && (base === 'PCS' || base === 'PACK')) return (a * 1000) / pw; // кг → штуки
       return null;
-    case 'мл': return base === 'L' ? a / 1000 : null;
-    case 'л': return base === 'L' ? a : null;
+    case 'мл':
+      if (base === 'L') return a / 1000;
+      if (base === 'KG') return a / 1000;                                   // 1 мл ≈ 1 г
+      if (pw != null && (base === 'PCS' || base === 'PACK')) return a / pw; // мл → штуки
+      return null;
+    case 'л':
+      if (base === 'L') return a;
+      if (base === 'KG') return a;                                          // 1 л ≈ 1 кг
+      if (pw != null && (base === 'PCS' || base === 'PACK')) return (a * 1000) / pw;
+      return null;
     case 'шт':
       if (base === 'PCS') return a;
       if (pw != null && (base === 'KG' || base === 'PACK')) return (a * pw) / 1000; // штуки → кг

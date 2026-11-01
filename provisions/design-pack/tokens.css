@@ -88,6 +88,24 @@
   --z-pop: 40;   /* поповеры: dp, select */
   --z-modal: 90;
   --z-toast: 100;
+  /* Тосты (WCAG AA: ≥4.5:1 на bg-1) */
+  --toast-bg: #1A2A38;
+  --toast-text: #EDF4F7;
+  --toast-border: rgba(148, 199, 214, .20);
+  --toast-shadow: 0 24px 64px rgba(0, 0, 0, .45);
+
+  --toast-success-bg: #0D6B60;
+  --toast-success-text: #F2F7F5;
+
+  --toast-error-bg: #8B3A0A;
+  --toast-error-text: #F2F7F5;
+
+  --toast-warning-bg: #8B6A20;
+  --toast-warning-text: #F2F7F5;
+
+  --toast-info-bg: #107A6E;
+  --toast-info-text: #F2F7F5;
+
 }
 
 /* ---------- СВЕТЛАЯ ТЕМА ---------- */
@@ -104,16 +122,16 @@
 
   --text-1: #10202B;
   --text-2: #435663;
-  --text-3: #75848E;
+  --text-3: #506672;
 
   --amber-200: #F9B569;
   --amber-300: #D97418;   /* акцент-ТЕКСТ на светлом темнее */
   --amber-500: #D96A10;
   --amber-600: #C2570E;
   --flame-600: #C24E12;
-  --on-fire: #FFF8F0;     /* текст на огне становится светлым */
+  --on-fire: #4A1E06;     /* WCAG AA ≥4.5:1 на огненном градиенте */
 
-  --wave-300: #0F7A6E;
+  --wave-300: #0D6B60;
   --wave-400: #12877A;
   --wave-600: #0C6B60;
 
@@ -124,7 +142,7 @@
   --success: #0F7A6E;
   --success-soft: rgba(15, 122, 110, .1);
 
-  --grad-brand: linear-gradient(135deg, #F79A3E 0%, #E8622C 55%, #C24E12 100%);
+  --grad-brand: linear-gradient(135deg, #D97A2E 0%, #B85018 55%, #C24E12 100%);
   --grad-hull: linear-gradient(90deg, #B8400F, #8F2F0E);
   --grad-dusk:
     radial-gradient(1100px 520px at 78% -10%, rgba(232, 138, 42, .14), transparent 60%),
@@ -132,6 +150,24 @@
     var(--bg-0);
 
   --shadow-1: 0 18px 50px rgba(31, 42, 50, .12);
+
+  /* Тосты светлая тема */
+  --toast-bg: #FFFFFF;
+  --toast-text: #10202B;
+  --toast-border: rgba(16, 32, 43, .14);
+  --toast-shadow: 0 24px 64px rgba(16, 32, 43, .14);
+
+  --toast-success-bg: #0F7A6E;
+  --toast-success-text: #FFFFFF;
+
+  --toast-error-bg: #D93A26;
+  --toast-error-text: #FFFFFF;
+
+  --toast-warning-bg: #D97418;
+  --toast-warning-text: #10202B;
+
+  --toast-info-bg: #107A6E;
+  --toast-info-text: #FFFFFF;
   --shadow-glow: 0 0 0 1px rgba(217, 106, 16, .28), 0 14px 44px rgba(217, 106, 16, .16);
 }
 

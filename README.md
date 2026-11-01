@@ -65,7 +65,7 @@ docker compose up --build
 | Профиль | Назначение |
 |---|---|
 | `dev` (по умолчанию в compose) | DEBUG-логи, Swagger, сид демо-данных при `SEED_DEMO_USERS=true` |
-| `prod` | WARN/INFO-логи, Swagger отключён, ошибки без detail, actuator только health/info |
+| `prod` | WARN/INFO-логи, Swagger отключён, `detail` ошибок без внутренних сообщений (внутренние исключения — стабильный код, доменные тексты сохраняются, KB-27), actuator только health/info |
 
 Активация: `SPRING_PROFILES_ACTIVE` в docker-compose или `--spring.profiles.active=prod`.
 
