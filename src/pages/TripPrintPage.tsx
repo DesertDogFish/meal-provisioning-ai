@@ -189,9 +189,9 @@ export default function TripPrintPage() {
           <h1 style={{ fontSize: 26, fontWeight: 800, margin: 0 }}>{trip.name}</h1>
           <p className="print-muted" style={{ margin: '6px 0 0', fontSize: 13 }}>
             {fmtDate(trip.startDate)} — {fmtDate(trip.endDate, { day: 'numeric', month: 'long', year: 'numeric' })}
-            {' · '}людей: {realPeopleLabel}
-            {' · '}дней: {trip.days?.length ?? 0}
-            {' · '}приёмов пищи (с людьми): {kpi.personMeals}
+            {' · '}<span className="keep-pair"><span className="print-muted">людей:</span> <b className="keep-num">{realPeopleLabel}</b></span>
+            {' · '}<span className="keep-pair"><span className="print-muted">дней:</span> <b className="keep-num">{trip.days?.length ?? 0}</b></span>
+            {' · '}<span className="keep-pair"><span className="print-muted">приёмов пищи (с людьми):</span> <b className="keep-num">{kpi.personMeals}</b></span>
           </p>
           {trip.notes && <p className="print-muted" style={{ margin: '4px 0 0', fontSize: 12 }}>{trip.notes}</p>}
         </header>
@@ -207,7 +207,7 @@ export default function TripPrintPage() {
                 {fmtDate(day.dayDate, { weekday: 'long', day: 'numeric', month: 'long' })}
               </h2>
               <p className="print-muted" style={{ margin: '0 0 12px', fontSize: 12 }}>
-                {day.effectivePeople} чел. · {mealsCountLabel(day.meals.length, { short: true })}
+                <span className="keep-pair"><span className="print-muted">{day.effectivePeople} чел.</span> · <span className="keep-num">{mealsCountLabel(day.meals.length, { short: true })}</span></span>
                 {dayRow ? ` · план ${formatRub(dayRow.planned)}${dayRow.actual !== dayRow.planned ? `, факт ${formatRub(dayRow.actual)}` : ''}` : ''}
               </p>
               {/* Fix-6 (п.3): меню СГРУППИРОВАНО по приёмам — «Завтрак», «Обед»,
@@ -234,12 +234,12 @@ export default function TripPrintPage() {
                           <div key={mi} style={{ marginBottom: 10 }}>
                             <p style={{ margin: '0 0 3px', fontSize: 14, fontWeight: 700 }}>
                               {meal.recipeName}
-                              <span className="print-muted" style={{ fontWeight: 400, fontSize: 12 }}> · {meal.servings} порц.</span>
+                              <span className="keep-pair"><span className="print-muted" style={{ fontWeight: 400, fontSize: 12 }}> · </span> <b className="keep-num">{meal.servings} порц.</b></span>
                             </p>
                             <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12.5, color: '#28384a' }}>
                               {meal.ingredients.map((ing, ii) => (
                                 <li key={ii}>
-                                  {ing.name} — {formatAmount(ing.amount, ing.unit)}
+                                  <span className="keep-pair"><span>{ing.name}</span> — <span className="keep-num">{formatAmount(ing.amount, ing.unit)}</span></span>
                                   {(ing as { added?: boolean }).added && <span style={{ color: '#0F7A6E', fontWeight: 700 }}> (+добавлено)</span>}
                                   {(ing as { substitutedFrom?: string }).substitutedFrom && (
                                     <span className="print-muted"> (замена: {(ing as { substitutedFrom?: string }).substitutedFrom})</span>
@@ -258,7 +258,7 @@ export default function TripPrintPage() {
                   <p style={{ margin: '0 0 4px', fontSize: 13, fontWeight: 700, color: '#435663' }}>Дополнительно на день:</p>
                   <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12.5 }}>
                     {dayManual.map(mi => (
-                      <li key={mi.id}>{mi.ingredientName} — {formatAmount(mi.amount, mi.unit)}{mi.note ? ` (${mi.note})` : ''}</li>
+                      <li key={mi.id}><span className="keep-pair"><span>{mi.ingredientName}</span> — <span className="keep-num">{formatAmount(mi.amount, mi.unit)}</span></span>{mi.note ? ` (${mi.note})` : ''}</li>
                     ))}
                   </ul>
                 </div>
@@ -276,7 +276,7 @@ export default function TripPrintPage() {
             <h2 style={{ fontSize: 18, fontWeight: 800, margin: '0 0 8px', color: '#0F7A6E' }}>На весь поход</h2>
             <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12.5 }}>
               {tripManual.map(mi => (
-                <li key={mi.id}>{mi.ingredientName} — {formatAmount(mi.amount, mi.unit)}{mi.note ? ` (${mi.note})` : ''}</li>
+                <li key={mi.id}><span className="keep-pair"><span>{mi.ingredientName}</span> — <span className="keep-num">{formatAmount(mi.amount, mi.unit)}</span></span>{mi.note ? ` (${mi.note})` : ''}</li>
               ))}
             </ul>
           </section>
@@ -325,18 +325,18 @@ export default function TripPrintPage() {
                     const isBought = boughtKeys.has(`${row.ingredientId}@${Math.round(row.needed * 1000)}`);
                     return (
                       <tr key={row.ingredientId}>
-                        <td>{isBought ? '✓ ' : ''}{row.name}</td>
-                        <td style={{ textAlign: 'right' }}>{formatAmount(row.needed, row.unit)}</td>
-                        <td style={{ textAlign: 'right', fontWeight: 700 }}>{tookStr}</td>
+                        <td>{isBought ? '✓ ' : ''}<span className="keep-pair"><span>{row.name}</span></span></td>
+                        <td style={{ textAlign: 'right' }}><span className="keep-num">{formatAmount(row.needed, row.unit)}</span></td>
+                        <td style={{ textAlign: 'right', fontWeight: 700 }}><span className="keep-num">{tookStr}</span></td>
                         {!allFact && (
                           <td style={{ textAlign: 'right' }}>
-                            {src?.plannedCost != null ? formatRub(src.plannedCost) : '—'}
+                            {src?.plannedCost != null ? <span className="keep-num">{formatRub(src.plannedCost)}</span> : '—'}
                           </td>
                         )}
                         {(anyFact || allFact) && (
                           <td style={{ textAlign: 'right', fontWeight: src?.hasFact ? 700 : 400 }}>
                             {src?.hasFact && src?.actualCost != null
-                              ? formatRub(src.actualCost)
+                              ? <span className="keep-num">{formatRub(src.actualCost)}</span>
                               : <span className="print-muted">—</span>}
                           </td>
                         )}
@@ -349,7 +349,7 @@ export default function TripPrintPage() {
           ))}
           {shopping.some(r => r.excluded) && (
             <p className="print-muted" style={{ fontSize: 11.5, marginTop: 8 }}>
-              Исключено из закупки: {shopping.filter(r => r.excluded).map(r => r.ingredientName).join(', ')}.
+              Исключено из закупки: <span className="keep-pairs">{shopping.filter(r => r.excluded).map(r => <span key={r.ingredientId} className="keep-pair"><span>{r.ingredientName}</span></span>).join(', ')}</span>.
             </p>
           )}
         </section>
@@ -363,28 +363,28 @@ export default function TripPrintPage() {
               {!allFact && (
                 <tr>
                   <td>План (на поход)</td>
-                  <td style={{ textAlign: 'right', fontWeight: 700 }}>{formatRub(kpi.totalPlanned)}</td>
+                  <td style={{ textAlign: 'right', fontWeight: 700 }}><span className="keep-num">{formatRub(kpi.totalPlanned)}</span></td>
                 </tr>
               )}
               {anyFact && (
                 <tr>
                   <td>Факт (по введённым чекам)</td>
-                  <td style={{ textAlign: 'right', fontWeight: 700 }}>{formatRub(kpi.totalActual)}</td>
+                  <td style={{ textAlign: 'right', fontWeight: 700 }}><span className="keep-num">{formatRub(kpi.totalActual)}</span></td>
                 </tr>
               )}
               {anyFact && !allFact && (
                 <tr>
                   <td>Расхождение</td>
                   <td style={{ textAlign: 'right', fontWeight: 700, color: kpi.totalActual > kpi.totalPlanned ? '#C24E12' : '#0F7A6E' }}>
-                    {kpi.totalPlanned > 0 ? `${kpi.totalActual > kpi.totalPlanned ? '+' : ''}${Math.round(kpi.totalActual - kpi.totalPlanned).toLocaleString('ru-RU')} ₽` : '—'}
+                    {kpi.totalPlanned > 0 ? <span className="keep-num">{`${kpi.totalActual > kpi.totalPlanned ? '+' : ''}${Math.round(kpi.totalActual - kpi.totalPlanned).toLocaleString('ru-RU')} ₽`}</span> : '—'}
                   </td>
                 </tr>
               )}
               {!anyFact && !allFact && (
-                <tr><td>Итого (план)</td><td style={{ textAlign: 'right', fontWeight: 700 }}>{formatRub(kpi.totalPlanned)}</td></tr>
+                <tr><td>Итого (план)</td><td style={{ textAlign: 'right', fontWeight: 700 }}><span className="keep-num">{formatRub(kpi.totalPlanned)}</span></td></tr>
               )}
-              <tr><td>На одного человека ({realPeopleLabel} чел.)</td><td style={{ textAlign: 'right', fontWeight: 800 }}>{formatRub(kpi.perPerson)}</td></tr>
-              <tr><td>На один приём пищи ({kpi.personMeals} {mealsWord(kpi.personMeals)} с людьми)</td><td style={{ textAlign: 'right', fontWeight: 700 }}>{formatRub(kpi.perPersonMeal)}</td></tr>
+              <tr><td>На одного человека (<span className="keep-num">{realPeopleLabel}</span> чел.)</td><td style={{ textAlign: 'right', fontWeight: 800 }}><span className="keep-num">{formatRub(kpi.perPerson)}</span></td></tr>
+              <tr><td>На один приём пищи (<span className="keep-num">{kpi.personMeals}</span> <span className="keep-num">{mealsWord(kpi.personMeals)}</span> с людьми)</td><td style={{ textAlign: 'right', fontWeight: 700 }}><span className="keep-num">{formatRub(kpi.perPersonMeal)}</span></td></tr>
             </tbody>
           </table>
 
@@ -402,19 +402,19 @@ export default function TripPrintPage() {
             <tbody>
               {days.map(d => (
                 <tr key={d.dayDate}>
-                  <td>{fmtDate(d.dayDate, { weekday: 'short', day: 'numeric', month: 'short' })}</td>
-                  <td style={{ textAlign: 'right' }}>{d.people}</td>
-                  {!allFact && <td style={{ textAlign: 'right' }}>{formatRub(d.planned)}</td>}
-                  {anyFact && <td style={{ textAlign: 'right' }}>{formatRub(d.actual)}</td>}
-                  <td style={{ textAlign: 'right', fontWeight: 700 }}>{formatRub((anyFact ? d.actual : d.planned) / Math.max(1, d.people))}</td>
+                  <td><span className="keep-pair"><span>{fmtDate(d.dayDate, { weekday: 'short', day: 'numeric', month: 'short' })}</span></span></td>
+                  <td style={{ textAlign: 'right' }}><span className="keep-num">{d.people}</span></td>
+                  {!allFact && <td style={{ textAlign: 'right' }}><span className="keep-num">{formatRub(d.planned)}</span></td>}
+                  {anyFact && <td style={{ textAlign: 'right' }}><span className="keep-num">{formatRub(d.actual)}</span></td>}
+                  <td style={{ textAlign: 'right', fontWeight: 700 }}><span className="keep-num">{formatRub((anyFact ? d.actual : d.planned) / Math.max(1, d.people))}</span></td>
                 </tr>
               ))}
               <tr style={{ borderTop: '2px solid #d8dee3' }}>
-                <td style={{ fontWeight: 800 }}>Итого</td>
+                <td style={{ fontWeight: 800 }}><span className="keep-pair"><span>Итого</span></span></td>
                 <td />
-                {!allFact && <td style={{ textAlign: 'right', fontWeight: 800 }}>{formatRub(kpi.totalPlanned)}</td>}
-                {anyFact && <td style={{ textAlign: 'right', fontWeight: 800 }}>{formatRub(kpi.totalActual)}</td>}
-                <td style={{ textAlign: 'right', fontWeight: 800 }}>{formatRub(kpi.perPerson)}</td>
+                {!allFact && <td style={{ textAlign: 'right', fontWeight: 800 }}><span className="keep-num">{formatRub(kpi.totalPlanned)}</span></td>}
+                {anyFact && <td style={{ textAlign: 'right', fontWeight: 800 }}><span className="keep-num">{formatRub(kpi.totalActual)}</span></td>}
+                <td style={{ textAlign: 'right', fontWeight: 800 }}><span className="keep-num">{formatRub(kpi.perPerson)}</span></td>
               </tr>
             </tbody>
           </table>

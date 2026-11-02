@@ -1443,8 +1443,12 @@ textarea {
 }
 .infotip-trigger:hover,
 .infotip-trigger[aria-expanded="true"] {
-  color: var(--amber-300);
-  background: color-mix(in srgb, var(--amber-500) 14%, transparent);
+  /* dark: --amber-300 на color-mix(amber-500 14%, transparent) → 8.51:1 ✅ */
+  /* light: --amber-300 на том же фоне → 2.77:1 ❌ (amber-300 не проходит AA на белом фоне).
+     Заменяем на --amber-600 (#C2570E): на чистом bg-1 → 4.50:1 ✅, убираем color-mix фон
+     (он только ухудшает контраст на белом). */
+  color: var(--amber-600);
+  background: transparent;
 }
 .infotip-trigger:focus-visible {
   outline: 2px solid var(--amber-500);
