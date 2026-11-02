@@ -35,6 +35,7 @@ import TripPersonTab from '../components/TripPersonTab';
 import StageTabBar, { type StageId } from '../components/StageTabBar';
 import { StageNextCta } from '../components/StageNextCta';
 import { RecipeViewSheet } from '../components/RecipeViewSheet';
+import { ConflictDialog } from '../components/ConflictDialog'; // BL-41: 409 «данные изменились»
 import { globalCatalogRecipeId } from '../utils/recipeRef'; // navigation-п.2: CTA «Далее»
 import { Button } from '../components/Button';
 import { manualForDay, manualForTrip } from '../utils/manualItems'; // U40
@@ -326,6 +327,11 @@ export default function TripDetailPage() {
 
       {/* Fix-6 (п.7): брендовый диалог подтверждений */}
       {d.confirmDialog}
+
+      {/* BL-41 (AU-13): конфликт оптимистичной блокировки — диалог «данные изменились»
+          с повторной загрузкой. Слушает сигнал из api/client, поэтому срабатывает
+          на любой мутации похода, не только на этой вкладке. */}
+      <ConflictDialog onReload={d.reloadAfterConflict} />
 
       {/* Модалка ручных позиций (U40): продукты к дню (dayId) или ко всему походу (null) */}
       {d.manualCtx && (

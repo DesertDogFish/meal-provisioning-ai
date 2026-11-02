@@ -12,6 +12,13 @@
  * сбрасывается при размонтировании вкладок.
  */
 import { getServerBought, syncServerBought } from '../api/checklist';
+// BL-27: фактическое количество — серверный источник истины (V37).
+import {
+  baseIngredientKey,
+  getServerActualQty,
+  syncServerActualQty,
+  type ServerActualQtyItem,
+} from '../api/checklistActual';
 
 export interface ActualPriceDraft {
   price: number;
@@ -351,6 +358,7 @@ export function setBought(tripId: string, next: Set<string>) {
   // иначе серверный снимок сотрёт её (в т.ч. после перезагрузки без сети).
   boughtMutationSeq.set(tripId, boughtSeq(tripId) + 1);
   markBoughtDirty(tripId);
+  bindOnlineFlush();
   notify(tripId, 'bought');
   // Fire-and-forget, но СТРОГО последовательно (очередь на поход): офлайн PUT
   // вернёт false - набор останется dirty и уедет при следующей синхронизации.
@@ -434,6 +442,198 @@ async function runBoughtRefresh(
   return loadBought(tripId);
 }
 
+// ===================== BL-27: факт количества — сервер + офлайн-очередь =====================
+
+/**
+ * Признак «в локальной карте есть факты, которых ещё НЕТ на сервере» (офлайн-правки
+ * в магазине без связи). Литерал '1', как и у отметок «взято»: флаг не описывает
+ * ни одной позиции и не является новой сущностью данных — он лишь не даёт серверному
+ * снимку затереть офлайн-ввод после перезагрузки страницы.
+ */
+const ACTUAL_QTY_DIRTY_KEY = (tripId: string) => `trip-checklist-actualqty-dirty-${tripId}`;
+
+const actualQtyDirtyMem = new Set<string>();
+const actualQtyPutQueue = new Map<string, Promise<boolean>>();
+const actualQtyLatestSeq = new Map<string, number>();
+let actualQtySeqCounter = 0;
+
+function readActualQtyDirtyFlag(tripId: string): boolean {
+  try {
+    return localStorage.getItem(ACTUAL_QTY_DIRTY_KEY(tripId)) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function isActualQtyDirty(tripId: string): boolean {
+  if (actualQtyDirtyMem.has(tripId)) return true;
+  if (!readActualQtyDirtyFlag(tripId)) return false;
+  actualQtyDirtyMem.add(tripId);
+  return true;
+}
+
+function markActualQtyDirty(tripId: string) {
+  actualQtyDirtyMem.add(tripId);
+  try {
+    localStorage.setItem(ACTUAL_QTY_DIRTY_KEY(tripId), '1');
+  } catch {
+    /* quota/SSR — в рамках сессии помнит память */
+  }
+}
+
+function clearActualQtyDirty(tripId: string) {
+  actualQtyDirtyMem.delete(tripId);
+  try {
+    localStorage.removeItem(ACTUAL_QTY_DIRTY_KEY(tripId));
+  } catch {
+    /* см. markActualQtyDirty */
+  }
+}
+
+/** Трипы, по которым в этой сессии были локальные правки или гидрация. */
+const stageSyncTrips = new Set<string>();
+
+function enqueueActualQtyPut(tripId: string, map: Record<string, ChecklistActual>): Promise<boolean> {
+  const seq = ++actualQtySeqCounter;
+  actualQtyLatestSeq.set(tripId, seq);
+  stageSyncTrips.add(tripId);
+  bindOnlineFlush();
+  const prev = actualQtyPutQueue.get(tripId) ?? Promise.resolve(true);
+  const task = prev
+    .catch(() => null)
+    .then(() => syncServerActualQty(tripId, map))
+    .catch(() => null)
+    .then(res => {
+      if (!res) return false;
+      if (res.rejected.length > 0) dropUnsendableActualKeys(tripId, res.rejected);
+      if (!res.ok) return false;
+      // dirty снимаем только при успехе И только если это последняя отправка
+      // (пока PUT летел, пользователь мог ввести новое значение).
+      if (actualQtyLatestSeq.get(tripId) === seq) clearActualQtyDirty(tripId);
+      return true;
+    });
+  actualQtyPutQueue.set(tripId, task);
+  void task.then(() => {
+    if (actualQtyPutQueue.get(tripId) === task) actualQtyPutQueue.delete(tripId);
+  });
+  return task;
+}
+
+function dropUnsendableActualKeys(tripId: string, rejected: string[]) {
+  const cur = loadActualQty(tripId);
+  const dropped: string[] = [];
+  for (const key of rejected) if (cur[key]) { delete cur[key]; dropped.push(key); }
+  if (dropped.length === 0) return;
+  console.warn(
+    `[checklist-actual-qty] dropped ${dropped.length} unsendable key(s) from local cache of trip ${tripId}:`,
+    dropped.slice(0, 10),
+  );
+  writeJson(ACTUAL_QTY_KEY(tripId), cur);
+  notify(tripId, 'qty');
+}
+
+/**
+ * Сопоставить серверные факты локальным ключам карты.
+ * Локальный ключ может быть trip-scoped ('ing5::ttrip1') — серверный id базовый,
+ * поэтому ищем существующий локальный ключ по базовому id и пишем под него.
+ */
+function applyServerActual(
+  server: ServerActualQtyItem[],
+  local: Record<string, ChecklistActual>,
+): Record<string, ChecklistActual> {
+  const out: Record<string, ChecklistActual> = {};
+  const localKeys = Object.keys(local);
+  for (const item of server) {
+    const serverKey = String(item.ingredientId);
+    const base = baseIngredientKey(serverKey);
+    const existing = localKeys.find(k => k === serverKey || baseIngredientKey(k) === base);
+    out[existing ?? serverKey] = { amount: item.amount, unit: item.unit };
+  }
+  return out;
+}
+
+function writeActualQtyIfChanged(tripId: string, next: Record<string, ChecklistActual>) {
+  const cur = loadActualQty(tripId);
+  const same = Object.keys(cur).length === Object.keys(next).length
+    && Object.entries(next).every(([k, v]) => cur[k] && cur[k].amount === v.amount && cur[k].unit === v.unit);
+  if (same) return;
+  writeJson(ACTUAL_QTY_KEY(tripId), next);
+  notify(tripId, 'qty');
+}
+
+/**
+ * BL-27: сверить локальные факты количества с сервером.
+ *
+ *  - сервер недоступен (null) → локальную карту не трогаем, dirty не сбрасываем
+ *    («в магазине нет связи»: ввод продолжает работать);
+ *  - НЕТ несинхронизированных правок → серверный набор ПОЛНОСТЬЮ заменяет локальный,
+ *    включая факты, изменённые на другом устройстве;
+ *  - ЕСТЬ правки (dirty=true) → локальная карта авторитетна и досылается целиком.
+ *    Union здесь невозможен без «надгробий» удалений: снятый локально факт неотличим
+ *    от «никогда не введённого», и union воскрешал бы стёртое значение. После успешной
+ *    досылки dirty снимается, и следующий чистый refresh снова берёт сервер как истину.
+ */
+export async function refreshActualQtyFromServer(
+  tripId: string,
+  opts: { timeoutMs?: number } = {},
+): Promise<Record<string, ChecklistActual>> {
+  const timeoutMs = opts.timeoutMs && opts.timeoutMs > 0 ? opts.timeoutMs : BOUGHT_SYNC_SOFT_TIMEOUT_MS;
+  stageSyncTrips.add(tripId);
+  bindOnlineFlush();
+  const server = await withSoftTimeout(getServerActualQty(tripId), timeoutMs);
+  if (server === null) return loadActualQty(tripId); // недоступен — кэш не трогаем
+
+  if (isActualQtyDirty(tripId)) {
+    const local = loadActualQty(tripId);
+    await enqueueActualQtyPut(tripId, local);
+    return loadActualQty(tripId);
+  }
+
+  const next = applyServerActual(server, loadActualQty(tripId));
+  writeActualQtyIfChanged(tripId, next);
+  return loadActualQty(tripId);
+}
+
+/** Освободить in-memory состояние синхронизации фактов похода (размонтирование). */
+export function forgetTripActualQtySyncState(tripId: string) {
+  actualQtyDirtyMem.delete(tripId);
+  if (!actualQtyPutQueue.has(tripId)) {
+    actualQtyLatestSeq.delete(tripId);
+  }
+}
+
+/** Тест-хук: дождаться опустошения очереди PUT фактов похода. */
+export async function flushActualQtyPuts(tripId: string): Promise<void> {
+  for (let guard = 0; guard < 100; guard++) {
+    const pending = actualQtyPutQueue.get(tripId);
+    if (!pending) return;
+    await pending.catch(() => false);
+  }
+}
+
+/**
+ * BL-27: сценарий «в магазине нет связи». Браузер вернул сеть → досылаем всё, что
+ * осталось dirty по походам этой сессии (отметки «взято» + факт количества).
+ * Слушатель вешается один раз и только если есть window (SSR/тесты без DOM — без него).
+ */
+let onlineFlushBound = false;
+
+function bindOnlineFlush() {
+  if (onlineFlushBound || typeof window === 'undefined') return;
+  onlineFlushBound = true;
+  window.addEventListener('online', () => {
+    void flushPendingStageWrites();
+  });
+}
+
+/** Дослать все несинхронизированные правки походов этой сессии (вызывает 'online'). */
+export async function flushPendingStageWrites(): Promise<void> {
+  for (const tripId of [...stageSyncTrips]) {
+    if (isBoughtDirty(tripId)) await enqueueBoughtPut(tripId, [...loadBought(tripId)]);
+    if (isActualQtyDirty(tripId)) await enqueueActualQtyPut(tripId, loadActualQty(tripId));
+  }
+}
+
 // ===================== Чеклист: фактические количества =====================
 
 export function loadActualQty(tripId: string): Record<string, ChecklistActual> {
@@ -455,6 +655,12 @@ export function setActualQty(tripId: string, ingredientId: string, value: Checkl
   else cur[ingredientId] = value;
   writeJson(ACTUAL_QTY_KEY(tripId), cur);
   notify(tripId, 'qty');
+  // BL-27: правка ещё не на сервере → dirty до успешного PUT (иначе серверный снимок
+  // затрёт офлайн-ввод, в т.ч. после перезагрузки без сети). Fire-and-forget, но
+  // строго последовательно: офлайн PUT вернёт false, карта уедет при появлении сети.
+  markActualQtyDirty(tripId);
+  bindOnlineFlush();
+  void enqueueActualQtyPut(tripId, cur);
 }
 
 // ===================== Подписка на изменения =====================

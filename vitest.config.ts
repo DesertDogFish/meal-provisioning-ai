@@ -135,6 +135,13 @@ export default defineConfig({
         // фокус-ловушка модалок/шитов (Tab-цикл, возврат фокуса, preventScroll)
         'src/utils/overlayStack.ts',
         'src/utils/focusTrap.ts',
+        // BL-66 (аудит 02.11.2026): явный 404-маршрут — новая страница в зоне изменения
+        'src/pages/NotFoundPage.tsx',
+        // BL-41 (AU-13): сигнал 409 CONCURRENT_MODIFICATION и диалог «данные изменились»
+        'src/api/conflictSignal.ts',
+        'src/components/ConflictDialog.tsx',
+        // BL-27 (V37): серверный факт количества чеклиста — новый api-модуль
+        'src/api/checklistActual.ts',
       ],
     },
   },

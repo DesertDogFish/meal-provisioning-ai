@@ -38,6 +38,17 @@ export interface MockChecklistBoughtItem {
 }
 export const checklistBought: Record<string, MockChecklistBoughtItem[]> = {};
 
+// BL-27: серверный ФАКТИЧЕСКИЙ факт «сколько реально берём/взяли» по позиции
+// чеклиста ({amount, unit}) — паритет backend trip_checklist_actual_qty (V37).
+// Ключ агрегата — ingredientId (не штамп потребности): факт переживает пересчёт.
+export interface MockChecklistActualQtyItem {
+  ingredientId: string | number;
+  amount: number;
+  /** человеческая единица ввода: 'г' | 'кг' | 'мл' | 'л' | 'шт' | 'уп' */
+  unit: string;
+}
+export const checklistActualQty: Record<string, MockChecklistActualQtyItem[]> = {};
+
 // Фаза 13 (п.6): пер-походные замещения ингредиентов (TripIngredientSubstitution).
 // Хранят дельту черновика состава блюда относительно каталога: from/to/ratio и
 // добавленные вручную позиции (added=true). Закупка/дни/человек считают с ними.
@@ -357,4 +368,52 @@ export function ownTripOr404(tripId: string): Trip {
 export function visibleTrips(): Trip[] {
   const uid = sessionUserId();
   return uid == null ? trips : trips.filter(t => String(t.userId) === uid);
+}
+
+// ===================== BL-41: инъекция конфликта оптимистичной блокировки =====================
+/**
+ * Mock-паритет 409 CONCURRENT_MODIFICATION (R3).
+ *
+ * Настоящую гонку in-memory мок воспроизвести не может: клиент не передаёт
+ * версию агрегата (на бэкенде её проверяет JPA `@Version`), поэтому «устаревшую»
+ * запись нечем отличить. Для контракт-/e2e-сценариев диалога «данные изменились»
+ * конфликт ВНЕДРЯЕТСЯ явно:
+ *   - из теста — `armConcurrentConflict(tripId)`;
+ *   - вручную в браузере — `localStorage.setItem('mock-concurrent-conflict', '<tripId>')`.
+ * Следующая НЕ-GET мутация этого похода отдаёт 409 в той же форме, что backend
+ * (`{status: 409, title: 'Conflict', detail: 'CONCURRENT_MODIFICATION: ...'}`),
+ * после чего инъекция снимается — одна мутация, один конфликт.
+ */
+const concurrentConflictsOnce = new Map<string, number>();
+
+export function armConcurrentConflict(tripId: string, times = 1): void {
+  concurrentConflictsOnce.set(String(tripId), Math.max(1, times));
+}
+
+/** Снять инъекцию без срабатывания (изоляция тестов). */
+export function clearConcurrentConflict(tripId?: string): void {
+  if (tripId == null) concurrentConflictsOnce.clear();
+  else concurrentConflictsOnce.delete(String(tripId));
+}
+
+/** Забрать инъекцию конфликта для похода, если она заряжена. */
+export function takeConcurrentConflict(tripId: string): boolean {
+  const key = String(tripId);
+  const left = concurrentConflictsOnce.get(key);
+  if (left != null) {
+    if (left <= 1) concurrentConflictsOnce.delete(key);
+    else concurrentConflictsOnce.set(key, left - 1);
+    return true;
+  }
+  // ручной флаг для демо/отладки в браузере
+  try {
+    if (typeof localStorage === 'undefined') return false;
+    if (localStorage.getItem('mock-concurrent-conflict') === key) {
+      localStorage.removeItem('mock-concurrent-conflict');
+      return true;
+    }
+  } catch {
+    /* приватный режим/нет storage — инъекции нет */
+  }
+  return false;
 }

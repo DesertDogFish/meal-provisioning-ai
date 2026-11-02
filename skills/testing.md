@@ -17,6 +17,10 @@ mvn -B -o test -DforkCount=0 -Dtest='ИмяКласса' -DfailIfNoSpecifiedTest
 ```
 - `-o` (offline) обязательно — иначе Maven виснет на сети.
 - `-DforkCount=0` обязательно — форк без него OOM.
+- **На Windows/git-bash `mvn` из PATH не стартует** (`ClassNotFoundException:
+  org.codehaus.plexus.classworlds.launcher.Launcher`) — запускать `cmd.exe /c "mvn ..."`,
+  а переменные брать из `.env`: `set -a; . ../.env; set +a` (подробнее — `AGENTS.md`,
+  «Грабли окружения»).
 - Несколько классов: `-Dtest='A,B,C'` (суммарно ≤ 3 Spring-классов за прогон).
 
 ## Между прогонами: чистка тестовых БД (иначе stale-состояние)

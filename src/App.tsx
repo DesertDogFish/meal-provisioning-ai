@@ -7,6 +7,7 @@ import ProtectedRoute from './components/ProtectedRoute';
 import PageLoader from './components/PageLoader';
 import { AuthProvider } from './components/AuthProvider'; // cleanup-п.7: один /auth/me на сессию
 import LoginPage from './pages/LoginPage';
+import NotFoundPage from './pages/NotFoundPage';
 
 /**
  * Fix-10 (п.4): тяжёлые страницы — ленивые чанки (React.lazy). Первый пейнт
@@ -97,7 +98,15 @@ function App() {
           {/* U35 (список 26.10): страница «Ошибки (демо)» скрыта; cleanup-п.1
               (31.10.2026): мёртвый ErrorsDemoPage.tsx удалён, редирект оставлен. */}
           <Route path="/errors-demo" element={<Navigate to="/trips" replace />} />
-          <Route path="*" element={<Navigate to="/login" replace />} />
+              {/* BL-66 (аудит 02.11.2026): неизвестный маршрут — явный 404 вместо
+                  молчаливого редиректа на /login. Вне сессии ProtectedRoute по-прежнему
+                  уводит на логин (прежнее поведение не меняется); в сессии пользователь
+                  видит «Страница не найдена» + CTA «К списку походов». */}
+              <Route path="*" element={
+                <ProtectedRoute>
+                  <Layout><NotFoundPage /></Layout>
+                </ProtectedRoute>
+              } />
             </Routes>
             </Suspense>
             </AuthProvider>

@@ -8,6 +8,8 @@ import com.provision.dto.trip.MealCompositionDtos.CompositionResponse.Totals;
 import com.provision.entity.*;
 import com.provision.exception.NotFoundException;
 import com.provision.repository.*;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -61,6 +63,8 @@ public class MealCompositionService {
     private final SummaryService summaryService;
     private final TripScopedIdResolver tripScopedIdResolver;
     private final CompositionDiffEngine diffEngine;
+    /** BL-41 (AU-13): нужен для OPTIMISTIC_FORCE_INCREMENT на приёме пищи. */
+    private final EntityManager entityManager;
 
     /** GET /trips/{t}/meals/{m}/composition — сервер считает ВСЁ масштабирование. */
     @Transactional(readOnly = true)
@@ -80,6 +84,16 @@ public class MealCompositionService {
                                               CompositionPutRequest request, Long userId) {
         validate(request);
         MealContext ctx = loadContext(tripId, mealId, userId);
+
+        // BL-41 (AU-13): оптимистичная блокировка АГРЕГАТА приёма.
+        // Правки состава живут в trip_ingredient_substitutions, поэтому простой
+        // диф-коммит не трогал ни одной версионированной строки: два параллельных
+        // batch-PUT на один приём молча перезаписывали друг друга (последний
+        // выигрывал). OPTIMISTIC_FORCE_INCREMENT поднимает version у TripMeal на
+        // коммите и проверяет её — вторая конкурентная запись получает
+        // OptimisticLockingFailureException → GlobalExceptionHandler отдаёт
+        // 409 CONCURRENT_MODIFICATION, а не тихую потерю чужих правок.
+        entityManager.lock(ctx.meal(), LockModeType.OPTIMISTIC_FORCE_INCREMENT);
 
         // Дубли ingredientId → 400 (по сырым id запроса)
         Set<Long> seen = new HashSet<>();

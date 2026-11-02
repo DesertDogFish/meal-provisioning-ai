@@ -5,9 +5,9 @@
  */
 
 import type { Trip } from '../types';
-import { nextSubstitutionSeq, nextRemovedSeq, nextManualSeq, products, recipes, trips, priceOverrides, shoppingExcluded, checklistBought, substitutions, removedItems, manualItems, allTripEdits, applyTripEditsToRows, loadClientStage, users, UNIT_LABELS, r3, r2, editRecipeKey, editIngredientKey, findOwnTrip, ownTripOr404 } from './mockState';
+import { nextSubstitutionSeq, nextRemovedSeq, nextManualSeq, products, recipes, trips, priceOverrides, shoppingExcluded, checklistBought, checklistActualQty, substitutions, removedItems, manualItems, allTripEdits, applyTripEditsToRows, loadClientStage, users, UNIT_LABELS, r3, r2, editRecipeKey, editIngredientKey, findOwnTrip, ownTripOr404, takeConcurrentConflict } from './mockState';
 import { tripPricesFor, ingredientEditsFor, tripsWithProgress, denormalizeOverrideKey } from './mockTripProgress'; // cleanup-п.8
-import type { MockSubstitution, MockManualItem, MockChecklistBoughtItem } from './mockState';
+import type { MockSubstitution, MockManualItem, MockChecklistBoughtItem, MockChecklistActualQtyItem } from './mockState';
 
 /** KB-15: предел размера «полной замены» набора отметок (паритет с backend-лимитом). */
 const MAX_CHECKLIST_BOUGHT_ITEMS = 2000;
@@ -35,6 +35,19 @@ function isoDay(d: Date): string {
 
 export function handleTripsImpl(srv: any, method: string, path: string, body?: any): any {
   const parts = path.split('/').filter(Boolean);
+
+  // BL-41 (AU-13): инъекция 409 CONCURRENT_MODIFICATION для контракт-/e2e-сценариев
+  // диалога «данные изменились» (R3 mock-паритет). Срабатывает на ПЕРВОЙ не-GET
+  // мутации помеченного похода и снимается — настоящая гонка в in-memory моке
+  // невозможна (клиент не передаёт версию агрегата).
+  if (method !== 'GET' && parts[0] === 'trips' && parts[1] && takeConcurrentConflict(parts[1])) {
+    throw {
+      status: 409,
+      title: 'Conflict',
+      detail: 'CONCURRENT_MODIFICATION: Данные изменились, пока вы их редактировали. '
+        + 'Обновите страницу и повторите правку.',
+    };
+  }
 
   // V20: цены похода — по trip-scoped копиям продуктов; если снепшотов нет
   // (legacy/сид-походы) — фолбэк на глобальный срез, как TripPriceController
@@ -647,6 +660,61 @@ export function handleTripsImpl(srv: any, method: string, path: string, body?: a
       return checklistBought[tripId];
     }
     if (method === 'GET') return checklistBought[tripId] || [];
+  }
+
+  // BL-27: GET/PUT /trips/:id/checklist-actual-qty — фактическое количество
+  // («сколько реально берём/взяли», {amount, unit}) по позиции чеклиста.
+  // Паритет с backend ChecklistActualQty: PUT — идемпотентная ПОЛНАЯ замена набора,
+  // GET — [{ingredientId, amount, unit}]; дубли ingredientId схлопываются
+  // (последнее значение выигрывает); неизвестный продукт → 404; кривая пара → 400.
+  if (parts.length === 3 && parts[2] === 'checklist-actual-qty') {
+    const tripId = parts[1];
+    if (!findOwnTrip(tripId)) {
+      throw { status: 404, message: 'Not found', detail: `Trip ${tripId} not found` };
+    }
+    if (method === 'PUT') {
+      const items = body?.items;
+      if (!Array.isArray(items)) {
+        throw {
+          status: 400, message: 'Bad request',
+          detail: 'Expected { items: [{ingredientId, amount, unit}] }',
+        };
+      }
+      if (items.length > MAX_CHECKLIST_BOUGHT_ITEMS) {
+        throw {
+          status: 400, message: 'Bad request',
+          detail: `Too many items: ${items.length} (max ${MAX_CHECKLIST_BOUGHT_ITEMS})`,
+        };
+      }
+      const byId = new Map<string, MockChecklistActualQtyItem>();
+      for (const it of items) {
+        const ingredientId = it?.ingredientId;
+        const amount = Number(it?.amount);
+        const unit = typeof it?.unit === 'string' ? it.unit.trim() : '';
+        // backend: @NotNull @Positive BigDecimal amount, @NotBlank @Size(max=16) unit
+        if (ingredientId == null || String(ingredientId).trim() === ''
+          || it?.amount == null || !Number.isFinite(amount) || amount <= 0
+          || unit === '' || unit.length > 16) {
+          throw {
+            status: 400, message: 'Bad request',
+            detail: 'Each item requires ingredientId, amount > 0 and non-empty unit (max 16 chars)',
+          };
+        }
+        byId.set(String(ingredientId), { ingredientId, amount, unit });
+      }
+      // backend ищет продукт по id и отдаёт 404, если его нет
+      for (const it of byId.values()) {
+        if (!products.some(p => String(p.id) === String(it.ingredientId))) {
+          throw {
+            status: 404, message: 'Not found',
+            detail: `Ingredient ${it.ingredientId} not found`,
+          };
+        }
+      }
+      checklistActualQty[tripId] = [...byId.values()];
+      return checklistActualQty[tripId];
+    }
+    if (method === 'GET') return checklistActualQty[tripId] || [];
   }
 
   // PUT /trips/:id/shopping-exclusions — идемпотентная замена набора.

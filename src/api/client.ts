@@ -19,6 +19,8 @@ import { AuthInterceptor } from './authInterceptor';
 import type { SessionLostHandler } from './authInterceptor';
 import { ModeResolver, readInjectedEnv } from './modeResolver';
 import type { ApiMode } from './modeResolver';
+// BL-41 (AU-13): 409 CONCURRENT_MODIFICATION → сигнал для диалога «данные изменились»
+import { isConcurrentModification, notifyConcurrentModification } from './conflictSignal';
 
 // Публичный контракт прежний: типы и ошибка импортируются из client.ts
 export type { ApiError, ApiMode, SessionLostHandler };
@@ -109,7 +111,14 @@ export class ApiClient {
         });
       }
       const { mockServer } = await import('./mockServer');
-      return mockServer.handleRequest<T>(method, fullPath, body);
+      // BL-41: mock тоже умеет отдавать 409 CONCURRENT_MODIFICATION (инъекция
+      // конфликта для e2e/контракта) — сигнал поднимается одинаково в обоих режимах.
+      try {
+        return mockServer.handleRequest<T>(method, fullPath, body);
+      } catch (err) {
+        if (isConcurrentModification(err)) notifyConcurrentModification();
+        throw err;
+      }
     }
 
     // Real API
@@ -124,7 +133,14 @@ export class ApiClient {
       response, path, method, url, body, baseUrl: this.baseUrl
     });
 
-    return readEnvelope<T>(finalResponse);
+    // BL-41 (AU-13): конфликт оптимистичной блокировки поднимаем сигналом ДО того,
+    // как ошибка уйдёт вызывающему коду, — страница покажет диалог «данные изменились».
+    try {
+      return await readEnvelope<T>(finalResponse);
+    } catch (err) {
+      if (isConcurrentModification(err)) notifyConcurrentModification();
+      throw err;
+    }
   }
 
   async get<T>(path: string, options?: { failMode?: string; params?: Record<string, string> }): Promise<T> {

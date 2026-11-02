@@ -12,7 +12,7 @@ import { useParams, useSearchParams } from 'react-router-dom';
 import { api } from '../api/client';
 import { useToast } from '../components/ToastProvider';
 import { useConfirm } from '../components/ConfirmDialog'; // Fix-6 (п.7)
-import { loadActualPrices, saveActualPrice, loadExcluded, setExcluded as persistExcluded, loadBought, setBought as persistBought, loadActualQty, setActualQty, onTripStageChange, refreshBoughtFromServer, forgetTripBoughtSyncState, type ChecklistActual, type ActualPriceDraft } from '../utils/tripStaging'; // U32 + Fix-2(п.6) + Fix-5(п.21) + Fix-8(п.6)
+import { loadActualPrices, saveActualPrice, loadExcluded, setExcluded as persistExcluded, loadBought, setBought as persistBought, loadActualQty, setActualQty, onTripStageChange, refreshBoughtFromServer, forgetTripBoughtSyncState, refreshActualQtyFromServer, forgetTripActualQtySyncState, type ChecklistActual, type ActualPriceDraft } from '../utils/tripStaging'; // U32 + Fix-2(п.6) + Fix-5(п.21) + Fix-8(п.6)
 import { unitFromTotal } from '../utils/checkInput'; // cleanup-п.5: чек-мутация переехала со вкладки на страницу
 import type { CheckRow } from '../components/ChecksModel';
 import { type TripIngredientEdit } from '../api/tripEdits'; // U30
@@ -136,14 +136,22 @@ export function useTripDetail() {
     if (!id) return;
     let cancelled = false;
     void (async () => {
+      // BL-27: «взято» и фактическое количество — два независимых серверных набора,
+      // оба гидратируются при открытии похода (последовательно: общая очередь сети).
       await refreshBoughtFromServer(String(id));
-      if (!cancelled) setChecklistBought(loadBought(String(id)));
+      const qty = await refreshActualQtyFromServer(String(id));
+      if (!cancelled) {
+        setChecklistBought(loadBought(String(id)));
+        setActualQtyState(qty);
+      }
     })();
     return () => {
       cancelled = true;
-      // KB-15: снимаем in-memory состояние синхронизации похода при размонтировании
-      // (LS-кэш и dirty-флаг остаются — офлайн-правки должны пережить перезагрузку).
+      // KB-15 / BL-27: снимаем in-memory состояние синхронизации похода при
+      // размонтировании (LS-кэш и dirty-флаги остаются — офлайн-правки должны
+      // пережить перезагрузку).
       forgetTripBoughtSyncState(String(id));
+      forgetTripActualQtySyncState(String(id));
     };
   }, [id]);
 
@@ -387,6 +395,22 @@ export function useTripDetail() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [trip]);
 
+  /**
+   * BL-41 (AU-13): повторная загрузка после 409 CONCURRENT_MODIFICATION.
+   * Данные похода + серверный набор «взято» (он живёт вне trip-бандла, поэтому
+   * одного loadData недостаточно). Вызывается кнопкой «Обновить» в ConflictDialog.
+   */
+  const reloadAfterConflict = async () => {
+    await loadData(true);
+    if (!id) return;
+    // BL-27: серверные наборы «взято» и факт количества живут вне trip-бандла —
+    // после 409 их тоже надо перечитать, иначе диалог закроется со старыми данными.
+    await refreshBoughtFromServer(String(id));
+    const qty = await refreshActualQtyFromServer(String(id));
+    setChecklistBought(loadBought(String(id)));
+    setActualQtyState(qty);
+  };
+
   return {
     id, trip, loading, error,
     activeTab, setActiveTab,
@@ -401,5 +425,6 @@ export function useTripDetail() {
     toggleDay, handleMealAdded, handleDeleteMeal, handleUpdateDayPeople,
     handleSortField, toggleShoppingExcluded, refreshManual, handleDeleteManual,
     toggleBought, commitActualQty, setAllBought,
+    reloadAfterConflict,
   };
 }

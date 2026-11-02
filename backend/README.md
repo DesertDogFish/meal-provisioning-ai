@@ -97,6 +97,7 @@ Swagger: http://localhost:8080/swagger-ui.html (dev). Health: `GET /api/v1/meta`
 - `GET|POST /api/v1/trips/{id}/substitutions`, `DELETE .../{substitutionId}` — замены ингредиента from→to с `ratio`
 - `GET /api/v1/trips/{id}/summary/menu|shopping|shopping/by-days|person` — расчётные сводки
 - `GET|PUT /api/v1/trips/{id}/meals/{mealId}/composition` — состав приёма: серверное масштабирование + атомарный batch-диф правок (V19-хранилище, спека FORM-meal-composition)
+- `GET|PUT /api/v1/trips/{id}/checklist-actual-qty` — фактическое количество чеклиста (BL-27, V37): `[{ingredientId, amount, unit}]`; PUT — идемпотентная полная замена набора, `amount > 0`, `unit` не пустой и ≤ 16, `items` ≤ 2000, неизвестный `ingredientId` → 404 с откатом; ключ — позиция (`ingredientId`), без штампа потребности
 - `GET|PUT /api/v1/trips/{id}/checklist-bought` — отметки «взято» чеклиста (KB-15, V32/V33): `[{ingredientId, neededStamp}]`; PUT — идемпотентная полная замена набора, `neededStamp >= 0` (0 — легитимный штамп позиции с нулевой потребностью), `items` ≤ 2000, неизвестный `ingredientId` → 404 с откатом
 
 ### Каталог (все аутентифицированные — чтение; глобальные записи, `trip_id IS NULL`)
@@ -182,6 +183,11 @@ Flyway, `src/main/resources/db/migration`; нумерация сквозная (
 - V36 — refresh-токены: `revoked_at`, `replaced_by_id` (mark-based ротация и reuse-detection,
   подзадача 4 аудита 02.11.2026); изначально планировалась как V35, перенумерована после
   коммита владельца `5eb70f8c` (V35 занят) — дубль номеров ловит страж в CI (job Repo Hygiene);
+- V37 — `trip_checklist_actual_qty` (BL-27): серверное хранение ФАКТИЧЕСКОГО количества чеклиста
+  («сколько реально берём/взяли») — `trip_id`, `ingredient_id`, `amount NUMERIC(14,3) > 0`,
+  `unit VARCHAR(16)` (человеческая единица ввода), `created_by`, `created_at`,
+  уникальность `(trip_id, ingredient_id)` + `version` под `@Version`; PUT — идемпотентная
+  полная замена набора;
 - V29 — решения владельца по единицам и фасовке: «Туалетная бумага, 4 рулона» → «Бумага туалетная, рулон» (÷4), «Влажные салфетки, упаковка 100 шт» → «Салфетки влажные, упаковка 20 шт.» (÷5), «Спички влагозащищённые (20 шт)» → «Спички, коробок» (÷20) с пересчётом `piece_weight_g` и истории цен; новые привязки `antiseptic`→8016, `sunscreen`→5311, `toilet_paper`→6502, `wipes_wet`→6505; `gas_canister`/`soy_sauce`/`vinegar` явно без привязки. Правило «плотность ≈ 1» (MASS↔VOLUME, `piece_weight_g` как мл) — в `EmisUnit.pricePerUnit`, не в схеме.
 
 Правила для новых миграций — `AGENTS.md` раздел 11.

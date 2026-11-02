@@ -61,6 +61,18 @@ provisions/        дизайн-пак и сайт
 
 Фиксы на 1–3 файла — без отдельного планирования, но с записью в пачку багов/задачу.
 
+## Грабли окружения (Windows + git-bash): обходить сразу
+
+1. **Maven запускать через `cmd.exe`.** Bash-обёртка `mvn` из PATH падает
+   `ClassNotFoundException: org.codehaus.plexus.classworlds.launcher.Launcher`
+   (класс-мир не подхватывается из `lib/`). Рабочий вид:
+   `cmd.exe /c "mvn -B -o test -DforkCount=0 -Dtest=ИмяКласса -DfailIfNoSpecifiedTests=false"`.
+   Симптом «Maven не стартует» — это не проект и не pom.
+2. **Переменные из `.env` не подхватываются сами.** Spring падает на старте
+   `IllegalStateException: JWT_SECRET is not set` (`JwtProperties.validate`) → все тесты
+   класса красные «не по коду». Перед прогоном бэкенд-тестов:
+   `set -a; . ../.env; set +a` (из каталога `backend/`), затем `cmd.exe /c "mvn ..."`.
+
 ## Прочее
 
 - GitHub Actions: SHA для actions — только из официальных релизов (придуманные запрещены);

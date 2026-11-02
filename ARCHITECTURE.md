@@ -185,6 +185,10 @@ SUBST с from==to отклоняется валидацией сервиса (40
 обнулён (иначе totals считали бы продукт дважды). Порядок в конвейере:
 SCALE → people → EXCLUDE → EXTRA → substitutions.
 
+Конкурентность: batch-PUT берёт `OPTIMISTIC_FORCE_INCREMENT` на строке приёма, поэтому два
+одновременных сохранения состава не могут молча перезаписать друг друга — вторая запись
+получает 409, а клиент показывает диалог «данные изменились» с перечитыванием.
+
 Модули (SRP): `MealCompositionService` — оркестратор (валидация, контекст, GET-ответ),
 `CompositionDiffEngine` — диф-коммит, `TripScopedIdResolver` — резолв входящих id,
 `CompositionCalculator` — чистая математика веса/ккал/стоимости. UI: `MealCompositionModal`
@@ -405,6 +409,8 @@ GET/POST /api/v1/trips/{id}/shopping-exclusions, DELETE .../{ingredientId}
 GET/POST/DELETE /api/v1/trips/{id}/substitutions[/{id}]   замены from→to (ratio)
 PUT/DELETE /api/v1/trips/{id}/price-overrides/{ingId}     факт-цены (чеки), за единицу
 GET/PUT /api/v1/trips/{id}/checklist-bought               отметки «взято» (см. ниже)
+GET/PUT /api/v1/trips/{id}/checklist-actual-qty           фактическое количество чеклиста
+                                          («сколько реально берём/взяли»; см. ниже)
 POST/PUT/DELETE /api/v1/admin/recipes[/{id}]              ADMIN CRUD блюд с составом
 ```
 
@@ -434,11 +440,34 @@ PUT /api/v1/trips/{tripId}/checklist-bought   body {items:[{ingredientId, needed
 - Введённые факты (цена чека, «Взяли») НЕ аннулируются при изменении потребности: цена за
   единицу применяется к текущему «нужно», суммы пересчитываются.
 
+**Фактическое количество чеклиста** (`trip_checklist_actual_qty`) — тоже серверное:
+
+```
+GET /api/v1/trips/{tripId}/checklist-actual-qty -> 200 [{ingredientId, amount, unit}]
+PUT /api/v1/trips/{tripId}/checklist-actual-qty body {items:[{ingredientId, amount, unit}]}
+```
+
+- Пара `{amount, unit}` — человеческая единица ввода (`г`|`кг`|`мл`|`л`|`шт`|`уп`), не базовые
+  единицы продукта: ровно то, что человек видит и правит в чеклисте и в чеке.
+- Ключ — `(trip_id, ingredient_id)`: в отличие от «взято» факт НЕ привязан к штампу
+  потребности и переживает пересчёт людей/состава.
+- PUT — идемпотентная полная замена набора: пустой `items` очищает, дубли `ingredientId`
+  схлопываются (последнее значение), `items` ≤ 2000; `amount > 0`, `unit` не пустой и ≤ 16;
+  неизвестный `ingredientId` → 404 с откатом; чужой поход → 404.
+- Синхронизация клиента: тот же паттерн, что у «взято» (сервер — истина, localStorage — кэш и
+  буфер офлайн-записи), но БЕЗ union: у факта нет «надгробий» удалений, поэтому при `dirty`
+  локальная карта авторитетна и досылается целиком, а чистый кэш заменяется серверным
+  снимком. Порядок PUT на поход строго последовательный (очередь); невалидные пары не
+  отправляются и вычищаются из кэша, чтобы флаг `dirty` не завис. Событие `online` досылает
+  всё отложенное по походам сессии («в магазине нет связи»).
+
 ### Клиентские контракты данных
 
 - Данные похода — только сервер (ADR-9); localStorage-ключи `trip-*` — кэш/стейдж отображения:
   `trip-checklist-actualqty-{tripId}` → `Record<ingredientId, {amount, unit}>`
-  (unit ∈ 'г'|'кг'|'мл'|'л'|'шт'|'уп'; legacy-число читается как `{amount, unit:''}`),
+  (unit ∈ 'г'|'кг'|'мл'|'л'|'шт'|'уп'; legacy-число читается как `{amount, unit:''}`);
+  серверный источник — `checklist-actual-qty` (§Эндпоинты похода), ключ кэша — кэш и буфер
+  офлайн-правок с `dirty`-флагом `trip-checklist-actualqty-dirty-{tripId}`;
   `trip-checklist-packs-*` — корректировка расчётных упаковок ± (расчётная математика не меняется).
   Факт-количества «Взяли» — ОДИН источник для чеклиста, колонки «Взяли» и печатного отчёта.
 - `utils/recipeEdits.ts`: `buildEffectiveIngredients(ingredients, edits)` и
@@ -586,10 +615,17 @@ PostgreSQL + Flyway. Источник правды по версиям и сос
   `ingredient_id` FK ON DELETE CASCADE, `needed_stamp BIGINT NOT NULL` (0 легитимен),
   `created_by` FK users, unique `(trip_id, ingredient_id, needed_stamp)` + индекс по trip_id;
   набор меняется только идемпотентным PUT (bulk-DELETE + saveAll в одной транзакции).
-- **Оптимистичные блокировки:** 8 сущностей похода (`trips`, `trip_days`, `trip_meals`,
-  `trip_manual_items`, `trip_price_overrides`, `trip_shopping_exclusions`,
-  `trip_ingredient_substitutions`, `trip_checklist_bought`) имеют `version BIGINT NOT NULL
-  DEFAULT 0` (`@Version`); конфликт → 409.
+- **Факт количества чеклиста:** `trip_checklist_actual_qty` — `trip_id`/`ingredient_id` FK
+  ON DELETE CASCADE, `amount NUMERIC(14,3) > 0`, `unit VARCHAR(16)` (человеческая единица
+  ввода), `created_by` FK users, unique `(trip_id, ingredient_id)` + индекс по trip_id;
+  меняется только идемпотентным PUT (полная замена набора).
+- **Оптимистичные блокировки:** изменяемые сущности похода (`trips`, `trip_days`,
+  `trip_meals`, `trip_manual_items`, `trip_price_overrides`, `trip_shopping_exclusions`,
+  `trip_ingredient_substitutions`, `trip_checklist_bought`, `trip_checklist_actual_qty`)
+  имеют `version BIGINT NOT NULL DEFAULT 0` (`@Version`); конфликт → 409
+  `CONCURRENT_MODIFICATION`. Состав приёма защищён `OPTIMISTIC_FORCE_INCREMENT` на строке
+  приёма в `MealCompositionService`: batch-PUT фиксирует изменение агрегата, и вторая
+  конкурентная запись получает 409 вместо молчаливой перезаписи.
 - **Refresh-токены:** `revoked_at`, `replaced_by_id` (FK на себя, ON DELETE SET NULL) —
   mark-based ротация и reuse-detection.
 - **Журнал синков:** partial unique индекс `sync_logs(provider) WHERE status='RUNNING'` —

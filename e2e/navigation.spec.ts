@@ -261,3 +261,19 @@ test('N-6 клавиатура в модалке приёма: Tab-цикл вн
   await expect(page.locator('.modal-overlay')).toHaveCount(0, { timeout: 10_000 });
   await expect(trigger).toBeFocused();
 });
+
+test('N-7 опечатка в URL: в сессии — явный 404, вне сессии — логин (BL-66)', async ({ page }) => {
+  // вне сессии: прежний редирект на /login (поведение не изменилось)
+  await page.goto('/ololo');
+  await expect(page).toHaveURL(/\/login(\?|$)/, { timeout: 15_000 });
+  await expect(page.getByRole('button', { name: 'Войти' })).toBeVisible();
+
+  // в сессии: страница «Страница не найдена» + CTA «К списку походов»
+  await login(page, USER);
+  await page.goto('/ololo');
+  const notFound = page.getByTestId('not-found-page');
+  await expect(notFound).toBeVisible({ timeout: 15_000 });
+  await expect(notFound.getByRole('heading', { name: 'Страница не найдена' })).toBeVisible();
+  await notFound.getByTestId('not-found-cta').click();
+  await expect(page).toHaveURL(/\/trips(\?|$)/, { timeout: 15_000 });
+});
