@@ -128,7 +128,9 @@ mvn test -Dtest=EmisSharedCountIntegrationTest        # emisSharedCount на р�
 - `EmisControllerTest` — срез `@WebMvcTest`: `JwtAuthenticationFilter` исключён через `excludeFilters` (иначе контекст требует `JwtService` и `UserRepository`).
 - Покрытие пакета `integration` (jacoco): 84,7 % инструкций / 70,9 % ветвей; `JdkEmisTransport` — 0 % (живая сеть к порталу, KB-10).
 - TestDataIsolation пересоздаёт схему каждого сьюта (drop + flyway migrate) — миграции обязаны быть повторо-безопасными.
-- **Baseline-красный:** `EconomicConsistencyTest` (несовместим с контрактом ProductRequest и ходит в голый localhost:5432) — задача CI-1 в PLAN.md; не «чинится» попутно и не маскируется.
+- **В песочнице агента не запускать** (лимит памяти ~1 ГБ, OOM 137): `EconomicConsistencyTest`,
+  `UserPricesIntegrationTest`, `DockerStackSmokeTest` — в CI они выполняются обычным `mvn test`.
+  Рецепты per-class прогонов и обоснование: `skills/testing.md` (история: KB-10, `tasks/done/2026-11/kb10-kb16-env-recipes.md`).
 
 ## Бизнес-правила
 
