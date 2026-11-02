@@ -50,11 +50,9 @@ public class DevDataInitializer {
             }
 
             seedUser(userRepository, passwordEncoder, "admin@provision.app",
-                    resolvePassword(devProperties.getAdminPassword(), "ADMIN_PASSWORD", "admin@provision.app"),
-                    "Admin User", UserRole.ADMIN);
+                    devProperties.getAdminPassword(), "ADMIN_PASSWORD", "Admin User", UserRole.ADMIN);
             seedUser(userRepository, passwordEncoder, "user@provision.app",
-                    resolvePassword(devProperties.getUserPassword(), "DEMO_USER_PASSWORD", "user@provision.app"),
-                    "Regular User", UserRole.USER);
+                    devProperties.getUserPassword(), "DEMO_USER_PASSWORD", "Regular User", UserRole.USER);
         };
     }
 
@@ -82,20 +80,37 @@ public class DevDataInitializer {
     }
 
     private void seedUser(UserRepository userRepository, PasswordEncoder passwordEncoder,
-                          String email, String password, String name, UserRole role) {
-        if (userRepository.findByEmail(email).isEmpty()) {
-            User user = User.builder()
-                    .email(email)
-                    // Пароль всегда хэшируется BCrypt (подзадача 2 аудита: сид не минует encoder)
-                    .passwordHash(passwordEncoder.encode(password))
-                    .firstName(name)
-                    .lastName("")
-                    .role(role)
-                    .build();
-            userRepository.save(user);
-            log.info("Created demo user: {} (role={})", email, role);
-        } else {
-            log.info("Demo user already exists, skipping: {}", email);
+                          String email, String configuredPassword, String envName,
+                          String name, UserRole role) {
+        var existing = userRepository.findByEmail(email);
+        if (existing.isPresent()) {
+            // FIX (баг 02.11.2026): существующая запись раньше пропускалась молча, поэтому
+            // пароль из env не применялся никогда (volume-БД помнит запись с 25.10).
+            // resolvePassword() вызывается ТОЛЬКО для новой записи: для существующей пустой
+            // env не должен ни генерировать, ни печатать пароль — он не сохранится.
+            if (configuredPassword != null && !configuredPassword.isBlank()) {
+                User user = existing.get();
+                user.setPasswordHash(passwordEncoder.encode(configuredPassword));
+                userRepository.save(user);
+                // Email ставим ПЕРВЫМ: строка «password updated from ENV: email» читалась
+                // как «пароль = email» (репорт владельца 02.11.2026), хотя значение — из env.
+                log.info("Demo user already exists: {} — password hash refreshed from {}", email, envName);
+            } else {
+                log.info("Demo user already exists: {} — password NOT changed ({} is empty)", email, envName);
+            }
+            return;
         }
+
+        String password = resolvePassword(configuredPassword, envName, email);
+        User user = User.builder()
+                .email(email)
+                // Пароль всегда хэшируется BCrypt (подзадача 2 аудита: сид не минует encoder)
+                .passwordHash(passwordEncoder.encode(password))
+                .firstName(name)
+                .lastName("")
+                .role(role)
+                .build();
+        userRepository.save(user);
+        log.info("Created demo user: {} (role={})", email, role);
     }
 }

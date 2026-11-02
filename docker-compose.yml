@@ -33,6 +33,11 @@ services:
     environment:
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
       SEED_DEMO_USERS: ${SEED_DEMO_USERS:-false}
+      # Пароли демо-учёток из .env (баг 02.11.2026): без этих строк compose не прокидывал
+      # переменные в контейнер, Spring видел пустые значения → «ADMIN_PASSWORD is not set»
+      # и логин паролем из .env не работал. Пустое значение = сгенерировать для НОВОЙ записи.
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      DEMO_USER_PASSWORD: ${DEMO_USER_PASSWORD:-}
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/provision
       SPRING_DATASOURCE_USERNAME: provision
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env (copy .env.example)}

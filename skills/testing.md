@@ -1,11 +1,11 @@
 # Skill: тесты и проверки (копии команд, не изобретай свои)
 
-## Ограничения среды агента (песочница 2 vCPU / ~1 ГБ RAM, без Docker-демона)
+## Ограничения среды агента (песочница 2 vCPU / ~1 ГБ RAM, без Docker-демона) - только для Linux
 - ПОЛНЫЙ `mvn test` — OOM (137). Backend-тесты — только per-class, рецепт ниже.
 - НЕ запускать никогда (OOM даже при -Xmx256m): `UserPricesIntegrationTest`,
   `EconomicConsistencyTest`, `DockerStackSmokeTest`. В отчёте: «не запускались из-за
   лимита памяти», это НЕ «упали».
-- Playwright/e2e в песочнице не стартует (OOM раннера) — e2e проверяет CI.
+- Playwright/e2e в песочнице не стартует — e2e проверяет CI.
 - Интеграционные тесты без Docker идут через LocalPgFallback: PostgreSQL на порту **5433**.
 
 ## Backend: прогон одного класса (копировать как есть)
