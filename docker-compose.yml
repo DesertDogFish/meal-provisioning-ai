@@ -60,8 +60,13 @@ services:
       # Лимит ручной загрузки выгрузки ЕМИСС (multipart) — см. также client_max_body_size в nginx.conf
       EMIS_UPLOAD_MAX_FILE_SIZE: ${EMIS_UPLOAD_MAX_FILE_SIZE:-96MB}
       INTEGRATION_CONTACT_EMAIL: ${INTEGRATION_CONTACT_EMAIL:-}
-    ports:
-      - "8080:8080"
+    # Подзадача 6 аудита 02.11.2026: backend НЕ публикуется наружу — API доступен
+    # только через nginx (security-заголовки, limit_req, client_max_body_size,
+    # access-лог) и внутри docker-сети (фронт ходит сюда же). Прежняя публикация
+    # 0.0.0.0:8080 открывала эндпоинты МИМО nginx на публичном хосте.
+    # Для локальной отладки и CI-джоб, которым нужен прямой доступ на :8080, —
+    # overlay docker-compose.debug.yml (127.0.0.1-only):
+    #   docker compose -f docker-compose.yml -f docker-compose.debug.yml up -d
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/api/v1/meta"]
       interval: 30s

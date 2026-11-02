@@ -9,8 +9,8 @@
   "scope": "/",
   "display": "standalone",
   "display_override": ["standalone", "minimal-ui", "browser"],
-  "background_color": "#1a1a2e",
-  "theme_color": "#16213e",
+  "background_color": "#0B141B",
+  "theme_color": "#0B141B",
   "categories": ["productivity", "food", "travel"],
   "icons": [
     {

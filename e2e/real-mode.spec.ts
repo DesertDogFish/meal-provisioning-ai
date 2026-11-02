@@ -39,7 +39,7 @@ async function apiRegister(email: string, password: string): Promise<string | nu
 
 async function loginViaUi(page: Page, email: string, password: string) {
   await page.goto(`${BASE}/login`);
-  await page.getByPlaceholder('you@example.com').fill(email);
+  await page.getByPlaceholder('ivan@example.com').fill(email);
   await page.getByPlaceholder('••••••••').fill(password);
   await page.getByRole('button', { name: 'Войти' }).click();
   await expect(page).toHaveURL(/\/trips(\?|$)/, { timeout: 20_000 });

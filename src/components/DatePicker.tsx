@@ -53,9 +53,11 @@ export function DatePicker({
         aria-invalid={error}
         className={[
           'px-3 py-2 rounded-lg border bg-transparent text-sm',
-          error ? 'border-red-500' : 'border-gray-600',
           disabled ? 'opacity-50 cursor-not-allowed' : '',
         ].filter(Boolean).join(' ')}
+        // BL-63 (подзадача 7): цвета границы — токенами дизайн-пака, без сырой
+        // палитры Tailwind (классы red-500/gray-600 не переключались с темой).
+        style={{ borderColor: error ? 'var(--danger)' : 'var(--line-strong)' }}
       />
     </div>
   );

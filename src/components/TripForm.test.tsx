@@ -52,7 +52,7 @@ const fillName = (name: string) =>
 
 describe('TripForm — базовый рендер', () => {
   it('показывает заголовок, поля DatePicker и значения по умолчанию (4 человека)', () => {
-    const { startInput, endInput } = renderTripForm();
+    const { startInput } = renderTripForm();
     expect(screen.getByText('Новый поход')).toBeTruthy();
     expect(screen.getByLabelText('Название')).toBeTruthy();
     // ФАЗА 13: пикеры отрисованы как input[type=text] (браузерный нативный

@@ -17,7 +17,7 @@ const ADMIN = { email: 'admin@provision.app', password: 'password123' };
 
 async function login(page: Page) {
   await page.goto('/login');
-  await page.getByPlaceholder('you@example.com').fill(ADMIN.email);
+  await page.getByPlaceholder('ivan@example.com').fill(ADMIN.email);
   await page.getByPlaceholder('••••••••').fill(ADMIN.password);
   await page.getByRole('button', { name: 'Войти' }).click();
   await expect(page).toHaveURL(/\/trips(\?|$)/, { timeout: 15_000 });

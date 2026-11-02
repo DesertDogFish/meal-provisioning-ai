@@ -12,7 +12,20 @@ import type { MockUser } from './mockState';
 export function handleAuthImpl(method: string, path: string, body?: any): any {
   if (path === '/auth/register' && method === 'POST') {
     const { email, password, firstName, lastName } = body;
-    
+
+    // Mock-паритет (R3, подзадача 4.5 аудита 02.11.2026): та же парольная
+    // политика, что в бэкенде (RegisterRequest @Size(min=8, max=100)), и та же
+    // ФОРМА ответа — ErrorResponse метода handleValidation(MethodArgumentNotValid):
+    // title "Validation Error", detail "Validation failed", errors[{field,message}].
+    if (typeof password !== 'string' || password.length < 8 || password.length > 100) {
+      throw {
+        status: 400,
+        title: 'Validation Error',
+        detail: 'Validation failed',
+        errors: [{ field: 'password', message: 'size must be between 8 and 100 characters' }],
+      } as any;
+    }
+
     // Проверка существования пользователя
     if (users.find(u => u.email === email)) {
       throw { status: 409, message: 'Conflict', detail: 'Email already registered' };

@@ -42,6 +42,10 @@ jobs:
       # Только на nightly-schedule/manual (на PR не тратим Docker-ресурсы).
       - name: Start docker compose stack (real mode)
         if: github.event_name != 'pull_request'
+        env:
+          # Подзадача 6 аудита 02.11.2026: backend в базовом compose не публикуется;
+          # real-mode e2e бьёт в localhost:8080 напрямую — нужен debug-overlay.
+          COMPOSE_FILE: docker-compose.yml:docker-compose.debug.yml
         run: |
           cp .env.example .env
           sed -i "s|^JWT_SECRET=.*|JWT_SECRET=$(openssl rand -base64 48)|" .env
@@ -66,6 +70,8 @@ jobs:
 
       - name: Tear down stack
         if: always() && github.event_name != 'pull_request'
+        env:
+          COMPOSE_FILE: docker-compose.yml:docker-compose.debug.yml
         run: docker compose down -v
 
       - name: Upload Playwright report

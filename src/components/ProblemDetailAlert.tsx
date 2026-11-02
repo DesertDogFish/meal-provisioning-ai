@@ -11,42 +11,38 @@ interface Props {
   compact?: boolean;
 }
 
+// BL-63 (аудит 02.11.2026, подзадача 7): цвета — только токенами дизайн-пака
+// через классы .alert--* (src/index.css). Сырая палитра Tailwind (классы
+// *-50/*-900) была только светлой — в тёмной теме алерт рисовался белёсой коробкой.
+// Компонент маппит семантику статуса (getErrorColor) на имя класса и не знает
+// ни о теме, ни о конкретных цветах (provisions/design-pack/AGENTS.md).
+const alertModifier: Record<ErrorColor, string> = {
+  amber: 'alert--warn',
+  orange: 'alert--warn',
+  red: 'alert--danger',
+  blue: 'alert--info',
+  purple: 'alert--info',
+  slate: 'alert--neutral',
+};
+
 /**
  * ProblemDetailAlert - UI компонент для отображения ProblemDetail
  * Аналог ProblemDetail response в Spring Boot
  */
 export function ProblemDetailAlert({ problemDetail, onClose, compact = false }: Props) {
-  const color = getErrorColor(problemDetail.status);
+  const modifier = alertModifier[getErrorColor(problemDetail.status)];
   const validationErrors = getValidationErrors(problemDetail);
   const conflictInfo = getConflictInfo(problemDetail);
   const message = getErrorMessage(problemDetail);
 
-  const colorClasses: Record<ErrorColor, string> = {
-    amber: 'bg-amber-50 border-amber-200 text-amber-900',
-    orange: 'bg-orange-50 border-orange-200 text-orange-900',
-    red: 'bg-red-50 border-red-200 text-red-900',
-    blue: 'bg-blue-50 border-blue-200 text-blue-900',
-    purple: 'bg-purple-50 border-purple-200 text-purple-900',
-    slate: 'bg-slate-50 border-slate-200 text-slate-900',
-  };
-
-  const iconColorClasses: Record<ErrorColor, string> = {
-    amber: 'text-amber-600',
-    orange: 'text-orange-600',
-    red: 'text-red-600',
-    blue: 'text-blue-600',
-    purple: 'text-purple-600',
-    slate: 'text-slate-600',
-  };
-
   if (compact) {
     return (
-      <div className={`flex items-start gap-2 p-3 rounded-lg border ${colorClasses[color]}`}>
-        <AlertCircle size={16} className={iconColorClasses[color]} />
+      <div role="alert" className={`alert ${modifier} flex items-start gap-2 p-3`}>
+        <AlertCircle size={16} className="alert__icon flex-none mt-0.5" aria-hidden="true" />
         <div className="flex-1 text-sm">{message}</div>
         {onClose && (
-          <button type="button" onClick={onClose} aria-label="Закрыть" className={iconColorClasses[color]}>
-            <X size={16} />
+          <button type="button" onClick={onClose} aria-label="Закрыть" className="alert__close flex-none">
+            <X size={16} aria-hidden="true" />
           </button>
         )}
       </div>
@@ -54,15 +50,15 @@ export function ProblemDetailAlert({ problemDetail, onClose, compact = false }: 
   }
 
   return (
-    <div className={`rounded-xl border ${colorClasses[color]} p-4`}>
+    <div role="alert" className={`alert ${modifier} p-4`}>
       <div className="flex items-start gap-3">
-        <AlertTriangle size={20} className={iconColorClasses[color]} />
-        <div className="flex-1">
+        <AlertTriangle size={20} className="alert__icon flex-none mt-0.5" aria-hidden="true" />
+        <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
             <h3 className="font-semibold">{problemDetail.title}</h3>
-            <span className="text-xs opacity-75">({problemDetail.status})</span>
+            <span className="alert__muted text-xs">({problemDetail.status})</span>
           </div>
-          
+
           {problemDetail.detail && (
             <p className="text-sm opacity-90 mb-2">{problemDetail.detail}</p>
           )}
@@ -70,7 +66,7 @@ export function ProblemDetailAlert({ problemDetail, onClose, compact = false }: 
           {/* Validation errors */}
           {validationErrors.length > 0 && (
             <div className="mt-3 space-y-1">
-              <p className="text-xs font-medium opacity-75">Ошибки валидации:</p>
+              <p className="alert__muted text-xs font-medium">Ошибки валидации:</p>
               <ul className="list-disc list-inside text-sm space-y-0.5">
                 {validationErrors.map((err, idx) => (
                   <li key={idx}>{humanizeFieldError(err)}</li>
@@ -82,7 +78,7 @@ export function ProblemDetailAlert({ problemDetail, onClose, compact = false }: 
           {/* Conflict info */}
           {conflictInfo && conflictInfo.length > 0 && (
             <div className="mt-3 space-y-1">
-              <p className="text-xs font-medium opacity-75">Используется в:</p>
+              <p className="alert__muted text-xs font-medium">Используется в:</p>
               <ul className="list-disc list-inside text-sm space-y-0.5">
                 {conflictInfo.map((item, idx) => (
                   <li key={idx}>
@@ -95,7 +91,7 @@ export function ProblemDetailAlert({ problemDetail, onClose, compact = false }: 
 
           {/* Technical details */}
           <details className="mt-3">
-            <summary className="text-xs opacity-75 cursor-pointer hover:opacity-100">
+            <summary className="alert__muted text-xs cursor-pointer hover:opacity-100">
               Технические детали (RFC 7807)
             </summary>
             <div className="mt-2 p-2 rounded text-xs font-mono overflow-x-auto" style={{ background: 'color-mix(in srgb, var(--bg-0) 30%, transparent)' }}>
@@ -105,8 +101,8 @@ export function ProblemDetailAlert({ problemDetail, onClose, compact = false }: 
         </div>
 
         {onClose && (
-          <button type="button" onClick={onClose} aria-label="Закрыть" className={iconColorClasses[color]}>
-            <X size={18} />
+          <button type="button" onClick={onClose} aria-label="Закрыть" className="alert__close flex-none">
+            <X size={18} aria-hidden="true" />
           </button>
         )}
       </div>

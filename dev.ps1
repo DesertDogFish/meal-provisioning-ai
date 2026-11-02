@@ -38,11 +38,16 @@ function Start-Services {
         $secret = [Convert]::ToBase64String((1..48 | ForEach-Object { Get-Random -Maximum 256 }))
         ((Get-Content .env) -replace '^JWT_SECRET=.*', "JWT_SECRET=$secret") | Set-Content .env
         Write-Success "Generated a random JWT_SECRET in .env"
+        # Dev-режим: демо-учётки включены (в .env.example дефолт false — подзадача 6
+        # аудита 02.11.2026, публичный сервер не должен сидировать ADMIN-демо).
+        ((Get-Content .env) -replace '^SEED_DEMO_USERS=.*', "SEED_DEMO_USERS=true") | Set-Content .env
+        Write-Success "Enabled SEED_DEMO_USERS=true in .env (dev only)"
     }
-    
-    # Start Docker Compose
+
+    # Start Docker Compose (+ debug overlay: backend на 127.0.0.1:8080 для Swagger/отладки;
+    # базовый compose backend наружу не публикует — подзадача 6 аудита 02.11.2026)
     Write-Status "Starting Docker containers..."
-    docker compose up -d --build
+    docker compose -f docker-compose.yml -f docker-compose.debug.yml up -d --build
     
     if ($LASTEXITCODE -eq 0) {
         Write-Success "Services started successfully!"
@@ -56,7 +61,7 @@ function Start-Services {
 
 function Stop-Services {
     Write-Status "Stopping Provision services..."
-    docker compose down
+    docker compose -f docker-compose.yml -f docker-compose.debug.yml down
     Write-Success "Services stopped"
 }
 
@@ -119,7 +124,7 @@ function Show-Status {
     }
     
     # Check containers
-    $containers = docker compose ps
+    $containers = docker compose -f docker-compose.yml -f docker-compose.debug.yml ps
     Write-Host $containers
     
     # Check frontend

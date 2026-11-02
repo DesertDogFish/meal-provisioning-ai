@@ -297,7 +297,14 @@
   образец — `EmisPriceApplierTest`, `EmisMirrorServiceTest`, `PriceSyncPayloadTest`,
   `IntegrationUploadTest`. Критерий приёмки: `mvn verify` публикует отчёт и валится ниже порога;
   у приоритетных сервисов есть свои тест-классы; покрытие `service/**` ≥ 70% lines. Источник: внешний аудит 30.10.2026, AU-08 (сводка 30 задач — `plans/done/2026-10-30-external-audit-p0-block.md`).
-  Статус: READY
+  **Поправка 02.11.2026 (план `plans/2026-11-02-audit-security-usability-ui.md`, подзадача 2):**
+  механизм гейта реализован и согласован с этой карточкой — ОДНО число и ОДИН механизм:
+  профиль `coverage-gate` в `backend/pom.xml` (LINE COVEREDRATIO, `minimum` 0.60 — между
+  стартом 50 % и целью 70 % этой карточки), вызов `mvn -P coverage-gate verify` в ci.yml;
+  замер в песочнице 02.11.2026: 68.4 % LINE (3418/4999, без трёх тяжёлых сьютов —
+  в CI не ниже). Остаток карточки: unit-тесты приоритетных сервисов (`MealCompositionService`,
+  `SubstitutionService`, `SyncLogService` — худшие по пропущенным строкам) и плавное
+  поднятие `minimum` к 0.70 по мере их появления. Статус: READY (остаток)
 
 - **BL-43. Удалить неиспользуемые зависимости и навести порядок в `package.json`** (S).
   Что сделать: удалить 8 неиспользуемых пакетов и `@types/canvas-confetti`; `happy-dom` →
@@ -362,7 +369,11 @@
   `@SpringBootTest` с профилем `prod` — `detail` без внутренних сообщений, с `dev` — прежнее
   поведение. Критерий приёмки: в prod 500/400 от `IllegalArgumentException` возвращают
   стабильный код без внутреннего текста; README соответствует реализации; тесты на оба профиля. Источник: внешний аудит 30.10.2026, AU-27 (сводка 30 задач — `plans/done/2026-10-30-external-audit-p0-block.md`).
-  Статус: READY
+  **Поправка 02.11.2026 (аудит, план `plans/2026-11-02-audit-security-usability-ui.md`,
+  подзадача 9):** ядро карточки (профиль-зависимая санитизация `detail`, KB-27) уже
+  реализовано в `GlobalExceptionHandler` и покрыто `GlobalExceptionHandlerProfileDetailTest`;
+  KB-27 закрыт (запись восстановлена в архиве). Остаток карточки — `traceId` в `extensions`
+  и вынос в `ErrorResponseFactory` (BL-54). Статус: READY (остаток)
 
 - **BL-50. Docker/compose hardening** (M, пересекается с BL-35). Что сделать: запинить все
   `FROM`/`image` по digest (`@sha256:…`) с комментарием о версии и обновлять пин через
@@ -404,7 +415,9 @@
   в прежнем тексте дважды повторялся `MealCompositionModal.tsx`; фактический список > 500 строк
   на 02.11.2026: `mockTrips.ts` 941, `MealCompositionModal.tsx` 876, `mockData.ts` 832,
   `ProductsPage.tsx` 636 (BL-16), `RecipesPage.tsx` 616, `ShoppingListCalculator.java` 520
-  (accepted-исключение), `GlobalExceptionHandler.java` 516 (BL-54), `RecipeEditorModal.tsx` 512.
+  (accepted-исключение), `GlobalExceptionHandler.java` 542 (BL-54; было 516 на момент аудита,
+  +26 строк — 404-обработчик подзадачи 10 плана `plans/2026-11-02-audit-security-usability-ui.md`,
+  декомпозиция — по-прежнему BL-54), `RecipeEditorModal.tsx` 512.
   Критерий приёмки: файлов > 500 строк
   не больше четырёх (с задокументированными исключениями); новый файл > 500 строк валит CI;
   поведение не изменилось (frontend-тесты и e2e зелёные). Источник: внешний аудит 30.10.2026, AU-19 (сводка 30 задач — `plans/done/2026-10-30-external-audit-p0-block.md`).
@@ -512,27 +525,6 @@
 
 ## Аудит 02.11.2026 — security, usability, UI, стандарты
 
-- **BL-63. Токены вместо сырой палитры Tailwind в алертах и формах** (M).
-  Карточка восстановлена аудитом 02.11.2026: номер назначен закрытым планом
-  `plans/done/2026-10-31-ux-audit-visual-inspection.md` («тосты на токенах вместо сырой
-  палитры Tailwind») и упомянут в `PLAN.md` («открыты BL-62/BL-63»), но записи не было ни
-  в живом реестре, ни в архиве — нарушение сквозной нумерации (`AGENTS.md` §2). Скоуп
-  актуализирован: тосты переведены на токены коммитом `ebb3a1b` (`.toast*` в `src/index.css`),
-  остаток — другие компоненты. Что сделать: `src/components/ProblemDetailAlert.tsx`
-  (строки 25–39 — 20 классов `bg-amber-50 border-amber-200 text-amber-900`-типа; палитра
-  только светлая → в тёмной теме алерт — белая коробка) перевести на классы `.alert--*`
-  с токенами по образцу `.toast*` (`src/index.css` ~262–300: `--danger-soft`/`--danger` и т.п.,
-  `color-mix` для границ), маппинг `getErrorColor()` → класс; `src/components/DatePicker.tsx`
-  (строка ~56) — `border-red-500`/`border-gray-600` → `var(--danger)`/`var(--line)`;
-  `src/pages/LoginPage.tsx` — deprecated-алиасы `--surface/--border/--text/--elev/--muted/--w1`
-  → канонические токены (`--bg-1/--line/--text-1/--text-2/--wave-400`). Файлы: перечисленные +
-  `src/index.css` + тесты компонентов. Критерий приёмки:
-  `grep -rE "(bg|text|border)-(red|green|blue|amber|orange|slate|purple|gray)-[0-9]" src --include='*.tsx'`
-  вне тестов пуст; `LoginPage.tsx` без `@deprecated`-алиасов; скрин алерта в тёмной и светлой
-  теме (контраст текста ≥ 4.5:1); vitest/tsc/build зелёные. Источник: аудит 02.11.2026,
-  план `plans/2026-11-02-audit-security-usability-ui.md` (подзадача 7 — план взял задачу).
-  Статус: READY
-
 - **BL-64. Декомпозировать монолит `src/index.css` (2292 строки, R8/R9)** (L). Что сделать:
   разрезать по ответственностям: базовый слой (`@layer base`, html/body/типографика) —
   `src/styles/base.css`; компонентные блоки (`.toast*`, `.alert--*` после BL-63,
@@ -544,21 +536,6 @@
   (если css-модули затронут тесты). Критерий приёмки: ни одного css-файла > 500 строк;
   скрин-регресс ключевых страниц (список походов, этап ①–④, логин) в тёмной и светлой теме —
   без диффов; vitest/build/tsc зелёные. Источник: аудит 02.11.2026 (замер R8: 2292 строки).
-  Статус: READY
-
-- **BL-65. Мелочи дрейфа и мок-паритета (аудит 02.11.2026)** (S). Что сделать:
-  (1) `/meta` в `src/api/mockServer.ts`: `version: '1.0.0'` рассинхронизирован с
-  `backend/pom.xml` (1.0.1) — привести к единому источнику (константа из package.json/
-  build-env или явная строка `'mock'`), `build: new Date().toISOString()` заменить на
-  статичное значение (backend отдаёт фиксированный `startedAt` — паритет формы и смысла);
-  обновить contract-тест `/meta` (mock ↔ real-фикстура);
-  (2) `src/pages/RecipesEditRepro.test.tsx` — отладочный repro-тест: переименовать в
-  сценарный (`RecipesPage.editIngredient.test.tsx`) либо удалить, если сценарий уже покрыт
-  `RecipesPage.test.tsx` (решить по содержимому). Файлы: `src/api/mockServer.ts`,
-  contract-тесты `src/api/`, repro-файл. Критерий приёмки: contract-тест `/meta` зелёный
-  на mock и real-фикстуре; файлов `*Repro*` в `src/` нет; vitest зелёный. Источник: аудит
-  02.11.2026, план `plans/2026-11-02-audit-security-usability-ui.md` (подзадача 10 — план
-  взял задачу).
   Статус: READY
 
 - **BL-66. Поведение 404 для неизвестных маршрутов** (S). Что сделать: catch-all

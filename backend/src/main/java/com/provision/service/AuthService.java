@@ -18,10 +18,14 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import io.micrometer.core.instrument.MeterRegistry;
+import org.springframework.beans.factory.ObjectProvider;
+
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -38,6 +42,17 @@ public class AuthService {
     private final JwtProperties jwtProperties;
     /** Brute-force guard (подзадача 19 аудита): 5 неудач на email -> 429 на 15 минут. */
     private final LoginAttemptService loginAttemptService;
+    /**
+     * Метрики refresh-reuse (подзадача 4 аудита 02.11.2026). ObjectProvider —
+     * сервис поднимается и в срезах без actuator (как LoginAttemptService).
+     */
+    private final ObjectProvider<MeterRegistry> meterRegistryProvider;
+
+    /** Метка деривации отдельного HMAC-ключа для хэша refresh-токенов (подзадача 4.3). */
+    static final String REFRESH_HASH_KEY_LABEL = "provision-refresh-hash";
+
+    /** Имя счётчика предъявлений отозванного refresh-токена (признак кражи). */
+    static final String METRIC_REFRESH_REUSE = "auth.refresh.reuse";
 
     /**
      * Фиктивный BCrypt-хэш для выравнивания времени ответа login при неизвестном email
@@ -49,9 +64,18 @@ public class AuthService {
 
     @Transactional
     public AuthResponseWithUser register(RegisterRequest request) {
+        // Подзадача 4.4 аудита: /auth/register был без лимитов — теперь тот же
+        // механизм AU-04 (ключ register:<email>): повторные регистрации занятого
+        // email блокируются 429 после 5 конфликтов за окно. Массовая регистрация
+        // случайными email — уровень IP-лимита nginx (BL-38), не этот ключ.
+        String registerKey = LoginAttemptService.registerKey(request.email());
+        loginAttemptService.assertNotBlocked(registerKey);
         if (userRepository.existsByEmail(request.email())) {
+            loginAttemptService.recordFailure(registerKey);
+            log.warn("Register rejected: email already registered ({})", request.email());
             throw new ConflictException("Email already registered: " + request.email());
         }
+        loginAttemptService.recordSuccess(registerKey);
 
         User user = User.builder()
                 .email(request.email())
@@ -69,7 +93,7 @@ public class AuthService {
         // (id/email/firstName/lastName/role) + accessToken/refreshToken/tokenType.
         String accessToken = jwtService.generateAccessToken(user);
         String refreshToken = generateRefreshToken();
-        saveRefreshToken(user, refreshToken);
+        saveRefreshToken(user, refreshToken, LocalDateTime.now());
         return new AuthResponseWithUser(toUserResponse(user), accessToken, refreshToken);
     }
 
@@ -112,22 +136,53 @@ public class AuthService {
         String refreshToken = generateRefreshToken();
 
         // Сохраняем refresh token (хэш)
-        saveRefreshToken(user, refreshToken);
+        saveRefreshToken(user, refreshToken, LocalDateTime.now());
 
         log.info("User logged in: {}", user.getEmail());
         return new AuthResponse(accessToken, refreshToken);
     }
 
-    @Transactional
+    /**
+     * noRollbackFor (подзадача 4.1): отзыв семьи токенов при reuse-detection и
+     * ленивая очистка истёкших ДОЛЖНЫ оставаться в БД, хотя метод и завершается
+     * UnauthorizedException — иначе rollback отменял бы саму защиту (регресс,
+     * пойманный AuthIntegrationTest AUTH-11). Все ветки с 401 меняют только
+     * refresh_tokens (отзыв/удаление), частичного доменного состояния не оставляют.
+     */
+    @Transactional(noRollbackFor = UnauthorizedException.class)
     public AuthResponse refreshTokens(RefreshTokenRequest request) {
+        // Подзадача 4.4 аудита: глобальный счётчик провалов /auth/refresh
+        // (ключ один на эндпоинт, потолок LoginAttemptService.REFRESH_MAX_ATTEMPTS).
+        loginAttemptService.assertNotBlocked(LoginAttemptService.REFRESH_GLOBAL_KEY);
+
+        LocalDateTime now = LocalDateTime.now();
+        // Ленивая физическая очистка истёкших (подзадача 4.1): отозванные строки
+        // остаются для reuse-detection, а просроченные — мусор, удаляем на месте.
+        refreshTokenRepository.deleteExpiredTokens(now);
+
         String tokenHash = hashToken(request.refreshToken());
         RefreshToken storedToken = refreshTokenRepository.findByTokenHash(tokenHash)
-                .orElseThrow(() -> {
-                    log.warn("Refresh rejected: token not found");
-                    return new UnauthorizedException("Invalid refresh token");
-                });
+                .orElse(null);
+        if (storedToken == null) {
+            loginAttemptService.recordFailure(LoginAttemptService.REFRESH_GLOBAL_KEY,
+                    LoginAttemptService.REFRESH_MAX_ATTEMPTS);
+            log.warn("Refresh rejected: token not found");
+            throw new UnauthorizedException("Invalid refresh token");
+        }
 
-        if (storedToken.getExpiresAt().isBefore(LocalDateTime.now())) {
+        // ПОДЗАДАЧА 4.1 (OAuth Security BCP, refresh token replay): предъявлен УЖЕ
+        // ОТОЗВАННЫЙ (ротированный) токен — вероятная кража. Отзываем ВСЮ семью
+        // refresh-токенов пользователя, логируем, метрика, 401.
+        if (storedToken.getRevokedAt() != null) {
+            int revoked = refreshTokenRepository.revokeAllByUserId(storedToken.getUser().getId(), now);
+            countRefreshReuse();
+            log.warn("Refresh REUSE detected: userId={}, revokedAt={}, revoked {} active token(s) — "
+                            + "possible token theft, whole family revoked",
+                    storedToken.getUser().getId(), storedToken.getRevokedAt(), revoked);
+            throw new UnauthorizedException("Invalid refresh token");
+        }
+
+        if (storedToken.getExpiresAt().isBefore(now)) {
             refreshTokenRepository.deleteByTokenHash(tokenHash);
             log.info("Refresh rejected: token expired for userId={}", storedToken.getUser().getId());
             throw new UnauthorizedException("Refresh token expired");
@@ -135,22 +190,32 @@ public class AuthService {
 
         User user = storedToken.getUser();
 
-        // FIX (подзадача 4 аудита, race condition): старый токен инвалидируется АТОМАРНО
-        // (bulk DELETE по уникальному token_hash берёт блокировку строки) ДО выдачи новой пары.
-        // При двух параллельных refresh с одним UUID вторая транзакция получит deleted=0
-        // и будет отклонена — два валидных токена из одного выдать невозможно.
-        int deleted = refreshTokenRepository.deleteByTokenHash(tokenHash);
-        if (deleted == 0) {
-            log.warn("Refresh race detected: token already rotated/deleted, userId={}", user.getId());
+        // Ротация: новый токен создаётся, старый помечается АТОМАРНО
+        // (UPDATE ... WHERE revoked_at IS NULL берёт блокировку строки). При двух
+        // параллельных refresh с одним UUID вторая транзакция получит updated=0 —
+        // строго по BCP трактуем как reuse и отзываем семью (прежняя семантика
+        // «race -> 401» сохранена, добавлен отзыв семьи).
+        String newRefreshToken = generateRefreshToken();
+        RefreshToken newStored = saveRefreshToken(user, newRefreshToken, now);
+        int updated = refreshTokenRepository.revokeForRotation(tokenHash, newStored.getId(), now);
+        if (updated == 0) {
+            int revoked = refreshTokenRepository.revokeAllByUserId(user.getId(), now);
+            countRefreshReuse();
+            log.warn("Refresh race detected: token already rotated, userId={} — revoked {} active token(s)",
+                    user.getId(), revoked);
             throw new UnauthorizedException("Invalid refresh token");
         }
 
         String newAccessToken = jwtService.generateAccessToken(user);
-        String newRefreshToken = generateRefreshToken();
-        saveRefreshToken(user, newRefreshToken);
-
         log.info("Refresh tokens rotated for userId={}", user.getId());
         return new AuthResponse(newAccessToken, newRefreshToken);
+    }
+
+    private void countRefreshReuse() {
+        MeterRegistry registry = meterRegistryProvider.getIfAvailable();
+        if (registry != null) {
+            registry.counter(METRIC_REFRESH_REUSE).increment();
+        }
     }
 
     @Transactional
@@ -168,14 +233,19 @@ public class AuthService {
         return toUserResponse(user);
     }
 
-    private void saveRefreshToken(User user, String refreshToken) {
+    /**
+     * Сохранить refresh-токен. ПОДЗАДАЧА 4.2 аудита: TTL больше не хардкод
+     * «7 дней» — берётся из jwt.refresh-token-expiration (JwtProperties,
+     * application.yml), чтобы смена конфига реально меняла expires_at в БД.
+     */
+    private RefreshToken saveRefreshToken(User user, String refreshToken, LocalDateTime issuedAt) {
         String tokenHash = hashToken(refreshToken);
         RefreshToken token = RefreshToken.builder()
                 .user(user)
                 .tokenHash(tokenHash)
-                .expiresAt(LocalDateTime.now().plusDays(7))
+                .expiresAt(issuedAt.plus(Duration.ofMillis(jwtProperties.getRefreshTokenExpiration())))
                 .build();
-        refreshTokenRepository.save(token);
+        return refreshTokenRepository.save(token);
     }
 
     private String generateRefreshToken() {
@@ -186,17 +256,24 @@ public class AuthService {
      * Хэш refresh-токена для хранения в БД (колонка refresh_tokens.token_hash).
      *
      * FIX (подзадача 3 аудита): раньше — unsalted SHA-256, обратимый по радужным
-     * таблицам при утечке БД. Теперь — HMAC-SHA256 с ключом из JWT_SECRET (≥32 байт
-     * гарантирует JwtProperties.validate()); без знания ключа хэш не подбирается.
-     * Следствие для деплоя: сохранённые ранее SHA-256-хэши перестанут находиться —
-     * пользователи разово перелогинятся (access-токены не затронуты).
+     * таблицам при утечке БД → HMAC-SHA256.
+     *
+     * ПОДЗАДАЧА 4.3 аудита 02.11.2026 (key separation): ключ хэширования БОЛЬШЕ
+     * не сам JWT_SECRET — он деривируется: derived = HMAC-SHA256(JWT_SECRET,
+     * "provision-refresh-hash"), хэш = HMAC-SHA256(derived, token). Signing-ключ
+     * access-токенов не переиспользуется напрямую в другой роли (утечка одного
+     * применения не даёт материал другого; ср. NIST SP 800-108 — одна итерация
+     * KDF в counter-mode с фиксированной меткой).
+     * Следствие для деплоя: сохранённые ранее хэши (HMAC от «голого» секрета)
+     * перестанут находиться — пользователи разово перелогинятся (прецедент —
+     * переход SHA-256→HMAC; access-токены не затронуты).
      */
     private String hashToken(String token) {
         try {
-            Mac mac = Mac.getInstance("HmacSHA256");
-            mac.init(new SecretKeySpec(
-                    jwtProperties.getSecret().getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
-            byte[] hash = mac.doFinal(token.getBytes(StandardCharsets.UTF_8));
+            byte[] derivedKey = hmacSha256(
+                    jwtProperties.getSecret().getBytes(StandardCharsets.UTF_8),
+                    REFRESH_HASH_KEY_LABEL.getBytes(StandardCharsets.UTF_8));
+            byte[] hash = hmacSha256(derivedKey, token.getBytes(StandardCharsets.UTF_8));
             StringBuilder hexString = new StringBuilder(hash.length * 2);
             for (byte b : hash) {
                 hexString.append(String.format("%02x", 0xff & b));
@@ -205,6 +282,12 @@ public class AuthService {
         } catch (GeneralSecurityException e) {
             throw new IllegalStateException("Cannot hash refresh token (HmacSHA256)", e);
         }
+    }
+
+    private static byte[] hmacSha256(byte[] key, byte[] data) throws GeneralSecurityException {
+        Mac mac = Mac.getInstance("HmacSHA256");
+        mac.init(new SecretKeySpec(key, "HmacSHA256"));
+        return mac.doFinal(data);
     }
 
     private UserResponse toUserResponse(User user) {

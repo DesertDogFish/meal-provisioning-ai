@@ -245,7 +245,11 @@
                         <version>0.8.12</version>
                         <executions>
                             <execution>
-                                <id>coverage-check</id>
+                                <!-- KB-37: id совпадает с именем профиля — селектор
+                                     jacoco:check@coverage-gate резолвится; фаза —
+                                     verify (для check это фаза по умолчанию). -->
+                                <id>coverage-gate</id>
+                                <phase>verify</phase>
                                 <goals>
                                     <goal>check</goal>
                                 </goals>
@@ -254,10 +258,17 @@
                         <configuration>
                             <rules>
                                 <rule>
+                                    <element>BUNDLE</element>
                                     <limits>
                                         <limit>
                                             <counter>LINE</counter>
-                                            <threshold>60</threshold>
+                                            <!-- KB-37: COVEREDRATIO — доля 0.0–1.0;
+                                                 прежнее <threshold>60</threshold> — невалидный
+                                                 параметр (6000 %), гейт не работал. Параметр
+                                                 Limit — <value> (проверено запуском гейта
+                                                 02.11.2026: valueType не существует). -->
+                                            <value>COVEREDRATIO</value>
+                                            <minimum>0.60</minimum>
                                         </limit>
                                     </limits>
                                 </rule>

@@ -113,6 +113,9 @@ export function humanizeFieldError(err: FieldErrorLike | null | undefined): stri
   if (/must contain at least one ingredient/i.test(raw)) return BLANK_TEXT.ingredients;
 
   const size = raw.match(/must be between (\d+) and (\d+) characters/i);
+  // Пароль — политика безопасности (NIST SP 800-63B, минимум 8; подзадача 4.5
+  // аудита 02.11.2026), а не «размер поля»: копи адресная — «не короче N символов».
+  if (size && err.field === 'password') return passwordTooShort(Number(size[1]));
   if (size) return `${fieldLabel(err.field)}: от ${size[1]} до ${size[2]} символов`;
 
   if (/must be positive/i.test(raw)) return `${fieldLabel(err.field)}: значение должно быть больше нуля`;
@@ -135,4 +138,13 @@ export function humanizeFieldError(err: FieldErrorLike | null | undefined): stri
 
   // Не технический шаблон — считаем текст уже человеческим (бизнес-ошибка бэка).
   return raw;
+}
+
+/** Минимальная длина пароля — синхронна с бэкендом (RegisterRequest @Size(min=8),
+ *  подзадача 4.5 аудита 02.11.2026) и mock-слоем (mockAuth.ts, R3). */
+export const PASSWORD_MIN_LENGTH = 8;
+
+/** Копи «пароль слишком короткий» — единая для клиентской проверки и humanizeFieldError. */
+export function passwordTooShort(min: number = PASSWORD_MIN_LENGTH): string {
+  return `Пароль: не короче ${min} символов`;
 }

@@ -1,7 +1,7 @@
 import { FieldError } from '../types/errors';
 import { ValidationError } from './errors';
 // UX-осмотр 31.10 (п.2): тексты ошибок — человеческие RU, единый маппинг field→копи.
-import { blankMessage, fieldLabel, fieldLabelGenitive } from './validationMessages';
+import { blankMessage, fieldLabel, fieldLabelGenitive, PASSWORD_MIN_LENGTH, passwordTooShort } from './validationMessages';
 
 /**
  * Validation rules - analog of Jakarta Bean Validation annotations
@@ -193,7 +193,10 @@ export function validateRegistration(data: {
 }): FieldError[] {
   return validateReturnErrors([
     { field: 'email', value: data.email, validators: [(v, f) => notBlank(v as string, f), (v, f) => email(v as string, f)] },
-    { field: 'password', value: data.password, validators: [(v, f) => notBlank(v as string, f), (v, f) => size(v as string, f, 6, 100)] },
+    // Пароль — синхронно с бэкендом (RegisterRequest @Size(min=8, max=100),
+    // подзадача 4.5 аудита 02.11.2026): короткий пароль получает адресную копи
+    // passwordTooShort(), а не «от 8 до 100 символов».
+    { field: 'password', value: data.password, validators: [(v, f) => notBlank(v as string, f), (v, f) => ((v as string).length < PASSWORD_MIN_LENGTH ? passwordTooShort() : size(v as string, f, PASSWORD_MIN_LENGTH, 100))] },
     { field: 'firstName', value: data.firstName, validators: [(v, f) => notBlank(v as string, f), (v, f) => size(v as string, f, 1, 50)] },
     { field: 'lastName', value: data.lastName, validators: [(v, f) => notBlank(v as string, f), (v, f) => size(v as string, f, 1, 50)] },
   ]);

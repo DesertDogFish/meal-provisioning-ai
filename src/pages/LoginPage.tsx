@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
+import { PASSWORD_MIN_LENGTH, passwordTooShort } from '../utils/validationMessages';
 import { useAuth } from '../components/AuthProvider'; // cleanup-п.7
 import { Mail, Lock, User, Eye, EyeOff } from 'lucide-react';
 import BrandMark from '../components/BrandMark';
@@ -45,6 +46,12 @@ export default function LoginPage() {
           setError('Заполните все поля');
           return;
         }
+        // Подзадача 4.5 аудита: парольная политика NIST SP 800-63B (минимум 8) —
+        // клиентская проверка до запроса; бэкенд и mock enforced'ят ту же границу.
+        if (password.length < PASSWORD_MIN_LENGTH) {
+          setError(passwordTooShort());
+          return;
+        }
         
         // Регистрация: контракт расширён (AUTH-01) — ответ содержит пару токенов,
         // отдельный round-trip на /login после регистрации больше не нужен.
@@ -81,7 +88,7 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4" style={{
-      background: 'radial-gradient(1100px 500px at 85% -10%, color-mix(in srgb, var(--wave-400) 9%, transparent), transparent), radial-gradient(900px 500px at -10% 30%, color-mix(in srgb, var(--wave-400) 7%, transparent), transparent), var(--bg)'
+      background: 'radial-gradient(1100px 500px at 85% -10%, color-mix(in srgb, var(--wave-400) 9%, transparent), transparent), radial-gradient(900px 500px at -10% 30%, color-mix(in srgb, var(--wave-400) 7%, transparent), transparent), var(--bg-0)'
     }}>
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
@@ -97,17 +104,26 @@ export default function LoginPage() {
           }}>
             <BrandMark size={64} />
           </div>
-          <h1 className="text-3xl font-bold mb-2" style={{ fontFamily: 'var(--font-display)', color: 'var(--text)' }}>Провиант</h1>
-          <p style={{ color: 'var(--muted)' }}>Планировщик питания для походов и яхт</p>
+          <h1 className="text-3xl font-bold mb-2" style={{ fontFamily: 'var(--font-display)', color: 'var(--text-1)' }}>Провиант</h1>
+          <p style={{ color: 'var(--text-2)' }}>Планировщик питания для походов и яхт</p>
         </div>
 
-        <div className="rounded-2xl p-8" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
-          <h2 className="text-xl font-bold mb-6" style={{ color: 'var(--text)' }}>
+        <div className="rounded-2xl p-8" style={{ background: 'var(--bg-1)', border: '1px solid var(--line)' }}>
+          <h2 className="text-xl font-bold mb-6" style={{ color: 'var(--text-1)' }}>
             {isRegister ? 'Регистрация' : 'Вход в систему'}
           </h2>
 
+          {/* Подзадача 8 (аудит 02.11.2026): role="alert" (неявный aria-live=
+              assertive) — скринридер объявляет ошибку входа сразу при появлении
+              блока, а не только при фокусе на форме. */}
           {error && (
-            <div className="px-4 py-3 rounded-lg mb-4 text-sm" style={{ background: 'color-mix(in srgb, var(--danger) 10%, transparent)', border: '1px solid color-mix(in srgb, var(--danger) 30%, transparent)', color: 'var(--danger)' }}>
+            <div id="login-error" role="alert"
+              className="px-4 py-3 rounded-lg mb-4 text-sm"
+              style={{
+                background: 'color-mix(in srgb, var(--danger) 10%, transparent)',
+                border: '1px solid color-mix(in srgb, var(--danger) 30%, transparent)',
+                color: 'var(--danger)',
+              }}>
               {error}
             </div>
           )}
@@ -116,29 +132,35 @@ export default function LoginPage() {
             {isRegister && (
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm font-medium mb-1" style={{ color: 'var(--muted)' }}>Имя</label>
+                  <label htmlFor="login-first-name" className="block text-sm font-medium mb-1" style={{ color: 'var(--text-2)' }}>Имя</label>
                   <div className="relative">
-                    <User size={18} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--muted)' }} />
+                    <User size={18} className="absolute left-3 top-1/2 -translate-y-1/2" aria-hidden="true" style={{ color: 'var(--text-2)' }} />
                     <input
+                      id="login-first-name"
+                      name="firstName"
+                      autoComplete="given-name"
                       type="text"
                       value={firstName}
                       onChange={e => setFirstName(e.target.value)}
                       className="w-full pl-10 pr-4 py-2.5 rounded-lg outline-none"
-                      style={{ background: 'var(--elev)', border: '1px solid var(--border)', color: 'var(--text)' }}
+                      style={{ background: 'var(--bg-2)', border: '1px solid var(--line)', color: 'var(--text-1)' }}
                       placeholder="Иван"
                     />
                   </div>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium mb-1" style={{ color: 'var(--muted)' }}>Фамилия</label>
+                  <label htmlFor="login-last-name" className="block text-sm font-medium mb-1" style={{ color: 'var(--text-2)' }}>Фамилия</label>
                   <div className="relative">
-                    <User size={18} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--muted)' }} />
+                    <User size={18} className="absolute left-3 top-1/2 -translate-y-1/2" aria-hidden="true" style={{ color: 'var(--text-2)' }} />
                     <input
+                      id="login-last-name"
+                      name="lastName"
+                      autoComplete="family-name"
                       type="text"
                       value={lastName}
                       onChange={e => setLastName(e.target.value)}
                       className="w-full pl-10 pr-4 py-2.5 rounded-lg outline-none"
-                      style={{ background: 'var(--elev)', border: '1px solid var(--border)', color: 'var(--text)' }}
+                      style={{ background: 'var(--bg-2)', border: '1px solid var(--line)', color: 'var(--text-1)' }}
                       placeholder="Петров"
                     />
                   </div>
@@ -147,30 +169,36 @@ export default function LoginPage() {
             )}
 
             <div>
-              <label className="block text-sm font-medium mb-1" style={{ color: 'var(--muted)' }}>Email</label>
+              <label htmlFor="login-email" className="block text-sm font-medium mb-1" style={{ color: 'var(--text-2)' }}>Email</label>
               <div className="relative">
-                <Mail size={18} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--muted)' }} />
+                <Mail size={18} className="absolute left-3 top-1/2 -translate-y-1/2" aria-hidden="true" style={{ color: 'var(--text-2)' }} />
                 <input
+                  id="login-email"
+                  name="email"
+                  autoComplete="email"
                   type="email"
                   value={email}
                   onChange={e => setEmail(e.target.value)}
                   className="w-full pl-10 pr-4 py-2.5 rounded-lg outline-none"
-                  style={{ background: 'var(--elev)', border: '1px solid var(--border)', color: 'var(--text)' }}
-                  placeholder="you@example.com"
+                  style={{ background: 'var(--bg-2)', border: '1px solid var(--line)', color: 'var(--text-1)' }}
+                  placeholder="ivan@example.com"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-sm font-medium mb-1" style={{ color: 'var(--muted)' }}>Пароль</label>
+              <label htmlFor="login-password" className="block text-sm font-medium mb-1" style={{ color: 'var(--text-2)' }}>Пароль</label>
               <div className="relative">
-                <Lock size={18} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--muted)' }} />
+                <Lock size={18} className="absolute left-3 top-1/2 -translate-y-1/2" aria-hidden="true" style={{ color: 'var(--text-2)' }} />
                 <input
+                  id="login-password"
+                  name="password"
+                  autoComplete={isRegister ? 'new-password' : 'current-password'}
                   type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={e => setPassword(e.target.value)}
                   className="w-full pl-10 pr-10 py-2.5 rounded-lg outline-none"
-                  style={{ background: 'var(--elev)', border: '1px solid var(--border)', color: 'var(--text)' }}
+                  style={{ background: 'var(--bg-2)', border: '1px solid var(--line)', color: 'var(--text-1)' }}
                   placeholder="••••••••"
                 />
                 <button
@@ -180,7 +208,7 @@ export default function LoginPage() {
                   aria-pressed={showPassword}
                   title={showPassword ? 'Скрыть пароль' : 'Показать пароль'}
                   className="absolute right-3 top-1/2 -translate-y-1/2 p-1"
-                  style={{ color: 'var(--muted)' }}
+                  style={{ color: 'var(--text-2)' }}
                 >
                   {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
@@ -196,22 +224,22 @@ export default function LoginPage() {
             <button
               onClick={() => { setIsRegister(!isRegister); setError(''); }}
               className="text-sm font-medium"
-              style={{ color: 'var(--w1)' }}
+              style={{ color: 'var(--wave-400)' }}
             >
               {isRegister ? 'Уже есть аккаунт? Войти' : 'Нет аккаунта? Зарегистрироваться'}
             </button>
           </div>
 
-          <div className="mt-6 pt-6" style={{ borderTop: '1px solid var(--border)' }}>
-            <p className="text-xs text-center mb-3" style={{ color: 'var(--muted)' }}>Демо-доступ:</p>
+          <div className="mt-6 pt-6" style={{ borderTop: '1px solid var(--line)' }}>
+            <p className="text-xs text-center mb-3" style={{ color: 'var(--text-2)' }}>Демо-доступ:</p>
             <div className="grid grid-cols-2 gap-2 text-xs">
-              <div className="rounded-lg p-2" style={{ background: 'var(--elev)' }}>
-                <p className="font-medium" style={{ color: 'var(--text)' }}>Админ</p>
-                <p style={{ color: 'var(--muted)' }}>admin@provision.app</p>
+              <div className="rounded-lg p-2" style={{ background: 'var(--bg-2)' }}>
+                <p className="font-medium" style={{ color: 'var(--text-1)' }}>Админ</p>
+                <p style={{ color: 'var(--text-2)' }}>admin@provision.app</p>
               </div>
-              <div className="rounded-lg p-2" style={{ background: 'var(--elev)' }}>
-                <p className="font-medium" style={{ color: 'var(--text)' }}>Пользователь</p>
-                <p style={{ color: 'var(--muted)' }}>user@provision.app</p>
+              <div className="rounded-lg p-2" style={{ background: 'var(--bg-2)' }}>
+                <p className="font-medium" style={{ color: 'var(--text-1)' }}>Пользователь</p>
+                <p style={{ color: 'var(--text-2)' }}>user@provision.app</p>
               </div>
             </div>
           </div>

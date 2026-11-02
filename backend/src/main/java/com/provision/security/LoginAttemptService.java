@@ -57,6 +57,30 @@ public class LoginAttemptService {
     static final int LOCK_MINUTES = 15;
 
     /**
+     * Подзадача 4 аудита 02.11.2026: лимиты /auth/register и /auth/refresh.
+     *
+     * <p><b>register</b> — ключ «register:&lt;email&gt;», тот же потолок {@value #MAX_ATTEMPTS}
+     * (AU-04): считаются КОНФЛИКТЫ (попытка зарегистрировать уже занятый email);
+     * успешная регистрация сбрасывает счётчик. Массовая регистрация случайными
+     * email этим ключом не ловится — это уровень IP-лимита (BL-38, nginx limit_req).</p>
+     *
+     * <p><b>refresh</b> — ключ один на весь эндпоинт ({@value #REFRESH_GLOBAL_KEY}):
+     * у refresh-токена (UUID) нет «владельца-ключа», а считать провалы по IP без
+     * доверенного XFF нельзя (BL-38). Потолок выше логин-ого ({@value #REFRESH_MAX_ATTEMPTS}
+     * за окно): перебор UUID-токенов бессмысленен (2^122), цель — ограничить
+     * нагрузку на БД от явного злоупотребления и дать сигнал в метриках, не
+     * блокируя эндпоинт для легитимных пользователей из-за случайных сбоев
+     * (просроченный токен после недельного отсутствия — не атака).</p>
+     */
+    public static final String REFRESH_GLOBAL_KEY = "refresh:__global__";
+    public static final int REFRESH_MAX_ATTEMPTS = 50;
+
+    /** Префикс ключа регистрационного окна (scope «register», ключ — email). */
+    public static String registerKey(String email) {
+        return "register:" + key(email);
+    }
+
+    /**
      * Потолок числа отслеживаемых email (AU-04). 50 000 ключей × ~200 байт ≈ 10 МБ —
      * заметно меньше heap (700 МБ при {@code mem_limit: 1g}) и заведомо больше числа
      * реальных пользователей, поэтому в штатном режиме эвакуация не срабатывает вообще.
@@ -113,8 +137,14 @@ public class LoginAttemptService {
 
     private static final class AttemptWindow {
         final AtomicInteger count = new AtomicInteger();
+        /** Потолок окна: 5 для login/register (AU-04), выше — для scope refresh. */
+        final int maxAttempts;
         volatile Instant windowStartedAt = Instant.now();
         volatile Instant lockedUntil = null;
+
+        AttemptWindow(int maxAttempts) {
+            this.maxAttempts = maxAttempts;
+        }
     }
 
     /**
@@ -147,10 +177,20 @@ public class LoginAttemptService {
      * см. {@link #newWindow(String)} (AU-04).</p>
      */
     public void recordFailure(String email) {
+        recordFailure(email, MAX_ATTEMPTS);
+    }
+
+    /**
+     * Неудачная попытка с явным потолком окна (scope-ключи вроде
+     * {@link #REFRESH_GLOBAL_KEY} — подзадача 4 аудита 02.11.2026).
+     * Потолок существующего окна НЕ меняется: какое окно создано первым,
+     * такой у него и лимит.
+     */
+    public void recordFailure(String email, int maxAttempts) {
         String k = key(email);
         AttemptWindow w = attempts.get(k);
         if (w == null) {
-            w = newWindow(k);
+            w = newWindow(k, maxAttempts);
             if (w == null) {
                 // Потолок не отпустил место: эту попытку не учитываем. Логируем WARN —
                 // штатно ветка недостижима, её срабатывание и есть признак атаки.
@@ -167,12 +207,12 @@ public class LoginAttemptService {
                 w.count.set(0);
             }
             int total = w.count.incrementAndGet();
-            if (total >= MAX_ATTEMPTS) {
+            if (total >= w.maxAttempts) {
                 w.lockedUntil = now.plus(Duration.ofMinutes(LOCK_MINUTES));
                 log.warn("Login locked for {} min after {} failed attempts: email={}",
                         LOCK_MINUTES, total, email);
             } else {
-                log.info("Failed login attempt {} of {} for email={}", total, MAX_ATTEMPTS, email);
+                log.info("Failed attempt {} of {} for key={}", total, w.maxAttempts, k);
             }
         }
     }
@@ -188,8 +228,12 @@ public class LoginAttemptService {
      * @return новое окно либо {@code null}, если место освободить не удалось
      */
     private AttemptWindow newWindow(String k) {
+        return newWindow(k, MAX_ATTEMPTS);
+    }
+
+    private AttemptWindow newWindow(String k, int maxAttempts) {
         if (attempts.size() < maxTrackedKeys) {
-            return attempts.computeIfAbsent(k, x -> new AttemptWindow());
+            return attempts.computeIfAbsent(k, x -> new AttemptWindow(maxAttempts));
         }
         sweepExpired();
         if (attempts.size() >= maxTrackedKeys) {
@@ -198,7 +242,7 @@ public class LoginAttemptService {
         if (attempts.size() >= maxTrackedKeys) {
             return null;
         }
-        return attempts.computeIfAbsent(k, x -> new AttemptWindow());
+        return attempts.computeIfAbsent(k, x -> new AttemptWindow(maxAttempts));
     }
 
     /**

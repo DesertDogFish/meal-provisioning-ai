@@ -30,6 +30,18 @@ public class RefreshToken {
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
+    /**
+     * Подзадача 4 аудита 02.11.2026 (V36): токен отозван — ротирован (заменён новым)
+     * или отозван вручную/по reuse-detection. Не null = предъявление токена —
+     * сигнал кражи (refresh replay), семья токенов пользователя отзывается.
+     */
+    @Column(name = "revoked_at")
+    private LocalDateTime revokedAt;
+
+    /** V36: id токена, выданного взамен этого при ротации (цепочка ротаций). */
+    @Column(name = "replaced_by_id")
+    private Long replacedById;
+
     @PrePersist
     protected void onCreate() {
         createdAt = LocalDateTime.now();

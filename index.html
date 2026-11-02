@@ -13,7 +13,11 @@
     <meta property="og:description" content="Меню по дням, закупки, чеки и отчёты для походов — всё в одном месте.">
     <meta property="og:image" content="/og-cover.png">
     <meta name="twitter:card" content="summary_large_image">
+    <!-- theme-color: дефолт — тёмная тема приложения (--bg-0 dark, tokens.css);
+         media-вариант для светлой ОС-темы — --bg-0 light (#F5F2EB). Значения —
+         токены дизайн-пака, синхронны с manifest.json (подзадача 5, KB-38). -->
     <meta name="theme-color" content="#0B141B">
+    <meta name="theme-color" content="#F5F2EB" media="(prefers-color-scheme: light)">
     <!-- DESIGN_MIGRATION 2.6: знак v4 из design-pack assets/, инлайн-SVG favicon убран -->
     <link rel="icon" type="image/svg+xml" href="/src/assets/favicon.svg">
 
@@ -32,19 +36,15 @@
          источник правды), до инлайн-стилов и до src/index.css -->
     <link rel="stylesheet" href="/provisions/design-pack/tokens.css">
 
-    <!-- Шрифты дизайн-системы «Провиант».
-         Fix-11 (Vercel/медленный старт): грузим АСИНХРОННО (media="print" +
-         onload-переключение) — render-blocking запрос к fonts.googleapis.com
-         на медленных/нестабильных сетях держал первый пейнт до ~30 c.
-         До загрузки шрифтов текст рисуется системным стеком (tokens.css:
-         Manrope → system-ui/Segoe UI), display=swap подменяет без сдвигов. -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700&family=Manrope:wght@400;500;600;700;800&display=swap"
-          rel="stylesheet" media="print" onload="this.media='all'">
-    <noscript>
-      <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    </noscript>
+    <!-- Шрифты дизайн-системы «Провиант» — self-host (подзадача 5, аудит 02.11.2026,
+         KB-38): woff2 лежат в public/fonts/, @font-face — в src/index.css.
+         Внешние fonts.googleapis.com/gstatic удалены: prod-CSP (font-src/style-src
+         'self') их блокировала, брендовые шрифты в docker-prod не применялись.
+         Same-origin: шрифты кэширует service worker, third-party-зависимости нет.
+         Preload основных срезов — текст первого пейнта рисуется брендовым Manrope
+         без ожидания CSS-бандла (font-display: swap — без сдвигов макета). -->
+    <link rel="preload" as="font" type="font/woff2" crossorigin href="/fonts/manrope-latin.woff2">
+    <link rel="preload" as="font" type="font/woff2" crossorigin href="/fonts/manrope-cyrillic.woff2">
 
     <style>
       /* Инлайн-стили только structural (без цветов вне токенов): фон/текст — из tokens.css */

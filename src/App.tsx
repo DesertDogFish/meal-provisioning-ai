@@ -10,10 +10,12 @@ import LoginPage from './pages/LoginPage';
 
 /**
  * Fix-10 (п.4): тяжёлые страницы — ленивые чанки (React.lazy). Первый пейнт
- * на деплое (Vercel) больше не тащит весь_bundle разом: TripDetailPage,
- * recharts, datepicker, framer-motion и пр. доезжают только к своему роуту,
- * а на время дозагрузки показывается брендовый PageLoader (Suspense-фолбэк).
+ * на деплое (Vercel) больше не тащит весь_bundle разом: TripDetailPage и
+ * другие страницы/модалки доезжают только к своему роуту, а на время
+ * дозагрузки показывается брендовый PageLoader (Suspense-фолбэк).
  * LoginPage/Layout/ProtectedRoute остаются в базовом чанке — это первый экран.
+ * (Правка 02.11.2026, подзадача 9.3: прежний перечень «recharts, datepicker,
+ * framer-motion» устарел — библиотеки удалены по BL-43/BL-47, чанки остались.)
  */
 const TripsPage = lazy(() => import('./pages/TripsPage'));
 const TripDetailPage = lazy(() => import('./pages/TripDetailPage'));

@@ -59,3 +59,56 @@ export function expectNoNamelessButtons(root: ParentNode = document): void {
     throw new Error(`Найдены кнопки без accessible name (${bad.length}):\n  ${dump}`);
   }
 }
+
+/**
+ * Подзадача 8 (аудит 02.11.2026): a11y-проход 31.10 чинил иконочные кнопки,
+ * поля форм не были покрыты. Probe «поля без доступного имени»: placeholder —
+ * не замена имени (WCAG 1.3.1/4.1.2), имя даёт <label> (for/id или обёртка),
+ * aria-label/aria-labelledby или title.
+ */
+
+/** Поле не участвует в дереве доступности (скрыто / декоративное / служебное). */
+function isExposedField(el: Element): boolean {
+  if (!isExposed(el)) return false;
+  if (el.tagName.toLowerCase() === 'input') {
+    const type = (el.getAttribute('type') ?? 'text').toLowerCase();
+    return !['hidden', 'submit', 'button', 'reset', 'image'].includes(type);
+  }
+  return true;
+}
+
+/** Доступное имя поля формы (упрощённый Accname) или пустая строка. */
+export function fieldAccessibleName(el: Element, root: ParentNode = document): string {
+  const aria = el.getAttribute('aria-label');
+  if (aria && aria.trim()) return aria.trim();
+  const labelledBy = el.getAttribute('aria-labelledby');
+  if (labelledBy) {
+    const text = labelledBy
+      .split(/\s+/)
+      .map(id => (root as Document | HTMLElement).querySelector?.(`#${id}`)?.textContent ?? '')
+      .join(' ')
+      .trim();
+    if (text) return text;
+  }
+  const id = el.getAttribute('id');
+  if (id) {
+    const escaped = typeof CSS !== 'undefined' && CSS.escape ? CSS.escape(id) : id;
+    const label = root.querySelector?.(`label[for="${escaped}"]`);
+    const labelText = (label?.textContent ?? '').trim();
+    if (labelText) return labelText;
+  }
+  const wrapping = el.closest('label');
+  if (wrapping) {
+    const text = (wrapping.textContent ?? '').replace(/\s+/g, ' ').trim();
+    if (text) return text;
+  }
+  const title = el.getAttribute('title');
+  if (title && title.trim()) return title.trim();
+  return '';
+}
+
+/** Все видимые поля форм (input/select/textarea) контейнера без доступного имени. */
+export function namelessFields(root: ParentNode = document): Element[] {
+  const nodes = Array.from(root.querySelectorAll<Element>('input, select, textarea'));
+  return nodes.filter(el => isExposedField(el) && !fieldAccessibleName(el, root));
+}

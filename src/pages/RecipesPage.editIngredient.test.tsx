@@ -1,5 +1,11 @@
 /// <reference types="vitest/globals" />
-// Scratch-repro: правка блюда, используемого в походе (mock-режим, настоящий mockServer)
+/**
+ * Сценарный тест (переименован из отладочного RecipesEditRepro.test.tsx —
+ * подзадача 10.3 аудита 02.11.2026, BL-65): правка блюда, используемого в походе
+ * (mock-режим, настоящий mockServer). Рецепты в походах живут на снепшотах (V20),
+ * поэтому редактирование базового блюда обязано проходить без блокировок и
+ * ошибок ErrorBoundary.
+ */
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, it, expect, beforeEach } from 'vitest';
@@ -14,7 +20,7 @@ beforeEach(() => {
   localStorage.setItem('accessToken', 'mock-access-token-1');
 });
 
-describe('repro: редактирование занятого блюда', () => {
+describe('RecipesPage — редактирование блюда, используемого в походе', () => {
   it('открывает редактор и сохраняет блюдо, используемое в походе', async () => {
     // создаём поход и приём → блюдо становится «занятым» (снепшот)
     const recipes = mockServer.handleRequest<any[]>('GET', '/recipes');

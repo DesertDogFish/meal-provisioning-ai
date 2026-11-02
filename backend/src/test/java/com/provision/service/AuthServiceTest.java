@@ -8,6 +8,7 @@ import com.provision.dto.auth.RegisterRequest;
 import com.provision.entity.RefreshToken;
 import com.provision.entity.User;
 import com.provision.entity.UserRole;
+import com.provision.exception.ConflictException;
 import com.provision.exception.UnauthorizedException;
 import com.provision.repository.RefreshTokenRepository;
 import com.provision.repository.UserRepository;
@@ -23,6 +24,8 @@ import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
+import io.micrometer.core.instrument.MeterRegistry;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
@@ -37,6 +40,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
@@ -73,14 +78,23 @@ class AuthServiceTest {
 
     private final LoginAttemptService loginAttemptService = new LoginAttemptService();
 
+    @Mock
+    @SuppressWarnings("rawtypes")
+    private ObjectProvider meterRegistryProvider;
+
+    private JwtProperties jwtProperties;
     private AuthService authService;
 
     @BeforeEach
+    @SuppressWarnings("unchecked")
     void setUp() {
-        JwtProperties jwtProperties = new JwtProperties();
+        jwtProperties = new JwtProperties();
         jwtProperties.setSecret(SECRET);
+        jwtProperties.setRefreshTokenExpiration(7L * 24 * 3600 * 1000); // 7 дней, как в application.yml
+        lenient().when(meterRegistryProvider.getIfAvailable()).thenReturn(null);
         authService = new AuthService(userRepository, refreshTokenRepository,
-                passwordEncoder, jwtService, jwtProperties, loginAttemptService);
+                passwordEncoder, jwtService, jwtProperties, loginAttemptService,
+                meterRegistryProvider);
     }
 
     private User user(String email) {
@@ -113,10 +127,10 @@ class AuthServiceTest {
         assertThat(hash).doesNotContain("password123");
     }
 
-    // ---------- подзадача 3: refresh-хэш — HMAC-SHA256, не голый SHA-256 ----------
+    // ---------- подзадачи 3 + 4.3: refresh-хэш — HMAC-SHA256 от ПРОИЗВОДНОГО ключа ----------
 
     @Test
-    @DisplayName("SUB-3: refresh-токен сохраняется как HMAC-SHA256(key=jwt.secret), не SHA-256")
+    @DisplayName("SUB-3/4.3: refresh-токен сохраняется как HMAC-SHA256 от производного ключа (не от «голого» JWT_SECRET и не SHA-256)")
     void login_storesHmacRefreshHash() throws Exception {
         User u = user("user@example.com");
         when(userRepository.findByEmail("user@example.com")).thenReturn(Optional.of(u));
@@ -130,50 +144,67 @@ class AuthServiceTest {
         String rawToken = response.refreshToken();
 
         assertThat(storedHash).hasSize(64).matches("[0-9a-f]{64}");
-        assertThat(storedHash).isEqualTo(hmacSha256Hex(SECRET, rawToken));
+        // подзадача 4.3 (key separation): ключ — HMAC(JWT_SECRET, "provision-refresh-hash")
+        assertThat(storedHash).isEqualTo(derivedHashHex(rawToken));
+        assertThat(storedHash).isNotEqualTo(hmacSha256Hex(SECRET, rawToken)); // signing-ключ напрямую не используется
         assertThat(storedHash).isNotEqualTo(sha256Hex(rawToken)); // радужные таблицы SHA-256 больше не работают
     }
 
     // ---------- подзадача 4: race при параллельном refresh ----------
 
-    /** Хэш, который AuthService вычислит для RAW_REFRESH (HMAC-SHA256 от jwt.secret). */
+    /** Хэш, который AuthService вычислит для RAW_REFRESH (HMAC от производного ключа). */
     private String storedHashOfRaw() throws Exception {
-        return hmacSha256Hex(SECRET, RAW_REFRESH);
+        return derivedHashHex(RAW_REFRESH);
     }
 
     @Test
-    @DisplayName("SUB-4: refresh удаляет старый токен АТОМАРНО до выдачи новой пары")
+    @DisplayName("SUB-4: refresh помечает старый токен отозванным АТОМАРНО (revokeForRotation), новая пара выдаётся")
     void refresh_invalidatesOldTokenBeforeIssuingNew() throws Exception {
         User u = user("user@example.com");
         RefreshToken stored = RefreshToken.builder()
                 .id(10L).user(u).tokenHash(storedHashOfRaw()).expiresAt(LocalDateTime.now().plusDays(1)).build();
         when(refreshTokenRepository.findByTokenHash(stored.getTokenHash())).thenReturn(Optional.of(stored));
-        when(refreshTokenRepository.deleteByTokenHash(stored.getTokenHash())).thenReturn(1);
+        when(refreshTokenRepository.save(any(RefreshToken.class))).thenAnswer(inv -> {
+            RefreshToken t = inv.getArgument(0);
+            t.setId(99L);
+            return t;
+        });
+        when(refreshTokenRepository.revokeForRotation(eq(stored.getTokenHash()), eq(99L), any(LocalDateTime.class)))
+                .thenReturn(1);
         when(jwtService.generateAccessToken(u)).thenReturn("new-access");
 
-        authService.refreshTokens(new RefreshTokenRequest(RAW_REFRESH));
+        AuthResponse response = authService.refreshTokens(new RefreshTokenRequest(RAW_REFRESH));
 
+        assertThat(response.refreshToken()).isNotBlank();
         InOrder order = inOrder(refreshTokenRepository);
-        order.verify(refreshTokenRepository).deleteByTokenHash(stored.getTokenHash());
         order.verify(refreshTokenRepository).save(any(RefreshToken.class));
+        order.verify(refreshTokenRepository).revokeForRotation(eq(stored.getTokenHash()), eq(99L), any(LocalDateTime.class));
+        // старый токен физически НЕ удаляется — остаётся для reuse-detection
+        verify(refreshTokenRepository, never()).deleteByTokenHash(stored.getTokenHash());
     }
 
     @Test
-    @DisplayName("SUB-4: параллельный refresh (deleted=0) отклоняется 401, новая пара НЕ выдаётся")
+    @DisplayName("SUB-4: параллельный refresh (updated=0) отклоняется 401 и отзывает ВСЮ семью токенов")
     void refresh_raceSecondCallRejected() throws Exception {
         User u = user("user@example.com");
         RefreshToken stored = RefreshToken.builder()
                 .id(10L).user(u).tokenHash(storedHashOfRaw()).expiresAt(LocalDateTime.now().plusDays(1)).build();
         when(refreshTokenRepository.findByTokenHash(stored.getTokenHash())).thenReturn(Optional.of(stored));
-        // первая транзакция уже успела удалить токен — вторая видит 0 удалённых строк
-        when(refreshTokenRepository.deleteByTokenHash(stored.getTokenHash())).thenReturn(0);
+        when(refreshTokenRepository.save(any(RefreshToken.class))).thenAnswer(inv -> {
+            RefreshToken t = inv.getArgument(0);
+            t.setId(99L);
+            return t;
+        });
+        // первая транзакция уже успела отозвать токен — вторая видит 0 обновлённых строк
+        when(refreshTokenRepository.revokeForRotation(eq(stored.getTokenHash()), eq(99L), any(LocalDateTime.class)))
+                .thenReturn(0);
 
         assertThatThrownBy(() -> authService.refreshTokens(new RefreshTokenRequest(RAW_REFRESH)))
                 .isInstanceOf(UnauthorizedException.class)
                 .hasMessage("Invalid refresh token");
 
         verify(jwtService, never()).generateAccessToken(any());
-        verify(refreshTokenRepository, never()).save(any());
+        verify(refreshTokenRepository).revokeAllByUserId(eq(1L), any(LocalDateTime.class));
     }
 
     @Test
@@ -287,7 +318,102 @@ class AuthServiceTest {
         verify(refreshTokenRepository).delete(stored);
     }
 
+    // ---------- подзадача 4.1: refresh-reuse detection (OAuth Security BCP) ----------
+
+    @Test
+    @DisplayName("SUB-4.1: предъявление ОТОЗВАННОГО токена — reuse: семья отозвана, метрика, 401, новая пара НЕ выдаётся")
+    void refresh_reuseDetection_revokesWholeFamily() throws Exception {
+        User u = user("user@example.com");
+        RefreshToken revoked = RefreshToken.builder()
+                .id(10L).user(u).tokenHash(storedHashOfRaw())
+                .expiresAt(LocalDateTime.now().plusDays(1))
+                .revokedAt(LocalDateTime.now().minusMinutes(5))  // уже ротирован
+                .replacedById(11L)
+                .build();
+        when(refreshTokenRepository.findByTokenHash(revoked.getTokenHash())).thenReturn(Optional.of(revoked));
+        when(refreshTokenRepository.revokeAllByUserId(eq(1L), any(LocalDateTime.class))).thenReturn(2);
+
+        assertThatThrownBy(() -> authService.refreshTokens(new RefreshTokenRequest(RAW_REFRESH)))
+                .isInstanceOf(UnauthorizedException.class)
+                .hasMessage("Invalid refresh token");
+
+        verify(refreshTokenRepository).revokeAllByUserId(eq(1L), any(LocalDateTime.class));
+        verify(jwtService, never()).generateAccessToken(any());
+        verify(refreshTokenRepository, never()).save(any());
+    }
+
+    // ---------- подзадача 4.2: TTL refresh-токена из конфигурации ----------
+
+    @Test
+    @DisplayName("SUB-4.2: expires_at = now + jwt.refresh-token-expiration (не хардкод 7 дней)")
+    void saveRefreshToken_ttlFromConfig() {
+        jwtProperties.setRefreshTokenExpiration(3600_000L); // 1 час
+        User u = user("user@example.com");
+        when(userRepository.findByEmail("user@example.com")).thenReturn(Optional.of(u));
+        when(jwtService.generateAccessToken(u)).thenReturn("access-token");
+
+        LocalDateTime before = LocalDateTime.now();
+        authService.login(new LoginRequest("user@example.com", "password123"));
+
+        ArgumentCaptor<RefreshToken> captor = ArgumentCaptor.forClass(RefreshToken.class);
+        verify(refreshTokenRepository).save(captor.capture());
+        LocalDateTime expiresAt = captor.getValue().getExpiresAt();
+        assertThat(expiresAt).isBetween(
+                before.plusMinutes(59), LocalDateTime.now().plusMinutes(61));
+    }
+
+    // ---------- подзадача 4.4: rate-limit register и refresh ----------
+
+    @Test
+    @DisplayName("SUB-4.4: 5 конфликтов регистрации одного email → 429 без обращения к БД")
+    void register_repeatedConflicts_blockedWith429() {
+        when(userRepository.existsByEmail("taken@example.com")).thenReturn(true);
+
+        for (int i = 0; i < 5; i++) {
+            assertThatThrownBy(() -> authService.register(
+                    new RegisterRequest("taken@example.com", "password123", "A", "B")))
+                    .isInstanceOf(ConflictException.class);
+        }
+        assertThatThrownBy(() -> authService.register(
+                new RegisterRequest("taken@example.com", "password123", "A", "B")))
+                .isInstanceOf(TooManyRequestsException.class);
+
+        // 6-й вызов отклонён ДО БД: existsByEmail вызван ровно 5 раз
+        verify(userRepository, times(5)).existsByEmail("taken@example.com");
+    }
+
+    @Test
+    @DisplayName("SUB-4.4: провалы /auth/refresh копятся в глобальный счётчик → 429")
+    void refresh_globalFailureCounter_blocksWith429() {
+        when(refreshTokenRepository.findByTokenHash(anyString())).thenReturn(Optional.empty());
+
+        for (int i = 0; i < LoginAttemptService.REFRESH_MAX_ATTEMPTS; i++) {
+            final String bogus = "bogus-" + i;
+            assertThatThrownBy(() -> authService.refreshTokens(new RefreshTokenRequest(bogus)))
+                    .isInstanceOf(UnauthorizedException.class);
+        }
+        assertThatThrownBy(() -> authService.refreshTokens(new RefreshTokenRequest("bogus-final")))
+                .isInstanceOf(TooManyRequestsException.class);
+
+        // заблокированный эндпоинт не ходит в БД
+        verify(refreshTokenRepository, times(LoginAttemptService.REFRESH_MAX_ATTEMPTS))
+                .findByTokenHash(anyString());
+    }
+
     // ---------- хелперы ----------
+
+    /** HMAC-SHA256 от производного ключа (подзадача 4.3): derived = HMAC(SECRET, label). */
+    private static String derivedHashHex(String token) throws Exception {
+        byte[] derived = hmacSha256Bytes(SECRET.getBytes(StandardCharsets.UTF_8),
+                AuthService.REFRESH_HASH_KEY_LABEL.getBytes(StandardCharsets.UTF_8));
+        return toHex(hmacSha256Bytes(derived, token.getBytes(StandardCharsets.UTF_8)));
+    }
+
+    private static byte[] hmacSha256Bytes(byte[] key, byte[] data) throws Exception {
+        Mac mac = Mac.getInstance("HmacSHA256");
+        mac.init(new SecretKeySpec(key, "HmacSHA256"));
+        return mac.doFinal(data);
+    }
 
     private static String hmacSha256Hex(String key, String value) throws Exception {
         Mac mac = Mac.getInstance("HmacSHA256");

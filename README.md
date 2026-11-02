@@ -40,16 +40,20 @@ docker compose up --build
 ```
 
 - Приложение: http://localhost:3000
-- Health API: http://localhost:8080/api/v1/meta (`"db":"ok"`; 503 при недоступной БД)
-- Swagger: http://localhost:8080/swagger-ui.html (profile `dev`)
+- Health API: http://localhost:3000/api/v1/meta (`"db":"ok"`; 503 при недоступной БД) — через nginx
+- Backend напрямую (`http://127.0.0.1:8080`, Swagger `…/swagger-ui.html` в profile `dev`) в базовом
+  запуске НЕ публикуется (подзадача 6 аудита 02.11.2026 — API мимо nginx лишён заголовков и лимитов).
+  Для отладки поднимите стек с overlay:
+  `docker compose -f docker-compose.yml -f docker-compose.debug.yml up -d --build`
+  (порт биндится только на `127.0.0.1`; `dev.ps1` делает это автоматически).
 
-Порт PostgreSQL проброшен только на `127.0.0.1:5432`. Миграции Flyway (V1–V33) применяются при старте бэкенда, каталог сеется автоматически.
+Порт PostgreSQL проброшен только на `127.0.0.1:5432`. Миграции Flyway (список — `backend/src/main/resources/db/migration/`) применяются при старте бэкенда, каталог сеется автоматически.
 
 ### Первый вход и демо-данные
 
 Готовых учётных записей в проде нет: первый пользователь создаётся через «Регистрация».
 
-Для локальной разработки при `SEED_DEMO_USERS=true` (в `.env.example` включено; в compose по умолчанию `false`; работает только в profile `dev`) создаются:
+Для локальной разработки при `SEED_DEMO_USERS=true` (дефолт `.env.example` — `false`: шаблон копируют и на публичные серверы; `dev.ps1` включает `true` сам; работает только в profile `dev`) создаются:
 
 | Учётная запись | Пароль | Роль | Демо-походы |
 |---|---|---|---|
@@ -78,7 +82,7 @@ docker compose up --build
 | `POSTGRES_PASSWORD` | **обязательна** (без неё compose не стартует) | Пароль БД; задаётся в `.env` (шаблон — `.env.example`) |
 | `JWT_SECRET` | **обязательна** | Подпись JWT; без неё compose/бэкенд падают fail-fast. Минимум 32 символа: `openssl rand -base64 48` |
 | `SPRING_PROFILES_ACTIVE` | `dev` | Профиль бэкенда |
-| `SEED_DEMO_USERS` | `false` (в compose) / `true` (в `.env.example`) | Демо-пользователи и демо-походы (только `dev`) |
+| `SEED_DEMO_USERS` | `false` (в compose и в `.env.example`; `dev.ps1` включает) | Демо-пользователи и демо-походы (только `dev`) |
 | `CORS_ALLOWED_ORIGINS` | `http://localhost:5173,http://localhost:3000` | Origins для прямых запросов к API (вне nginx-прокси) |
 | `ROSSTAT_INDICATOR_ID` | `31448` | Показатель ЕМИСС: 31448 — «Средние потребительские цены на товары и услуги» (ежемесячно), 37426 — еженедельные цены |
 | `ROSSTAT_REGION` | `Российская Федерация` | Регион из справочника ОКАТО (например, `Белгородская область`) |
@@ -117,17 +121,45 @@ build-флагу: `vercel.json → build.env.VITE_ENABLE_MOCK=true` — демо
   визуально прод не ломался — 404 был косметическим, но boot-лоадеру SVG нужен файлом).
 - **Скорость** — страницы грузятся ленивыми чанками (React.lazy + Suspense с брендовым
   `PageLoader`), mock-задержка уменьшена (100–180 мс вместо 200–400; `VITE_MOCK_LATENCY_MS=0`
-  для мгновенного демо), Google Fonts грузится асинхронно (render-blocking запрос шрифтов
-  на нестабильных сетях давал до ~30 c белого экрана), в `#root` встроен мгновенный
-  boot-лоадер (SVG-парус design-pack — виден до загрузки JS).
+  для мгновенного демо), шрифты бренда — self-host woff2 с `preload` и `font-display: swap`
+  (внешний render-blocking запрос к Google Fonts на нестабильных сетях давал до ~30 c белого
+  экрана; с 02.11.2026 внешних запросов к шрифтам нет вовсе — см. «PWA и шрифты»), в `#root`
+  встроен мгновенный boot-лоадер (SVG-парус design-pack — виден до загрузки JS).
+- **Security-заголовки** — с 02.11.2026 (подзадача 5 аудита) `vercel.json` содержит секцию
+  `headers`: CSP, `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`,
+  `Permissions-Policy`, HSTS — демо больше не отдаётся «голым» (nginx-заголовки на Vercel
+  не действуют).
 - **Режим API** — `vercel.json` исключает `/api/` из SPA-rewrite, а `resolveMode` требует
   `content-type: json` для 'real': иначе SPA-фолбэк (200 + index.html) переключал бы
   приложение в 'real' и все запросы получали HTML.
 
+## PWA и шрифты (офлайн-оболочка)
+
+- **Манифест и service worker** живут в `src/pwa/` и попадают в корень `dist` плагином
+  pwa-assets (`vite.config.js`); в dev их отдаёт middleware. `sw.js` обязан быть в корне
+  сайта — его scope равен каталогу файла.
+- **Регистрация SW — только в prod-сборке** (`import.meta.env.PROD` в `src/main.tsx`);
+  в dev service worker не мешает hot-reload. Ошибка регистрации не ломает приложение.
+- **Стратегии кэширования** (`src/pwa/sw.js`): навигация (HTML) — network-first, офлайн —
+  оболочка из кэша; статика сборки — stale-while-revalidate (имена файлов хэшированные);
+  оболочка (`/`, манифест, иконки) — прекэш при install. **НЕ кэшируются никогда:**
+  не-GET запросы, чужие origin, `/api/`, `/auth/`, сам `sw.js`.
+- **Офлайн:** приложение открывается без сети, данные похода — из localStorage (кэш и буфер
+  офлайн-записи; источник истины — сервер, перенос отметок на сервер — задача BL-27).
+- **Шрифты бренда self-hosted** (подзадача 5 аудита 02.11.2026): Unbounded 500/700 и
+  Manrope 400–800 — переменные woff2 в `public/fonts/` (срезы latin + cyrillic),
+  `@font-face` — в начале `src/index.css`. Внешних запросов к fonts.googleapis.com /
+  fonts.gstatic.com нет: их блокировала prod-CSP (`font-src 'self'`), а same-origin
+  шрифты кэшируются SW — бренд доступен и офлайн.
+- **Цвета PWA** — токены дизайн-пака: `background_color`/`theme_color` манифеста =
+  `--bg-0` тёмной темы; светлый вариант — `<meta name="theme-color">` с media-атрибутом
+  в `index.html`.
+
 ## Технологический стек
 
-- **Backend:** Java 17, Spring Boot 3.2.5 (Web, Security, Data JPA, Validation), PostgreSQL 15 + Flyway (V1–V33), JJWT, springdoc-openapi, MapStruct-free (ручные DTO), JUnit 5 + AssertJ + Mockito + Testcontainers/LocalPgFallback
-- **Frontend:** React 18 + TypeScript + Vite, Tailwind 4, React Router, lucide-react, react-datepicker; раздаётся nginx
+- **Backend:** Java 17, Spring Boot 3.2.5 (Web, Security, Data JPA, Validation), PostgreSQL 15 + Flyway (список миграций — источник правды `backend/src/main/resources/db/migration/`), JJWT, springdoc-openapi, MapStruct-free (ручные DTO), JUnit 5 + AssertJ + Mockito + Testcontainers/LocalPgFallback
+- **Frontend:** React 18 + TypeScript + Vite, Tailwind 4, React Router, lucide-react, нативный ввод дат (`DatePicker.tsx`); раздаётся nginx
+- **Шрифты:** Unbounded/Manrope — self-host woff2 в `public/fonts/` (`@font-face` в `src/index.css`); внешних запросов к CDN шрифтов нет — prod-CSP (`font-src 'self'`) не блокирует бренд, service worker кэширует их same-origin
 - **Инфраструктура:** Docker Compose (postgres + backend + frontend), GitHub Actions (CI, Docker Stack Smoke, contract parity nightly, e2e nightly)
 
 ## Разработка
@@ -155,9 +187,11 @@ npm run test:e2e     # Playwright, mock-режим (real-режим: E2E_BASE_UR
 | Симптом | Что делать |
 |---|---|
 | backend долго не становится `healthy` | `docker compose logs backend` — ошибки БД/миграций |
-| фронт отдаёт страницу, но данные не грузятся | `curl localhost:8080/api/v1/meta`, затем `docker compose logs frontend` |
+| фронт отдаёт страницу, но данные не грузятся | `curl localhost:3000/api/v1/meta` (через nginx; backend в базовом compose не публикуется — для прямого `:8080` нужен `docker-compose.debug.yml`), затем `docker compose logs frontend` |
+| `curl localhost:8080/api/v1/meta` не отвечает | ожидаемо в базовом запуске (подзадача 6 аудита 02.11.2026): backend доступен через фронт (`:3000/api/...`) или с debug-overlay (`-f docker-compose.debug.yml`, только `127.0.0.1`) |
 | в прод-сборке при недоступном бэкенде нет демо-данных — «Сервер недоступен» + «Повторить» | это ожидаемое поведение (решение 31.10.2026): mock-фолбэк в проде отключён; демо-стенд собирается с `VITE_ENABLE_MOCK=true` (см. `vercel.json`) |
 | порт 3000/5432/8080 занят | поменяйте хостовую часть в `ports:` docker-compose.yml |
+| брендовые шрифты не применяются | шрифты self-hosted (`/fonts/*.woff2`): проверьте `curl -I localhost:3000/fonts/manrope-latin.woff2` (ожидается 200) и CSP-ошибки в консоли браузера; после обновления SW — hard-reload (Ctrl+Shift+R) |
 | нужна чистая БД после сбоя миграций | `docker compose down -v && docker compose up --build` (данные удаляются!) |
 | после `git pull` backend не стартует: `Detected applied migration not resolved locally: 14` (или `15`) | начиная с аудита 30.10.2026 (AU-02) это лечится конфигом — `spring.flyway.ignore-migration-patterns: "*:missing"`, вручную делать ничего не нужно. Если образ старше правки: `docker compose exec postgres psql -U provision -d provision -c "DELETE FROM flyway_schema_history WHERE version IN ('14','15')"` либо `mvn org.flywaydb:flyway-maven-plugin:10.10.0:repair -Dflyway.url=... -Dflyway.user=... -Dflyway.password=...` |
 | после апгрейда со старых версий в БД остались демо-юзеры V14/V15 | на старт приложения это больше не влияет (строки в `flyway_schema_history` игнорируются, см. строку выше); самих пользователей удалите вручную: `DELETE FROM users WHERE email IN ('admin@provision.app','user@provision.app')` — либо используйте демо-сид (`SEED_DEMO_USERS=true`) |

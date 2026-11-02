@@ -5,10 +5,10 @@
  * без текста, aria-label и title — скринридер объявлял просто «button».
  */
 /// <reference types="vitest/globals" />
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { namelessButtons } from '../test/a11y';
+import { namelessButtons, namelessFields } from '../test/a11y';
 
 vi.mock('../api/client', () => ({
   api: { get: vi.fn(), post: vi.fn(), put: vi.fn(), del: vi.fn(), onSessionLost: vi.fn(() => () => {}) },
@@ -19,6 +19,7 @@ vi.mock('../components/AuthProvider', () => ({
 }));
 
 import LoginPage from './LoginPage';
+import { api } from '../api/client';
 
 function renderPage() {
   return render(<MemoryRouter><LoginPage /></MemoryRouter>);
@@ -52,5 +53,105 @@ describe('LoginPage — a11y иконочных кнопок (подзадача
     renderPage();
     fireEvent.click(screen.getByRole('button', { name: /Зарегистрироваться|Уже есть аккаунт|Нет аккаунта/ }));
     expect(namelessButtons(document)).toEqual([]);
+  });
+});
+
+/**
+ * Подзадача 8 (аудит 02.11.2026, план plans/2026-11-02-audit-security-usability-ui.md):
+ * autoComplete для менеджеров паролей, связка <label>/<input> (htmlFor/id),
+ * озвучка ошибки входа (role="alert"), копи-консистентность placeholder'а.
+ */
+function switchToRegister() {
+  fireEvent.click(screen.getByRole('button', { name: /Нет аккаунта\? Зарегистрироваться/ }));
+}
+
+describe('LoginPage — a11y полей и менеджеры паролей (подзадача 8)', () => {
+  it('probe: полей без accessible name = 0 (вход)', () => {
+    renderPage();
+    expect(namelessFields(document)).toEqual([]);
+  });
+
+  it('probe: полей без accessible name = 0 (регистрация)', () => {
+    renderPage();
+    switchToRegister();
+    expect(namelessFields(document)).toEqual([]);
+  });
+
+  it('label связаны с input через htmlFor/id', () => {
+    renderPage();
+    // getByLabelText резолвит именно связку label→control
+    expect(screen.getByLabelText('Email').tagName).toBe('INPUT');
+    expect(screen.getByLabelText('Пароль').tagName).toBe('INPUT');
+    switchToRegister();
+    expect(screen.getByLabelText('Имя').tagName).toBe('INPUT');
+    expect(screen.getByLabelText('Фамилия').tagName).toBe('INPUT');
+  });
+
+  it('режим входа: autoComplete email/current-password + name-атрибуты', () => {
+    renderPage();
+    const email = screen.getByLabelText('Email');
+    const password = screen.getByLabelText('Пароль');
+    expect(email.getAttribute('autocomplete')).toBe('email');
+    expect(email.getAttribute('name')).toBe('email');
+    expect(password.getAttribute('autocomplete')).toBe('current-password');
+    expect(password.getAttribute('name')).toBe('password');
+  });
+
+  it('режим регистрации: autoComplete given-name/family-name/new-password', () => {
+    renderPage();
+    switchToRegister();
+    expect(screen.getByLabelText('Имя').getAttribute('autocomplete')).toBe('given-name');
+    expect(screen.getByLabelText('Фамилия').getAttribute('autocomplete')).toBe('family-name');
+    expect(screen.getByLabelText('Пароль').getAttribute('autocomplete')).toBe('new-password');
+  });
+
+  it('ошибка входа объявляется скринридеру: role="alert"', async () => {
+    renderPage();
+    // до ошибки live-региона нет
+    expect(document.querySelector('[role="alert"]')).toBeNull();
+    fireEvent.submit(screen.getByRole('button', { name: 'Войти' }).closest('form')!);
+    const alert = await waitFor(() => document.querySelector('[role="alert"]'));
+    expect(alert).not.toBeNull();
+    expect(alert!.textContent).toContain('Введите email и пароль');
+  });
+
+  it('копи-консистентность: placeholder email на русской форме — ivan@example.com', () => {
+    renderPage();
+    expect(screen.getByPlaceholderText('ivan@example.com')).toBeTruthy();
+  });
+});
+
+/** Подзадача 4.5 аудита: парольная политика NIST SP 800-63B (минимум 8) на клиенте. */
+describe('LoginPage — пароль не короче 8 (подзадача 4.5)', () => {
+  it('регистрация с паролем 7 символов — ошибка до запроса, API не вызван', async () => {
+    renderPage();
+    switchToRegister();
+    fireEvent.change(screen.getByLabelText('Имя'), { target: { value: 'Иван' } });
+    fireEvent.change(screen.getByLabelText('Фамилия'), { target: { value: 'Петров' } });
+    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'ivan@example.com' } });
+    fireEvent.change(screen.getByLabelText('Пароль'), { target: { value: '1234567' } });
+    fireEvent.submit(screen.getByRole('button', { name: 'Зарегистрироваться' }).closest('form')!);
+
+    const alert = await waitFor(() => document.querySelector('[role="alert"]'));
+    expect(alert!.textContent).toContain('Пароль: не короче 8 символов');
+    expect(api.post).not.toHaveBeenCalled();
+  });
+
+  it('пароль 8 символов — запрос на /auth/register уходит', async () => {
+    (api.post as any).mockResolvedValueOnce({
+      accessToken: 'a', refreshToken: 'r', tokenType: 'Bearer',
+    });
+    renderPage();
+    switchToRegister();
+    fireEvent.change(screen.getByLabelText('Имя'), { target: { value: 'Иван' } });
+    fireEvent.change(screen.getByLabelText('Фамилия'), { target: { value: 'Петров' } });
+    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'ivan@example.com' } });
+    fireEvent.change(screen.getByLabelText('Пароль'), { target: { value: '12345678' } });
+    fireEvent.submit(screen.getByRole('button', { name: 'Зарегистрироваться' }).closest('form')!);
+
+    await waitFor(() => expect(api.post).toHaveBeenCalledWith('/auth/register', expect.objectContaining({
+      email: 'ivan@example.com',
+      password: '12345678',
+    })));
   });
 });

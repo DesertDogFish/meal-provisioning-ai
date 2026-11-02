@@ -16,12 +16,30 @@ jobs:
   # Проверяются именно первые три байта файла (а не вхождение байтов в тексте), чтобы
   # не ловить легитимный U+FEFF внутри содержимого.
   hygiene:
-    name: Repo Hygiene (no BOM)
+    name: Repo Hygiene (no BOM, no dup migrations)
     runs-on: ubuntu-latest
     timeout-minutes: 5
 
     steps:
       - uses: actions/checkout@v4
+
+      # KB-36 (аудит 02.11.2026): дубль V30 (два файла с одним номером) дожил до HEAD —
+      # Flyway падает на resolve, backend не стартует, но ловилось это только поздним
+      # падением тяжёлых job'ов. Быстрый страж: два файла с одинаковым Vn — ошибка.
+      # AGENTS.md §11: следующий номер миграции = максимум в каталоге + 1.
+      - name: No duplicate Flyway migration versions
+        run: |
+          set -euo pipefail
+          dups=$(ls backend/src/main/resources/db/migration | grep -oE '^V[0-9]+' | sort | uniq -d || true)
+          if [ -n "$dups" ]; then
+            echo "::error::Дубли номеров Flyway-миграций (AGENTS.md §11 — следующий номер = максимум + 1):"
+            for v in $dups; do
+              echo "  $v:"
+              ls backend/src/main/resources/db/migration | grep -E "^${v}__" | sed 's/^/    /'
+            done
+            exit 1
+          fi
+          echo "OK: дублей номеров миграций нет ($(ls backend/src/main/resources/db/migration | wc -l) файлов)"
 
       - name: No UTF-8 BOM in tracked files
         run: |
@@ -87,14 +105,28 @@ jobs:
           fi
           psql --version || true
           ls /usr/lib/postgresql/
-      - name: Backend tests
+      # KB-37 (аудит 02.11.2026): прежний отдельный шаг `jacoco:check@coverage-gate`
+      # не работал — профиль не активировался, id execution не совпадал с селектором,
+      # а threshold=60 при шкале COVEREDRATIO 0.0–1.0 означал 6000 %. Теперь гейт —
+      # часть `verify` в профиле coverage-gate (один шаг вместе с тестами, exec-файл
+      # от prepare-agent уже на месте), порог — <minimum> в долях.
+      - name: Backend tests + coverage gate (JaCoCo LINE >= 0.60)
         working-directory: backend
         env:
           JWT_SECRET: ci-test-secret-key-for-jwt-tokens-must-be-at-least-256-bits-long-hs256-ok
-        run: mvn -B -ntp test
-      - name: Coverage gate (JaCoCo lines >= 60%)
+        run: mvn -B -ntp -P coverage-gate verify
+      - name: Publish coverage to summary
+        if: always()
         working-directory: backend
-        run: mvn -B -ntp jacoco:check@coverage-gate
+        run: |
+          if [ -f target/site/jacoco/jacoco.csv ]; then
+            awk -F, 'NR>1 {missed+=$8; covered+=$9} END {
+              printf "### Backend JaCoCo (LINE)\n\n**%.2f%%** (%d covered / %d total)\n", \
+                covered*100/(missed+covered), covered, missed+covered }' \
+              target/site/jacoco/jacoco.csv >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "JaCoCo CSV не найден — отчёт не сгенерирован" >> "$GITHUB_STEP_SUMMARY"
+          fi
       - name: Upload JaCoCo report
         if: always()
         uses: actions/upload-artifact@v4

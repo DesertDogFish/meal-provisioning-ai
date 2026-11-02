@@ -1,0 +1,15 @@
+# Overlay для локальной отладки и CI-джоб (docker-stack, e2e-nightly), которым
+# нужен ПРЯМОЙ доступ к backend на :8080 в обход nginx.
+#
+# Базовый docker-compose.yml backend наружу не публикует (подзадача 6 аудита
+# 02.11.2026): на публичном хосте API должен быть доступен только через nginx
+# (заголовки, limit_req, лимиты тела). Здесь порт биндится ТОЛЬКО на loopback —
+# снаружи хоста эндпоинты по-прежнему не видны.
+#
+# Запуск:
+#   docker compose -f docker-compose.yml -f docker-compose.debug.yml up -d
+# (в CI то же самое задаётся переменной COMPOSE_FILE)
+services:
+  backend:
+    ports:
+      - "127.0.0.1:8080:8080"

@@ -407,16 +407,190 @@
 - Статус: ЗАКРЫТ
 - Что сделано: nginx.conf — X-Content-Type-Options, X-Frame-Options, CSP report-only, Referrer-Policy, Permissions-Policy, server_tokens off, gzip, Cache-Control /assets/, XFF proxy-headers. Upgrade/Connection убраны.
 
-### KB-22 (01.11.2026)
-- Статус: OWNER TASK (не закрыт — требует GitHub Admin)
-- Что сделано: Документировано — branch protection, required status checks, Conventional Commits требуют GitHub Admin access.
+### KB-22 — записи в архиве НЕТ (правка 02.11.2026, KB-39 п.5)
+Прежняя копия «KB-22 (01.11.2026) — OWNER TASK (не закрыт)» нарушала правило архива
+(здесь живут только ЗАКРЫТЫЕ карточки) и дублировала живую карточку. Канон —
+`plans/knownbugs.md` KB-22 (OWNER TASK); отсюда копия удалена 02.11.2026 планом
+`plans/2026-11-02-audit-security-usability-ui.md` (подзадача 9).
 
 ### KB-24 (01.11.2026)
 - Статус: ЗАКРЫТ
 - Что сделано: @Version добавлен в Trip, TripPriceOverride, TripManualItem, TripChecklistBought. GlobalExceptionHandler уже ловит OptimisticLockingFailureException и отдаёт 409.
+- **Поправка 02.11.2026 (KB-36):** закрытие было преждевременным — работа не функционировала:
+  миграция `version` создана дублем V30 (Flyway resolve падал, backend не стартовал), а колонка
+  `trip_checklist_bought` пропущена (ddl-auto=validate). Остаток перерегистрирован по правилу
+  «частично выполненная запись → остаток под новым номером»: **KB-36** (живой реестр), закрыт
+  подзадачей 1 плана `plans/2026-11-02-audit-security-usability-ui.md` (V34 + 8-й блок).
 
 ### KB-25 (01.11.2026)
 - Статус: ЗАКРЫТ
 - Что сделано: Coverage gate R5 добавлен в ci.yml: `npx vitest run --coverage`, порог >= 60% lines, exit 1 при нарушении.
+- **Поправка 02.11.2026 (KB-37):** backend-гейт JaCoCo из той же партии не работал ни дня
+  (профиль не активировался, id execution не совпадал с селектором, threshold=60 при шкале
+  COVEREDRATIO 0.0–1.0). Остаток перерегистрирован: **KB-37** (живой реестр), закрыт подзадачей 2
+  плана `plans/2026-11-02-audit-security-usability-ui.md`.
 
+### KB-26 (01.11.2026) — восстановлена записью 02.11.2026 (KB-39 п.5)
+- Статус: ЗАКРЫТ
+- Что было: UTF-8 BOM в 5 файлах и `fix-encoding.ps1` в дереве — риск mojibake (внешний
+  аудит 30.10.2026, AU-26; регистрация — план `plans/done/2026-10-30-external-audit-p0-block.md`).
+- Что сделано: закрыт через **BL-46** (ГОТОВО 01.11.2026): BOM убран, `fix-encoding.ps1`
+  удалён, в CI добавлен гейт «No UTF-8 BOM in tracked files» (job Repo Hygiene в ci.yml).
+- **Поправка 02.11.2026:** карточка отсутствовала в архиве (потеряна при переоформлении
+  реестров) — восстановлена как указатель контрольной сверкой подзадачи 9 плана
+  `plans/2026-11-02-audit-security-usability-ui.md`. Проверено по HEAD: BOM в дереве нет,
+  `fix-encoding.ps1` отсутствует, гейт в ci.yml на месте.
 
+### KB-27 (01.11.2026) — восстановлена записью 02.11.2026 (KB-39 п.5)
+- Статус: ЗАКРЫТ
+- Что было: в prod `detail` ответов об ошибках мог отдать внутреннее сообщение исключения
+  (внешний аудит 30.10.2026, AU-27; регистрация — план
+  `plans/done/2026-10-30-external-audit-p0-block.md`).
+- Что сделано: профиль-зависимая политика `detail` реализована в `GlobalExceptionHandler`
+  (prod: стабильный код вместо внутреннего текста для `IllegalArgumentException`/
+  `IllegalStateException` и ошибок каркаса Spring MVC; доменные исключения — как есть;
+  dev — прежнее поведение), покрыта `GlobalExceptionHandlerProfileDetailTest` (unit).
+- **Поправка 02.11.2026:** карточка отсутствовала в архиве — восстановлена контрольной
+  сверкой подзадачи 9 плана `plans/2026-11-02-audit-security-usability-ui.md`. Остаток
+  BL-49 (traceId в `extensions`, вынос в `ErrorResponseFactory` — BL-54) живым не
+  считался закрытым: BL-49 остаётся в живом реестре с поправкой о выполненной части.
+
+### KB-36. Backend не стартует: Flyway «Found more than one migration with version 30»
+
+- Симптом: в `backend/src/main/resources/db/migration/` два файла версии 30 —
+  `V30__ingredient_prices_latest_index.sql` (в дереве с 29.10.2026, применён на
+  существующих БД) и `V30__optimistic_locking_version.sql` (добавлен коммитом `ebb3a1b`
+  01.11.2026). Flyway падает на resolve ДО применения: `FlywayException: Found more than
+  one migration with version 30`; bean `flywayInitializer` не создаётся, контекст Spring
+  не поднимается. Замер в песочнице 01.11.2026: `SnapshotIsolationIntegrationTest` 3/3
+  ERROR (лог: `BeanCreationException ... flywayInitializer`). docker-стек не стартует,
+  CI job'ы `backend` и `migration-upgrade` красные. Второй скрытый дефект той же партии:
+  `@Version` добавлен в 8 сущностей (включая `TripChecklistBought`), а колонка `version`
+  миграцией — только в 7 таблиц: у `trip_checklist_bought` (V32) её нет → после устранения
+  дубля старт упадёт на `ddl-auto=validate` (missing column [version]).
+- Влияние: HEAD `75a8e1c` непригоден к запуску: backend не стартует ни локально, ни в
+  compose, ни в CI; интеграционные тесты не выполняются; миграции не накатываются.
+- Обход: рабочего нет (только не запускать backend; фронтенд в mock-режиме не затрагивается).
+- Источник: аудит 02.11.2026, подзадача 1 плана `plans/2026-11-02-audit-security-usability-ui.md`;
+  остаток KB-24, закрытой 01.11.2026 преждевременно (карточка в архиве утверждает
+  «@Version добавлен…», фактически работа не запускается). Нарушен `AGENTS.md` §11
+  (новый номер = max + 1).
+- upd (владелец, коммит `5eb70f8c` 02.11.2026): V30__optimistic_locking_version.sql переименован
+  в V34 для старта бека; недостающая колонка `trip_checklist_bought.version` вынесена в отдельную
+  `V35__trip_checklist_bought_version.sql`.
+- Статус: ЗАКРЫТ 02.11.2026 — план plans/2026-11-02-audit-security-usability-ui.md (подзадача 1)
+  + коммит владельца `5eb70f8c` (выполнен параллельно плану, принят как канон).
+- Что сделано (итоговое состояние после сведения параллельных правок 02.11.2026): дубль живёт как
+  `V34__optimistic_locking_version.sql` (переименование владельца, содержимое прежней V30 не правилось);
+  пропущенная колонка — отдельная миграция `V35__trip_checklist_bought_version.sql` (вариант владельца;
+  рабочий вариант плана «8-й блок внутри V34» отменён в пользу него — применённые/опубликованные
+  миграции не правятся); миграция подзадачи 4 (reuse-detection refresh) перенумерована V35→**V36**
+  во избежание дубля номера с V35 владельца; в CI добавлен страж дублей номеров миграций (job
+  «Repo Hygiene», ci.yml) — именно этот класс дефекта (два V35) он и ловит. Проверено в песочнице
+  после сведения: Flyway применяет миграции до v36, `SnapshotIsolationIntegrationTest` 3/3 зелёный,
+  `FlywayUpgradeIntegrationTest` зелёный, auth-интеграция 10/10. Прогоны до сведения: 16
+  прогонопригодных Spring-сьютов зелёные (per-class, рецепт KB-10);
+  `UserPricesIntegrationTest`/`EconomicConsistencyTest`/`DockerStackSmokeTest` НЕ запускались
+  (лимит памяти песочницы ~1 ГБ, OOM 137) — ограничение среды, а не вердикт «падает».
+
+### KB-37. CI-гейт «Coverage gate (JaCoCo lines >= 60%)» не измеряет покрытие и падает не по делу
+
+- Симптом: шаг в `.github/workflows/ci.yml` (job `backend`, ~строка 95) вызывает
+  `mvn -B -ntp jacoco:check@coverage-gate`, но в `backend/pom.xml` execution с goal `check`
+  имеет id `coverage-check` и находится в профиле `coverage-gate`, который CI не активирует
+  (`-P` отсутствует). Замер той же командой в песочнице 01.11.2026:
+  `[ERROR] Failed to execute goal org.jacoco:jacoco-maven-plugin:0.8.12:check (coverage-gate)
+  ... The parameters 'rules' for goal ... are missing or invalid`. Даже при активации профиля
+  селектор `@coverage-gate` не совпадает с id `coverage-check`; кроме того
+  `<threshold>60</threshold>` при `counter=LINE` трактуется JaCoCo как COVEREDRATIO=60
+  (6000 %; шкала 0.0–1.0) — корректно вызванный гейт не проходил бы никогда.
+- Влияние: гейт покрытия backend — фикция: шаг либо краснит CI по неверной причине, либо
+  (при «починке» вызова без порога) молча пропускает всё. KB-25 (архив, 01.11.2026)
+  отрапортовала «гейт добавлен» — фактически он не работал ни дня.
+- Обход: нет; до починки шаг будет красным после того, как тесты снова смогут запускаться.
+- Источник: аудит 02.11.2026, подзадача 2 плана `plans/2026-11-02-audit-security-usability-ui.md`;
+  остаток KB-25, закрытой 01.11.2026 преждевременно.
+- Статус: ЗАКРЫТ 02.11.2026 — план plans/2026-11-02-audit-security-usability-ui.md (подзадача 2)
+- Что сделано: в `backend/pom.xml` execution переименован в id `coverage-gate` (совпадает с именем
+  профиля) и привязан к фазе `verify`; параметр лимита — `<value>COVEREDRATIO</value>` (текст плана
+  предлагал `valueType` — такого параметра у `org.jacoco.report.check.Limit` в 0.8.12 нет, опровергнуто
+  запуском гейта: «Cannot find 'valueType'»); `<minimum>0.60</minimum>` — доля, а не 6000 %. В ci.yml —
+  один шаг «Backend tests + coverage gate (JaCoCo LINE >= 0.60)» = `mvn -B -ntp -P coverage-gate verify`;
+  шаг «Publish coverage to summary» печатает LINE % в `$GITHUB_STEP_SUMMARY`, отчёт грузится артефактом.
+  Замер в песочнице 02.11.2026 (UNIT-батч 237 тестов + 16 Spring-сьютов per-class с javaagent JaCoCo,
+  без трёх тяжёлых): LINE 68.4 % (3418/4999) — в CI с тяжёлыми сьютами не ниже. Позитивный прогон:
+  «All coverage checks have been met», BUILD SUCCESS; негативный (minimum 0.99): «Rule violated for
+  bundle provision: lines covered ratio is 0.68, but expected minimum is 0.99», BUILD FAILURE; порог
+  возвращён к 0.60. Согласование с BL-42: одно число (0.60 — между стартом 50 % и целью 70 % BL-42),
+  один механизм (профиль coverage-gate); поправка внесена в живую карточку BL-42.
+
+### KB-38. Prod-представление: CSP блокирует брендовые шрифты, Vercel без security-заголовков, манифест PWA в чужой палитре
+
+- Симптом: (1) CSP в `nginx.conf` — `style-src 'self' 'unsafe-inline'; font-src 'self'`,
+  а `index.html` (~строки 41–47) грузит стили и файлы шрифтов с `fonts.googleapis.com` /
+  `fonts.gstatic.com` → в docker-prod оба запроса блокируются (CSP violation в консоли),
+  Unbounded/Manrope не применяются, UI откатывается на системные шрифты — не соответствует
+  дизайн-паку; (2) во вложенном `location /assets/ ... { location ~* ... }` из-за правил
+  наследования `add_header` server-заголовки не действуют, а вручную добавлены 4 из 5 —
+  CSP там отсутствует (в т.ч. для SVG); (3) `vercel.json` не содержит секции `headers` —
+  публичное демо на Vercel отдаётся без CSP/X-Frame-Options/nosniff/Referrer-Policy
+  (nginx-заголовки туда не попадают); (4) `src/pwa/manifest.json`:
+  `background_color: #1a1a2e`, `theme_color: #16213e` — цвета вне токенов дизайн-пака
+  (dark `--bg-0` = #0B141B): splash/статус-бар PWA вне бренда.
+- Влияние: prod-сборка визуально не соответствует дизайн-системе; Vercel-демо лишено
+  базовой защиты (clickjacking, MIME-sniffing); PWA-брендинг нарушен.
+- Обход: частичное — в dev (vite) CSP nginx не действует и шрифты грузятся; проверка
+  дизайна в dev-режиме маскирует дефект.
+- Источник: аудит 02.11.2026, подзадача 5 плана `plans/2026-11-02-audit-security-usability-ui.md`;
+  смежно с задачей nginx-hardening внешнего аудита 30.10.2026 (AU-12) — данная карточка
+  фиксирует дефекты ТЕКУЩЕЙ сборки, а не будущие улучшения.
+- Статус: ЗАКРЫТ 02.11.2026 — план plans/2026-11-02-audit-security-usability-ui.md (подзадача 5)
+- Что сделано: шрифты self-host — `public/fonts/{manrope,unbounded}-{cyrillic,latin}.woff2`,
+  `@font-face` в `src/index.css` (после `@import "tailwindcss"`), внешние `fonts.googleapis.com`/
+  `fonts.gstatic.com` удалены из `index.html` — `font-src 'self'` больше ничего не блокирует;
+  `nginx.conf`: во вложенный `location /assets/` добавлены CSP и полный комплект server-заголовков
+  (add_header не наследуется); `vercel.json`: секция `headers` — CSP, X-Frame-Options DENY,
+  X-Content-Type-Options nosniff, Referrer-Policy strict-origin-when-cross-origin;
+  `src/pwa/manifest.json`: background_color/theme_color → `#0B141B` (токен дизайн-пака dark `--bg-0`).
+  Документация: README — секция «PWA и шрифты (офлайн-оболочка)», ARCHITECTURE — Deployment
+  (prod-экспозиция, CSP в /assets/, заголовки Vercel). Docker-prod в песочнице не проверялся
+  (нет демона) — конфигурация выверена статически.
+
+### KB-39. Реестры plans/ недостоверны: дубли BL-48/BL-51 в двух файлах, архивные «ГОТОВО» опровергнуты HEAD, BL-63 не была зарегистрирована
+
+- Симптом: (1) BL-48 и BL-51 присутствуют одновременно в живом `plans/backlog.md`
+  (READY) и в `plans/done/backlog.md` («ГОТОВО 01.11.2026») — нарушено `AGENTS.md` §2
+  («номер всегда однозначно находится в одном из двух файлов»); (2) архивные записи не
+  соответствуют репозиторию: `eslint.config.js` и `.github/dependabot.yml` никогда не
+  существовали в истории (`git log --all -- eslint.config.js .github/dependabot.yml` пуст),
+  `.eslintrc.cjs` + eslint ^8.55 + отсутствие jsx-a11y на месте, `trivy-action@master` не
+  заменён тегом, `runs-on: ubuntu-latest` не заменён; (3) номер BL-63 назначен закрытым
+  планом `plans/done/2026-10-31-ux-audit-visual-inspection.md` и упомянут в `PLAN.md`
+  («открыты BL-62/BL-63»), но карточка отсутствовала в обоих реестрах до 02.11.2026;
+  (4) KB-24/KB-25 закрыты 01.11.2026, однако заявленная работа не функционирует
+  (остатки перерегистрированы как KB-36/KB-37); (5) KB-22 дублируется: живая карточка
+  (OWNER TASK) и копия в `plans/done/knownbugs.md` со статусом «не закрыт» — в архиве
+  закрытых карточка лежит незакрытой.
+- Влияние: реестры показывают работу, которой нет; планирование по ним пропускает
+  реально открытые задачи (ESLint 9 + jsx-a11y, Dependabot, trivy-тег); нарушен R6
+  (отчёты «ГОТОВО» без проверки фактов) — тот же класс, что урок BL-20/KB-14 из §2.
+- Обход: перед взятием «закрытого» в работу сверять утверждения карточки с HEAD
+  (`ls`/`grep`/`git log --all`); аудит 02.11.2026 такую сверку выполнил.
+- Источник: аудит 02.11.2026, подзадача 9 плана `plans/2026-11-02-audit-security-usability-ui.md`;
+  связано с коммитами 01.11.2026 (`ebb3a1b`, `75a8e1c`).
+- Статус: ЗАКРЫТ 02.11.2026 — план plans/2026-11-02-audit-security-usability-ui.md (подзадача 9)
+- Что сделано: (1) архив `plans/done/backlog.md` — к «ГОТОВО»-записям BL-48/BL-51 дописаны
+  датированные опровержения аудитом (исходный текст сохранён, канон — живые карточки); (2) архив
+  `plans/done/knownbugs.md` — копия KB-22 (незакрытая OWNER TASK не принадлежит архиву закрытых)
+  заменена объяснительной заглушкой со ссылкой на живую карточку; KB-24/KB-25 получили поправки
+  02.11.2026 с указателями на KB-36/KB-37; (3) восстановлены потерянные закрытые карточки KB-26
+  (закрыт через BL-46) и KB-27 (профиль-зависимая санитизация `detail` реализована в
+  `GlobalExceptionHandler` + `GlobalExceptionHandlerProfileDetailTest`); живая BL-49 получила
+  поправку: ядро (KB-27) выполнено, остаток — traceId/`ErrorResponseFactory` (BL-54); (4) BL-63
+  восстановлена аудитом и закрыта подзадачей 7 (перенесена в архив); (5) `src/App.tsx` — комментарий
+  Fix-10 приведён к фактам HEAD (ленивые чанки без устаревшего списка библиотек); (6) PWA описан в
+  README и ARCHITECTURE; (7) BL-53 сверена с HEAD: числа 616/512/636/941/876/832/520 точны,
+  `GlobalExceptionHandler.java` 516→542 (404-обработчик подзадачи 10) — поправка внесена.
+  Контрольная сверка 02.11.2026: каждый упоминаемый в дереве номер BL/KB определён ровно в одном
+  реестре (единственные пересечения live∩archive — документированные: опровержения BL-48/BL-51 и
+  заглушка KB-22); `git ls-files '*.md'` — только белый список AGENTS.md §1.

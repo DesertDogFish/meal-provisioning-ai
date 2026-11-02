@@ -29,4 +29,24 @@ public interface RefreshTokenRepository extends JpaRepository<RefreshToken, Long
     @Modifying
     @Query("DELETE FROM RefreshToken rt WHERE rt.expiresAt < :now")
     void deleteExpiredTokens(LocalDateTime now);
+
+    /**
+     * Подзадача 4 аудита 02.11.2026 (reuse-detection): отозвать ВСЕ активные
+     * refresh-токены пользователя (семья) — применяется при предъявлении уже
+     * отозванного токена (кража) и при гонке ротаций. Возвращает число отозванных.
+     */
+    @Modifying
+    @Query("UPDATE RefreshToken rt SET rt.revokedAt = :now "
+            + "WHERE rt.user.id = :userId AND rt.revokedAt IS NULL")
+    int revokeAllByUserId(Long userId, LocalDateTime now);
+
+    /**
+     * Атомарная ротация: пометить токен отозванным и связать с новым ТОЛЬКО если
+     * он ещё активен (revokedAt IS NULL берёт блокировку строки). 0 обновлённых
+     * строк — токен уже ротирован параллельным запросом (гонка) или отозван.
+     */
+    @Modifying
+    @Query("UPDATE RefreshToken rt SET rt.revokedAt = :now, rt.replacedById = :newTokenId "
+            + "WHERE rt.tokenHash = :tokenHash AND rt.revokedAt IS NULL")
+    int revokeForRotation(String tokenHash, Long newTokenId, LocalDateTime now);
 }

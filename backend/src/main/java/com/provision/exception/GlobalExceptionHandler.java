@@ -494,6 +494,32 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(status).body(error);
     }
 
+    /**
+     * Подзадача 10 аудита 02.11.2026 (план plans/2026-11-02-audit-security-usability-ui.md,
+     * BL-65): неизвестный API-путь — 404 ProblemDetail, а не 500.
+     *
+     * <p>Spring Boot 3.2 отправляет путь без контроллера в {@code ResourceHttpRequestHandler},
+     * который бросает {@code NoResourceFoundException} (а при отключённых static-маппингах —
+     * {@code NoHandlerFoundException}); без этого обработчика оба перехватывал
+     * {@code handleGeneric} → 500 «An unexpected error occurred» (доказано red-прогоном
+     * {@code UnknownRouteIntegrationTest}: expected 404, was 500). Mock-слой на тот же путь
+     * отвечает 404 — паритет форм ответа восстановлен.</p>
+     */
+    @ExceptionHandler({
+            org.springframework.web.servlet.resource.NoResourceFoundException.class,
+            org.springframework.web.servlet.NoHandlerFoundException.class
+    })
+    public ResponseEntity<ErrorResponse> handleUnknownRoute(
+            Exception ex,
+            HttpServletRequest request
+    ) {
+        // R10: метод и путь — в лог; клиенту — стабильный ProblemDetail без внутренностей.
+        log.warn("Unknown route: {} {} ({})",
+                request.getMethod(), request.getRequestURI(), ex.getClass().getSimpleName());
+        return build(HttpStatus.NOT_FOUND, "Not Found",
+                "Resource not found: " + request.getRequestURI(), request);
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleGeneric(
             Exception ex,

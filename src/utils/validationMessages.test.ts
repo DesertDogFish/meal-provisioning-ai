@@ -64,7 +64,7 @@ describe('validateRecipe / validateRegistration — те же RU-шаблоны'
   it('регистрация: некорректная почта и короткий пароль', () => {
     const messages = validateRegistration({ email: 'no-at', password: '123' }).map(e => e.message);
     expect(messages).toContain('Укажите корректный адрес эл. почты');
-    expect(messages).toContain('Пароль: от 6 до 100 символов');
+    expect(messages).toContain('Пароль: не короче 8 символов');
   });
 });
 
@@ -74,8 +74,8 @@ describe('humanizeFieldError — серверный ProblemDetail.errors → RU 
     expect(humanizeFieldError({ field: 'name', message: 'must not be blank' })).toBe('Укажите название');
     expect(humanizeFieldError({ field: 'email', message: 'must be a valid email address' }))
       .toBe('Укажите корректный адрес эл. почты');
-    expect(humanizeFieldError({ field: 'password', message: 'must be between 6 and 100 characters' }))
-      .toBe('Пароль: от 6 до 100 символов');
+    expect(humanizeFieldError({ field: 'password', message: 'must be between 8 and 100 characters' }))
+      .toBe('Пароль: не короче 8 символов');
     expect(humanizeFieldError({ field: 'defaultPeople', message: 'must be positive' }))
       .toBe('Количество человек: значение должно быть больше нуля');
   });

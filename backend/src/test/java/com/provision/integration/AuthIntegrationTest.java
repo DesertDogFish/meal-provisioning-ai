@@ -319,4 +319,81 @@ class AuthIntegrationTest {
                         .content("{\"refreshToken\":\"" + refreshToken + "\"}"))
                 .andExpect(status().isUnauthorized());
     }
+
+    @Test
+    @Order(9)
+    @DisplayName("AUTH-10 (подзадача 4.5): пароль короче 8 символов — 400 с ошибкой поля password")
+    void auth10_registerShortPassword_returns400() throws Exception {
+        RegisterRequest request = new RegisterRequest(
+                "short-pass@example.com",
+                "1234567", // 7 символов — ниже NIST SP 800-63B минимума
+                "John",
+                "Doe"
+        );
+
+        mockMvc.perform(post("/api/v1/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.errors[?(@.field == 'password')]").exists());
+    }
+
+    @Test
+    @Order(10)
+    @DisplayName("AUTH-11 (подзадача 4.1): повторное предъявление ротированного токена — reuse: 401 и ВСЯ семья отозвана")
+    void auth11_refreshReuseDetection_revokesFamily() throws Exception {
+        // Register + login → токен A
+        RegisterRequest registerRequest = new RegisterRequest(
+                TEST_EMAIL, TEST_PASSWORD, "John", "Doe");
+        mockMvc.perform(post("/api/v1/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(registerRequest)))
+                .andExpect(status().isCreated());
+
+        LoginRequest loginRequest = new LoginRequest(TEST_EMAIL, TEST_PASSWORD);
+        MvcResult loginResult = mockMvc.perform(post("/api/v1/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(loginRequest)))
+                .andExpect(status().isOk())
+                .andReturn();
+        Map<String, Object> tokens = objectMapper.readValue(
+                loginResult.getResponse().getContentAsString(StandardCharsets.UTF_8), Map.class);
+        String tokenA = (String) tokens.get("refreshToken");
+
+        // Refresh(A) → 200, токен B; A помечен отозванным (не удалён)
+        MvcResult refreshResult = mockMvc.perform(post("/api/v1/auth/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"refreshToken\":\"" + tokenA + "\"}"))
+                .andExpect(status().isOk())
+                .andReturn();
+        Map<String, Object> rotated = objectMapper.readValue(
+                refreshResult.getResponse().getContentAsString(StandardCharsets.UTF_8), Map.class);
+        String tokenB = (String) rotated.get("refreshToken");
+        assertThat(tokenB).isNotEqualTo(tokenA);
+
+        // Ключевое: повторное предъявление A (кража/replay) — 401
+        mockMvc.perform(post("/api/v1/auth/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"refreshToken\":\"" + tokenA + "\"}"))
+                .andExpect(status().isUnauthorized());
+
+        // Семья отозвана ЦЕЛИКОМ: легитимный B тоже больше не работает
+        mockMvc.perform(post("/api/v1/auth/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"refreshToken\":\"" + tokenB + "\"}"))
+                .andExpect(status().isUnauthorized());
+
+        // В БД все refresh-токены пользователя помечены revoked_at
+        Integer active = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM refresh_tokens rt JOIN users u ON u.id = rt.user_id "
+                        + "WHERE u.email = ? AND rt.revoked_at IS NULL",
+                Integer.class, TEST_EMAIL);
+        assertThat(active).isZero();
+        Integer revoked = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM refresh_tokens rt JOIN users u ON u.id = rt.user_id "
+                        + "WHERE u.email = ? AND rt.revoked_at IS NOT NULL",
+                Integer.class, TEST_EMAIL);
+        assertThat(revoked).isGreaterThanOrEqualTo(2);
+    }
 }

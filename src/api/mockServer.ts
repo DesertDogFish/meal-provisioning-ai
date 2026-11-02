@@ -18,6 +18,9 @@ import { handleAuthImpl } from './mockAuth';
 import type { Ingredient, Recipe } from '../types';
 import {  } from './mockState';
 
+/** «Момент старта приложения» mock-сессии — паритет с MetaController.startedAt. */
+const MOCK_STARTED_AT = new Date().toISOString();
+
 export const mockServer = {
   /**
    * Нормализация кода привязки к ЕМИСС (паритет с ProductService.normalizeEmisCode):
@@ -83,7 +86,13 @@ export const mockServer = {
       return this.handleTrips(method, path, body) as T;
     }
     if (pathWithoutQuery === '/meta') {
-      return { version: '1.0.0', build: new Date().toISOString(), db: 'mock', application: 'provision' } as T;
+      // Мок-паритет /meta (подзадача 10 аудита 02.11.2026, BL-65): форма как у
+      // MetaController — {version, build, db, application}, все строки.
+      // version: 'mock' — единый источник правды о версии один (backend/pom.xml
+      // → app.version), дублировать номер в моке значит дрейфовать (было '1.0.0'
+      // при 1.0.1 в pom). build — СТАТИЧНЫЙ момент старта mock-сессии: бэкенд
+      // отдаёт фиксированный startedAt, а не now() на каждый запрос.
+      return { version: 'mock', build: MOCK_STARTED_AT, db: 'mock', application: 'provision' } as T;
     }
 
     throw { status: 404, message: 'Not found', detail: `Route ${path} not implemented in mock` };

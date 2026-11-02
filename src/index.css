@@ -1,5 +1,48 @@
-@import url('https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700&family=Manrope:wght@400;600;800&display=swap');
 @import "tailwindcss";
+
+/* ============================================================
+   Шрифты дизайн-системы — self-host (подзадача 5, аудит 02.11.2026,
+   KB-38): woff2-файлы лежат в public/fonts/ и отдаются same-origin.
+   Причины ухода с fonts.googleapis.com: (1) prod-CSP nginx/Vercel
+   (font-src/style-src 'self') блокировала внешние шрифты — брендовые
+   Unbounded/Manrope не применялись; (2) third-party-зависимость
+   (доступность из РФ, приватность); (3) same-origin шрифты кэширует
+   service worker (src/pwa/sw.js) — офлайн-запуск с брендом.
+   Оба семейства — переменные (один файл на диапазон весов),
+   unicode-range повторяет срезы Google Fonts (latin + cyrillic).
+   ============================================================ */
+@font-face {
+  font-family: 'Manrope';
+  font-style: normal;
+  font-weight: 400 800;
+  font-display: swap;
+  src: url('/fonts/manrope-cyrillic.woff2') format('woff2');
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+@font-face {
+  font-family: 'Manrope';
+  font-style: normal;
+  font-weight: 400 800;
+  font-display: swap;
+  src: url('/fonts/manrope-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Unbounded';
+  font-style: normal;
+  font-weight: 500 700;
+  font-display: swap;
+  src: url('/fonts/unbounded-cyrillic.woff2') format('woff2');
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+@font-face {
+  font-family: 'Unbounded';
+  font-style: normal;
+  font-weight: 500 700;
+  font-display: swap;
+  src: url('/fonts/unbounded-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
 
 /* ============================================================
    DESIGN_MIGRATION 0.2: блок :root с дублями токенов УДАЛЁН.
@@ -338,6 +381,52 @@ h1, h2, h3, .logo-word, .font-display {
 @media (prefers-reduced-motion: reduce) {
   .toast__close { transition: none; }
 }
+
+/* ============================================================
+   BL-63 (аудит 02.11.2026, подзадача 7): алерты — на токенах
+   дизайн-пака, без сырой палитры Tailwind (прежние bg-amber-50/
+   text-amber-900 были только светлыми — в тёмной теме алерт
+   рисовался белёсой коробкой). Паттерн тот же, что у .toast*:
+   tint состояния поверх непрозрачной подложки --bg-2 + accent
+   из var(--…); обе темы переключаются автоматически.
+   Контраст (расчёт WCAG 2.1, text-1 / icon на tinted bg-2):
+   dark — текст 10.95…13.88, иконка 5.29…8.93;
+   light — текст 12.09…13.84, иконка 3.41…7.42 (норма: текст
+   ≥ 4.5:1, иконка ≥ 3:1 — WCAG 1.4.11).
+   ============================================================ */
+.alert {
+  --alert-tint: transparent;        /* soft-цвет состояния поверх --bg-2 */
+  --alert-accent: var(--text-2);    /* иконка/граница состояния */
+
+  background: linear-gradient(var(--alert-tint), var(--alert-tint)), var(--bg-2);
+  color: var(--text-1);
+  border: 1px solid color-mix(in srgb, var(--alert-accent) 32%, var(--line));
+  border-radius: var(--r-lg);
+}
+
+.alert--danger  { --alert-tint: var(--danger-soft); --alert-accent: var(--danger); }
+.alert--warn    { --alert-tint: color-mix(in srgb, var(--amber-500) 12%, transparent); --alert-accent: var(--amber-500); }
+.alert--info    { --alert-tint: color-mix(in srgb, var(--wave-400) 10%, transparent); --alert-accent: var(--wave-400); }
+.alert--ok      { --alert-tint: var(--success-soft); --alert-accent: var(--success); }
+.alert--neutral { --alert-tint: transparent; --alert-accent: var(--text-2); }
+
+.alert__icon {
+  /* тот же приём, что .toast__icon: акцент, смешанный с текстом темы
+     на 18 % — в светлой теме тёмный текст усиливает акцент */
+  color: color-mix(in srgb, var(--alert-accent) 82%, var(--text-1));
+}
+
+.alert__close {
+  color: color-mix(in srgb, var(--alert-accent) 82%, var(--text-1));
+  transition: color var(--t-fast) var(--ease);
+}
+
+.alert__close:hover,
+.alert__close:focus-visible {
+  color: var(--text-1);
+}
+
+.alert__muted { color: var(--text-2); }
 
 /* Midnight Harbor theme classes */
 .bg-midnight { background: var(--bg); }

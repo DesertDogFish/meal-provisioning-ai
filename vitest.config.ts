@@ -49,6 +49,8 @@ export default defineConfig({
         'src/utils/format.ts',
         // новые компоненты, выделенные в Фазе 10
         'src/components/ProductTable.tsx',
+        // BL-63 (аудит 02.11.2026, подзадача 7): алерты на токенах — зона изменения
+        'src/components/ProblemDetailAlert.tsx',
         'src/components/TripForm.tsx',
         'src/components/ApiModeBadge.tsx',
         'src/components/DateRange.tsx',
