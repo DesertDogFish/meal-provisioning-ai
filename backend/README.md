@@ -7,7 +7,7 @@
 - Java 17 (target — `pom.xml <java.version>`), Spring Boot 3.2.5
 - Spring Data JPA + Hibernate (`ddl-auto=validate`), PostgreSQL 15
 - Spring Security: stateless JWT (access 1 ч / refresh 7 д с ротацией, хэш refresh в БД), CORS из ENV, fail-fast `JWT_SECRET`
-- Flyway V1–V33 (apply at startup)
+- Flyway V1–V35 (apply at startup)
 - springdoc-openapi (Swagger в profile `dev`)
 - Lombok; маппинг DTO ручной (record'ы); зависимость MapStruct присутствует, но не используется — к удалению (PLAN P1)
 - Тесты: JUnit 5 + AssertJ + Mockito + MockMvc; Testcontainers ИЛИ LocalPgFallback (initdb локального PostgreSQL, работает в CI без Docker)
@@ -35,7 +35,7 @@ backend/
 │   │                    # Emis* (MirrorService/CatalogService/PriceApplier/Unit), PriceSyncService...
 │   └── specification/   # ProductSpecifications (фильтры продуктов, isGlobal)
 ├── src/main/resources/
-│   ├── db/migration/    # Flyway V1–V33 (применённые не правим!)
+│   ├── db/migration/    # Flyway V1–V35 (применённые не правим!)
 │   ├── application.yml  # базовый (INFO)
 │   ├── application-dev.yml / application-prod.yml
 └── src/test/            # unit + integration (@ContainerSuite / LocalPgFallback) + smoke
@@ -145,7 +145,7 @@ mvn test -Dtest=EmisSharedCountIntegrationTest        # emisSharedCount на р�
 
 ## Миграции
 
-Flyway, `src/main/resources/db/migration`, нумерация V1–V33 без ретроспективных правок:
+Flyway, `src/main/resources/db/migration`, нумерация V1–V35 без ретроспективных правок:
 
 - пропуски номеров осознанные: V9 не создавалась; V14/V15 (сид демо-юзеров) удалены из дерева **до** широкого применения и заменены `DevDataInitializer`/`DevTripsInitializer` (profile `dev` + `SEED_DEMO_USERS`); в старых БД могли остаться демо-юзеры — cleanup-запрос в корне README;
 - БД, где V14/V15 уже записаны в `flyway_schema_history`, стартует без ручных действий: `spring.flyway.ignore-migration-patterns: "*:missing"` (AU-02, аудит 30.10.2026) — без неё валидация при старте падала `Detected applied migration not resolved locally: 14`. `*:future` и `*:pending` намеренно НЕ игнорируются (откат образа на новую схему и незапущенные миграции должны падать громко); регресс-гейт — `FlywayUpgradeIntegrationTest` и CI-job `migration-upgrade`;
@@ -166,6 +166,10 @@ Flyway, `src/main/resources/db/migration`, нумерация V1–V33 без р
 - V33 — FK `trip_checklist_bought.ingredient_id -> ingredients(id)` пересоздан с `ON DELETE CASCADE`
   (без этого удаление продукта с отметкой падало на FK-нарушении → 409 с нерелевантным текстом);
   V32 не правится из-за checksum — только новый номер;
+- V35 — `trip_checklist_bought.version BIGINT NOT NULL DEFAULT 0` (оптимистичный лок @Version, сущность
+  `TripChecklistBought`): V34 добавила `version` для 7 сущностей похода, но пропустила
+  `trip_checklist_bought` → Hibernate падал на `Schema-validation: missing column [version]`.
+  `IF NOT EXISTS` в миграции безопасен к перенакату.
 - V29 — решения владельца по единицам и фасовке: «Туалетная бумага, 4 рулона» → «Бумага туалетная, рулон» (÷4), «Влажные салфетки, упаковка 100 шт» → «Салфетки влажные, упаковка 20 шт.» (÷5), «Спички влагозащищённые (20 шт)» → «Спички, коробок» (÷20) с пересчётом `piece_weight_g` и истории цен; новые привязки `antiseptic`→8016, `sunscreen`→5311, `toilet_paper`→6502, `wipes_wet`→6505; `gas_canister`/`soy_sauce`/`vinegar` явно без привязки. Правило «плотность ≈ 1» (MASS↔VOLUME, `piece_weight_g` как мл) — в `EmisUnit.pricePerUnit`, не в схеме.
 
 Правила для новых миграций — `AGENTS.md` раздел 8.
