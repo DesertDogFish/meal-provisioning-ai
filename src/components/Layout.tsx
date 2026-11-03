@@ -6,6 +6,7 @@ import BrandMark from './BrandMark';
 import ThemeToggle from './ThemeToggle';
 import ScrollTopButton from './ScrollTopButton';
 import { lockBodyScroll, unlockBodyScroll } from './Modal'; // подзадача 9: фон не скроллится под открытым drawer
+import { syncManager } from '../sync/SyncManager';
 import { useToast } from './ToastProvider';
 import { useAuth } from './AuthProvider'; // cleanup-п.7: профиль — из общего контекста
 
@@ -189,6 +190,14 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 <ChevronUp size={16} style={{ transform: profileOpen ? 'rotate(180deg)' : 'none', transition: 'transform 150ms', flexShrink: 0 }} />
               </button>
             </div>
+            <button
+              onClick={() => syncManager.syncAll()}
+              className="ibtn"
+              aria-label="Синхронизировать"
+              title="Синхронизировать"
+            >
+              <RefreshCw size={16} />
+            </button>
             <ThemeToggle />
           </div>
         </div>

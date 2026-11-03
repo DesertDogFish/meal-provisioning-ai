@@ -80,6 +80,9 @@ export default function LoginPage() {
 
         localStorage.setItem('accessToken', regResponse.accessToken);
         localStorage.setItem('refreshToken', regResponse.refreshToken);
+        // Офлайн: дублируем токены в IndexedDB
+        const { saveTokens } = await import('../db/authStorage');
+        await saveTokens(regResponse.accessToken, regResponse.refreshToken);
         await refresh(); // cleanup-п.7: контекст узнаёт пользователя ОДНИМ запросом
         navigate('/trips');
       } else {
@@ -92,6 +95,8 @@ export default function LoginPage() {
         const response = await api.post<AuthResponse>('/auth/login', { email, password });
         localStorage.setItem('accessToken', response.accessToken);
         localStorage.setItem('refreshToken', response.refreshToken);
+        const { saveTokens } = await import('../db/authStorage');
+        await saveTokens(response.accessToken, response.refreshToken);
         await refresh(); // cleanup-п.7: контекст узнаёт пользователя ОДНИМ запросом
         navigate('/trips');
       }
