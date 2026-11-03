@@ -2383,3 +2383,90 @@ textarea {
 
 /* обложка карточки похода: слой только на мобильном (подзадача 4) */
 .trip-card__cover { display: none; }
+
+/* ============================================================
+   Атмосфера (tasks/design-atmosphere-art.md, утверждено владельцем
+   03.11.2026): фон входа и glass-шапка похода. Отклонено 2-й волной
+   отзывов и НЕ применяется: wash каталога, волны (лента/текстура чеков),
+   фото-обложки карточек походов.
+   Все цвета — токены; декоративные слои — aria-hidden + pointer-events:none;
+   анимации отключаются prefers-reduced-motion; печать их не получает.
+   ============================================================ */
+
+/* --- п.3 LoginPage: арт «море целиком» + вуаль + лёгкий Ken Burns --- */
+.login-art {
+  position: absolute;
+  inset: -12% 0;
+  z-index: 0;
+  background-size: cover;
+  background-position: center 38%;
+  animation: login-kenburns 44s var(--ease) infinite alternate;
+  will-change: transform;
+  pointer-events: none;
+}
+@keyframes login-kenburns {
+  from { transform: scale(1) translate3d(0, 0, 0); }
+  to   { transform: scale(1.07) translate3d(0, -1.2%, 0); }
+}
+.login-art-veil {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--bg-0) 30%, transparent) 0%,
+    color-mix(in srgb, var(--bg-0) 62%, transparent) 55%,
+    color-mix(in srgb, var(--bg-0) 90%, transparent) 100%);
+}
+/* светлая тема: вуаль плотнее, чтобы тёмный арт не пробивался сквозь светлый UI */
+:root[data-theme="light"] .login-art-veil {
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--bg-0) 58%, transparent) 0%,
+    color-mix(in srgb, var(--bg-0) 84%, transparent) 55%,
+    color-mix(in srgb, var(--bg-0) 96%, transparent) 100%);
+}
+.login-content { position: relative; z-index: 1; }
+@media (prefers-reduced-motion: reduce) {
+  .login-art { animation: none; }
+}
+
+/* --- п.5 TripDetailPage: шапка «стекло поверх арта» --- */
+.trip-header-glass {
+  position: relative;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-1);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  background: linear-gradient(160deg,
+    color-mix(in srgb, var(--bg-2) 38%, transparent),
+    color-mix(in srgb, var(--bg-0) 55%, transparent));
+}
+.trip-header-glass__art {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background-size: cover;
+  background-position: center 30%;
+  opacity: .45;
+  pointer-events: none;
+}
+:root[data-theme="light"] .trip-header-glass__art { opacity: .28; }
+.trip-header-glass__in {
+  position: relative;
+  z-index: 1;
+  padding: var(--sp-5) var(--sp-6);
+}
+/* Mobile: обёртка НЕ создаёт коробку — sticky .trip-strip липнет к странице,
+   как до введения карточки; арт-слой скрыт (экономия памяти/батареи). */
+@media (max-width: 767px) {
+  .trip-header-glass,
+  .trip-header-glass__in { display: contents; }
+  .trip-header-glass__art { display: none; }
+}
+
+/* --- печать: декоративные слои не печатаем --- */
+@media print {
+  .login-art, .login-art-veil,
+  .trip-header-glass__art { display: none !important; }
+}

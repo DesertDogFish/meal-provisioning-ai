@@ -48,3 +48,7 @@ scripts/read_chunk.py
 scripts/replace_one.py
 scripts/replace_all.py
 scripts/replace_lines.py
+
+# Design lab: эскизные ассеты и галерея (черновики, не в git;
+# в прод пойдёт только выбранное и оптимизированное)
+design-lab/

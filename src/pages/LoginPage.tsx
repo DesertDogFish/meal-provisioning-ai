@@ -5,6 +5,8 @@ import { PASSWORD_MIN_LENGTH, passwordTooShort } from '../utils/validationMessag
 import { useAuth } from '../components/AuthProvider'; // cleanup-п.7
 import { Mail, Lock, User, Eye, EyeOff } from 'lucide-react';
 import BrandMark from '../components/BrandMark';
+// design-п.3 (tasks/design-atmosphere-art.md, утверждено 03.11.2026): фон-арт
+import seaLogin from '../assets/atmosphere/sea-login.webp';
 import { Button } from '../components/Button';
 
 interface AuthResponse {
@@ -87,10 +89,15 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4" style={{
+    <div className="relative overflow-hidden min-h-screen flex items-center justify-center p-4" style={{
       background: 'radial-gradient(1100px 500px at 85% -10%, color-mix(in srgb, var(--wave-400) 9%, transparent), transparent), radial-gradient(900px 500px at -10% 30%, color-mix(in srgb, var(--wave-400) 7%, transparent), transparent), var(--bg-0)'
     }}>
-      <div className="w-full max-w-md">
+      {/* design-п.3 «море целиком»: арт на весь экран + тёмная вуаль снизу;
+          лёгкий Ken Burns (CSS) отключается prefers-reduced-motion. Слои
+          декоративные — aria-hidden, форма остаётся непрозрачной (контраст). */}
+      <div className="login-art" aria-hidden style={{ backgroundImage: `url(${seaLogin})` }} />
+      <div className="login-art-veil" aria-hidden />
+      <div className="login-content w-full max-w-md">
         <div className="text-center mb-8">
           {/* Fix-7 (п.11): «оранжевое лого на оранжевом фоне» — подложка знака стала
               ТЁМНОЙ (ink) с обводкой; брендовый градиент остался свечением вокруг.

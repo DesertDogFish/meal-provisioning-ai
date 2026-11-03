@@ -155,3 +155,32 @@ describe('LoginPage — пароль не короче 8 (подзадача 4.5
     })));
   });
 });
+
+/**
+ * Задача tasks/design-atmosphere-art.md (подзадача 3, утверждено 03.11.2026):
+ * фон входа — арт «море целиком» (sea-login.webp) + тёмная вуаль; оба слоя
+ * декоративные (aria-hidden), Ken Burns отключается prefers-reduced-motion
+ * (CSS-медиазапрос, в jsdom проверяем наличие слоёв и их aria-hidden).
+ * RED: до правки слоёв .login-art/.login-art-veil на странице нет.
+ */
+describe('LoginPage — атмосферный фон (design-п.3)', () => {
+  it('арт-слой и вуаль присутствуют, оба aria-hidden', () => {
+    renderPage();
+    const art = document.querySelector('.login-art');
+    const veil = document.querySelector('.login-art-veil');
+    expect(art).toBeTruthy();
+    expect(veil).toBeTruthy();
+    expect(art!.getAttribute('aria-hidden')).toBe('true');
+    expect(veil!.getAttribute('aria-hidden')).toBe('true');
+    // арт — фоновая картинка (webp-ассет подключён)
+    expect((art as HTMLElement).style.backgroundImage).toContain('sea-login');
+  });
+
+  it('контент формы — НАД фоном (z-index слоя контента ≥ 1)', () => {
+    renderPage();
+    const content = document.querySelector('.login-content');
+    expect(content).toBeTruthy();
+    const z = parseInt(getComputedStyle(content as HTMLElement).zIndex || '1', 10);
+    expect(z).toBeGreaterThanOrEqual(1);
+  });
+});

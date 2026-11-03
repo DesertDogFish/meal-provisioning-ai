@@ -27,6 +27,9 @@ import AddMealModal from '../components/AddMealModal';
 import MealCompositionModal from '../components/MealCompositionModal';
 import ManualItemsModal from '../components/ManualItemsModal';
 import TripActions from '../components/TripActions';
+// design-п.5: растровый арт под стеклом шапки (утверждён 03.11.2026; после
+// отката фото-обложек SVG-заглушки под blur не читались — владелец: «пропала»)
+import headerArt from '../assets/atmosphere/camp-ready.webp';
 import TripSummaryPanel from '../components/TripSummaryPanel';
 import TripDaysList from '../components/TripDaysList';
 import TripShoppingTab from '../components/TripShoppingTab';
@@ -96,6 +99,13 @@ export default function TripDetailPage() {
 
   return (
     <div className="space-y-4 md:space-y-6 stage-page">
+      {/* design-п.5 «стекло поверх арта» (tasks/design-atmosphere-art.md):
+          TripActions + сводка + десктопные сегменты — ОДНА glass-карточка с
+          арт-слоем обложки похода. На mobile обёртка уходит в display:contents
+          (CSS), чтобы sticky .trip-strip не терял липкость. */}
+      <div className="trip-header-glass" data-testid="trip-header-glass">
+      <div className="trip-header-glass__art" aria-hidden style={{ backgroundImage: `url(${headerArt})` }} />
+      <div className="trip-header-glass__in space-y-4 md:space-y-6">
       {/* Header — подзадача 26: TripActions (+ kebab с отчётом, подзадача 7) */}
       <TripActions trip={trip} onBack={() => navigate('/trips')} onOpenReport={() => navigate(`/trips/${trip.id}/report`)} />
 
@@ -114,10 +124,6 @@ export default function TripDetailPage() {
         onStage={(s) => { setActiveTab(s); }}
         onOpenReport={() => navigate(`/trips/${trip.id}/report`)}
       />
-
-      {/* Мобильный нижний таб-бар — ЕДИНСТВЕННЫЙ переключатель этапов на mobile
-          (UX-осмотр 31.10, п.5: степпер-дубль удалён, KB-33) */}
-      <StageTabBar stage={stage} onStage={setActiveTab} done={done} />
 
       {/* Десктоп: сегментированный контрол (.seg) из брендбука, 4 этапа.
           `seg-desktop-only` — явное скрытие на mobile: утилита `hidden` из
@@ -141,6 +147,13 @@ export default function TripDetailPage() {
           </button>
         ))}
       </div>
+      </div>
+      </div>
+
+      {/* Мобильный нижний таб-бар — ЕДИНСТВЕННЫЙ переключатель этапов на mobile
+          (UX-осмотр 31.10, п.5: степпер-дубль удалён, KB-33). Вне glass-обёртки:
+          fixed-бар не должен зависеть от её containing block (backdrop-filter). */}
+      <StageTabBar stage={stage} onStage={setActiveTab} done={done} />
 
       {/* Этап ①: меню по дням */}
       {stage === 'menu' && (
