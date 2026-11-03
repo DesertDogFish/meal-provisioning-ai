@@ -16,6 +16,8 @@
   },
   "dependencies": {
     "date-fns": "^2.30.0",
+    "dexie": "^4.4.7",
+    "fake-indexeddb": "^6.2.7",
     "happy-dom": "^21.0.4",
     "lucide-react": "^0.294.0",
     "react": "^18.2.0",

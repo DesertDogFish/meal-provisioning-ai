@@ -12,6 +12,8 @@ initTheme();
 
 ReactDOM.createRoot(document.getElementById("root")!).render(<App />);
 
+import { syncManager } from "./sync/SyncManager";
+
 // BL-28: PWA. Регистрируем service worker только в прод-сборке — в dev он кэшировал
 // бы HMR-модули и «залипал» на старых чанках. Файл отдаёт плагин pwa-assets
 // (src/pwa/sw.js → /sw.js при build). Ошибки регистрации не ломают приложение:
@@ -22,4 +24,9 @@ if (import.meta.env.PROD && "serviceWorker" in navigator) {
       /* офлайн-режим недоступен — приложение работает как обычный сайт */
     });
   });
+}
+
+// Запуск авто-синхронизации при появлении сети (только если офлайн-режим включён)
+if (import.meta.env.VITE_OFFLINE_ENABLED === 'true') {
+  syncManager.startAutoSync();
 }
