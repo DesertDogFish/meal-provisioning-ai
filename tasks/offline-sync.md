@@ -16,21 +16,21 @@ Closed:
 
 ## Этап 0 — Подготовка API-слоя (уже частично)
 - [ ] 0.1. Вынести все вызовы `fetch`/`api.*` из компонентов в единый слой `src/api/` (уже есть `src/api/*.ts` — проверить полноту).
-- [ ] 0.2. Ввести интерфейс `IRepository<T>` с методами `getAll`, `getById`, `save`, `delete`, `sync`.
-- [ ] 0.3. Создать `src/repositories/OnlineRepository.ts` — обёртка над текущим API.
+- [x] 0.2. Ввести интерфейс `IRepository<T>` с методами `getAll`, `getById`, `save`, `delete`, `sync`.
+- [x] 0.3. Создать `src/repositories/OnlineRepository.ts` — обёртка над текущим API.
 
 ## Этап 1 — Локальная БД (IndexedDB)
-- [ ] 1.1. Добавить зависимость `dexie` (или `idb`).
-- [ ] 1.2. Создать `src/db/schema.ts` — схема таблиц (products, recipes, trips, meals, shopping, checklist, users, syncQueue).
-- [ ] 1.3. Создать `src/db/indexedDb.ts` — инициализация Dexie, миграции версий.
-- [ ] 1.4. Создать `src/repositories/OfflineRepository.ts` — реализация `IRepository` поверх IndexedDB.
-- [ ] 1.5. Добавить unit-тесты для IndexedDB-репозиториев.
+- [x] 1.1. Добавить зависимость `dexie` (или `idb`).
+- [x] 1.2. Создать `src/db/schema.ts` — схема таблиц (products, recipes, trips, meals, shopping, checklist, users, syncQueue).
+- [x] 1.3. Создать `src/db/indexedDb.ts` — инициализация Dexie, миграции версий.
+- [x] 1.4. Создать `src/repositories/OfflineRepository.ts` — реализация `IRepository` поверх IndexedDB.
+- [x] 1.5. Добавить unit-тесты для IndexedDB-репозиториев.
 
 ## Этап 2 — Синхронизация
-- [ ] 2.1. Создать `src/sync/SyncQueue.ts` — очередь изменений (create/update/delete) с метаданными (timestamp, entity, id).
-- [ ] 2.2. Создать `src/sync/ConflictResolver.ts` — разрешение конфликтов при 409 (optimistic locking): стратегия "server wins" / "client wins" / "merge".
-- [ ] 2.3. Создать `src/sync/SyncManager.ts` — оркестрация: при появлении сети отправить очередь, обработать ответы, обновить локальную БД.
-- [ ] 2.4. Создать `src/sync/NetworkMonitor.ts` — отслеживание online/offline (navigator.onLine + fetch probe).
+- [x] 2.1. Создать `src/sync/SyncQueue.ts` — очередь изменений (create/update/delete) с метаданными (timestamp, entity, id).
+- [x] 2.2. Создать `src/sync/ConflictResolver.ts` — разрешение конфликтов при 409 (optimistic locking): стратегия "server wins" / "client wins" / "merge".
+- [x] 2.3. Создать `src/sync/SyncManager.ts` — оркестрация: при появлении сети отправить очередь, обработать ответы, обновить локальную БД.
+- [x] 2.4. Создать `src/sync/NetworkMonitor.ts` — отслеживание online/offline (navigator.onLine + fetch probe).
  - [x] 2.5. Добавить интеграционные тесты синхронизации (mock-сервер).
 
 ## Этап 3 — Service Worker и кэширование
@@ -50,7 +50,7 @@ Closed:
  - [x] 5.4. Офлайн-баннер: "Вы офлайн, изменения сохранены локально".
 
 ## Этап 6 — Тестирование
-- [ ] 6.1. Unit-тесты репозиториев (online/offline).
+- [x] 6.1. Unit-тесты репозиториев (online/offline).
  - [x] 6.2. E2E офлайн-сценарии (Playwright с network throttling).
  - [x] 6.3. Тесты конфликтов (409, merge).
 
