@@ -52,10 +52,6 @@ function setup(over: Partial<TripViewInput> = {}) {
       rows={view.sortedShopping}
       sortSpec={{ field: 'ingredientName', dir: 'asc' }}
       onSortField={vi.fn()}
-      total={view.shoppingTotalFinal}
-      excludedCount={view.sortedShopping.filter(i => i.excluded).length}
-      hasMissingPrices={false}
-      missingIngredients={[]}
       excluded={over.shoppingExcluded ?? new Set<string>()}
       onToggleExcluded={vi.fn()}
     />,

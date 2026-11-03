@@ -49,6 +49,20 @@ Closed:
   (datepicker — отдельный чанк), `size-limit`/bash-гейт; критерий «чанк DatePicker
   ≤ 40 КБ raw» пересчитать под react-datepicker при реализации; «суммарный бандл
   меньше на 150 КБ» — недействителен (зависимость возвращается).
+  **Обновление статуса (03.11.2026, `tasks/bugs-app-ui.md` п.3 — выполнено):**
+  `react-datepicker@^9.1.0` возвращён в `package.json`; `DatePicker.tsx` восстановлен
+  из коммита `9eeae7d2` (а НЕ `776dab9`, как предлагала пачка багов: `9eeae7d2` —
+  настоящая KB-32-версия — отображение/ввод ДД.ММ.ГГГГ через `src/utils/dateInput.ts`,
+  хранение ISO, попапер `.dark-calendar`; версия `776dab9` показывала в поле ISO и
+  противоречила бы контракту KB-32). Прокинуты `describedBy` (aria-describedby) и
+  очистка поля; потребители (`DateRange`→`TripForm`, `SyncLogsTab`, `ProductsPage`)
+  API не меняли. `manualChunks` добавлен в `vite.config.js`: `react-datepicker` и
+  `date-fns` вынесены в отдельный чанк `datepicker` (сборка 03.11.2026: datepicker
+  ≈ 345 КБ raw / ≈ 98 КБ gzip; index ≈ 92 КБ raw / ≈ 29 КБ gzip). Критерий «чанк
+  DatePicker ≤ 40 КБ raw» при возвращённой зависимости недостижим — требуется
+  пересчёт владельцем. Остаток карточки: `rollup-plugin-visualizer` (артефакт CI),
+  `size-limit`/bash бюджет-гейт; e2e CR-3 — проверить в CI (в песочнице Playwright
+  не стартует).
 
 - **BL-48. ESLint 9 flat config + jsx-a11y + реализация правила hex-токенов** (M).
   Что сделать: миграция на flat config (`eslint.config.js`, ESLint 9); добавить `jsx-a11y`

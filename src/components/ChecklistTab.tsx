@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { ChevronDown, ChevronRight, ClipboardList, Filter } from 'lucide-react';
 import InfoTip from './InfoTip';
 import FreeAmountInput from './FreeAmountInput';
+import ListSearch from './ListSearch'; // bugs-trip-checks-stage п.7 (общий с ④)
 import { Button } from './Button';
 import { KebabMenu } from './KebabMenu';
 import { useConfirm } from './ConfirmDialog';
@@ -57,6 +58,11 @@ export function ChecklistTab({
   const { confirm, dialog: confirmDialog } = useConfirm();
   const [onlyMissing, setOnlyMissing] = useState(false);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  // bugs-trip-checks-stage п.7: запрос липкого поиска (общий ListSearch с ④).
+  // При непустом запросе свёрнутые группы раскрываются — иначе совпадение
+  // не отрисовано и прокрутить к нему нельзя; фильтр «только не взятое»
+  // не конфликтует: ищем по видимым строкам (items = visibleGroups).
+  const [searchQuery, setSearchQuery] = useState('');
 
   const allKeys = useMemo(
     () => groups.flatMap(g => g.rows.map(checklistRowKey)),
@@ -74,6 +80,12 @@ export function ChecklistTab({
       .filter(g => g.rows.length > 0);
     // `bought` — Set, пересоздаётся родителем при каждом изменении: зависимость корректна
   }, [groups, onlyMissing, bought]);
+
+  const searchItems = useMemo(
+    () => visibleGroups.flatMap(g => g.rows.map(r => ({ id: r.ingredientId, text: r.name }))),
+    [visibleGroups],
+  );
+  const effectiveCollapsed = searchQuery.trim() ? new Set<string>() : collapsed;
 
   const toggleGroup = (category: string) => {
     setCollapsed(prev => {
@@ -168,6 +180,18 @@ export function ChecklistTab({
             ]}
           />
         </div>
+        {/* bugs-trip-checks-stage п.7: поиск прилипает к верху списка (зона
+            .checklist-sticky) и прокручивает к найденному (scrollIntoView
+            center, Enter/стрелки — следующее совпадение, промах — «Не найдено») */}
+        {total > 0 && (
+          <ListSearch
+            items={searchItems}
+            testId="checklist-search"
+            ariaLabel="Поиск по чеклисту"
+            placeholder="Найти позицию…"
+            onQueryChange={setSearchQuery}
+          />
+        )}
       </div>
 
       {/* navigation-п.3: пустой чеклист — тот же текст, но с выходом на этап ① */}
@@ -188,7 +212,7 @@ export function ChecklistTab({
       )}
 
       {visibleGroups.map(group => {
-        const isCollapsed = collapsed.has(group.category);
+        const isCollapsed = effectiveCollapsed.has(group.category);
         const groupBought = group.rows.filter(r => bought.has(checklistRowKey(r))).length;
         return (
           <div key={group.category} className="rounded-xl overflow-hidden" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
@@ -237,8 +261,12 @@ export function ChecklistTab({
                    СОСЕДИ, поднятые над хит-зоной через .checklist-row__hit. */
                 <div
                   key={row.ingredientId}
-                  className="checklist-row flex flex-wrap items-center gap-3 px-4 py-3 text-sm"
+                  /* bugs-trip-checks-stage п.6: неотмеченная позиция требует
+                     внимания — янтарная подложка .row-attention; отмеченная
+                     гаснет (opacity .6, как прежде) */
+                  className={`checklist-row flex flex-wrap items-center gap-3 px-4 py-3 text-sm${isBought ? '' : ' row-attention'}`}
                   data-testid={`checklist-row-${row.ingredientId}`}
+                  data-search-id={row.ingredientId}
                   style={{
                     borderTop: '1px solid var(--border)',
                     opacity: isBought && !underfilled ? 0.6 : 1,

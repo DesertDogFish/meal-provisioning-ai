@@ -160,18 +160,59 @@ describe('ChecksMobile — поведение сохранено после ре
   });
 });
 
-/**
- * UX-осмотр 31.10 (п.10): «честный факт» в мобильных строках чека. До ввода
- * чека отклонение показывало «0%» (факт = копия плана) — теперь «—».
- */
-describe('ChecksMobile — честный факт (UX-осмотр 31.10, п.10)', () => {
-  it('до ввода чека отклонение «—», а не «0%»', () => {
-    setup();
-    expect(screen.getByTestId('row-delta-i1').textContent).toBe('—');
+// bugs-trip-checks-stage п.3: describe «честный факт» (отклонение «—» /
+// «+20,0%») УСТАРЕЛ — бейджи отклонения и колонка «План ₽» из этапа ④ удалены
+// (calculateDelta/formatDelta/getDeltaChipClass выпилены из ChecksModel).
+// «Честный факт» живёт в: enteredFactsTotal (ChecksModel.test.ts) и «Итог —
+// нет данных» (PriceOverridesTab.test.tsx).
+
+// bugs-trip-checks-stage пп.3,4,6,7: из мобильной строки чека ушли «план» и
+// бейдж отклонения; CTA ввода чека переименован под словарь «Стоимость ₽»;
+// строка без введённого чека подсвечена (.row-attention); липкий поиск
+// прокручивает к совпадению (общий контрол ListSearch, R8).
+describe('ChecksMobile — bugs-trip-checks-stage пп.3,4,6,7', () => {
+  beforeEach(() => {
+    (Element.prototype as any).scrollIntoView = vi.fn();
   });
 
-  it('после ввода факт-цены — процент отклонения', () => {
+  it('п.3: в строке нет «плана» и бейджа отклонения', () => {
+    setup();
+    expect(screen.queryByText('план')).toBeNull();
+    expect(screen.queryByText(/^план/)).toBeNull();
+    expect(screen.queryByTestId('row-delta-i1')).toBeNull();
+  });
+
+  it('п.4: CTA ввода чека — «+ стоимость, ₽» (слово «факт» из подписей ушло)', () => {
+    setup();
+    const cta = screen.getByTestId('fact-add-i1');
+    expect(cta.textContent).toContain('стоимость');
+    expect(cta.textContent).not.toContain('факт');
+  });
+
+  it('п.6: строка без введённого чека — .row-attention', () => {
+    setup();
+    const line = screen.getByTestId('checkline-toggle-i1').closest('.checkline')!;
+    expect(line.classList.contains('row-attention')).toBe(true);
+  });
+
+  it('п.6: после ввода чека подсветка снята', () => {
     setup({ draftOverrides: { i1: { price: 120, total: 120 } } });
-    expect(screen.getByTestId('row-delta-i1').textContent).toBe('+20,0%');
+    const line = document.querySelector('[data-search-id="i1"].checkline')
+      ?? screen.getByTestId('actual-input-i1').closest('.checkline')!;
+    expect(line.classList.contains('row-attention')).toBe(false);
+  });
+
+  it('п.7: липкий поиск — при вводе подсветка и прокрутка к строке, «Не найдено» при промахе', () => {
+    setup();
+    const input = screen.getByTestId('checks-search-input');
+    // контроль прилипает к верху списка (зона .checklist-sticky)
+    expect(input.closest('.checklist-sticky')).toBeTruthy();
+    fireEvent.change(input, { target: { value: 'греч' } });
+    const hit = document.querySelector('[data-search-id="i1"]')!;
+    expect(hit.classList.contains('search-hit')).toBe(true);
+    expect(Element.prototype.scrollIntoView).toHaveBeenCalled();
+    expect(screen.getByTestId('checks-search-count').textContent).toBe('1/1');
+    fireEvent.change(input, { target: { value: 'гречка-несуществующая' } });
+    expect(screen.getByTestId('checks-search-none').textContent).toBe('Не найдено');
   });
 });

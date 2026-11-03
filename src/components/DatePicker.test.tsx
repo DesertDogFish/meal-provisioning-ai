@@ -1,15 +1,15 @@
 /**
  * План plans/done/2026-10-31-ux-audit-visual-inspection.md (подзадача 3, KB-32).
  *
- * Новый контракт (native <input type="date">, R2: слой изменения):
- *  - значение показывается в ISO YYYY-MM-DD (нативный формат браузера);
- *  - onChange вызывается при каждом изменении инпута;
- *  - min/max/disabled проксируются в нативный атрибут;
- *  - DateRange: endDate disabled пока startDate пуст, разблокируется при выборе.
+ * Контракт поля даты в живом компоненте (R2: слой изменения — компонент):
+ *  - значение показывается в ДД.ММ.ГГГГ, а не ISO;
+ *  - набранная с клавиатуры дата коммитится в форму (полная — сразу,
+ *    короткая — на blur/Enter), нераспознанный ввод откатывается;
+ *  - заблокированное поле окончания объясняет причину подписью.
  */
 /// <reference types="vitest/globals" />
-import { render, screen } from '@testing-library/react';
-import { describe, it, expect } from 'vitest';
+import { render, screen, fireEvent } from '@testing-library/react';
+import { describe, it, expect, vi } from 'vitest';
 import { DatePicker } from './DatePicker';
 import { DateRange } from './DateRange';
 
@@ -19,36 +19,90 @@ function input(id: string): HTMLInputElement {
   return el as HTMLInputElement;
 }
 
-describe('DatePicker — отображение значения (KB-32, native input)', () => {
-  it('значение формы в ISO YYYY-MM-DD', () => {
+describe('DatePicker — отображение значения (KB-32)', () => {
+  it('значение формы в ДД.ММ.ГГГГ, а не ISO 2026-10-10', () => {
     render(<DatePicker value="2026-10-10" onChange={() => {}} id="d1" />);
-    expect(input('d1').value).toBe('2026-10-10');
+    expect(input('d1').value).toBe('10.10.2026');
+    expect(input('d1').value).not.toContain('2026-10-10');
   });
 
-  it('пустое значение → пустой инпут', () => {
+  it('пустое значение → виден плейсхолдер ДД.ММ.ГГГГ', () => {
     render(<DatePicker value={null} onChange={() => {}} id="d2" />);
     expect(input('d2').value).toBe('');
+    expect(input('d2').placeholder).toBe('ДД.ММ.ГГГГ');
+  });
+});
+
+describe('DatePicker — коммит набранного с клавиатуры (KB-32)', () => {
+  it('полная дата ДД.ММ.ГГГГ уходит в форму сразу (без blur)', () => {
+    const onChange = vi.fn();
+    render(<DatePicker value={null} onChange={onChange} id="d3" />);
+    fireEvent.change(input('d3'), { target: { value: '10.11.2026' } });
+    expect(onChange).toHaveBeenLastCalledWith('2026-11-10');
   });
 
-  it('disabled пробрасывается', () => {
-    render(<DatePicker value="2026-10-10" onChange={() => {}} id="d3" disabled />);
-    expect(input('d3')).toBeDisabled();
+  it('ISO-ввод (вставка из буфера / e2e fill) тоже коммитится', () => {
+    const onChange = vi.fn();
+    render(<DatePicker value={null} onChange={onChange} id="d4" />);
+    fireEvent.change(input('d4'), { target: { value: '2026-07-01' } });
+    expect(onChange).toHaveBeenLastCalledWith('2026-07-01');
   });
 
-  it('min/max атрибуты проставляются', () => {
-    render(<DatePicker value="2026-10-10" onChange={() => {}} id="d4" minDate={new Date('2026-01-01')} maxDate={new Date('2027-12-31')} />);
-    expect(input('d4').getAttribute('min')).toBe('2026-01-01');
-    expect(input('d4').getAttribute('max')).toBe('2027-12-31');
+  it('короткая дата переживает blur и уходит в форму', () => {
+    const onChange = vi.fn();
+    render(<DatePicker value={null} onChange={onChange} id="d5" />);
+    fireEvent.change(input('d5'), { target: { value: '1.7.26' } });
+    expect(onChange).not.toHaveBeenCalled();
+    fireEvent.blur(input('d5'));
+    expect(onChange).toHaveBeenLastCalledWith('2026-07-01');
   });
 
-  it('aria-describedby проставляется', () => {
-    render(<DatePicker value="2026-10-10" onChange={() => {}} id="d5" describedBy="hint" />);
-    expect(input('d5').getAttribute('aria-describedby')).toBe('hint');
+  it('Enter коммитит набранное и не открывает выбор календарём', () => {
+    const onChange = vi.fn();
+    render(<DatePicker value={null} onChange={onChange} id="d6" />);
+    fireEvent.change(input('d6'), { target: { value: '5.3.27' } });
+    fireEvent.keyDown(input('d6'), { key: 'Enter' });
+    expect(onChange).toHaveBeenLastCalledWith('2027-03-05');
+  });
+
+  it('нераспознанный ввод на blur откатывается к значению формы', () => {
+    const onChange = vi.fn();
+    render(<DatePicker value="2026-10-10" onChange={onChange} id="d7" />);
+    fireEvent.change(input('d7'), { target: { value: '31.02.2026' } });
+    expect(onChange).not.toHaveBeenCalled();
+    fireEvent.blur(input('d7'));
+    expect(onChange).not.toHaveBeenCalled();
+    expect(input('d7').value).toBe('10.10.2026');
+  });
+
+  it('очистка поля отдаёт пустую строку', () => {
+    const onChange = vi.fn();
+    render(<DatePicker value="2026-10-10" onChange={onChange} id="d8" />);
+    fireEvent.change(input('d8'), { target: { value: '' } });
+    expect(onChange).toHaveBeenLastCalledWith('');
+  });
+});
+
+describe('DatePicker — брендовый попапер вместо нативного пикера (BL-47/п.3 bugs-app-ui)', () => {
+  it('поле — input[type=text]: нативный браузерный пикер не используется', () => {
+    render(<DatePicker value={null} onChange={() => {}} id="dp-native" />);
+    expect(input('dp-native').type).toBe('text');
+    expect(document.querySelector('input[type="date"]')).toBeNull();
+  });
+
+  it('клик по полю открывает попапер react-datepicker с тёмным календарём', () => {
+    render(<DatePicker value="2026-10-10" onChange={() => {}} id="dp-popper" />);
+    expect(document.querySelector('.react-datepicker')).toBeNull();
+    fireEvent.click(input('dp-popper'));
+    const calendar = document.querySelector('.react-datepicker');
+    expect(calendar).not.toBeNull();
+    // Брендовый стиль: calendarClassName="dark-calendar" (styles/DatePicker.css)
+    expect(calendar!.classList.contains('dark-calendar')).toBe(true);
   });
 });
 
 describe('DateRange — подсказка на заблокированном поле окончания (KB-32)', () => {
-  it('endDate disabled + подпись при пустом startDate', () => {
+  it('endDate disabled + подпись «Сначала укажите дату начала» + aria-describedby', () => {
     render(<DateRange startDate="" endDate="" onStartDateChange={() => {}} onEndDateChange={() => {}} />);
     expect(input('end-date')).toBeDisabled();
     const hint = screen.getByTestId('end-date-hint');
@@ -66,9 +120,9 @@ describe('DateRange — подсказка на заблокированном �
     expect(input('end-date').getAttribute('min')).toBe('2026-10-10');
   });
 
-  it('оба поля показывают ISO YYYY-MM-DD', () => {
+  it('оба поля показывают ДД.ММ.ГГГГ', () => {
     render(<DateRange startDate="2026-10-10" endDate="2026-10-12" onStartDateChange={() => {}} onEndDateChange={() => {}} />);
-    expect(input('start-date').value).toBe('2026-10-10');
-    expect(input('end-date').value).toBe('2026-10-12');
+    expect(input('start-date').value).toBe('10.10.2026');
+    expect(input('end-date').value).toBe('12.10.2026');
   });
 });

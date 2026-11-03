@@ -49,6 +49,8 @@ export default defineConfig({
         'src/utils/format.ts',
         // новые компоненты, выделенные в Фазе 10
         'src/components/ProductTable.tsx',
+        // bugs-products-catalog п.4: мультиселект фильтра категорий
+        'src/components/CustomMultiSelect.tsx',
         // BL-63 (аудит 02.11.2026, подзадача 7): алерты на токенах — зона изменения
         'src/components/ProblemDetailAlert.tsx',
         'src/components/TripForm.tsx',
@@ -64,6 +66,8 @@ export default defineConfig({
         'src/utils/checklist.ts',
         'src/components/AmountInput.tsx',
         'src/components/ManualItemsModal.tsx',
+        // bugs-trip-menu-stage п.4: общий блок «поиск + кол-во + добавить»
+        'src/components/ProductAddRow.tsx',
         // Fix-3 (список 26.10, итерация 3): готовность похода, ввод чека суммой, CSV-экспорт
         'src/utils/readiness.ts',
         'src/utils/checkInput.ts',
@@ -100,7 +104,6 @@ export default defineConfig({
         'src/components/TripDaysList.tsx',
         'src/components/TripShoppingTab.tsx',
         'src/components/TripDayShoppingTab.tsx',
-        'src/components/TripPersonTab.tsx',
         'src/components/ExclusionCheckbox.tsx',
         'src/components/Modal.tsx',
         // plan plans/2026-10-31-ux-audit-cleanup-dedup.md (R5): новые компоненты

@@ -240,11 +240,12 @@ export default function LoginPage() {
           <div className="mt-6 pt-6" style={{ borderTop: '1px solid var(--line)' }}>
             <p className="text-xs text-center mb-3" style={{ color: 'var(--text-2)' }}>Демо-доступ:</p>
             <div className="grid grid-cols-2 gap-2 text-xs">
-              <div className="rounded-lg p-2" style={{ background: 'var(--bg-2)' }}>
+              {/* bugs-app-ui п.1: text-center — карточки согласованы с заголовком «Демо-доступ» */}
+              <div className="rounded-lg p-2 text-center" style={{ background: 'var(--bg-2)' }}>
                 <p className="font-medium" style={{ color: 'var(--text-1)' }}>Админ</p>
                 <p style={{ color: 'var(--text-2)' }}>admin@provision.app</p>
               </div>
-              <div className="rounded-lg p-2" style={{ background: 'var(--bg-2)' }}>
+              <div className="rounded-lg p-2 text-center" style={{ background: 'var(--bg-2)' }}>
                 <p className="font-medium" style={{ color: 'var(--text-1)' }}>Пользователь</p>
                 <p style={{ color: 'var(--text-2)' }}>user@provision.app</p>
               </div>

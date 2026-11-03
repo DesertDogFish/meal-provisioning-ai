@@ -112,3 +112,52 @@ describe('TripsPage — создание похода открывает пох�
     expect(screen.queryByTestId('loc')).toBeNull();
   });
 });
+
+describe('TripsPage — «Создать поход» в шапке и «Отчёт» в kebab (bugs-trip-list пп.1–2)', () => {
+  const tripsFixture = [{
+    id: 't1', userId: '1', name: 'Поход один', startDate: '2026-07-01', endDate: '2026-07-03',
+    defaultPeople: 2, days: [{ id: 'd1', dayDate: '2026-07-01', meals: [{}, {}] }],
+    progress: { stage: 'shopping', meals: 2, checklistTotal: 5, facts: 0, factsTotal: 5, totalCost: 1000, costPerPerson: 500 },
+  }];
+
+  const renderList = () =>
+    render(
+      <MemoryRouter initialEntries={['/trips']}>
+        <AuthProvider>
+          <ToastProvider>
+            <Routes>
+              <Route path="/trips" element={<TripsPage />} />
+              <Route path="/trips/:id/report" element={<LocationProbe />} />
+            </Routes>
+          </ToastProvider>
+        </AuthProvider>
+      </MemoryRouter>
+    );
+
+  beforeEach(() => {
+    (api.get as any).mockImplementation((path: string) => {
+      if (path === '/auth/me') return Promise.resolve({ id: '1', email: 'a@b.c', role: 'ADMIN' });
+      if (path === '/trips') return Promise.resolve(tripsFixture);
+      if (/\/checklist-bought$/.test(path)) return Promise.resolve([]);
+      return Promise.reject({ status: 404, detail: `unexpected ${path}` });
+    });
+  });
+
+  it('п.1: кнопка создания — в шапке, без класса позиционирования trips-fab (FAB удалён)', async () => {
+    renderList();
+    const btn = await screen.findByRole('button', { name: 'Создать поход' });
+    expect(btn.className).not.toContain('trips-fab');
+    // кнопка — потомок шапки (flex-контейнер заголовка), как на Продуктах/Блюдах
+    expect(btn.closest('div.flex')).toBeTruthy();
+  });
+
+  it('п.2: в kebab карточки есть пункт «Отчёт» — клик ведёт на /trips/:id/report', async () => {
+    renderList();
+    await screen.findByTestId('trip-progress-t1');
+    fireEvent.click(screen.getByTestId('trip-card-kebab-t1'));
+    const report = await screen.findByTestId('trip-report-t1');
+    expect(report.textContent).toContain('Отчёт');
+    fireEvent.click(report);
+    await waitFor(() => expect(screen.getByTestId('loc').textContent).toBe('/trips/t1/report'));
+  });
+});

@@ -41,16 +41,13 @@ export interface ProductRow {
 }
 
 /**
- * Подпись колонки «Цена синхронизирована» (ProductResponse.priceSyncStatus):
- * SYNCED — действующая цена пришла из локальной копии ЕМИСС;
- * NO_DATA — продукт привязан, но цен позиции в копии нет (нужна синхронизация);
- * NOT_LINKED — источник цены не выбран, цену ведёт человек.
+ * Подпись колонки «Синхронизация» (bugs-products-catalog п.2, решение владельца
+ * 03.11.2026): текстовые статусы (PRICE_SYNC_LABELS «да, из ЕМИСС» / «нет данных» /
+ * «не привязан») зашумляли витрину — удалены. В колонке остаётся ТОЛЬКО иконка
+ * линка со счётчиком продуктов на позиции ЕМИСС (KB-8): есть привязка (emisCode) —
+ * иконка показывается всегда, и при одной ссылке; нет привязки — ячейка пустая.
+ * Статусы NOT_LINKED/BOUND по-прежнему доступны через фильтр «Интеграция».
  */
-export const PRICE_SYNC_LABELS: Record<string, { label: string; tone: 'ok' | 'warn' | 'dim' }> = {
-  SYNCED: { label: 'да, из ЕМИСС', tone: 'ok' },
-  NO_DATA: { label: 'нет данных', tone: 'warn' },
-  NOT_LINKED: { label: 'не привязан', tone: 'dim' },
-};
 
 export type ProductSortKey = 'name' | 'category' | 'unit' | 'price' | 'usage';
 
@@ -183,70 +180,60 @@ export function ProductTable({ products, filters, onEdit, onDelete, onResetFilte
     sortKey === key ? (sortDir === 'asc' ? ' ↑' : ' ↓') : '';
 
   const formatPrice = (price?: { value: number; currency: string; source: string }) => {
-    if (!price) return <span className="chip-delta fire">нет цены</span>;
+    // bugs-products-catalog п.3: в поле «Цена» — только сумма. Чип источника
+    // («ЕМИСС»/«API»/«ручная») убран; цены нет — ячейка пустая (поиск таких
+    // позиций — фильтр «Цена: есть/нет»).
+    if (!price) return null;
     return (
       <span style={{ color: 'var(--text)' }}>
         {/* Plan plans/2026-10-30-mobile-workflow-ux.md (подзадача 9): цены везде «₽» —
             «30 RUB» в карточках продуктов был контент-баг (виден и на десктопе). */}
         <span className="keep-num">{price.value.toLocaleString('ru-RU')}{'\u00A0'}₽</span>
-        <span className="chip-delta dim" style={{ marginLeft: '8px' }}>
-          {/* Источник цены: ROSSTAT — применила синхронизация ЕМИСС, MANUAL — ввёл человек,
-              API — машинный источник (legacy-строки, V28). Значения 'OFF' больше нет. */}
-          {price.source === 'ROSSTAT' ? 'ЕМИСС' : price.source === 'API' ? 'API' : 'ручная'}
-        </span>
       </span>
     );
   };
 
   /**
-   * Колонка «цена синхронизирована»: короткий ответ + подсказка с позицией ЕМИСС
-   * и датой действующей цены (боль «даже цена не высвечивается»).
+   * Колонка «Синхронизация» (bugs-products-catalog п.2): только иконка линка со
+   * счётчиком продуктов на позиции ЕМИСС. Нет привязки (NOT_LINKED / нет emisCode)
+   * — ячейка ПУСТАЯ. Иконка показывается при любом числе ссылок, включая одну
+   * (раньше — только от двух, emisSharedCount > 0). NO_DATA отдельно не
+   * подсвечивается: у такой позиции просто пустая цена (п.3).
    */
   const formatSyncStatus = (product: ProductRow) => {
     const status = String(product.priceSyncStatus ?? (product.emisCode ? 'NO_DATA' : 'NOT_LINKED'));
-    const meta = PRICE_SYNC_LABELS[status] ?? { label: status, tone: 'dim' as const };
-    const tone =
-      meta.tone === 'ok' ? { background: 'var(--success-soft)', color: 'var(--wave-300)' }
-      : meta.tone === 'warn' ? { background: 'color-mix(in srgb, var(--amber-500) 14%, transparent)', color: 'var(--amber-300)' }
-      : { background: 'color-mix(in srgb, var(--line-strong) 28%, transparent)', color: 'var(--muted)' };
-    const title = product.emisName
-      ? `ЕМИСС: ${product.emisName}${product.currentPrice?.effectiveFrom ? ` · цена от ${product.currentPrice.effectiveFrom}` : ''}`
-      : 'Источник цены не выбран — цену ведёт человек';
-    // KB-8: значок «привязка уже используется» — одна и та же позиция ЕМИСС у нескольких
-    // продуктов законна (сухое молоко и сухие сливки → 1115), но цена синхронизации придёт
-    // одна на всех, и админ должен это видеть, а не узнавать из цифр в походе.
-    // Решение владельца 29.10.2026: значок НЕ сужаем (показываем на всех продуктах с общей
-    // позицией), но добавляем СЧЁТЧИК — сколько всего продуктов сидит на этой позиции.
-    // Бэкенд отдаёт число ДРУГИХ продуктов (ProductService.emisSharedWithOthers = всего − 1),
-    // поэтому здесь +1: админу важно «нас тут трое», а не «кроме меня ещё двое».
+    const linked = Boolean(product.emisCode) && status !== 'NOT_LINKED';
+    if (!linked) return null;
+    // KB-8: одна и та же позиция ЕМИСС у нескольких продуктов законна (сухое молоко
+    // и сухие сливки → 1115), но цена синхронизации придёт одна на всех, и админ
+    // должен это видеть. Бэкенд отдаёт число ДРУГИХ продуктов
+    // (ProductService.emisSharedWithOthers = всего − 1), поэтому здесь +1:
+    // админу важно «нас тут трое», а не «кроме меня ещё двое».
     const shared = product.emisSharedCount ?? 0;
     const linkedTotal = shared + 1;
+    const shareText = `Позицию ЕМИСС используют ${linkedTotal} ${productsWord(linkedTotal)} (включая этот): цена синхронизации придёт одна на всех`;
+    const title = product.emisName
+      ? `ЕМИСС: ${product.emisName}${product.currentPrice?.effectiveFrom ? ` · цена от ${product.currentPrice.effectiveFrom}` : ''}. ${shareText}`
+      : shareText;
     return (
-      <span className="inline-flex items-center gap-1.5">
-        <span className="chip-delta" style={tone} title={title} data-testid="price-sync-status">
-          {meta.label}
+      <span
+        title={title}
+        aria-label={`Позицию ЕМИСС используют ${linkedTotal} ${productsWord(linkedTotal)}`}
+        data-testid="emis-shared-badge"
+        style={{
+          color: 'var(--amber-300, var(--muted))',
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 2,
+        }}
+      >
+        <Share2 size={14} />
+        <span
+          data-testid="emis-shared-count"
+          style={{ fontSize: 'var(--fs-caption)', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}
+        >
+          {linkedTotal}
         </span>
-        {shared > 0 && (
-          <span
-            title={`Позицию ЕМИСС используют ${linkedTotal} ${productsWord(linkedTotal)} (включая этот): цена синхронизации придёт одна на всех`}
-            aria-label={`Позицию ЕМИСС используют ${linkedTotal} ${productsWord(linkedTotal)}`}
-            data-testid="emis-shared-badge"
-            style={{
-              color: 'var(--amber-300, var(--muted))',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 2,
-            }}
-          >
-            <Share2 size={14} />
-            <span
-              data-testid="emis-shared-count"
-              style={{ fontSize: 'var(--fs-caption)', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}
-            >
-              {linkedTotal}
-            </span>
-          </span>
-        )}
       </span>
     );
   };
@@ -291,7 +278,7 @@ export function ProductTable({ products, filters, onEdit, onDelete, onResetFilte
               Цена{sortIndicator('price')}
             </th>
             <th className="text-left px-4 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: 'var(--fs-caption)' }}>
-              Синхронизация цены
+              Синхронизация
             </th>
             <th
               className="text-right px-4 py-3 font-bold cursor-pointer"
@@ -349,10 +336,11 @@ export function ProductTable({ products, filters, onEdit, onDelete, onResetFilte
               </td>
               <td className="no-label px-4 py-3 text-right" data-label="">
                 <div className="flex items-center justify-end gap-1">
+                  {/* bugs-app-ui п.5: иконки действий — класс .icon-action (рыжий),
+                      без инлайнового цвета и JS-ховеров */}
                   <button
                     onClick={() => onEdit(product)}
-                    className="p-1.5 rounded transition-colors touch-hit"
-                    style={{ color: 'var(--muted)' }}
+                    className="icon-action p-1.5 rounded touch-hit"
                     title="Правка"
                     aria-label={`Правка: ${product.name}`}
                   >
@@ -360,8 +348,7 @@ export function ProductTable({ products, filters, onEdit, onDelete, onResetFilte
                   </button>
                   <button
                     onClick={() => onDelete(product)}
-                    className="p-1.5 rounded transition-colors touch-hit"
-                    style={{ color: 'var(--muted)' }}
+                    className="icon-action p-1.5 rounded touch-hit"
                     title="Удалить"
                     aria-label={`Удалить: ${product.name}`}
                   >

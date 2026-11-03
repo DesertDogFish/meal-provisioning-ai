@@ -1,13 +1,13 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Mountain, Calendar, Users, Trash2, Edit2, Check } from 'lucide-react';
+import { Plus, Mountain, Calendar, Users, Trash2, Edit2, Check, FileDown } from 'lucide-react';
 import { useToast } from '../components/ToastProvider';
 import { TripForm, type TripFormData } from '../components/TripForm';
 import { useConfirm } from '../components/ConfirmDialog'; // Fix-6 (п.7): красивые подтверждения
 import { KebabMenu } from '../components/KebabMenu';
 import { api } from '../api/client';
 import { loadBought, refreshBoughtFromServer, BOUGHT_SYNC_SOFT_TIMEOUT_MS } from '../utils/tripStaging';
-import { tripReadiness } from '../utils/readiness';
+import { tripReadiness, earliestOpenStage } from '../utils/readiness';
 import type { Trip } from '../types/tripDetail'; // cleanup-п.9: общий тип (включая progress, п.8)
 import { STAGES, type StageId } from '../components/StageTabBar';
 import { getTripCover } from '../utils/getTripCover';
@@ -68,21 +68,24 @@ function buildProgressMap(tripsData: Trip[]): Record<string, TripProgress> {
     const readiness = tripReadiness({
       mealsCount: meals, checklistTotal, boughtCount: bought, factCount: facts, checksTotal: factsTotal,
     });
-    let stage: StageId;
+    // bugs-trip-list п.3: этап — по самой ранней незакрытой части воркфлоу
+    // (utils/readiness, единый источник), а не «по нарастающей»: введённые чеки
+    // при незакрытой закупке/магазине больше не рисуют заполненную полосу.
+    const stage: StageId = earliestOpenStage(readiness, { checklistTotal });
     let done = 0;
     let total = 0;
-    if (readiness.checks !== 'none' || facts > 0) {
-      stage = 'checks'; done = facts; total = factsTotal;
-    } else if (bought > 0) {
-      stage = 'store'; done = bought; total = checklistTotal;
-    } else if (checklistTotal > 0) {
-      stage = 'shopping'; done = 0; total = checklistTotal;
-    } else {
+    if (stage === 'menu') {
       // transparency-п.6: знаменатель «days×3» (норма «3 приёма в день») —
-      // выдуманная: у этапа ① нет реального знаменателя. Готовность ① = «меню
+      // выдуманный: у этапа ① нет реального знаменателя. Готовность ① = «меню
       // собрано» (≥1 приём, как в utils/readiness); карточка показывает
       // «N приёмов» БЕЗ процентной полосы (полоса — только у ②③④).
-      stage = 'menu'; done = meals; total = 0;
+      done = meals; total = 0;
+    } else if (stage === 'shopping') {
+      done = 0; total = 0;
+    } else if (stage === 'store') {
+      done = bought; total = checklistTotal;
+    } else {
+      done = facts; total = factsTotal;
     }
     next[trip.id] = {
       stage,
@@ -320,9 +323,11 @@ export default function TripsPage() {
           </p>
         </div>
         {/* Fix-7 (п.5): иконочная кнопка создания — единый паттерн всех шапок.
-            Подзадача 4: текстовый блок шапки с min-w-0 — FAB не перекрывает подзаголовок. */}
+            Подзадача 4: текстовый блок шапки с min-w-0 — кнопка не перекрывает подзаголовок.
+            bugs-trip-list п.1: мобильный FAB (.trips-fab, position:fixed внизу) удалён —
+            плюс остаётся справа вверху, как на Продуктах/Блюдах. */}
         <Button variant="primary" iconOnly onClick={() => setShowCreate(true)}
-                className="trips-fab touch-hit"
+                className="touch-hit"
                 aria-label="Создать поход" title="Создать поход" icon={<Plus size={18} />} />
       </div>
 
@@ -385,6 +390,16 @@ export default function TripsPage() {
                     label={`Действия с походом: ${trip.name}`}
                     testId={`trip-card-kebab-${trip.id}`}
                     items={[
+                      {
+                        id: 'report',
+                        label: 'Отчёт',
+                        icon: <FileDown size={16} aria-hidden />,
+                        testId: `trip-report-${trip.id}`,
+                        // bugs-trip-list п.2: финальный отчёт из kebab карточки.
+                        // Связь: после внедрения этапа ⑤ (tasks/trip-workflow-redesign.md)
+                        // пункт должен вести на ?stage=ready — согласовать при реализации.
+                        onSelect: () => navigate(`/trips/${trip.id}/report`),
+                      },
                       {
                         id: 'edit',
                         label: 'Редактировать',

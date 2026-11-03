@@ -78,8 +78,10 @@ describe('TripsPage — гидрация отметок «взято» с сер
 
     renderPage();
 
+    // bugs-trip-list п.3: этап — по самой ранней незакрытой части: закупка собрана
+    // (5 поз.), ничего не взято → ③ «Магазин» 0/5 (раньше показывалось «Закупка 5 поз.»)
     const row = await screen.findByTestId('trip-progress-t1');
-    await waitFor(() => expect(row.textContent).toContain('Закупка'));
-    expect(row.textContent).toContain('5 поз.');
+    await waitFor(() => expect(row.textContent).toContain('Магазин'));
+    expect(row.textContent).toContain('0/5');
   });
 });

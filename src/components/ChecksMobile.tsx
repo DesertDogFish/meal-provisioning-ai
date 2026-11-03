@@ -1,22 +1,25 @@
 /**
  * План plans/2026-10-31-ux-audit-cleanup-dedup.md (п.5): мобильные компактные
  * строки чека, выделенные из PriceOverridesTab (R8/R9). «[✓] Сахар · взяли
- * 192,5 г · 13 ₽ → [факт ₽] · [бейдж −2%]»; детали (нужно/взяли/исключить) —
- * раскрытие по тапу. Данные — props из общей view-модели (ChecksModel).
+ * 192,5 г → [стоимость ₽]»; детали (нужно/взяли/исключить) — раскрытие по тапу.
+ * Данные — props из общей view-модели (ChecksModel).
+ *
+ * bugs-trip-checks-stage пп.3–4,6–7 (владелец 03.11.2026): «план N ₽» и бейдж
+ * отклонения из строки удалены; словарь — «стоимость» вместо «факт»; строка без
+ * введённого чека подсвечена .row-attention; под шапкой — липкий поиск
+ * (общий ListSearch, R8 — тот же контрол, что в чеклисте ③ и таблице ④).
  */
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { formatAmount } from '../utils/calculations';
-import { formatRub, formatUnitPrice } from '../utils/format';
+import { formatUnitPrice } from '../utils/format';
 import { NumberField } from './NumberField';
 import FreeAmountInput from './FreeAmountInput';
+import ListSearch from './ListSearch';
 import { neededAsActual, type ActualAmount } from '../utils/checkUnits';
 import { enteredCheckTotal } from '../utils/checkInput';
 import { checklistRowKey } from '../utils/checklist';
 import type { ChecklistActual } from '../utils/tripStaging';
-import {
-  calculateDelta, formatDelta, getDeltaChipClass,
-  type CheckRow, type CheckGroup,
-} from './ChecksModel';
+import type { CheckRow, CheckGroup } from './ChecksModel';
 
 export interface ChecksMobileProps {
   groups: CheckGroup[];
@@ -35,17 +38,31 @@ export interface ChecksMobileProps {
 
 export function ChecksMobile(props: ChecksMobileProps) {
   const { groups, factCount, factsTotal } = props;
+  // п.7: поиск скоупится на карточку — десктоп-таблица (ChecksTable) в DOM
+  // одновременно и несёт те же data-search-id
+  const cardRef = useRef<HTMLDivElement>(null);
+  const searchItems = groups.flatMap(g => g.items.map(i => ({ id: i.ingredientId, text: i.ingredientName })));
   return (
-    <div className="md:hidden rounded-xl overflow-hidden max-w-3xl" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }} data-testid="checks-mobile">
+    <div ref={cardRef} className="md:hidden rounded-xl overflow-hidden max-w-3xl" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }} data-testid="checks-mobile">
       <div className="px-4 py-3 flex items-center justify-between" style={{ background: 'var(--elev)' }}>
         <b style={{ color: 'var(--text)' }}>Ввести чек</b>
         <span className="keep-num cap" style={{ color: 'var(--text-2)' }}>{factCount} из {factsTotal}</span>
+      </div>
+      {/* п.7: липкий поиск — прилипает к верху списка и виден при прокрутке */}
+      <div className="checklist-sticky px-4 py-2" style={{ background: 'var(--bg-1)' }}>
+        <ListSearch
+          items={searchItems}
+          scope={cardRef}
+          testId="checks-search"
+          ariaLabel="Поиск по чеку"
+          placeholder="Найти позицию в чеке…"
+        />
       </div>
       {groups.map(group => (
         <MobileGroupRows key={group.category} category={group.category} {...props} items={group.items} />
       ))}
       <p className="px-4 py-3 cap" style={{ color: 'var(--text-2)' }}>
-        Тап по строке — ввести или поправить факт. Детали (нужно/взяли/исключить) — в раскрытии строки.
+        Тап по строке — ввести или поправить стоимость. Детали (нужно/взяли/исключить) — в раскрытии строки.
       </p>
     </div>
   );
@@ -107,8 +124,8 @@ function MobileCheckRow(props: MobileCheckRowProps) {
   const [open, setOpen] = useState(false);
   const [entering, setEntering] = useState(false);
   const actualTotal = enteredCheckTotal(item.enteredUnitPrice, item.totalAmount);
-  const actualCostView = actualTotal ?? item.actualCost;
-  const delta = calculateDelta(item.plannedCost, actualCostView);
+  // п.6: чек по позиции ещё не введён — строка требует внимания
+  const needsAttention = !excluded && actualTotal == null;
   return (
     <div style={{ opacity: excluded ? 0.45 : 1 }} data-testid={`checkline-${item.ingredientId}`}>
       {/* KB-31 (UX-осмотр 31.10, п.4): строка больше НЕ <button>. Раньше внешняя
@@ -120,7 +137,7 @@ function MobileCheckRow(props: MobileCheckRowProps) {
           index.css), а чекбокс и ввод факта — СОСЕДИ с .checkline__hit
           (position:relative + z-index) поверх этой хит-зоны. Тап по строке
           по-прежнему раскрывает детали, но DOM валиден и клавиатура честная. */}
-      <div className="checkline">
+      <div className={`checkline${needsAttention ? ' row-attention' : ''}`} data-search-id={item.ingredientId}>
         <div className="checkline__top">
           {/* UX-осмотр 31.10 (п.7): чекбокс 22×22 — промах пальцем. Хит-зону
               даёт обёртка-<label> .check-hit (≥40px на pointer:coarse); псевдоэлемент
@@ -153,15 +170,14 @@ function MobileCheckRow(props: MobileCheckRowProps) {
           </span>
         </div>
         <div className="checkline__fact">
-          <span className="keep-pair">план <b className="keep-num" style={{ color: 'var(--text-2)' }}>{formatRub(item.plannedCost)}</b></span>
-          <span aria-hidden>→</span>
+          {/* пп.3–4: «план N ₽» и бейдж отклонения удалены — только стоимость */}
           <span className="checkline__hit inline-flex items-center gap-2">
             {actualTotal != null ? (
               <NumberField
                 value={actualTotal}
                 size="sm"
                 stepRef={item.plannedCost}
-                placeholder="факт, ₽"
+                placeholder="стоимость, ₽"
                 disabled={!canEnterCheck}
                 onCommit={v => onCommitActualTotal(item, v)}
                 testId={`actual-input-${item.ingredientId}`}
@@ -176,18 +192,9 @@ function MobileCheckRow(props: MobileCheckRowProps) {
                 aria-label={`Ввести сумму из чека: ${item.ingredientName}`}
                 onClick={() => { setOpen(true); setEntering(true); }}
               >
-                + факт, ₽
+                + стоимость, ₽
               </button>
             )}
-          </span>
-          {/* UX-осмотр 31.10 (п.10): до введённого чека отклонения нет — «—»,
-              а не «0%» (факт тогда равен копии плана) */}
-          <span
-            className={`chip-delta keep-num ${actualTotal != null ? getDeltaChipClass(delta) : 'dim'}`}
-            data-testid={`row-delta-${item.ingredientId}`}
-            title={actualTotal != null ? undefined : 'Чек по позиции не введён — отклонение появится после ввода факта'}
-          >
-            {actualTotal != null ? formatDelta(delta) : '—'}
           </span>
         </div>
       </div>
@@ -228,7 +235,7 @@ function MobileCheckRow(props: MobileCheckRowProps) {
               value={null}
               size="sm"
               stepRef={item.plannedCost}
-              placeholder="факт, ₽"
+              placeholder="стоимость, ₽"
               disabled={!canEnterCheck}
               onCommit={v => onCommitActualTotal(item, v)}
               testId={`actual-input-mobile-${item.ingredientId}`}

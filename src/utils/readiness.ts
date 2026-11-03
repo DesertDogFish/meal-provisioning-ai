@@ -60,3 +60,24 @@ export function tripReadiness(f: ReadinessFacts): TripReadiness {
     canEnterCheck: f.boughtCount > 0,
   };
 }
+
+/**
+ * bugs-trip-list п.3: id этапов воркфлоу (совпадает со StageId StageTabBar).
+ */
+export type WorkflowStage = 'menu' | 'shopping' | 'store' | 'checks';
+
+/**
+ * Текущий этап похода = САМАЯ РАННЯЯ незакрытая часть воркфлоу (R8: единый
+ * источник для списка походов и страницы похода, чтобы не разъезжались).
+ * Раньше TripsPage выбирал этап «по нарастающей» (самому продвинутому признаку),
+ * из-за чего введённые чеки при незакрытой закупке рисовали заполненную полосу.
+ *
+ * menu не готов → ①; иначе чеклист пуст → ②; иначе не всё взято → ③;
+ * иначе → ④ (и «вводятся», и «готово» — финальный этап).
+ */
+export function earliestOpenStage(r: TripReadiness, f: Pick<ReadinessFacts, 'checklistTotal'>): WorkflowStage {
+  if (r.menu !== 'done') return 'menu';
+  if (f.checklistTotal === 0) return 'shopping';
+  if (r.store !== 'done') return 'store';
+  return 'checks';
+}

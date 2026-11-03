@@ -19,6 +19,13 @@ describe('KebabMenu — действия карточки/чеклиста че�
     expect(screen.getByTestId('km-b').className).toContain('danger');
   });
 
+  it('триггер ⋮ — .icon-action (рыжий), без инлайнового серого (bugs-app-ui п.5)', () => {
+    render(<KebabMenu label="Действия" items={items()} />);
+    const trigger = screen.getByTestId('kebab-menu');
+    expect(trigger.classList.contains('icon-action')).toBe(true);
+    expect(trigger.getAttribute('style') ?? '').not.toContain('muted');
+  });
+
   it('пункт вызывается один раз, меню закрывается, фокус возвращается на ⋮', () => {
     const its = items();
     render(<KebabMenu label="Действия" items={its} />);

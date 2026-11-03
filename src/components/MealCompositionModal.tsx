@@ -3,6 +3,7 @@ import { Info, Plus, Undo2, X } from 'lucide-react';
 import Modal from './Modal';
 import { Button } from './Button';
 import RecipeSearchSelect from './RecipeSearchSelect';
+import ProductAddRow from './ProductAddRow';
 import CustomSelect from './CustomSelect'; // Fix-6 (п.1)
 import { useConfirm } from './ConfirmDialog'; // Fix-6 (п.7)
 import { ProblemDetailAlert } from './ProblemDetailAlert';
@@ -764,42 +765,29 @@ export default function MealCompositionModal({
               );
             })()}
 
-            {/* Строка добавления продукта (§2.3: количество — поле рядом с поиском, обязательное).
-                U9 (список багов 25.10): «всё наляпано» — блок собран в панель с
-                аккуратной сеткой поиск/количество/кнопка (на узких экранах — в колонку);
-                подтверждения (новый продукт / merge) живут в той же панели. */}
+            {/* Строка добавления продукта. bugs-trip-menu-stage п.4: «составной
+                искатель» (заголовок панели + сетка лейблов «Найти продукт в
+                справочнике»/«Кол-во») заменён на общий простой блок ProductAddRow —
+                одна строка «поиск + кол-во + добавить», как в создании блюда
+                (RecipeIngredientsEditor); подтверждения (новый продукт / merge)
+                остаются под строкой в той же панели. */}
             <div className="mt-4 p-3 rounded-lg" style={{ background: 'var(--elev)', border: '1px solid var(--border)' }}>
-              <span className="block text-xs font-semibold mb-2" style={{ color: 'var(--text)' }}>
-                Добавить продукт к приёму
-              </span>
-              <div className="grid grid-cols-1 sm:grid-cols-[minmax(200px,1fr)_110px_auto] gap-2 items-end">
-                <div>
-                  <label className="block text-xs mb-1" style={{ color: 'var(--muted)' }}>Найти продукт в справочнике</label>
-                  <RecipeSearchSelect
-                    value={addSelected}
-                    onChange={(v) => { setAddSelected(v); setMergeAsk(null); }}
-                    onQueryChange={setAddQuery}
-                    options={products.map((p) => ({ value: String(p.id), label: p.name, hint: `${p.category} · ${humanize(1, p.unit)}` }))}
-                    placeholder="Название продукта…"
-                    emptyText="Не найдено"
-                    ariaLabel="Поиск продукта"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs mb-1" style={{ color: 'var(--muted)' }}>Кол-во</label>
-                  {/* U31: AmountInput — г/мл для KG/L, шт/уп для PCS/PACK */}
-                  <AmountInput
-                    value={addAmount}
-                    unit={products.find((p) => String(p.id) === addSelected)?.unit ?? 'PCS'}
-                    onChange={(v) => { setAddAmount(v); setMergeAsk(null); }}
-                    ariaLabel="Количество добавляемого продукта"
-                    testId="add-amount"
-                  />
-                </div>
-                <Button variant="primary" size="sm" onClick={() => { if (addSelected) addProduct(false); else offerFreeTextAdd(); }} aria-label="Добавить продукт в состав">
-                  <Plus size={14} /> Добавить
-                </Button>
-              </div>
+              <ProductAddRow
+                options={products.map((p) => ({ value: String(p.id), label: p.name, hint: `${p.category} · ${humanize(1, p.unit)}` }))}
+                value={addSelected}
+                onValueChange={(v) => { setAddSelected(v); setMergeAsk(null); }}
+                onQueryChange={setAddQuery}
+                amount={addAmount}
+                onAmountChange={(v) => { setAddAmount(v); setMergeAsk(null); }}
+                unit={products.find((p) => String(p.id) === addSelected)?.unit ?? 'PCS'}
+                searchAriaLabel="Поиск продукта"
+                searchPlaceholder="Название продукта…"
+                searchEmptyText="Не найдено"
+                amountAriaLabel="Количество добавляемого продукта"
+                amountTestId="add-amount"
+                onAdd={() => { if (addSelected) addProduct(false); else offerFreeTextAdd(); }}
+                addAriaLabel="Добавить продукт в состав"
+              >
 
             {/* Инлайн-предложение добавить набранное название как новый продукт (§2.2) */}
             {addAsk && (
@@ -840,6 +828,7 @@ export default function MealCompositionModal({
                 <Button variant="ghost" size="sm" onClick={() => setMergeAsk(null)}>Отмена</Button>
               </div>
             )}
+              </ProductAddRow>
             </div>
 
             {/* Итоги live (§2.2) */}

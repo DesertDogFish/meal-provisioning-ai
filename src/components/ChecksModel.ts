@@ -7,6 +7,7 @@
  * формула на оба этапа; компонент не делает сетевых запросов вовсе.
  */
 import { compareRu } from '../utils/rowSort';
+import { enteredCheckTotal } from '../utils/checkInput';
 import type { TripView } from '../utils/tripDerived';
 
 /** Строка чека (форма прежнего ShoppingItem из PriceOverridesTab). */
@@ -117,19 +118,27 @@ export function checkTotals(rows: CheckRow[]): { totalPlanned: number; totalActu
   return { totalPlanned, totalActual };
 }
 
-export function calculateDelta(planned?: number | null, actual?: number | null): number {
-  if (!planned || !actual || planned === 0) return 0;
-  return ((actual - planned) / planned) * 100;
-}
+/* bugs-trip-checks-stage пп.2–3,5: calculateDelta/formatDelta/getDeltaChipClass
+   УДАЛЕНЫ — колонки «План ₽»/«Отклонение» и план-факт-сводки с этапа ④ сняты
+   (решение владельца 03.11.2026), потребителей у дельты не осталось. Отчёт
+   (TripReportPage) и печать (TripPrintPage) план/дельту показывают — они
+   считают их своей локальной логикой и не тронуты. */
 
-export function formatDelta(delta: number): string {
-  // «−0,0%» — ноль с минусом после округления; нормализуем в «0%»
-  const rounded = Math.round(delta * 10) / 10;
-  if (rounded === 0) return '0%';
-  return `${rounded > 0 ? '+' : ''}${rounded.toLocaleString('ru-RU', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
-}
-
-export function getDeltaChipClass(delta: number): string {
-  if (Math.abs(delta) < 0.001) return 'dim';
-  return delta > 0 ? 'fire' : 'ok';
+/**
+ * bugs-trip-checks-stage п.5: ЕДИНЫЙ «Итог» этапа ④ — сумма ВВЕДЁННЫХ чеков
+ * по неисключённым позициям. Пока ни одного чека не введено — null («нет
+ * данных»): план за факт не выдаётся, фолбэки effectiveCost не суммируются.
+ */
+export function enteredFactsTotal(rows: CheckRow[]): number | null {
+  let sum = 0;
+  let any = false;
+  for (const r of rows) {
+    if (r.excluded) continue;
+    const total = enteredCheckTotal(r.enteredUnitPrice, r.totalAmount);
+    if (total != null) {
+      sum += total;
+      any = true;
+    }
+  }
+  return any ? sum : null;
 }

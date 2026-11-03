@@ -1,14 +1,14 @@
-import { useEffect, useState } from 'react';
-import { PackagePlus, Plus, Trash2, X } from 'lucide-react';
+import { useState } from 'react';
+import { PackagePlus, Trash2, X } from 'lucide-react';
 import Modal from './Modal';
 import { Button } from './Button';
-import RecipeSearchSelect from './RecipeSearchSelect';
-import AmountInput from './AmountInput';
-import CustomSelect from './CustomSelect';
+import ProductAddRow from './ProductAddRow';
+// Fix-6 (п.13) → bugs-recipes-catalog п.5 (R8): создание продукта из свободного
+// ввода — общий компонент (тот же сценарий в редакторе блюда)
+import FreeProductCreate, { useProductCategories, normalizeProductName } from './FreeProductCreate';
 import { useToast } from './ToastProvider';
 import { useConfirm } from './ConfirmDialog'; // Fix-6 (п.7)
 import { addManualItem, deleteManualItem, type TripManualItem } from '../api/tripManualItems';
-import { api } from '../api/client';
 import { formatQty } from '../utils/format';
 import type { UnitOfMeasure } from '../types';
 
@@ -52,26 +52,12 @@ export default function ManualItemsModal({ tripId, dayId, dayLabel, items, produ
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
 
-  // Fix-6 (п.13): свободный ввод — «а если продукта нет в списке?»
+  // Fix-6 (п.13) → bugs-recipes-catalog п.5 (R8): free-text «создать продукт»
+  // вынесен в общий FreeProductCreate (его же использует редактор блюда);
+  // здесь остаются только запрос/опции; категории — общий хук (один запрос).
   const [addQuery, setAddQuery] = useState('');
-  const [showCreate, setShowCreate] = useState(false);
-  const [createUnit, setCreateUnit] = useState<UnitOfMeasure>('PCS');
-  const [createCategory, setCreateCategory] = useState('');
-  const [creating, setCreating] = useState(false);
   const [extraOptions, setExtraOptions] = useState<Array<{ value: string; label: string; hint?: string; unit?: UnitOfMeasure }>>([]);
-  const [categories, setCategories] = useState<Array<{ id: string; name: string }>>([]);
-  useEffect(() => {
-    if (!isAdmin) return;
-    let cancelled = false;
-    api.get<any>('/product-categories')
-      .then((res) => {
-        if (cancelled) return;
-        const list = Array.isArray(res) ? res : (res?.content ?? []);
-        setCategories(list.map((c: any) => ({ id: String(c.id), name: String(c.name ?? '') })));
-      })
-      .catch(() => { /* не-админ/офлайн — создание и так недоступно */ });
-    return () => { cancelled = true; };
-  }, [isAdmin]);
+  const categories = useProductCategories(isAdmin);
 
   const allOptions = [...extraOptions, ...products
     .filter(p => p.enabled !== false)
@@ -84,9 +70,8 @@ export default function ManualItemsModal({ tripId, dayId, dayLabel, items, produ
     ?? 'PCS';
   // предложение «добавить новый продукт»: запрос непустой, ничего не выбрано,
   // точного совпадения по имени в справочнике нет
-  const normalize = (t: string) => t.trim().toLowerCase().replace(/ё/g, 'е');
-  const q = normalize(addQuery);
-  const freeQuery = !selected && q.length >= 2 && !options.some(o => normalize(o.label).includes(q));
+  const q = normalizeProductName(addQuery);
+  const freeQuery = !selected && q.length >= 2 && !options.some(o => normalizeProductName(o.label).includes(q));
 
   const handleAdd = async () => {
     if (!selected || !(amount != null && amount > 0)) {
@@ -118,43 +103,6 @@ export default function ManualItemsModal({ tripId, dayId, dayLabel, items, produ
       onChanged();
     } catch (err: any) {
       showError(err?.detail || 'Не удалось удалить позицию');
-    }
-  };
-
-  /**
-   * Fix-6 (п.13): продукта нет в справочнике — завести (админ) и сразу выбрать.
-   * Паритет с MealCompositionModal.resolveFreeRows: check-name → существующий id;
-   * иначе POST /admin/products с выбранной категорией.
-   */
-  const handleCreateProduct = async () => {
-    const name = addQuery.trim();
-    if (!name) return;
-    setCreating(true);
-    try {
-      const chk = await api.get<any>(
-        `/admin/products/check-name?name=${encodeURIComponent(name)}&unit=${encodeURIComponent(createUnit)}`
-      ).catch(() => null);
-      let id: string;
-      if (chk?.duplicate && chk?.existingId != null) {
-        id = String(chk.existingId);
-      } else {
-        const categoryId = createCategory || categories[0]?.id;
-        if (!categoryId) {
-          showError('Не выбрана категория для нового продукта');
-          return;
-        }
-        const created = await api.post<any>('/admin/products', { name, unit: createUnit, categoryId: Number(categoryId) });
-        if (created?.id == null) throw new Error('Сервер не вернул id продукта');
-        id = String(created.id);
-      }
-      setExtraOptions(prev => prev.some(o => o.value === id) ? prev : [...prev, { value: id, label: name, hint: 'новый продукт', unit: createUnit }]);
-      setSelected(id);
-      setShowCreate(false);
-      setAddQuery('');
-    } catch (err: any) {
-      showError(err?.detail || err?.message || 'Не удалось завести продукт');
-    } finally {
-      setCreating(false);
     }
   };
 
@@ -198,8 +146,7 @@ export default function ManualItemsModal({ tripId, dayId, dayLabel, items, produ
                   type="button"
                   aria-label={`Удалить позицию: ${mi.ingredientName}`}
                   onClick={() => void handleDelete(mi.id, mi.ingredientName)}
-                  className="p-1 rounded transition-colors"
-                  style={{ color: 'var(--muted)' }}
+                  className="icon-action p-1 rounded touch-hit"
                 >
                   <Trash2 size={14} />
                 </button>
@@ -211,105 +158,63 @@ export default function ManualItemsModal({ tripId, dayId, dayLabel, items, produ
           <p className="text-sm mb-4" style={{ color: 'var(--muted)' }}>Пока ничего не добавлено.</p>
         )}
 
-        {/* Форма добавления */}
+        {/* Форма добавления. bugs-trip-menu-stage п.4: «составной искатель»
+            (label «Продукт из справочника» + поиск + сетка «Количество/Примечание»)
+            заменён на общий простой блок ProductAddRow — одна строка
+            «поиск + кол-во + добавить» без многоуровневых лейблов; free-text
+            «создать продукт» (Fix-6 п.13) остаётся доступным из того же поиска. */}
         <div className="space-y-3">
-          <div>
-            <label className="block text-xs mb-1" style={{ color: 'var(--muted)' }}>Продукт из справочника</label>
-            <RecipeSearchSelect
-              value={selected}
-              onChange={(v) => { setSelected(v); setAddQuery(''); setShowCreate(false); }}
-              onQueryChange={setAddQuery}
-              options={options}
-              placeholder="Найти продукт…"
-              emptyText="Не найдено"
-              ariaLabel="Продукт ручной позиции"
-            />
+          <ProductAddRow
+            options={options}
+            value={selected}
+            onValueChange={(v) => { setSelected(v); setAddQuery(''); }}
+            onQueryChange={setAddQuery}
+            amount={amount}
+            onAmountChange={setAmount}
+            unit={productUnit}
+            searchAriaLabel="Продукт ручной позиции"
+            searchPlaceholder="Найти продукт…"
+            searchEmptyText="Не найдено"
+            amountAriaLabel="Количество ручной позиции"
+            amountTestId="manual-amount"
+            onAdd={() => void handleAdd()}
+            addBusy={busy}
+            addAriaLabel="Добавить позицию"
+          >
             {options.length === 0 && (
               <p className="text-xs mt-1" style={{ color: 'var(--fire, #d97706)' }}>
                 Справочник продуктов недоступен — добавьте продукт в каталог (админ) и повторите.
               </p>
             )}
-            {/* Fix-6 (п.13): продукта нет в списке — предложить добавить (админ создаёт
-                в справочнике и позиция сразу выбирается; не-админу — подсказка) */}
+            {/* Fix-6 (п.13) → bugs-recipes-catalog п.5 (R8): продукта нет в списке —
+                общий блок создания (админ создаёт в справочнике, позиция сразу
+                выбирается; не-админу — подсказка). Тот же компонент, что в
+                редакторе блюда. */}
             {freeQuery && (
-              <div className="mt-2 rounded-lg px-3 py-2"
-                style={{ background: 'color-mix(in srgb, var(--wave-400) 8%, transparent)', border: '1px dashed var(--line-strong)' }}>
-                {!showCreate ? (
-                  isAdmin ? (
-                    <button type="button" className="text-xs font-bold underline-offset-2 hover:underline"
-                      style={{ color: 'var(--w1)' }}
-                      onClick={() => setShowCreate(true)}
-                      aria-label={`Добавить «${addQuery.trim()}» как новый продукт`}
-                      data-testid="manual-create-product">
-                      «{addQuery.trim()}» нет в справочнике — добавить как новый продукт
-                    </button>
-                  ) : (
-                    <p className="text-xs" style={{ color: 'var(--muted)' }}>
-                      «{addQuery.trim()}» нет в справочнике. Новые продукты добавляет администратор
-                      (вкладка «Продукты») — после этого позиция станет доступна.
-                    </p>
-                  )
-                ) : (
-                  <div className="flex flex-wrap items-end gap-2">
-                    <div>
-                      <label className="block text-xs mb-1" style={{ color: 'var(--muted)' }}>Единица</label>
-                      <CustomSelect
-                        value={createUnit}
-                        onChange={(v) => setCreateUnit(v as UnitOfMeasure)}
-                        options={[{ value: 'PCS', label: 'шт' }, { value: 'KG', label: 'кг' }, { value: 'L', label: 'л' }, { value: 'PACK', label: 'уп' }]}
-                        ariaLabel="Единица нового продукта"
-                      />
-                    </div>
-                    <div className="flex-1" style={{ minWidth: 140 }}>
-                      <label className="block text-xs mb-1" style={{ color: 'var(--muted)' }}>Категория</label>
-                      <CustomSelect
-                        value={createCategory}
-                        onChange={setCreateCategory}
-                        options={categories.map(c => ({ value: c.id, label: c.name }))}
-                        placeholder="Выберите категорию"
-                        ariaLabel="Категория нового продукта"
-                      />
-                    </div>
-                    <Button size="sm" variant="primary" disabled={creating} onClick={() => void handleCreateProduct()}>
-                      <Plus size={14} /> {creating ? 'Добавляем…' : 'Добавить'}
-                    </Button>
-                    <Button size="sm" variant="ghost" onClick={() => setShowCreate(false)}>Отмена</Button>
-                  </div>
-                )}
-              </div>
+              <FreeProductCreate
+                query={addQuery.trim()}
+                isAdmin={isAdmin}
+                categories={categories}
+                testId="manual-create-product"
+                onCreated={(np) => {
+                  setExtraOptions(prev => prev.some(o => o.value === np.id) ? prev : [...prev, { value: np.id, label: np.name, hint: 'новый продукт', unit: np.unit }]);
+                  setSelected(np.id);
+                  setAddQuery('');
+                }}
+              />
             )}
-          </div>
-          {/* Fix-4 (п.1): единая линия контролов — одинаковая высота (40px),
-              один радиус (--r-input), кнопка того же роста: больше нет «лесенки» */}
-          <div className="flex flex-wrap items-center gap-3">
-            <div>
-              <label className="block text-xs mb-1" style={{ color: 'var(--muted)' }}>Количество</label>
-              <AmountInput
-                value={amount}
-                unit={productUnit}
-                onChange={setAmount}
-                ariaLabel="Количество ручной позиции"
-                testId="manual-amount"
-              />
-            </div>
-            <div className="flex-1" style={{ minWidth: 160 }}>
-              <label className="block text-xs mb-1" style={{ color: 'var(--muted)' }}>Примечание (необязательно)</label>
-              <input
-                type="text"
-                value={note}
-                onChange={e => setNote(e.target.value)}
-                aria-label="Примечание к позиции"
-                placeholder="например, 1 на группу"
-                className="w-full px-3 outline-none text-sm"
-                style={{ background: 'var(--elev)', border: '1px solid var(--border)', color: 'var(--text)', height: 'var(--h-control, 40px)' }}
-              />
-            </div>
-            <Button variant="primary" onClick={() => void handleAdd()} disabled={busy} aria-label="Добавить позицию"
-                    className="self-end" style={{ height: 'var(--h-control, 40px)' }}>
-              {/* transparency-п.5: состояние «Добавляем…» до ответа сервера */}
-              <Plus size={14} /> {busy ? 'Добавляем…' : 'Добавить'}
-            </Button>
-          </div>
+          </ProductAddRow>
+          {/* Примечание — компактная строка без лейбла (aria-label + placeholder):
+              функциональность сохранена, «лесенки» из подписей нет */}
+          <input
+            type="text"
+            value={note}
+            onChange={e => setNote(e.target.value)}
+            aria-label="Примечание к позиции"
+            placeholder="Примечание (необязательно), например: 1 на группу"
+            className="w-full px-3 outline-none text-sm"
+            style={{ background: 'var(--elev)', border: '1px solid var(--border)', color: 'var(--text)', height: 'var(--h-control, 40px)' }}
+          />
         </div>
 
         <div className="modal-foot flex justify-end mt-5">

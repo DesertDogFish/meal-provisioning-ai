@@ -21,13 +21,6 @@ export interface TripShoppingTabProps {
   sortSpec: { field: ShoppingSortField; dir: SortDir };
   /** клик по заголовку: то же поле — смена направления, другое — asc */
   onSortField: (field: ShoppingSortField) => void;
-  /** «Итого» — единый источник с KPI шапки (shoppingTotalFinal) */
-  total: number;
-  /** сколько позиций исключено (soft-disable) */
-  excludedCount: number;
-  /** Fix-7 (п.28): позиции без плановой цены и без введённого чека */
-  hasMissingPrices: boolean;
-  missingIngredients: string[];
   /** ключи исключений для чекбоксов */
   excluded: ReadonlySet<string>;
   onToggleExcluded: (key: string) => void;
@@ -36,22 +29,25 @@ export interface TripShoppingTabProps {
 }
 
 export function TripShoppingTab({
-  rows, sortSpec, onSortField, total, excludedCount, hasMissingPrices,
-  missingIngredients, excluded, onToggleExcluded, onGoToMenu,
+  rows, sortSpec, onSortField, excluded, onToggleExcluded, onGoToMenu,
 }: TripShoppingTabProps) {
   return (
     <div className="space-y-3 max-w-4xl">
-      {/* Fix-5 (п.2): единая шапка вкладки — тот же TabHeader, что на остальных */}
+      {/* Fix-5 (п.2): единая шапка вкладки — тот же TabHeader, что на остальных.
+          bugs-trip-shopping-stage пп.1–2: этап ② — «предварительная закупка» без
+          пугающих предупреждений: «Итого: N ₽» и «⚠️ нет цен» из шапки убраны
+          (итог и отсутствующие цены живут в KPI сводки TripSummaryPanel),
+          добавлена подсказка про исключение позиций «уже есть дома». */}
       <TabHeader
-        title="Закупка на поход"
+        title="Предварительная закупка"
         subtitle={
-          <>
-            Итого: {formatRub(total)}{excludedCount > 0 ? ` (без ${excludedCount} искл.)` : ''}
-            {' · '}позиций: {rows.length}
-            {hasMissingPrices && (
-              <span style={{ color: 'var(--fire)' }}> · ⚠️ нет цен: {missingIngredients.join(', ')}</span>
-            )}
-          </>
+          <span className="keep-pair">
+            позиций: {rows.length}
+            <InfoTip
+              label="Про исключение позиций"
+              text="Продукты и товары, которые уже есть дома, можно исключить из закупки: снимите галочку «В расчёт» — строка останется в списке (полупрозрачной), но перестанет учитываться в сумме и не попадёт в список магазина."
+            />
+          </span>
         }
       />
       {/* navigation-п.3: пустая закупка — не «пустая таблица без слов», а выход на ① */}

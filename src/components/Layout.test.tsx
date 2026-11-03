@@ -122,3 +122,20 @@ describe('Layout — мобильный drawer (подзадача 9)', () => {
     expect(baseElement.querySelector('header.app-topbar')).toBeTruthy();
   });
 });
+
+describe('Layout — мобильный topbar без логотипа (bugs-app-ui п.4)', () => {
+  it('в мобильном topbar нет BrandMark и слова «Провиант»; бургер остаётся, справа — распорка', () => {
+    const { baseElement } = renderLayout();
+    const topbar = baseElement.querySelector('header.app-topbar');
+    expect(topbar).toBeTruthy();
+    expect(topbar!.querySelector('.brand-mark')).toBeNull();
+    expect(topbar!.querySelector('h1')).toBeNull();
+    expect(topbar!.textContent).not.toContain('Провиант');
+    // бургер на месте
+    expect(topbar!.querySelector('button[aria-label="Открыть меню навигации"]')).toBeTruthy();
+    // распорка flex-1 прижимает бейдж режима и тогл темы к правому краю
+    expect(topbar!.querySelector('.flex-1')).toBeTruthy();
+    // десктопный сайдбар логотип СОХРАНЯЕТ
+    expect(baseElement.querySelector('aside')!.textContent).toContain('Провиант');
+  });
+});

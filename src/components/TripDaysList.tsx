@@ -14,6 +14,7 @@ import { mealsCountLabel } from '../utils/text';
 import { manualForDay, manualForTrip } from '../utils/manualItems';
 import type { TripManualItem } from '../api/tripManualItems';
 import { Button } from './Button';
+import InfoTip from './InfoTip';
 import TripMealCard from './TripMealCard';
 import type { AddMealDayContext } from './AddMealModal';
 import type { MenuDay } from '../types';
@@ -84,12 +85,11 @@ export function TripDaysList(props: TripDaysListProps) {
                     {tripDay.peopleOverride} чел.
                   </span>
                 )}
+                {/* bugs-app-ui п.5: иконки действий — .icon-action (рыжие), без инлайновых
+                    цветов и JS-ховеров; bugs-trip-menu-stage п.3: «Добавить продукт или товар» */}
                 <button
                   onClick={(e) => { e.stopPropagation(); onStartEditDay(tripDay.id, tripDay.peopleOverride?.toString() || ''); }}
-                  className="p-1.5 rounded transition-colors touch-hit"
-                  style={{ color: 'var(--muted)' }}
-                  onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--w1)'; e.currentTarget.style.background = 'color-mix(in srgb, var(--wave-400) 10%, transparent)'; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--muted)'; e.currentTarget.style.background = 'transparent'; }}
+                  className="icon-action p-1.5 rounded touch-hit"
                   title="Изменить количество людей"
                   aria-label="Изменить количество людей"
                 >
@@ -97,21 +97,15 @@ export function TripDaysList(props: TripDaysListProps) {
                 </button>
                 <button
                   onClick={(e) => { e.stopPropagation(); onAddDayProduct(tripDay.id, new Date(tripDay.dayDate).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })); }}
-                  className="p-1.5 rounded transition-colors touch-hit"
-                  style={{ color: 'var(--muted)' }}
-                  onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--w1)'; e.currentTarget.style.background = 'color-mix(in srgb, var(--wave-400) 10%, transparent)'; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--muted)'; e.currentTarget.style.background = 'transparent'; }}
-                  title="Добавить продукт к дню (не блюдо)"
-                  aria-label="Добавить продукт к дню"
+                  className="icon-action p-1.5 rounded touch-hit"
+                  title="Добавить продукт или товар"
+                  aria-label="Добавить продукт или товар"
                 >
                   <PackagePlus size={16} />
                 </button>
                 <button
                   onClick={(e) => { e.stopPropagation(); onAddMeal({ dayId: tripDay.id, dayDate: tripDay.dayDate, dayIndex: idx + 1 }); }}
-                  className="p-1.5 rounded transition-colors touch-hit"
-                  style={{ color: 'var(--muted)' }}
-                  onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--w1)'; e.currentTarget.style.background = 'color-mix(in srgb, var(--wave-400) 10%, transparent)'; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--muted)'; e.currentTarget.style.background = 'transparent'; }}
+                  className="icon-action p-1.5 rounded touch-hit"
                   title="Добавить приём пищи"
                   aria-label="Добавить приём пищи"
                 >
@@ -171,8 +165,7 @@ export function TripDaysList(props: TripDaysListProps) {
                         <button
                           onClick={() => void onDeleteManual(mi.id, mi.ingredientName)}
                           aria-label={`Удалить позицию: ${mi.ingredientName}`}
-                          className="p-0.5 rounded"
-                          style={{ color: 'var(--muted)' }}
+                          className="icon-action p-0.5 rounded"
                         >
                           <X size={11} />
                         </button>
@@ -196,21 +189,27 @@ export function TripDaysList(props: TripDaysListProps) {
               <PackagePlus size={18} style={{ color: 'var(--w1)' }} />
             </span>
             <div>
-              <p className="font-semibold" style={{ color: 'var(--text)' }}>На весь поход</p>
-              <p className="text-xs" style={{ color: 'var(--muted)' }}>
-                Ручные позиции: аптечка, антисептик, топливо… {manualForTrip(manualItems).length > 0 ? `· ${manualForTrip(manualItems).length} поз.` : ''}
+              {/* bugs-trip-menu-stage пп.1–2: заголовок приглашает добавить, когда
+                  позиций ещё нет; пояснение про ручные позиции — в InfoTip, счётчик
+                  «N поз.» сохранён в заголовке */}
+              <p className="font-semibold flex items-center gap-1.5 keep-pair" style={{ color: 'var(--text)' }}>
+                {manualForTrip(manualItems).length > 0
+                  ? <>Продукты и товары <span className="text-xs font-normal" style={{ color: 'var(--muted)' }}>· {manualForTrip(manualItems).length} поз.</span></>
+                  : 'Добавить дополнительные продукты и товары…'}
+                <InfoTip
+                  label="Что добавляют к походу"
+                  text="Ручные позиции: аптечка, антисептик, топливо… — продукты и товары, которые берутся на весь поход, а не в конкретный день. Они попадают в закупку и в чек наравне с ингредиентами блюд."
+                />
               </p>
             </div>
           </div>
-          {/* Fix-6 (п.2): та же иконка-кнопка, что у дня («добавить продукт»), — единообразно */}
+          {/* Fix-6 (п.2): та же иконка-кнопка, что у дня («добавить продукт»), — единообразно;
+              bugs-trip-menu-stage п.3 — та же формулировка, bugs-app-ui п.5 — .icon-action */}
           <button
             onClick={onAddTripProduct}
-            className="p-1.5 rounded transition-colors touch-hit"
-            style={{ color: 'var(--muted)' }}
-            onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--w1)'; e.currentTarget.style.background = 'color-mix(in srgb, var(--wave-400) 10%, transparent)'; }}
-            onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--muted)'; e.currentTarget.style.background = 'transparent'; }}
-            title="Добавить продукт к походу (не блюдо)"
-            aria-label="Добавить продукт к походу"
+            className="icon-action p-1.5 rounded touch-hit"
+            title="Добавить продукт или товар (на весь поход)"
+            aria-label="Добавить продукт или товар (на весь поход)"
           >
             <PackagePlus size={16} />
           </button>
@@ -226,8 +225,7 @@ export function TripDaysList(props: TripDaysListProps) {
                 <button
                   onClick={() => void onDeleteManual(mi.id, mi.ingredientName)}
                   aria-label={`Удалить позицию: ${mi.ingredientName}`}
-                  className="p-0.5 rounded"
-                  style={{ color: 'var(--muted)' }}
+                  className="icon-action p-0.5 rounded"
                 >
                   <X size={11} />
                 </button>

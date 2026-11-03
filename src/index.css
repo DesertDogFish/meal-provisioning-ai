@@ -1321,25 +1321,10 @@ input.compact-input {
   .api-badge--inline { padding-inline: var(--sp-2); }
 }
 
-/* UX-осмотр 31.10 (подзадача 7): «Создать поход» на мобильном — FAB в правом
-   нижнем углу (конвенция), на десктопе остаётся иконочной кнопкой в шапке.
-   В DOM элемент ОДИН (меняется только позиционирование), поэтому e2e-локаторы
-   и accessible name не ломаются. Низ поднят над .scroll-top-btn (18px + 44px),
-   чтобы плавающие кнопки не перекрывались. */
-@media (max-width: 767px) {
-  .trips-fab {
-    position: fixed;
-    right: calc(16px + env(safe-area-inset-right, 0px));
-    bottom: calc(74px + env(safe-area-inset-bottom, 0px));
-    z-index: calc(var(--z-nav) - 6);
-    width: 56px;
-    height: 56px;
-    border-radius: 50%;
-    box-shadow: var(--shadow-1);
-  }
-  /* список походов не прячется под FAB */
-  .trips-list { padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px)); }
-}
+/* bugs-trip-list п.1: мобильный FAB «Создать поход» (position:fixed bottom) УДАЛЁН —
+   владелец: плюс должен быть справа вверху, как на остальных страницах
+   (Продукты/Блюда — иконочная кнопка в шапке). Компенсация padding-bottom у
+   .trips-list больше не нужна. */
 
 /* Хит-зона чекбокса: обёртка-<label> нужного размера, сам чекбокс — прежний
    визуально. Клик по любому месту обёртки переключает input (нативный label). */
@@ -2272,17 +2257,50 @@ textarea {
   color: var(--text-1);
 }
 .who-owes__row + .who-owes__row { border-top: 1px solid color-mix(in srgb, var(--line) 60%, transparent); }
-.planfact-strip {
+/* bugs-trip-checks-stage п.2: .planfact-strip УДАЛЁН (сирота) — липкая сводка
+   «План · Факт · Δ» снята с этапа ④ решением владельца 03.11.2026. */
+
+/* bugs-trip-checks-stage п.6: строка, требующая внимания (не отмечена «взято»
+   в чеклисте ③ / не введён чек в ④) — мягкая янтарная подложка + левый акцент.
+   Закрытые строки подсветку теряют; контраст токена --amber-500 сверен с BL-62
+   (8–10% подложка не спорит с текстом --text-1 в обеих темах). */
+.row-attention {
+  background: color-mix(in srgb, var(--amber-500) 8%, var(--surface));
+  box-shadow: inset 3px 0 0 var(--amber-500);
+}
+[data-theme="light"] .row-attention {
+  background: color-mix(in srgb, var(--amber-500) 10%, var(--surface));
+}
+
+/* bugs-trip-checks-stage п.7: общий липкий поиск по списку (ListSearch —
+   магазин ③ и чек ④, R8). Хозяин ставит контрол в зону .checklist-sticky. */
+.list-search {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: var(--sp-2) var(--sp-4);
-  padding: var(--sp-3) var(--sp-4);
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
   border-radius: var(--r-md);
-  background: var(--surface);
-  border: 1px solid var(--border);
-  font: 600 var(--fs-body)/1.2 var(--font-body);
-  color: var(--text-2);
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+}
+.list-search__input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--text-1);
+  font: 500 var(--fs-body)/1.2 var(--font-body);
+  padding: var(--sp-1) 0;
+}
+.list-search__input::placeholder { color: var(--text-3); }
+.list-search:focus-within { border-color: var(--amber-500); }
+/* Совпадение поиска: строка, к которой ListSearch прокрутил (scrollIntoView
+   center) и перевёл фокус — янтарный контур, виден в обеих темах. */
+.search-hit {
+  outline: 2px solid var(--amber-500);
+  outline-offset: -2px;
+  border-radius: var(--r-sm);
 }
 @media (min-width: 768px) {
   .checkline-mobile { display: none; }
@@ -2469,4 +2487,22 @@ textarea {
 @media print {
   .login-art, .login-art-veil,
   .trip-header-glass__art { display: none !important; }
+}
+
+/* --- bugs-app-ui п.5: иконки действий — «рыжие» (янтарная ступень палитры) ---
+   Мелкие иконки добавить/править/удалить были серыми var(--muted) и сливались;
+   владелец хочет видеть их главными элементами взаимодействия. Токен --amber-500
+   сам переключается по теме (dark #FF9E2C / light #D96A10). Hover/active —
+   --amber-600 solid (фикс-паттерн coding-rules «Контраст в светлой теме»:
+   amber-600 на чистом bg-1 = 4.50:1 ✅, color-mix в light НЕ использовать).
+   Никаких инлайновых JS-hover'ов (onMouseEnter/Leave) — только CSS. */
+.icon-action {
+  color: var(--amber-500);
+  transition: color .15s ease, background-color .15s ease;
+}
+.icon-action:hover { color: var(--amber-600); }
+.icon-action:active { color: var(--amber-600); }
+.icon-action:focus-visible {
+  outline: 2px solid var(--amber-500);
+  outline-offset: 2px;
 }

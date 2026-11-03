@@ -1,4 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
+// bugs-recipes-catalog пп.4–5: подсказка категории — InfoTip; свободный ввод
+// продукта — общий блок создания (вынесен из ManualItemsModal, R8)
+import InfoTip from './InfoTip';
+import FreeProductCreate, { useProductCategories, normalizeProductName } from './FreeProductCreate';
 import { createPortal } from 'react-dom';
 import { Plus, Trash2, X } from 'lucide-react';
 import { Button } from './Button';
@@ -55,6 +59,8 @@ interface Row {
 interface Props {
   recipe: EditableRecipe | null; // null = создание
   categories: string[];
+  /** bugs-recipes-catalog п.5: админ может завести продукт прямо из редактора */
+  isAdmin?: boolean;
   onClose: () => void;
   onSaved: () => void;
 }
@@ -80,11 +86,13 @@ export function parseAmount(raw: string): number | null {
 
 let rowSeq = 1;
 
-export default function RecipeEditorModal({ recipe, categories, onClose, onSaved }: Props) {
+export default function RecipeEditorModal({ recipe, categories, isAdmin = false, onClose, onSaved }: Props) {
   const { showError, showSuccess } = useToast();
 
   const [products, setProducts] = useState<EditorProduct[]>([]);
   const [productsLoading, setProductsLoading] = useState(true);
+  // bugs-recipes-catalog п.5: категории справочника — для формы создания продукта
+  const productCategories = useProductCategories(isAdmin);
 
   const [name, setName] = useState(recipe?.name ?? '');
   const [mealType, setMealType] = useState<MealType>(recipe?.mealType ?? 'LUNCH');
@@ -309,9 +317,17 @@ export default function RecipeEditorModal({ recipe, categories, onClose, onSaved
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div>
-              <label className="block text-sm mb-1" style={{ color: 'var(--muted)' }} htmlFor="recipe-category">
-                Категория
-              </label>
+              {/* bugs-recipes-catalog п.4: подсказка «Свободный ввод…» ломала
+                  вёрстку на фуллскрине — переведена в тултип рядом с лейблом.
+                  InfoTip ВНЕ <label>: кнопка-триггер — labelable-элемент, внутри
+                  лейбла она получила бы тот же accessible name, что и поле
+                  (дубль для скринридера и getByLabelText). */}
+              <div className="flex items-center gap-1 mb-1">
+                <label className="text-sm" style={{ color: 'var(--muted)' }} htmlFor="recipe-category">
+                  Категория
+                </label>
+                <InfoTip text="Свободный ввод: выберите существующую или впишите свою." label="Про ввод категории" />
+              </div>
               <div className="relative" ref={catAnchorRef}>
                 <input
                   id="recipe-category"
@@ -321,7 +337,6 @@ export default function RecipeEditorModal({ recipe, categories, onClose, onSaved
                   onFocus={() => setCatOpen(true)}
                   onBlur={() => setTimeout(() => setCatOpen(false), 150)}
                   placeholder="Супы, Каши, Второе…"
-                  aria-describedby="recipe-category-hint"
                   className="w-full px-3 py-2.5 rounded-lg outline-none"
                   style={inputStyle}
                 />
@@ -363,9 +378,6 @@ export default function RecipeEditorModal({ recipe, categories, onClose, onSaved
                   document.body,
                 )}
               </div>
-              <p id="recipe-category-hint" className="text-xs mt-1" style={{ color: 'var(--muted)' }}>
-                Свободный ввод: выберите существующую или впишите свою.
-              </p>
             </div>
             <div>
               <label className="block text-sm mb-1" style={{ color: 'var(--muted)' }} htmlFor="recipe-cook">
@@ -417,6 +429,11 @@ export default function RecipeEditorModal({ recipe, categories, onClose, onSaved
               {rows.map(row => {
                 const product = row.ingredientId ? productById.get(String(row.ingredientId)) : undefined;
                 const suggestions = openPicker === row.key ? suggestionsFor(row) : [];
+                // bugs-recipes-catalog п.5: свободный ввод без совпадения (≥2 символов)
+                // — предложение завести продукт (админ) / подсказка (не-админ)
+                const nq = normalizeProductName(row.query);
+                const freeRow = !row.ingredientId && nq.length >= 2
+                  && !products.some(p => normalizeProductName(p.name).includes(nq));
                 return (
                   <div key={row.key} className="relative grid grid-cols-[1fr_auto_36px] gap-2 items-center">
                     <div className="relative">
@@ -481,6 +498,24 @@ export default function RecipeEditorModal({ recipe, categories, onClose, onSaved
                     >
                       <Trash2 size={15} />
                     </button>
+                    {freeRow && (
+                      <div className="col-span-3">
+                        <FreeProductCreate
+                          query={row.query.trim()}
+                          isAdmin={isAdmin}
+                          categories={productCategories}
+                          testId="recipe-create-product"
+                          onCreated={(np) => {
+                            // продукт сразу попадает в справочник редактора и выбирается в строке
+                            setProducts(prev => prev.some(x => String(x.id) === np.id)
+                              ? prev
+                              : [...prev, { id: np.id, name: np.name, unit: np.unit, kcalPer100g: null, pieceWeightG: null }]);
+                            updateRow(row.key, { ingredientId: np.id, query: np.name });
+                            setOpenPicker(null);
+                          }}
+                        />
+                      </div>
+                    )}
                   </div>
                 );
               })}

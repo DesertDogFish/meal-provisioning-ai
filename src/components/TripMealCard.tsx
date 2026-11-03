@@ -62,14 +62,12 @@ export function TripMealCard({ meal, tripMeal, onOpenComposition, onDelete, onVi
           <span className="text-xs" style={{ color: 'var(--muted)' }}>({meal.servings} {servingsWord(meal.servings)})</span>
         </div>
         <div className="flex items-center gap-1">
-          {/* FORM-meal-composition-spec §2.2: кнопка-иконка «Состав» на карточке приёма → Модалка B */}
+          {/* FORM-meal-composition-spec §2.2: кнопка-иконка «Состав» на карточке приёма → Модалка B.
+              bugs-app-ui п.5: иконки действий — .icon-action (рыжие), без инлайновых JS-ховеров */}
           <button
             onClick={() => tripMeal && onOpenComposition(tripMeal.id)}
             disabled={!tripMeal}
-            className="p-1 rounded transition-colors"
-            style={{ color: 'var(--muted)' }}
-            onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--w1)'; }}
-            onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--muted)'; }}
+            className="icon-action p-1 rounded touch-hit"
             title="Состав приёма"
             aria-label={`Состав приёма: ${meal.recipeName ?? ''}`}
           >
@@ -77,10 +75,7 @@ export function TripMealCard({ meal, tripMeal, onOpenComposition, onDelete, onVi
           </button>
           <button
             onClick={() => tripMeal && onDelete(tripMeal.id, meal.recipeName ?? 'приём')}
-            className="p-1 rounded transition-colors"
-            style={{ color: 'var(--muted)' }}
-            onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--danger)'; }}
-            onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--muted)'; }}
+            className="icon-action p-1 rounded touch-hit"
             title={`Удалить приём: ${meal.recipeName ?? ''}`}
             aria-label={`Удалить приём пищи: ${meal.recipeName ?? ''}`}
           >
@@ -88,7 +83,9 @@ export function TripMealCard({ meal, tripMeal, onOpenComposition, onDelete, onVi
           </button>
         </div>
       </div>
-      <div className="flex flex-wrap gap-2 mt-2">
+      {/* bugs-trip-menu-stage п.5: на узком экране чипы состава — «простыня»;
+          скрыты до md (состав и так виден тапом на блюдо — RecipeViewSheet) */}
+      <div className="hidden md:flex flex-wrap gap-2 mt-2">
         {/* U30: добавленные в походе позиции видны рядом со «старыми»
             ингредиентами (бейдж «+»), замены подписываются источником */}
         {meal.ingredients.map((ing, i) => (

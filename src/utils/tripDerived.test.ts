@@ -113,15 +113,15 @@ describe('deriveTripView — меню и базовая закупка', () => {
     expect(dayRow.unitLabel).toBe('кг');
   });
 
-  it('«на человека»: суммы и сортировка по алфавиту (U28/U33)', () => {
+  // bugs-trip-shopping-stage п.5: вид «На человека» удалён — personSummary больше
+  // не часть view-модели; KPI «на человека» (costPerDefaultPerson/costPerPersonMeal)
+  // остаются в tripSummary.
+  it('KPI «на человека» в tripSummary (U33) сохранены', () => {
     const v = deriveTripView(input());
     expect(v.realPeople).toBe(2);
     expect(v.tripSummary.costPerDefaultPerson).toBe(75); // 150 / 2
     expect(v.tripSummary.costPerPersonMeal).toBe(37.5); // 150 / (2 дня × 2 чел.)
-    const names = v.personSummary.map(p => p.ingredientName);
-    expect(names).toEqual([...names].sort((a, b) => a.localeCompare(b, 'ru')));
-    expect(names).toContain('Гречка');
-    expect(rowByName(v.personSummary, 'Гречка').costPerDefaultPerson).toBe(50); // 100 / 2
+    expect((v as any).personSummary).toBeUndefined();
   });
 });
 
@@ -133,8 +133,6 @@ describe('deriveTripView — чек (draftOverrides) и исключения', (
     expect(t.effectiveCost).toBe(30); // 30 × 1 шт — факт × текущее количество
     expect(v.shoppingTotalFinal).toBe(130); // 100 + 30
     expect(v.factCount).toBe(1);
-    const p = rowByName(v.personSummary, 'Тушёнка');
-    expect(p.costPerDefaultPerson).toBe(15); // 30 × (1/2 чел.)
   });
 
   it('введённый чек делает позицию «с ценой» — «нет цен» её больше не пугает (Fix-7 п.28)', () => {
@@ -150,8 +148,6 @@ describe('deriveTripView — чек (draftOverrides) и исключения', (
     expect(rowByName(v.visibleShopping, 'Тушёнка').excluded).toBe(true);
     expect(v.includedShoppingFinal.map(i => i.ingredientName)).not.toContain('Тушёнка');
     expect(v.shoppingTotalFinal).toBe(100);
-    // calculatePersonSummary получает тот же набор исключений — строка уходит целиком
-    expect(v.personSummary.map(p => p.ingredientName)).not.toContain('Тушёнка');
   });
 
   it('по-дневное исключение `дата::id` снимает количество только этого дня (Fix-2 п.5)', () => {

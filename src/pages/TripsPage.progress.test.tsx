@@ -72,26 +72,56 @@ describe('TripsPage — прогресс из ответа списка (cleanup
     expect(boughtTripIds).toHaveLength(new Set(boughtTripIds).size); // все tripId уникальны
   });
 
-  it('карточка ② «Закупка»: этап и позиции из серверного прогресса', async () => {
+  it('карточка ③ «Магазин»: самая ранняя незакрытая часть — закупка собрана, не взято ничего (0/5)', async () => {
     renderPage();
     const row = await screen.findByTestId('trip-progress-t1');
-    expect(row.textContent).toContain('Закупка');
-    expect(row.textContent).toContain('5 поз.');
+    expect(row.textContent).toContain('Магазин');
+    expect(row.textContent).toContain('0/5');
   });
 
-  it('карточка ④ «Чеки»: facts/factsTotal из серверного прогресса', async () => {
+  it('карточка t2: чеки введены (2/3), но ничего не взято → этап ③ «Магазин» 0/3, а не «Чеки»', async () => {
     renderPage();
     const row = await screen.findByTestId('trip-progress-t2');
-    expect(row.textContent).toContain('Чеки');
-    expect(row.textContent).toContain('2/3');
+    expect(row.textContent).toContain('Магазин');
+    expect(row.textContent).toContain('0/3');
+    expect(row.textContent).not.toContain('Чеки');
   });
 
-  it('локальные отметки «взято» уточняют этап shopping → store (2/5)', async () => {
+  it('локальные отметки «взято» уточняют прогресс этапа ③ (2/5)', async () => {
     setBought('t1', new Set(['i1@1000', 'i2@2000']));
     renderPage();
     const row = await screen.findByTestId('trip-progress-t1');
     expect(row.textContent).toContain('Магазин');
     expect(row.textContent).toContain('2/5');
+  });
+});
+
+describe('TripsPage — прогресс по самой ранней незакрытой части (bugs-trip-list п.3)', () => {
+  const checksAheadTrip = [{
+    id: 'x1', userId: '1', name: 'Поход чеки впереди', startDate: '2026-07-01', endDate: '2026-07-02',
+    defaultPeople: 2, days: [{ id: 'dx', dayDate: '2026-07-01', meals: [{}] }],
+    // все чеки введены (4/4), но закупка не закрыта (взято 1 из 4):
+    // старая логика «по нарастающей» рисовала ПОЛНУЮ полосу этапа ④
+    progress: { stage: 'checks', meals: 1, checklistTotal: 4, facts: 4, factsTotal: 4, totalCost: 800, costPerPerson: 400 },
+  }];
+
+  beforeEach(() => {
+    (api.get as any).mockImplementation((path: string) => {
+      if (path === '/auth/me') return Promise.resolve({ id: '1', email: 'a@b.c', role: 'ADMIN' });
+      if (path === '/trips') return Promise.resolve(checksAheadTrip);
+      return Promise.reject({ status: 404, detail: `unexpected ${path}` });
+    });
+    setBought('x1', new Set(['i1@100']));
+  });
+
+  it('facts>0, bought<checklistTotal → stage=«Магазин», полоса НЕ полная', async () => {
+    renderPage();
+    const row = await screen.findByTestId('trip-progress-x1');
+    expect(row.textContent).toContain('Магазин');
+    expect(row.textContent).not.toContain('Чеки');
+    const bar = row.querySelector('.trip-card__bar > span') as HTMLElement | null;
+    expect(bar).toBeTruthy();
+    expect(bar!.style.width).not.toBe('100%');
   });
 });
 
@@ -116,12 +146,31 @@ describe('TripsPage — честный прогресс этапа ① (transpar
     });
   });
 
-  it('2 приёма за 4 дня — НЕ «2/12»: «2 приёма» и без процентной полосы', async () => {
+  // bugs-trip-list п.3: семантика «по нижней границе» — меню t3 собрано (2 приёма),
+  // а список закупки пуст → самая ранняя незакрытая часть воркфлоу = этап ②.
+  // Знаменатель «2/12» (дни×3) по-прежнему не выдумывается.
+  it('меню собрано, закупка пуста → этап ② «Закупка»: «0 поз.», НЕ «2/12»', async () => {
     renderPage();
     const row = await screen.findByTestId('trip-progress-t3');
-    expect(row.textContent).toContain('Меню');
-    expect(row.textContent).toContain('2 приёма');
+    expect(row.textContent).toContain('Закупка');
+    expect(row.textContent).toContain('0 поз.');
     expect(row.textContent).not.toContain('2/12');
+  });
+
+  it('меню НЕ собрано (0 приёмов) → этап ① «Меню» без процентной полосы', async () => {
+    (api.get as any).mockImplementation((path: string) => {
+      if (path === '/auth/me') return Promise.resolve({ id: '1', email: 'a@b.c', role: 'ADMIN' });
+      if (path === '/trips') return Promise.resolve([{
+        ...menuTrip[0], id: 't4', name: 'Пустое меню',
+        days: [{ id: 'd41', dayDate: '2026-09-01', meals: [] }],
+        progress: { stage: 'menu', meals: 0, checklistTotal: 0, facts: 0, factsTotal: 0, totalCost: 0, costPerPerson: 0 },
+      }]);
+      return Promise.reject({ status: 404, detail: `unexpected ${path}` });
+    });
+    renderPage();
+    const row = await screen.findByTestId('trip-progress-t4');
+    expect(row.textContent).toContain('Меню');
+    expect(row.textContent).toContain('0 приёмов');
     expect(row.querySelector('.trip-card__bar')).toBeNull();
   });
 });

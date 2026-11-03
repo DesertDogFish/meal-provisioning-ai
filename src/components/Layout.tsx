@@ -219,9 +219,11 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           <button ref={menuButtonRef} className="ibtn" onClick={() => setSidebarOpen(true)} aria-label="Открыть меню навигации" aria-expanded={sidebarOpen} aria-controls="app-nav">
             <Menu size={24} />
           </button>
-          <BrandMark size={28} />
-          {/* Слово-логотип уступает место бейджу режима на очень узких экранах */}
-          <h1 className="text-lg font-bold logo-word flex-1 min-w-0 hidden min-[400px]:block" style={{ fontFamily: 'var(--font-display)', color: 'var(--text-1)' }}>Провиант</h1>
+          {/* bugs-app-ui п.4: логотип-знак и слово «Провиант» убраны из мобильной
+              шапки — на узком экране они съедали место. Брендинг живёт в сайдбаре
+              (десктоп) и в drawer-меню; распорка flex-1 прижимает бейдж режима и
+              тогл темы к правому краю. */}
+          <div className="flex-1" aria-hidden="true" />
           <ApiModeBadge inline />
           <ThemeToggle />
         </header>

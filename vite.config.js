@@ -84,6 +84,26 @@ function pwaAssets() {
 
 export default defineConfig({
   plugins: [react(), tailwindcss(), copyDesignPackAssets(), pwaAssets()],
+  build: {
+    rollupOptions: {
+      output: {
+        /**
+         * BL-47 / bugs-app-ui п.3: react-datepicker и date-fns (его единственная
+         * зависимость-потребитель — DatePicker) вынесены в отдельный кешируемый
+         * chunk «datepicker», чтобы календарная библиотека не раздувала index-чанк
+         * приложения и переиспользовалась между сборками.
+         */
+        manualChunks(id) {
+          if (
+            id.includes("node_modules/react-datepicker") ||
+            id.includes("node_modules/date-fns")
+          ) {
+            return "datepicker";
+          }
+        },
+      },
+    },
+  },
   server: {
     host: "0.0.0.0",
     port: 5173,

@@ -9,12 +9,13 @@
  *   готовность) — чистый модуль `utils/tripDerived.ts`;
  * - презентация — компоненты `TripActions` (шапка), `TripSummaryPanel`
  *   (KPI + готовность), `TripDaysList`/`TripMealCard` (меню),
- *   `TripShoppingTab`, `TripDayShoppingTab`, `TripPersonTab`, `ExclusionCheckbox`;
+ *   `TripShoppingTab`, `TripDayShoppingTab`, `ExclusionCheckbox`;
  * - здесь остались только layout, переключатель этапов и модалки.
  *
  * Мобильный воркфлоу (30.10.2026): прежние 6 равноправных вкладок стали
- * 4 этапами; «Закупка по дням» и «На человека» — виды списка внутри этапа
- * «Закупка» (локальный state `shopView`); этап живёт в URL (?stage=);
+ * 4 этапами; «Закупка по дням» — вид списка внутри этапа «Закупка» (локальный
+ * state `shopView`; вид «На человека» вырезан — bugs-trip-shopping-stage п.5);
+ * этап живёт в URL (?stage=);
  * на мобильном навигация — нижний таб-бар + степпер (`StageTabBar`).
  */
 import { useState } from 'react';
@@ -34,7 +35,6 @@ import TripSummaryPanel from '../components/TripSummaryPanel';
 import TripDaysList from '../components/TripDaysList';
 import TripShoppingTab from '../components/TripShoppingTab';
 import TripDayShoppingTab from '../components/TripDayShoppingTab';
-import TripPersonTab from '../components/TripPersonTab';
 import StageTabBar, { type StageId } from '../components/StageTabBar';
 import { StageNextCta } from '../components/StageNextCta';
 import { RecipeViewSheet } from '../components/RecipeViewSheet';
@@ -91,10 +91,10 @@ export default function TripDetailPage() {
     { id: 'checks', label: 'Чеки и итог', icon: <Receipt size={16} /> },
   ];
 
+  // bugs-trip-shopping-stage п.5: вид «На человека» вырезан (владелец: больше не нужен)
   const shopViews: { id: ShoppingView; label: string }[] = [
     { id: 'total', label: 'На поход' },
     { id: 'days', label: 'По дням' },
-    { id: 'person', label: 'На человека' },
   ];
 
   return (
@@ -201,10 +201,6 @@ export default function TripDetailPage() {
               rows={view.sortedShopping}
               sortSpec={d.sortSpec}
               onSortField={d.handleSortField}
-              total={view.shoppingTotalFinal}
-              excludedCount={d.shoppingExcluded.size}
-              hasMissingPrices={view.tripSummary.hasMissingPrices}
-              missingIngredients={view.tripSummary.missingIngredients}
               excluded={d.shoppingExcluded}
               onToggleExcluded={d.toggleShoppingExcluded}
               onGoToMenu={() => setActiveTab('menu')}
@@ -217,15 +213,6 @@ export default function TripDetailPage() {
               priceOf={view.manualPriceOf}
               excluded={d.shoppingExcluded}
               onToggleExcluded={d.toggleShoppingExcluded}
-              onGoToMenu={() => setActiveTab('menu')}
-            />
-          )}
-          {shopView === 'person' && (
-            <TripPersonTab
-              trip={trip}
-              realPeople={view.realPeople}
-              tripSummary={view.tripSummary}
-              personSummary={view.personSummary}
               onGoToMenu={() => setActiveTab('menu')}
             />
           )}

@@ -153,7 +153,9 @@ export function deriveTripView(input: TripViewInput) {
   // peopleOverride), а не по defaultPeople
   const realPeople = realTripPeople(trip as any);
   // Fix-5 (п.7): ручные позиции входят в «на человека» — за аптечку платят все
-  const { summary: personSummaryBase, tripSummary: tripSummaryBase } = calculatePersonSummary(
+  // bugs-trip-shopping-stage п.5: вид «На человека» удалён — из расчёта нужен
+  // только tripSummary (KPI «на человека» живут в сводке)
+  const { tripSummary: tripSummaryBase } = calculatePersonSummary(
     trip as any, effectiveRecipesMap, prices, realPeople, shoppingExcluded, manualItems, manualPriceOf,
   );
   // Release-1.0 (UI-consistency): KPI шапки и «Итого» в закупке — ОДИН источник.
@@ -174,23 +176,6 @@ export function deriveTripView(input: TripViewInput) {
     costPerDefaultPerson: totalCostFinal / Math.max(1, realPeople),
     costPerPersonMeal: totalCostFinal / Math.max(1, tripSummaryBase.totalPersonMeals || 1),
   };
-  // «На человека»: фактические цены (unit price) применяются к каждой доле напрямую;
-  // без чеков — базовый расчёт утилиты.
-  const personSummary = personSummaryBase.map(p => {
-    const match = baseShoppingList.find(b => b.ingredientName === p.ingredientName);
-    const matchDraft = match ? draftOverrides[String(match.ingredientId)] : undefined;
-    // Fix-8 (п.6): факт-цена живёт при любой потребности
-    const actualUnit = match ? matchDraft?.price : undefined;
-    return {
-      ...p,
-      costPerDefaultPerson: actualUnit != null
-        ? actualUnit * p.amountPerDefaultPerson
-        : (p.costPerDefaultPerson != null && match && shoppingExcluded.has(match.ingredientId) ? 0 : p.costPerDefaultPerson),
-    };
-  })
-  // U28: «На человека» — по алфавиту
-  .sort((a, b) => compareRu(a.ingredientName, b.ingredientName));
-
   // U26: сортируемая таблица «Закупка на поход»
   const sortedShopping = sortRows(visibleShopping, sortSpec as any);
 
@@ -271,7 +256,6 @@ export function deriveTripView(input: TripViewInput) {
     dayShopping,
     realPeople,
     tripSummary,
-    personSummary,
     sortedShopping,
     productInfo,
     manualProductOptions,

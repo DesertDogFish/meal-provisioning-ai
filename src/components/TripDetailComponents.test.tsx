@@ -1,5 +1,5 @@
 /// <reference types="vitest/globals" />
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, cleanup } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import TripActions from './TripActions';
 import TripSummaryPanel from './TripSummaryPanel';
@@ -7,7 +7,6 @@ import TripMealCard from './TripMealCard';
 import TripDaysList from './TripDaysList';
 import TripShoppingTab from './TripShoppingTab';
 import TripDayShoppingTab from './TripDayShoppingTab';
-import TripPersonTab from './TripPersonTab';
 import ChecklistTab from './ChecklistTab';
 import ExclusionCheckbox from './ExclusionCheckbox';
 import { deriveTripView, type TripViewInput } from '../utils/tripDerived';
@@ -116,7 +115,12 @@ describe('TripSummaryPanel', () => {
     expect(screen.getByText(/Магазин: взято 2 из 2/)).toBeTruthy();
     expect(screen.getByText(/Чек: введено 2 из 2/)).toBeTruthy();
     expect(screen.getByText('Поход готов ✓')).toBeTruthy();
-    fireEvent.click(screen.getByLabelText('Сформировать отчёт'));
+    // bugs-trip-shopping-stage п.7: кнопка отчёта — яркая рыжая иконка без текста
+    const reportBtn = screen.getByLabelText('Отчёт');
+    expect(reportBtn.textContent).toBe('');
+    expect(reportBtn.getAttribute('title')).toBe('Сформировать отчёт (печать/PDF)');
+    expect(reportBtn.className).toContain('icon-action');
+    fireEvent.click(reportBtn);
     expect(open).toHaveBeenCalledWith('/trips/t1/print', '_blank');
   });
 
@@ -163,7 +167,8 @@ describe('TripSummaryPanel', () => {
     );
     expect(screen.getByText('В процессе')).toBeTruthy();
     expect(screen.getByText(/Меню собрано/)).toBeTruthy();
-    expect(screen.getByLabelText('Посмотреть отчёт')).toBeTruthy();
+    // п.7: иконочная кнопка отчёта — aria-label «Отчёт», смысл — в title
+    expect(screen.getByLabelText('Отчёт').getAttribute('title')).toBe('Посмотреть отчёт (печать/PDF)');
     // пустое меню
     const emptyMenu = tripReadiness({ mealsCount: 0, checklistTotal: 0, boughtCount: 0, factCount: 0, checksTotal: 0 });
     render(
@@ -231,6 +236,33 @@ describe('TripMealCard', () => {
     expect(comp.disabled).toBe(true);
     fireEvent.click(screen.getByLabelText('Удалить приём пищи: Обед'));
     expect(onDelete).not.toHaveBeenCalled();
+  });
+
+  // bugs-trip-menu-stage п.5: на мобильном чипы ингредиентов — «простыня»;
+  // контейнер скрыт до md (состав виден тапом на блюдо — RecipeViewSheet)
+  it('контейнер чипов ингредиентов скрыт на mobile (hidden md:flex)', () => {
+    render(
+      <TripMealCard meal={meal} tripMeal={{ id: 'm9', tripDayId: 'd1', mealType: 'LUNCH', recipeId: 'r9', sortOrder: 1 }}
+        onOpenComposition={vi.fn()} onDelete={vi.fn()} />
+    );
+    const container = screen.getByText(/Соль/).closest('div')!;
+    expect(container.className).toContain('hidden');
+    expect(container.className).toContain('md:flex');
+  });
+
+  // bugs-app-ui п.5: иконки действий карточки приёма — рыжие (.icon-action),
+  // без инлайнового цвета и JS-ховеров
+  it('иконки «Состав»/«Удалить» — класс .icon-action без инлайнового цвета', () => {
+    render(
+      <TripMealCard meal={meal} tripMeal={{ id: 'm9', tripDayId: 'd1', mealType: 'LUNCH', recipeId: 'r9', sortOrder: 1 }}
+        onOpenComposition={vi.fn()} onDelete={vi.fn()} />
+    );
+    const compBtn = screen.getByLabelText('Состав приёма: Обед');
+    const del = screen.getByLabelText('Удалить приём пищи: Обед');
+    expect(compBtn.className).toContain('icon-action');
+    expect(del.className).toContain('icon-action');
+    expect(compBtn.style.color).toBe('');
+    expect(del.style.color).toBe('');
   });
 });
 
@@ -335,16 +367,28 @@ describe('TripDaysList', () => {
     expect(namelessButtons(document)).toEqual([]);
   });
 
-  // UX-осмотр 31.10 (п.10): «Не блюда:» читалось как ошибка — термин «ручные позиции».
-  it('карточка «На весь поход»: подпись «Ручные позиции», а не «Не блюда»', () => {
+  // bugs-trip-menu-stage пп.1–2: заголовок карточки «на поход» по состоянию,
+  // пояснение про ручные позиции — в InfoTip, не в тексте карточки.
+  it('карточка к походу: без позиций — «Добавить дополнительные продукты и товары…», с позицией — «Продукты и товары»', () => {
+    setup({ manualItems: [...manualDay] }); // trip-позиций нет
+    expect(screen.getByText('Добавить дополнительные продукты и товары…')).toBeTruthy();
+    cleanup();
+    setup(); // manualTrip — одна trip-позиция (Аптечка)
+    expect(screen.getByText('Продукты и товары')).toBeTruthy();
+    expect(screen.getByText(/· 1 поз\./)).toBeTruthy();
+  });
+
+  it('пояснение «Ручные позиции: аптечка…» убрано в InfoTip (под заголовком его нет)', () => {
     setup();
-    expect(screen.getByText(/Ручные позиции: аптечка, антисептик, топливо…/)).toBeTruthy();
-    expect(screen.queryByText(/Не блюда:/)).toBeNull();
+    expect(screen.queryByText(/Ручные позиции: аптечка, антисептик, топливо…/)).toBeNull();
+    expect(screen.getByLabelText('Что добавляют к походу')).toBeTruthy();
   });
 
   it('кнопки дня: продукт к дню, приём пищи (контекст §2.1)', () => {
     const p = setup();
-    fireEvent.click(screen.getAllByLabelText('Добавить продукт к дню')[0]);
+    // bugs-trip-menu-stage п.3: «Добавить продукт или товар» вместо «продукт к дню (не блюдо)»
+    expect(screen.getAllByTitle('Добавить продукт или товар')[0]).toBeTruthy();
+    fireEvent.click(screen.getAllByLabelText('Добавить продукт или товар')[0]);
     expect(p.onAddDayProduct).toHaveBeenCalledWith('d1', expect.stringMatching(/1 июля/));
     fireEvent.click(screen.getAllByTitle('Добавить приём пищи')[0]);
     expect(p.onAddMeal).toHaveBeenCalledWith({ dayId: 'd1', dayDate: '2026-07-01', dayIndex: 1 });
@@ -359,7 +403,11 @@ describe('TripDaysList', () => {
     expect(p.onDeleteMeal).toHaveBeenCalledWith('d1', 'm1', 'Каша', '2026-07-01');
     // чип ручной позиции дня + удаление
     expect(screen.getByText(/Антисептик/)).toBeTruthy();
-    fireEvent.click(screen.getByLabelText('Удалить позицию: Антисептик'));
+    // bugs-app-ui п.5: крестик чипа — .icon-action, без инлайнового серого
+    const chipX = screen.getByLabelText('Удалить позицию: Антисептик');
+    expect(chipX.classList.contains('icon-action')).toBe(true);
+    expect(chipX.getAttribute('style') ?? '').not.toContain('muted');
+    fireEvent.click(chipX);
     expect(p.onDeleteManual).toHaveBeenCalledWith('mm2', 'Антисептик');
   });
 
@@ -382,10 +430,10 @@ describe('TripDaysList', () => {
       expandedDays: new Set(['d1']),
     });
     expect(screen.getByText('Нет приёмов пищи. Нажмите + чтобы добавить.')).toBeTruthy();
-    expect(screen.getByText('На весь поход')).toBeTruthy();
+    expect(screen.getByText('Продукты и товары')).toBeTruthy();
     expect(screen.getByText(/Аптечка/)).toBeTruthy();
     expect(screen.getByText(/· 1 поз\./)).toBeTruthy();
-    fireEvent.click(screen.getByLabelText('Добавить продукт к походу'));
+    fireEvent.click(screen.getByLabelText('Добавить продукт или товар (на весь поход)'));
     expect(p.onAddTripProduct).toHaveBeenCalledTimes(1);
     fireEvent.click(screen.getByLabelText('Удалить позицию: Аптечка'));
     expect(p.onDeleteManual).toHaveBeenCalledWith('mm1', 'Аптечка');
@@ -399,10 +447,6 @@ describe('TripShoppingTab', () => {
       rows: view.sortedShopping,
       sortSpec: { field: 'ingredientName' as const, dir: 'asc' as const },
       onSortField: vi.fn(),
-      total: view.shoppingTotalFinal,
-      excludedCount: over.shoppingExcluded?.size ?? 0,
-      hasMissingPrices: view.tripSummary.hasMissingPrices,
-      missingIngredients: view.tripSummary.missingIngredients,
       excluded: over.shoppingExcluded ?? new Set<string>(),
       onToggleExcluded: vi.fn(),
     };
@@ -410,11 +454,15 @@ describe('TripShoppingTab', () => {
     return { props, view };
   }
 
-  it('шапка с итогом, сортируемые заголовки, строки', () => {
+  // bugs-trip-shopping-stage пп.1–2: «Предварительная закупка» без пугающих
+  // итогов в шапке + подсказка про исключение «уже есть дома»
+  it('заголовок «Предварительная закупка», в шапке нет «Итого» и «нет цен», есть InfoTip про исключение', () => {
     const { props } = setup();
-    expect(screen.getByText('Закупка на поход')).toBeTruthy();
-    expect(screen.getByText(/Итого:/)).toBeTruthy();
+    expect(screen.getByText('Предварительная закупка')).toBeTruthy();
+    expect(screen.queryByText(/Итого:/)).toBeNull();
+    expect(screen.queryByText(/нет цен/)).toBeNull();
     expect(screen.getByText(/позиций: 2/)).toBeTruthy();
+    expect(screen.getByLabelText('Про исключение позиций')).toBeTruthy();
     expect(screen.getByText('Гречка')).toBeTruthy();
     // aria-sort только у активной колонки
     expect(screen.getByRole('columnheader', { name: /Продукт/ }).getAttribute('aria-sort')).toBe('ascending');
@@ -423,7 +471,7 @@ describe('TripShoppingTab', () => {
     expect(props.onSortField).toHaveBeenCalledWith('effectiveCost');
   });
 
-  it('«нет цен» в подзаголовке; исключённая строка зачёркнута; ✓ чек', () => {
+  it('позиция без цены: «нет цены» остаётся в строке таблицы (не в шапке); исключённая строка зачёркнута; ✓ чек', () => {
     const noPrice = deriveTripView(viewInput({
       recipes: [{ id: 'r1', name: 'Каша', mealType: 'BREAKFAST', baseServings: 2, ingredients: [
         { ingredientId: 'i3', amount: 1, ingredient: { id: 'i3', name: 'Без цены', unit: 'PCS' } },
@@ -438,15 +486,12 @@ describe('TripShoppingTab', () => {
         rows={noPrice.sortedShopping}
         sortSpec={{ field: 'ingredientName', dir: 'asc' }}
         onSortField={vi.fn()}
-        total={noPrice.shoppingTotalFinal}
-        excludedCount={0}
-        hasMissingPrices={noPrice.tripSummary.hasMissingPrices}
-        missingIngredients={noPrice.tripSummary.missingIngredients}
         excluded={new Set()}
         onToggleExcluded={vi.fn()}
       />
     );
-    expect(screen.getByText(/нет цен: Без цены/)).toBeTruthy();
+    // п.1: предупреждение «⚠️ нет цен: …» из шапки убрано
+    expect(screen.queryByText(/нет цен: Без цены/)).toBeNull();
     expect(screen.getByText('нет цены')).toBeTruthy();
   });
 
@@ -491,62 +536,27 @@ describe('TripDayShoppingTab', () => {
       <TripDayShoppingTab dayShopping={view.dayShopping} manualItems={[]} priceOf={view.manualPriceOf}
         excluded={new Set()} onToggleExcluded={vi.fn()} />
     );
-    expect(screen.getByText('Закупка по дням')).toBeTruthy();
+    // bugs-trip-shopping-stage пп.3–4: новый заголовок + подсказка про исключение
+    expect(screen.getByText('Предварительная закупка по дням')).toBeTruthy();
+    expect(screen.getByLabelText('Про исключение позиций')).toBeTruthy();
     expect(screen.getByText(/Итого за поход:/)).toBeTruthy();
     expect(screen.getByText('есть без цены')).toBeTruthy();
     expect(screen.getByText('—')).toBeTruthy(); // без цены — прочерк
     expect(screen.getAllByLabelText('Исключить из этого дня')).toHaveLength(2);
   });
 
-  it('позиции «На весь поход»: сумма по trip-ценам, прочерк без цены', () => {
+  it('позиции «На весь поход поровну»: сумма по trip-ценам, прочерк без цены', () => {
     const { props } = setup([...manualTrip, ...manualDay], [
       ...prices,
       { id: 'p9', ingredientId: 'i9', pricePerUnit: 200, currency: 'RUB', effectiveFrom: '2026-06-01' },
     ]);
-    expect(screen.getByText('На весь поход')).toBeTruthy();
+    // bugs-trip-shopping-stage п.6: лейбл карточки ручных позиций — «На весь поход поровну»
+    expect(screen.getByText('На весь поход поровну')).toBeTruthy();
     expect(screen.getByText(/Аптечка · малая/)).toBeTruthy();
     expect(screen.getAllByText(/200/).length).toBeGreaterThan(0);
     // дневная позиция в карточке дня
     expect(screen.getByText('Антисептик')).toBeTruthy();
     expect(props.priceOf('i9')).toBe(200);
-  });
-});
-
-describe('TripPersonTab', () => {
-  it('сводка (5 плиток) и таблица продуктов на человека', () => {
-    const view = deriveTripView(viewInput());
-    render(
-      <TripPersonTab trip={trip} realPeople={view.realPeople}
-        tripSummary={view.tripSummary} personSummary={view.personSummary} />
-    );
-    expect(screen.getAllByText('На человека').length).toBeGreaterThan(0);
-    expect(screen.getByText('Приёмов пищи всего')).toBeTruthy();
-    expect(screen.getByText('Людей в походе')).toBeTruthy();
-    expect(screen.getByText('На человека за поход')).toBeTruthy();
-    expect(screen.getByText('На человека за приём')).toBeTruthy();
-    expect(screen.getByText('Калории за приём')).toBeTruthy();
-    expect(screen.getByText('—')).toBeTruthy(); // калорий нет (нет kcalPer100g)
-    expect(screen.getByText('Продукты на человека')).toBeTruthy();
-    expect(screen.getByText('Гречка')).toBeTruthy();
-    expect(screen.getByText('Тушёнка')).toBeTruthy();
-    // стоимость на человека: 100 ₽ / 2.5 чел.
-    expect(screen.getAllByText(/40/).length).toBeGreaterThan(0);
-  });
-
-  it('калории за приём — числом, когда есть ккал-данные', () => {
-    const kcalRecipes: Recipe[] = [{ id: 'r1', name: 'Каша', mealType: 'BREAKFAST', baseServings: 2, ingredients: [
-      { ingredientId: 'i1', amount: 1, ingredient: { id: 'i1', name: 'Гречка', unit: 'KG', kcalPer100g: 340 } },
-    ] }];
-    const view = deriveTripView(viewInput({
-      recipes: kcalRecipes,
-      recipesMap: new Map(kcalRecipes.map(r => [r.id, r])),
-      trip: { ...trip, days: [trip.days![0]] },
-    }));
-    render(
-      <TripPersonTab trip={{ ...trip, days: [trip.days![0]] }} realPeople={view.realPeople}
-        tripSummary={view.tripSummary} personSummary={view.personSummary} />
-    );
-    expect(screen.getByText(/ккал/)).toBeTruthy();
   });
 });
 
@@ -556,8 +566,8 @@ describe('Empty-state этапов (navigation-п.3)', () => {
     const onGoToMenu = vi.fn();
     render(
       <TripShoppingTab rows={[]} sortSpec={{ field: 'ingredientName', dir: 'asc' }}
-        onSortField={vi.fn()} total={0} excludedCount={0} hasMissingPrices={false}
-        missingIngredients={[]} excluded={new Set()} onToggleExcluded={vi.fn()}
+        onSortField={vi.fn()}
+        excluded={new Set()} onToggleExcluded={vi.fn()}
         onGoToMenu={onGoToMenu} />
     );
     expect(screen.getByTestId('shopping-empty')).toBeTruthy();
@@ -573,18 +583,6 @@ describe('Empty-state этапов (navigation-п.3)', () => {
     );
     expect(screen.getByTestId('day-shopping-empty')).toBeTruthy();
     fireEvent.click(screen.getByTestId('day-shopping-empty-cta'));
-    expect(onGoToMenu).toHaveBeenCalledTimes(1);
-  });
-
-  it('② «На человека»: нет продуктов → empty-state + CTA', () => {
-    const onGoToMenu = vi.fn();
-    const view = deriveTripView(viewInput({ trip: { ...trip, days: [] }, recipes: [], recipesMap: new Map() }));
-    render(
-      <TripPersonTab trip={{ ...trip, days: [] }} realPeople={view.realPeople}
-        tripSummary={view.tripSummary} personSummary={[]} onGoToMenu={onGoToMenu} />
-    );
-    expect(screen.getByTestId('person-empty')).toBeTruthy();
-    fireEvent.click(screen.getByTestId('person-empty-cta'));
     expect(onGoToMenu).toHaveBeenCalledTimes(1);
   });
 

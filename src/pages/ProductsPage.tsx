@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useToast } from '../components/ToastProvider';
 import { useConfirm } from '../components/ConfirmDialog'; // Fix-6 (п.7)
 import { Plus, Search, X } from 'lucide-react';
@@ -7,6 +7,7 @@ import { ProductTable, type ProductRow } from '../components/ProductTable';
 import { EmisLinkPicker } from '../components/EmisLinkPicker';
 import Modal from '../components/Modal';
 import CustomSelect from '../components/CustomSelect';
+import CustomMultiSelect from '../components/CustomMultiSelect';
 import FilterSheet from '../components/FilterSheet';
 import { DatePicker } from '../components/DatePicker';
 import { api } from '../api/client';
@@ -295,6 +296,15 @@ export default function ProductsPage() {
     setUsageStatus('');
   };
 
+  // bugs-products-catalog п.4: опции фильтра категорий — из справочника категорий;
+  // если он пуст (например, не загрузился) — берём уникальные categoryName продуктов.
+  const categoryOptions = useMemo(() => {
+    const names = categories.length > 0
+      ? categories.map(c => c.name)
+      : Array.from(new Set(products.map(p => p.categoryName).filter(Boolean)));
+    return names.map(n => ({ value: n, label: n }));
+  }, [categories, products]);
+
 
 
   // KB-5: пикеру привязки нужен контекст продукта, чтобы сервер вернул цену, пересчитанную
@@ -363,9 +373,22 @@ export default function ProductsPage() {
             селекты фильтров уезжают в bottom-sheet («Фильтры · N»), на десктопе —
             прежний инлайн рядом с поиском. */}
         <FilterSheet
-          count={(selectedUnit ? 1 : 0) + (priceStatus ? 1 : 0) + (bindingStatus ? 1 : 0)}
+          count={(selectedCategories.length ? 1 : 0) + (selectedUnit ? 1 : 0) + (priceStatus ? 1 : 0) + (bindingStatus ? 1 : 0)}
           testId="products-filters"
         >
+        {/* bugs-products-catalog п.4: фильтр по категориям — state и ветка
+            фильтрации существовали, но UI-контрола не было (массив всегда пустой). */}
+        <div style={{ width: 180 }}>
+          <CustomMultiSelect
+            className="w-full"
+            values={selectedCategories}
+            onChange={setSelectedCategories}
+            options={categoryOptions}
+            emptyLabel="Категория: все"
+            ariaLabel="Фильтр по категориям"
+          />
+        </div>
+
         {/* Fix-5: нативные селекты фильтров — в единый CustomSelect.
             Fix-7 (п.4): ФИКСИРОВАННАЯ ширина обёртки + w-full на селекте —
             выбор короткого значения («кг», «все») больше не сужает контрол
@@ -414,7 +437,7 @@ export default function ProductsPage() {
           />
         </div>
 
-        {(query || selectedUnit || priceStatus || bindingStatus) && (
+        {(query || selectedCategories.length > 0 || selectedUnit || priceStatus || bindingStatus) && (
           <Button variant="ghost" onClick={resetFilters} aria-label="Сбросить фильтры">
                       <X size={16} />
                       Сбросить

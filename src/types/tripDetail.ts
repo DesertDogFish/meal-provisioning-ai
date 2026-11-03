@@ -2,7 +2,7 @@
  * Подзадача 26 аудита (2026-10-29): типы страницы похода, вынесенные из
  * `TripDetailPage.tsx` (R8/R9) — их используют страница, хук `useTripDetail`
  * и компоненты `TripActions`/`TripSummaryPanel`/`TripDaysList`/`TripMealCard`/
- * `TripShoppingTab`/`TripDayShoppingTab`/`TripPersonTab`.
+ * `TripShoppingTab`/`TripDayShoppingTab`.
  *
  * Формы сущностей — СТРУКТУРНЫЕ (страница исторически читает их через
  * `api.get<Trip>` и передаёт в калькуляторы через `as any`): глобальные
@@ -88,7 +88,9 @@ export interface Price {
 export type TabType = 'menu' | 'shopping' | 'store' | 'checks';
 
 /** Виды списка закупки внутри этапа ② (подзадача 3): состояние локальное. */
-export type ShoppingView = 'total' | 'days' | 'person';
+// bugs-trip-shopping-stage п.5: вид «На человека» ('person') удалён;
+// старые URL ?stage=person маппит parseStage (StageTabBar) в этап ②.
+export type ShoppingView = 'total' | 'days';
 
 /** U26: поле сортировки таблицы «Закупка на поход». */
 export type ShoppingSortField = 'ingredientName' | 'totalAmount' | 'effectiveCost';

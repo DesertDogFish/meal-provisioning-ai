@@ -3,30 +3,36 @@
  * этапа ④ «Чеки и итог», выделенные из PriceOverridesTab (R8/R9 — презентация
  * отдельно от данных). Строки — props из общей view-модели (ChecksModel),
  * мутации (факт-цена, «взяли», исключение) — колбэки страницы похода.
+ *
+ * bugs-trip-checks-stage пп.3–5,7 (владелец 03.11.2026): чек — только
+ * фактическая стоимость. Колонки «План ₽» и «Отклонение» удалены (основная
+ * таблица, таблица «по дням»); «Факт ₽» переименована в «Стоимость ₽»;
+ * внизу — ОДИН «Итог» = сумма введённых чеков (пока чеков нет — «нет данных»,
+ * план за факт не выдаётся). Строки без введённого чека подсвечены
+ * .row-attention (п.6); над таблицей — липкий поиск ListSearch (п.7, общий
+ * контрол с чеклистом ③ и мобильными строками).
  */
+import { useRef } from 'react';
 import { formatAmount } from '../utils/calculations';
 import { formatRub, formatUnitPrice } from '../utils/format';
 import { NumberField } from './NumberField';
 import InfoTip from './InfoTip';
 import FreeAmountInput from './FreeAmountInput';
+import ListSearch from './ListSearch';
 import { neededAsActual, type ActualAmount } from '../utils/checkUnits';
 import { enteredCheckTotal } from '../utils/checkInput';
 import type { ChecklistActual } from '../utils/tripStaging';
-import {
-  calculateDelta, formatDelta, getDeltaChipClass, hasEnteredFacts,
-  type CheckRow, type CheckGroup, type DayPlanFact,
-} from './ChecksModel';
+import type { CheckRow, CheckGroup, DayPlanFact } from './ChecksModel';
 
 export interface ChecksTableProps {
   groups: CheckGroup[];
   dayFacts: DayPlanFact[];
-  /** люди по дням для таблицы «по дням» не нужны — только план/факт */
   excluded: Set<string>;
   actualMap: Record<string, ChecklistActual>;
   pieceWeightById: Map<string, number | null>;
   canEnterCheck: boolean;
-  totalPlanned: number;
-  totalActual: number;
+  /** п.5: сумма введённых чеков; null — пока ни один чек не введён («нет данных») */
+  enteredTotal: number | null;
   onCommitActualTotal: (row: CheckRow, total: number | null) => void;
   onCommitTook: (ingredientId: string, value: ActualAmount | null, needed?: number) => void;
   onToggleExcluded: (ingredientId: string) => void;
@@ -35,17 +41,29 @@ export interface ChecksTableProps {
 export function ChecksTable(props: ChecksTableProps) {
   const {
     groups, dayFacts, excluded, actualMap, pieceWeightById, canEnterCheck,
-    totalPlanned, totalActual, onCommitActualTotal, onCommitTook, onToggleExcluded,
+    enteredTotal, onCommitActualTotal, onCommitTook, onToggleExcluded,
   } = props;
-  const totalDelta = calculateDelta(totalPlanned, totalActual);
-  // UX-осмотр 31.10 (п.10): «честный факт» — пока ни один чек не введён,
-  // totalActual это копия плана; показывать её как факт и считать отклонение нельзя.
-  const hasFact = hasEnteredFacts(groups.flatMap(g => g.items));
+  // п.7: поиск скоупится на таблицу — мобильные строки (ChecksMobile) живут
+  // в DOM одновременно и несут те же data-search-id
+  const tableScope = useRef<HTMLDivElement>(null);
+  const searchItems = groups.flatMap(g => g.items.map(i => ({ id: i.ingredientId, text: i.ingredientName })));
 
   return (
     <>
+      {/* п.7: липкий поиск — при прокрутке списка контрол остаётся вверху */}
+      <div className="check-table-mobile-hide checklist-sticky rounded-xl max-w-5xl px-3 py-2"
+           style={{ background: 'var(--bg-1)', border: '1px solid var(--border)' }}>
+        <ListSearch
+          items={searchItems}
+          scope={tableScope}
+          testId="checks-table-search"
+          ariaLabel="Поиск по чеку"
+          placeholder="Найти позицию в чеке…"
+        />
+      </div>
+
       {/* Десктоп: таблица закупки (группы по категориям, как в чеклисте) */}
-      <div className="check-table-mobile-hide rounded-xl overflow-hidden max-w-5xl mob-scroll table-cards" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+      <div ref={tableScope} className="check-table-mobile-hide rounded-xl overflow-hidden max-w-5xl mob-scroll table-cards" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
         {/* Fix-7 (п.18): table-layout fixed + colgroup — заголовки ровно над полями */}
         <table className="w-full text-sm" style={{ tableLayout: 'fixed' }}>
           <colgroup>
@@ -53,9 +71,7 @@ export function ChecksTable(props: ChecksTableProps) {
             <col />
             <col style={{ width: 84 }} />
             <col style={{ width: 120 }} />
-            <col style={{ width: 84 }} />
             <col style={{ width: 150 }} />
-            <col style={{ width: 78 }} />
           </colgroup>
           <thead>
             <tr style={{ borderBottom: '1px solid var(--border)' }}>
@@ -73,22 +89,11 @@ export function ChecksTable(props: ChecksTableProps) {
                   <InfoTip text="Сколько реально куплено — в любых единицах (г, кг, шт, уп). Одно хранилище с чеклистом: ввели там — видно здесь, и наоборот. Попадает в отчёт." />
                 </span>
               </th>
+              {/* bugs-trip-checks-stage п.4: «Факт ₽» → «Стоимость ₽» */}
               <th className="text-right px-2 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: 'var(--fs-caption)' }}>
                 <span className="keep-pair">
-                  План ₽
-                  <InfoTip text="Плановая стоимость позиции: нужное количество × цена справочника на дату." />
-                </span>
-              </th>
-              <th className="text-right px-2 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: 'var(--fs-caption)' }}>
-                <span className="keep-pair">
-                  Факт ₽
-                  <InfoTip label="Что такое «Факт ₽»" text="Сумма из чека за позицию — сколько реально заплатили за купленное количество. Цена за единицу и распределение на всех посчитаются автоматически. Пока чек не введён, факт не показываем: план за факт не выдаётся." />
-                </span>
-              </th>
-              <th className="text-right px-2 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: 'var(--fs-caption)' }}>
-                <span className="keep-pair">
-                  Отклонение
-                  <InfoTip text="(Факт − План) ÷ План × 100%. Пусто («—»), пока чек по позиции не введён." />
+                  Стоимость ₽
+                  <InfoTip label="Что такое «Стоимость ₽»" text="Сумма из чека за позицию — сколько реально заплатили за купленное количество. Цена за единицу посчитается автоматически. Пока чек не введён, сумма не показывается: план за факт не выдаётся." />
                 </span>
               </th>
             </tr>
@@ -111,30 +116,18 @@ export function ChecksTable(props: ChecksTableProps) {
           </tbody>
         </table>
 
-        {/* Sticky итог — единый словарь этапов ②④: «План/Факт» (UX-осмотр 31.10, п.10) */}
+        {/* bugs-trip-checks-stage п.5: ОДИН итог — сумма введённых чеков.
+            План/дельта/«разница» удалены вместе с колонками; пока чеков нет —
+            «нет данных» (план за факт не выдаётся, UX-осмотр 31.10 п.10). */}
         <div className="sticky-totals" data-testid="checks-sticky-totals">
           <span className="keep-pair" style={{ color: 'var(--text)' }}>
-            План: <b className="keep-num">{formatRub(totalPlanned)}</b>
-          </span>
-          <span className="keep-pair" style={{ color: 'var(--text)' }}>
-            Факт:{' '}
-            {hasFact ? (
-              <b className="keep-num" style={{ color: 'var(--w1)' }}>{formatRub(totalActual)}</b>
+            Итог:{' '}
+            {enteredTotal != null ? (
+              <b className="keep-num" style={{ color: 'var(--w1)' }}>{formatRub(enteredTotal)}</b>
             ) : (
               <b className="keep-num" style={{ color: 'var(--muted)', fontWeight: 600 }}>нет данных</b>
             )}
           </span>
-          <span
-            className={`chip-delta keep-num ${hasFact ? getDeltaChipClass(totalDelta) : 'dim'}`}
-            title={hasFact ? undefined : 'Отклонение появится после первого введённого чека'}
-          >
-            {hasFact ? formatDelta(totalDelta) : '—'}
-          </span>
-          {hasFact && (
-            <span className="keep-pair cap" style={{ color: 'var(--muted)' }}>
-              разница: <span className="keep-num">{formatRub(totalActual - totalPlanned)}</span>
-            </span>
-          )}
           {excluded.size > 0 && (
             <span className="keep-pair cap" style={{ color: 'var(--muted)' }}>
               без <span className="keep-num">{excluded.size} искл.</span>
@@ -143,46 +136,30 @@ export function ChecksTable(props: ChecksTableProps) {
         </div>
       </div>
 
-      {/* По дням: план/факт — только десктоп */}
+      {/* По дням: стоимость — только десктоп (пп.3–4: без плана и отклонения) */}
       <div className="check-table-mobile-hide rounded-xl overflow-hidden max-w-3xl mob-scroll table-cards" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
         <table className="w-full text-sm">
           <thead>
             <tr style={{ borderBottom: '1px solid var(--border)' }}>
               <th className="text-left px-4 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: 'var(--fs-caption)' }}>День</th>
-              <th className="text-right px-4 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: 'var(--fs-caption)' }}><span className="keep-pair">План ₽</span></th>
-              <th className="text-right px-4 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: 'var(--fs-caption)' }}><span className="keep-pair">Факт ₽</span></th>
-              <th className="text-right px-4 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: 'var(--fs-caption)' }}>Отклонение</th>
+              <th className="text-right px-4 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: 'var(--fs-caption)' }}><span className="keep-pair">Стоимость ₽</span></th>
             </tr>
           </thead>
           <tbody>
-            {dayFacts.map(day => {
-              const delta = calculateDelta(day.plannedCost, day.actualCost);
-              return (
-                <tr key={day.dayDate} data-testid={`dayfact-row-${day.dayDate}`} style={{ borderBottom: '1px solid var(--border)' }}>
-                  <td className="row-title px-4 py-3" data-label="">
-                    <b style={{ color: 'var(--text)' }}>
-                      {new Date(day.dayDate).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })}
-                    </b>
-                  </td>
-                  <td className="keep-num px-4 py-3 text-right" data-label="План ₽" style={{ color: 'var(--text)' }}>
-                    {formatRub(day.plannedCost)}
-                  </td>
-                  <td className="keep-num px-4 py-3 text-right" data-label="Факт ₽" style={{ color: 'var(--w1)' }}>
-                    {day.hasFact
-                      ? formatRub(day.actualCost)
-                      : <span style={{ color: 'var(--muted)', fontWeight: 600 }}>нет данных</span>}
-                  </td>
-                  <td className="px-4 py-3 text-right" data-label="Отклонение">
-                    <span
-                      className={`chip-delta keep-num ${day.hasFact ? getDeltaChipClass(delta) : 'dim'}`}
-                      title={day.hasFact ? undefined : 'Чек за этот день не введён'}
-                    >
-                      {day.hasFact ? formatDelta(delta) : '—'}
-                    </span>
-                  </td>
-                </tr>
-              );
-            })}
+            {dayFacts.map(day => (
+              <tr key={day.dayDate} data-testid={`dayfact-row-${day.dayDate}`} style={{ borderBottom: '1px solid var(--border)' }}>
+                <td className="row-title px-4 py-3" data-label="">
+                  <b style={{ color: 'var(--text)' }}>
+                    {new Date(day.dayDate).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })}
+                  </b>
+                </td>
+                <td className="keep-num px-4 py-3 text-right" data-label="Стоимость ₽" style={{ color: 'var(--w1)' }}>
+                  {day.hasFact
+                    ? formatRub(day.actualCost)
+                    : <span style={{ color: 'var(--muted)', fontWeight: 600 }}>нет данных</span>}
+                </td>
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>
@@ -211,7 +188,7 @@ function GroupRows(props: GroupRowsProps) {
     <>
       {/* Fix-6 (п.25/23): категория — заметная плашка-строка, формат как в чеклисте */}
       <tr>
-        <td colSpan={7} data-label="" className="cell-group px-3 py-1.5 text-xs font-extrabold uppercase tracking-wide"
+        <td colSpan={5} data-label="" className="cell-group px-3 py-1.5 text-xs font-extrabold uppercase tracking-wide"
             style={{ background: 'var(--elev)', color: 'var(--text)', borderTop: '1px solid var(--border)', borderBottom: '1px solid var(--border)' }}>
           {category}
         </td>
@@ -222,12 +199,17 @@ function GroupRows(props: GroupRowsProps) {
         // Fix-8 (п.6): сохранённый ввод переживает смену потребности
         const storedTook = actualMap[String(item.ingredientId)] ?? null;
         const tookValue = storedTook ?? neededAsActual(item.totalAmount, item.unit);
-        // Fix-10 (п.1): «Факт» по умолчанию ПУСТО — только введённый чек
+        // Fix-10 (п.1): «Стоимость» по умолчанию ПУСТА — только введённый чек
         const actualTotal = enteredCheckTotal(item.enteredUnitPrice, item.totalAmount);
-        const actualCostView = actualTotal ?? item.actualCost;
-        const delta = calculateDelta(item.plannedCost, actualCostView);
+        // п.6: чек по позиции ещё не введён — строка требует внимания
+        const needsAttention = !isExcluded && actualTotal == null;
         return (
-          <tr key={item.ingredientId} style={{ borderBottom: '1px solid var(--border)', opacity: isExcluded ? 0.45 : 1 }}>
+          <tr
+            key={item.ingredientId}
+            data-search-id={item.ingredientId}
+            className={needsAttention ? 'row-attention' : undefined}
+            style={{ borderBottom: '1px solid var(--border)', opacity: isExcluded ? 0.45 : 1 }}
+          >
             <td className="cell-check px-2 py-2.5 text-center" data-label="">
               <input
                 type="checkbox"
@@ -261,16 +243,13 @@ function GroupRows(props: GroupRowsProps) {
                 testId={`qty-input-${item.ingredientId}`}
               />
             </td>
-            <td className="keep-num px-2 py-2.5 text-right" data-label="План ₽" style={{ color: 'var(--text)' }}>
-              {isExcluded ? '—' : formatRub(item.plannedCost)}
-            </td>
-            <td className="px-2 py-2.5 text-right" data-label="Факт ₽">
+            <td className="px-2 py-2.5 text-right" data-label="Стоимость ₽">
               {/* Fix-10 (п.3): sm — одной высоты с «Взяли» в этой строке */}
               <NumberField
                 value={actualTotal}
                 size="sm"
                 stepRef={item.plannedCost}
-                placeholder="факт, ₽"
+                placeholder="стоимость, ₽"
                 disabled={!canEnterCheck}
                 onCommit={v => onCommitActualTotal(item, v)}
                 testId={`actual-input-${item.ingredientId}`}
@@ -288,15 +267,6 @@ function GroupRows(props: GroupRowsProps) {
                   {formatUnitPrice(item.enteredUnitPrice, item.unit)}
                 </div>
               )}
-            </td>
-            <td className="px-2 py-2.5 text-right" data-label="Отклонение">
-              <span
-                className={`chip-delta keep-num ${actualTotal != null ? getDeltaChipClass(delta) : 'dim'}`}
-                data-testid={`row-delta-${item.ingredientId}`}
-                title={actualTotal != null ? undefined : 'Чек по позиции не введён — отклонение появится после ввода факта'}
-              >
-                {actualTotal != null ? formatDelta(delta) : '—'}
-              </span>
             </td>
           </tr>
         );

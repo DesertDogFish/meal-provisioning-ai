@@ -211,16 +211,21 @@ export function TripSummaryPanel({
               (шум), CTA без слова «черновик». */}
           {readinessChips}
           <span className="ml-auto">
+            {/* bugs-trip-shopping-stage п.7: «Посмотреть/Сформировать отчёт» текстом
+                забирал внимание в полосе готовности — теперь яркая рыжая иконка
+                (.icon-action, --amber-500) без текста; смысл сохранён в title,
+                aria-label «Отчёт». Связь: при внедрении этапа ⑤
+                (tasks/trip-workflow-redesign.md) кнопка может исчезнуть вовсе. */}
             <Button
-              variant={readiness.ready ? 'primary' : 'ghost'}
+              variant="ghost"
               size="sm"
+              iconOnly
+              className="icon-action"
               onClick={() => window.open(`/trips/${trip.id}/print`, '_blank')}
-              aria-label={readiness.ready ? 'Сформировать отчёт' : 'Посмотреть отчёт'}
-              title="Печатная версия: меню по дням, закупка, итоги — сохраняется в PDF"
-              icon={<FileDown size={15} />}
-            >
-              {readiness.ready ? 'Сформировать отчёт' : 'Посмотреть отчёт'}
-            </Button>
+              aria-label="Отчёт"
+              title={readiness.ready ? 'Сформировать отчёт (печать/PDF)' : 'Посмотреть отчёт (печать/PDF)'}
+              icon={<FileDown size={16} />}
+            />
           </span>
         </div>
       </div>

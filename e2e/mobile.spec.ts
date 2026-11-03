@@ -79,7 +79,7 @@ test('M-02 поход: KPI-связки целы, вкладки не рвут �
     .toBeLessThanOrEqual(6);
 
   // подписи вкладок — в одну строку
-  const tab = page.getByRole('button', { name: 'Закупка на поход' });
+  const tab = page.getByTestId('stage-bar-shopping');
   const tabBox = await tab.boundingBox();
   expect(tabBox!.height).toBeLessThanOrEqual(48);
 
@@ -198,14 +198,20 @@ test('M-06 «Снять всё» — опасное действие тольк�
 test('M-07 этап ④ «Чеки и итог»: карточный режим, значения подписаны, скролла страницы нет', async ({ page }) => {
   await openSeededTrip(page);
   await page.getByTestId('stage-bar-checks').click();
-  // подзадача 6: «кто сколько должен» и строка «План/Факт/Δ» — без скролла
-  await expect(page.getByTestId('who-owes')).toBeVisible();
-  await expect(page.getByTestId('planfact-strip')).toBeVisible();
+  // bugs-trip-checks-stage пп.1–2: блока «Кто сколько должен» и липкой полосы
+  // «План · Факт · Δ» на этапе ④ больше нет (итог — один, внизу таблицы)
+  await expect(page.getByTestId('who-owes')).toHaveCount(0);
+  await expect(page.getByTestId('planfact-strip')).toHaveCount(0);
   const mobile = page.getByTestId('checks-mobile');
   await expect(mobile).toBeVisible();
   await expectNoHorizontalScroll(page, 'чеки и итог');
-  // компактная строка позиции: план → факт/«+ факт, ₽» + бейдж отклонения
-  await expect(page.locator('[data-testid^="checkline-"]').first()).toBeVisible();
+  // компактная строка позиции: только стоимость («+ стоимость, ₽» / NumberField);
+  // «плана» и бейджа отклонения в строке нет (пп.3–4), неподведённая строка
+  // подсвечена .row-attention (п.6)
+  const firstLine = page.locator('[data-testid^="checkline-"]').first();
+  await expect(firstLine).toBeVisible();
+  await expect(firstLine).not.toContainText('план');
+  await expect(page.locator('.checkline.row-attention').first()).toBeVisible();
 });
 
 test('M-08 каталог продуктов: карточный режим без горизонтального скролла', async ({ page }) => {
@@ -249,19 +255,22 @@ test('M-10 этапы: переходы таб-баром, ?stage= в URL, со�
   await expect(page).toHaveURL(/stage=menu|\/trips\/trip1/);
   await page.getByTestId('stage-bar-shopping').click();
   await expect(page).toHaveURL(/stage=shopping/);
-  // вид списка закупки переключается в один тап (подзадача 3)
+  // вид списка закупки переключается в один тап (подзадача 3);
+  // bugs-trip-shopping-stage п.5: вид «На человека» удалён — только «На поход»/«По дням»
+  await expect(page.getByTestId('shopping-view-person')).toHaveCount(0);
   await page.getByTestId('shopping-view-days').click();
   await expect(page.getByTestId('shopping-view-days')).toHaveAttribute('aria-selected', 'true');
-  await page.getByTestId('shopping-view-person').click();
-  await expect(page.getByText('На человека за поход')).toBeVisible();
+  await expect(page.getByText('Предварительная закупка по дням')).toBeVisible();
   // возврат в меню и обратно — вид закупки сохранён (состояние этапа локальное)
   await page.getByTestId('stage-bar-menu').click();
   await expect(page).toHaveURL(/stage=menu/);
   await page.getByTestId('stage-bar-shopping').click();
-  await expect(page.getByTestId('shopping-view-person')).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByTestId('shopping-view-days')).toHaveAttribute('aria-selected', 'true');
   // прямая ссылка на этап (детерминизм e2e)
   await page.goto('/trips/trip1?stage=checks');
-  await expect(page.getByTestId('who-owes')).toBeVisible();
+  // bugs-trip-checks-stage п.1: «кто должен» убран с этапа ④ — только чек
+  await expect(page.getByTestId('who-owes')).toHaveCount(0);
+  await expect(page.getByTestId('checks-mobile')).toBeVisible();
   await expectNoHorizontalScroll(page, 'этапы');
 });
 
@@ -279,7 +288,7 @@ test('M-11 полоса похода: тап раскрывает sheet с KPI, 
   await expect(sheet).toHaveCount(0);
 });
 
-test('M-12 чек одним тапом по строке: «+ факт, ₽» → ввод → бейдж и итоги', async ({ page }) => {
+test('M-12 чек одним тапом по строке: «+ стоимость, ₽» → ввод → итоги', async ({ page }) => {
   await openSeededTrip(page);
   // отмечаем «взято» на этапе ③ — без этого ввод чека закрыт
   await page.getByTestId('stage-bar-store').click();
@@ -348,4 +357,62 @@ test('M-11 KB-33: одна мобильная навигация этапов, .
   await expect(page).toHaveURL(/stage=store/);
   await page.getByTestId('stage-bar-menu').click();
   await expect(page).toHaveURL(/stage=menu/);
+});
+
+// bugs-trip-menu-stage п.6: нижняя панель этапов должна быть прижата к низу
+// вьюпорта БЕЗ зазора («вроде внизу, но с зазором» — баг владельца 03.11).
+// В headless-Chromium safe-area-inset = 0, поэтому геометрию проверяем как
+// инвариант (bottom:0 → низ бара = низ вьюпорта, ширина = ширина вьюпорта);
+// реальный зазор на iPhone лечится viewport-fit=cover в index.html +
+// env(safe-area-inset-bottom)-паддингом бара (инвариант meta — src/viewportMeta.test.ts).
+test('M-14 п.6: .stage-bar прижат к низу вьюпорта, без просвета фона', async ({ page }) => {
+  await openSeededTrip(page);
+
+  const bar = page.locator('nav.stage-bar');
+  await expect(bar).toBeVisible();
+  const box = await bar.boundingBox();
+  const vp = page.viewportSize()!;
+  expect(box, 'stage-bar не отрисован').not.toBeNull();
+  // прижат к низу (допуск 1px на дробные координаты) и к боковым краям
+  expect(Math.abs(box!.y + box!.height - vp.height)).toBeLessThanOrEqual(1);
+  expect(Math.abs(box!.x)).toBeLessThanOrEqual(1);
+  expect(Math.abs(box!.x + box!.width - vp.width)).toBeLessThanOrEqual(1);
+  // под баром нет ничего видимого: точка на 2px ниже низа бара — вне вьюпорта
+  const below = await page.evaluate(() => {
+    const el = document.querySelector('nav.stage-bar')!;
+    const r = el.getBoundingClientRect();
+    return { gap: window.innerHeight - r.bottom };
+  });
+  expect(below.gap).toBeLessThanOrEqual(1);
+  await expectNoHorizontalScroll(page, '/trips/trip1 (stage-bar)');
+});
+
+// bugs-trip-checks-stage п.7: длинный список магазина/чека — липкий поиск,
+// прокрутка к совпадению ближе к центру, подсветка, явная индикация промаха.
+test('M-15 п.7: поиск в чеклисте — липкий контрол, подсветка совпадения, «Не найдено»', async ({ page }) => {
+  await openSeededTrip(page);
+  await page.getByTestId('stage-bar-store').click();
+  const input = page.getByTestId('checklist-search-input');
+  await expect(input).toBeVisible();
+
+  // (а) контрол в липкой шапке: после прокрутки страницы он остаётся видимым
+  await page.mouse.wheel(0, 300);
+  await expect(input).toBeVisible();
+  const box = await input.boundingBox();
+  expect(box!.y).toBeGreaterThanOrEqual(0);
+
+  // (б) ввод — первое совпадение подсвечено (.search-hit на строке списка)
+  const firstName = (await page.locator('.checklist-row .font-bold').first().innerText()).trim();
+  await input.fill(firstName);
+  await expect(page.getByTestId('checklist-search-count')).toBeVisible();
+  await expect(page.locator('[data-search-id].search-hit').first()).toBeVisible();
+
+  // (в) промах — явная индикация
+  await input.fill('zzz-такого-нет');
+  await expect(page.getByTestId('checklist-search-none')).toHaveText('Не найдено');
+
+  // очистка — подсветка снята
+  await page.getByTestId('checklist-search-clear').click();
+  await expect(page.locator('[data-search-id].search-hit')).toHaveCount(0);
+  await expectNoHorizontalScroll(page, 'поиск в чеклисте');
 });

@@ -199,3 +199,59 @@ describe('ChecklistTab — подтверждение массовых дейс�
     expect(screen.getByTestId('checklist-none')).not.toBeDisabled();
   });
 });
+
+// bugs-trip-checks-stage пп.6–7: неотмеченная позиция visibly отличается от
+// закрытой (.row-attention); в липкой шапке — поиск (общий контрол ListSearch,
+// R8 — тот же, что на этапе ④): ввод → прокрутка к совпадению ближе к центру +
+// подсветка, Enter — следующее совпадение, промах — «Не найдено».
+describe('ChecklistTab — bugs-trip-checks-stage пп.6–7', () => {
+  beforeEach(() => {
+    (Element.prototype as any).scrollIntoView = vi.fn();
+  });
+
+  it('п.6: неотмеченная строка — .row-attention, отмеченная — без подсветки', () => {
+    const boughtKey = checklistRowKey(GROUPS[0].rows[0]);
+    setup({ bought: new Set([boughtKey]) });
+    expect(screen.getByTestId('checklist-row-1').classList.contains('row-attention')).toBe(false);
+    expect(screen.getByTestId('checklist-row-2').classList.contains('row-attention')).toBe(true);
+    expect(screen.getByTestId('checklist-row-3').classList.contains('row-attention')).toBe(true);
+  });
+
+  it('п.7: поиск в липкой шапке; ввод — прокрутка/подсветка; Enter — следующее; промах — «Не найдено»', () => {
+    setup();
+    const input = screen.getByTestId('checklist-search-input');
+    expect(input.closest('.checklist-sticky')).toBeTruthy();
+
+    // «к» есть и в «Крупа гречневая», и в «Тушёнка» — два совпадения
+    fireEvent.change(input, { target: { value: 'к' } });
+    expect(screen.getByTestId('checklist-search-count').textContent).toBe('1/2');
+    expect(document.querySelector('[data-search-id="2"]')!.classList.contains('search-hit')).toBe(true);
+    expect(Element.prototype.scrollIntoView).toHaveBeenCalled();
+
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(document.querySelector('[data-search-id="3"]')!.classList.contains('search-hit')).toBe(true);
+    expect(document.querySelector('[data-search-id="2"]')!.classList.contains('search-hit')).toBe(false);
+    expect(screen.getByTestId('checklist-search-count').textContent).toBe('2/2');
+
+    fireEvent.change(input, { target: { value: 'ффы' } });
+    expect(screen.getByTestId('checklist-search-none').textContent).toBe('Не найдено');
+  });
+
+  it('п.7: поиск раскрывает свёрнутую группу и не конфликтует с фильтром «только не взятое»', () => {
+    const boughtKey = checklistRowKey(GROUPS[1].rows[0]); // Тушёнка взята
+    setup({ bought: new Set([boughtKey]) });
+    fireEvent.click(screen.getByTestId('checklist-group-Бакалея'));
+    expect(screen.queryByTestId('checklist-row-2')).toBeNull();
+
+    const input = screen.getByTestId('checklist-search-input');
+    fireEvent.change(input, { target: { value: 'греч' } });
+    // группа «Бакалея» раскрыта поиском, совпадение подсвечено
+    expect(screen.getByTestId('checklist-row-2')).toBeTruthy();
+    expect(document.querySelector('[data-search-id="2"]')!.classList.contains('search-hit')).toBe(true);
+
+    // фильтр «только не взятое» + поиск: взятая Тушёнка не ищется
+    fireEvent.click(screen.getByTestId('checklist-only-missing'));
+    fireEvent.change(input, { target: { value: 'туш' } });
+    expect(screen.getByTestId('checklist-search-none').textContent).toBe('Не найдено');
+  });
+});

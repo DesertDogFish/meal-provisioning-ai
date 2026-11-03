@@ -184,3 +184,14 @@ describe('LoginPage — атмосферный фон (design-п.3)', () => {
     expect(z).toBeGreaterThanOrEqual(1);
   });
 });
+
+describe('LoginPage — демо-карточки (bugs-app-ui п.1)', () => {
+  it('демо-карточки центрованы: text-center на контейнерах карточек', () => {
+    renderPage();
+    for (const email of ['admin@provision.app', 'user@provision.app']) {
+      const card = screen.getByText(email).closest('div.rounded-lg');
+      expect(card, `карточка ${email}`).toBeTruthy();
+      expect(card!.classList.contains('text-center')).toBe(true);
+    }
+  });
+});

@@ -19,6 +19,9 @@ export const daysWord = (count: number): string => pluralize(count, ['день',
 // Release-1.0 (UI-consistency): «1 продукт / 2 продукта / 5 продуктов» — для чипов и подсказок
 export const productsWord = (count: number): string => pluralize(count, ['продукт', 'продукта', 'продуктов']);
 export const categoriesWord = (count: number): string => pluralize(count, ['категория', 'категории', 'категорий']);
+// bugs-recipes-catalog п.1: подзаголовок витрины блюд — «N блюд · M категорий»
+// («блюдо», а не «рецепт» — словарь владельца; recipesWord остаётся для рецептурных контекстов)
+export const dishesWord = (count: number): string => pluralize(count, ['блюдо', 'блюда', 'блюд']);
 
 /**
  * UX-осмотр 31.10 (подзадача 1): подпись-счётчик «N приёмов пищи».

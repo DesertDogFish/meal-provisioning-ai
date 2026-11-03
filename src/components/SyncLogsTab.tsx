@@ -77,6 +77,10 @@ export function SyncLogsTab({ onGoToSettings }: SyncLogsTabProps) {
   const { showError } = useToast();
   const [syncLogs, setSyncLogs] = useState<SyncLog[]>([]);
   const [kpi, setKpi] = useState<Kpi | null>(null);
+  // bugs-app-ui п.2: loading — флаг ПЕРВОЙ загрузки (тогда и только тогда
+  // рендерится PageLoader). Обновления (поллинг RUNNING каждые 2 с, смена
+  // фильтров) флаг не трогают: таблица остаётся смонтированной, данные
+  // подменяются на месте — витрина больше не мигает.
   const [loading, setLoading] = useState(true);
   const [selectedLog, setSelectedLog] = useState<SyncLog | null>(null);
 
@@ -87,7 +91,9 @@ export function SyncLogsTab({ onGoToSettings }: SyncLogsTabProps) {
   const [filterTo, setFilterTo] = useState('');
 
   const loadSyncLogs = useCallback(async () => {
-    setLoading(true);
+    // БЕЗ setLoading(true): повторные вызовы — это «обновление», а не «первая
+    // загрузка» (bugs-app-ui п.2). setLoading(false) в finally закрывает только
+    // первый прогон (повторно — no-op).
     try {
       const params: Record<string, string> = {};
       if (filterType) params.type = filterType;

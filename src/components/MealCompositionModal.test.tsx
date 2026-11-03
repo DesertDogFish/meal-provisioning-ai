@@ -211,3 +211,20 @@ describe('MealCompositionModal — transparency-п.3: предупреждени
     await waitFor(() => expect(putMealComposition).toHaveBeenCalledTimes(1));
   });
 });
+
+
+describe('MealCompositionModal — простой поиск в одну строку (bugs-trip-menu-stage п.4)', () => {
+  it('блок добавления — одна строка «поиск+кол-во+добавить» без лейблов-заголовков', async () => {
+    renderModal();
+    await screen.findByText('Гречка');
+    // заголовок панели и многоуровневые лейблы убраны
+    expect(screen.queryByText('Добавить продукт к приёму')).toBeNull();
+    expect(screen.queryByText('Найти продукт в справочнике')).toBeNull();
+    expect(screen.queryByText('Кол-во', { selector: 'label' })).toBeNull();
+    // поиск, количество и кнопка — в ОДНОЙ строке (общий flex-контейнер)
+    const row = screen.getByTestId('product-add-row');
+    expect(within(row).getByLabelText('Поиск продукта')).toBeTruthy();
+    expect(within(row).getByTestId('add-amount')).toBeTruthy();
+    expect(within(row).getByLabelText('Добавить продукт в состав')).toBeTruthy();
+  });
+});

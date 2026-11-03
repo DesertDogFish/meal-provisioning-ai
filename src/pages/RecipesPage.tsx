@@ -1,9 +1,9 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { Pencil, Plus, Search, Trash2, Utensils, X } from 'lucide-react';
+import { PackagePlus, Pencil, Plus, Search, Trash2, Utensils, X } from 'lucide-react';
 import { MealType } from '../types';
 import { formatAmount } from '../utils/calculations';
-import { humanizeCategory, servingsWord, ingredientsWord, mealTypeLabels } from '../utils/text';
+import { humanizeCategory, servingsWord, ingredientsWord, mealTypeLabels, dishesWord, categoriesWord } from '../utils/text';
 import CustomSelect from '../components/CustomSelect'; // Fix-5 (п.19): «Все категории» — как везде
 import { api, getRecipes } from '../api/client';
 import { useToast } from '../components/ToastProvider';
@@ -199,7 +199,7 @@ export default function RecipesPage() {
         if (!hit) return false;
       }
       
-      // Только без огня
+      // Без огня (bugs-recipes-catalog п.2: прежде «Только без огня»)
       if (noFireOnly && r.cookMinutes !== 0) return false;
       
       return true;
@@ -273,7 +273,9 @@ export default function RecipesPage() {
           «Продукты»/«Походы»); счётчики типов переехали в слайдер-пресеты ниже */}
       <div className="flex items-start justify-between gap-3">
         <h1 className="text-2xl md:text-3xl font-bold" style={{ color: 'var(--text)' }}>
-          Блюда · {recipes.length}
+          {/* bugs-recipes-catalog п.1: как в продуктах — «N блюд · M категорий»,
+              без голого «Блюда · 200» */}
+          {recipes.length} {dishesWord(recipes.length)} · {categories.length} {categoriesWord(categories.length)}
         </h1>
         {isAdmin && (
           <Button variant="primary" iconOnly onClick={openCreate}
@@ -366,7 +368,7 @@ export default function RecipesPage() {
                 }}
               >
                 <Flame size={14} aria-hidden />
-                Только без огня
+                Без огня
               </button>
               {(search || filterMealType || filterCategory || filterIngredient || noFireOnly) && (
                 <button
@@ -443,12 +445,13 @@ export default function RecipesPage() {
                   <span className="flex items-center gap-1">
                     {isAdmin && (
                       <>
+                        {/* bugs-app-ui п.5 (opportunistic): иконки действий карточки —
+                            класс .icon-action без инлайнового muted/fire-цвета */}
                         <button
                           aria-label={`Редактировать ${recipe.name}`}
                           title="Редактировать"
                           onClick={e => { e.stopPropagation(); openEdit(recipe); }}
-                          className="px-2 py-2 rounded-lg"
-                          style={{ color: 'var(--muted)' }}
+                          className="icon-action px-2 py-2 rounded-lg"
                         >
                           <Pencil size={15} />
                         </button>
@@ -456,18 +459,20 @@ export default function RecipesPage() {
                           aria-label={`Удалить ${recipe.name}`}
                           title="Удалить"
                           onClick={e => { e.stopPropagation(); handleDelete(recipe); }}
-                          className="px-2 py-2 rounded-lg"
-                          style={{ color: 'var(--fire)' }}
+                          className="icon-action px-2 py-2 rounded-lg"
                         >
                           <Trash2 size={15} />
                         </button>
                       </>
                     )}
-                    {/* Fix-8 (п.5): «В меню» без переноса строки — nowrap + shrink-0,
-                        кнопка не сжимается соседями и не рвёт надпись между «В» и «меню» */}
+                    {/* Fix-8 (п.5) + bugs-recipes-catalog п.3: бренд-градиент на каждой
+                        карточке забирал всё внимание — кнопка стала иконочной
+                        (PackagePlus, .icon-action); смысл — в title/aria-label,
+                        testid сохранён для e2e (navigation.spec N-1/N-3b).
+                        nowrap + shrink-0 — без переноса/сжатия, как в Fix-8. */}
                     <button
-                      className="px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap shrink-0"
-                      style={{ background: 'var(--grad-brand)', color: 'var(--on-fire)' }}
+                      className="icon-action p-2 rounded-lg whitespace-nowrap shrink-0"
+                      title="В меню похода…"
                       data-testid={`recipe-to-menu-${recipe.id}`}
                       aria-label={`Добавить «${recipe.name}» в меню похода`}
                       onClick={e => {
@@ -478,7 +483,7 @@ export default function RecipesPage() {
                         void api.get<any[]>('/trips').then((t) => setMenuTrips(Array.isArray(t) ? t : [])).catch(() => setMenuTrips([]));
                       }}
                     >
-                      В меню похода…
+                      <PackagePlus size={16} aria-hidden />
                     </button>
                   </span>
                 </div>
@@ -604,6 +609,7 @@ export default function RecipesPage() {
         <RecipeEditorModal
           recipe={editingRecipe}
           categories={categories}
+          isAdmin={isAdmin}
           onClose={() => setEditorOpen(false)}
           onSaved={() => { loadRecipes(); }}
         />

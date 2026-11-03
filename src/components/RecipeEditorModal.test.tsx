@@ -19,10 +19,10 @@ vi.mock('../api/client', () => ({
 
 import { api } from '../api/client';
 
-const renderEditor = (recipe: any = null) =>
+const renderEditor = (recipe: any = null, props: Record<string, unknown> = {}) =>
   render(
     <ToastProvider>
-      <RecipeEditorModal recipe={recipe} categories={['Супы', 'Каши']} onClose={vi.fn()} onSaved={vi.fn()} />
+      <RecipeEditorModal recipe={recipe} categories={['Супы', 'Каши']} onClose={vi.fn()} onSaved={vi.fn()} {...props} />
     </ToastProvider>
   );
 
@@ -151,5 +151,65 @@ describe('RecipeEditorModal — категория (U15: свободный вв
     // категория — свободный ввод: можно вписать своё значение, которого нет в списке
     fireEvent.change(cat, { target: { value: 'Десерты' } });
     expect(cat.value).toBe('Десерты');
+  });
+});
+
+// bugs-recipes-catalog пп.4–5: подсказка категории — в InfoTip; свободный ввод
+// продукта — создание из редактора (паттерн ManualItemsModal Fix-6 п.13, общий
+// компонент FreeProductCreate — R8 без дубля).
+describe('RecipeEditorModal — bugs-recipes-catalog пп.4–5', () => {
+  it('п.4: подсказка категории убрана в InfoTip — видимого текста под полем нет', async () => {
+    renderEditor();
+    await waitFor(() => expect(api.get).toHaveBeenCalled());
+    expect(screen.queryByText('Свободный ввод: выберите существующую или впишите свою.')).toBeNull();
+    expect(screen.getByTestId('info-tip')).toBeTruthy();
+    // aria-describedby не ссылается на удалённую подсказку
+    expect(screen.getByLabelText('Категория').getAttribute('aria-describedby')).toBeNull();
+  });
+
+  it('п.5: админ — неизвестный продукт создаётся (check-name → POST) и выбирается в строке', async () => {
+    (api.get as any).mockImplementation((url: string) => {
+      if (String(url).startsWith('/product-categories')) return Promise.resolve([{ id: '7', name: 'Разное' }]);
+      if (String(url).startsWith('/admin/products/check-name')) return Promise.resolve({ duplicate: false });
+      if (String(url).startsWith('/admin/products')) return Promise.resolve({ content: products, totalElements: products.length });
+      return Promise.resolve(null);
+    });
+    (api.post as any).mockResolvedValue({ id: 'p77' });
+    renderEditor(null, { isAdmin: true });
+    await waitFor(() => expect(api.get).toHaveBeenCalled());
+
+    fireEvent.click(screen.getByRole('button', { name: 'Добавить ингредиент' }));
+    const input = screen.getByLabelText('Продукт');
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: 'Кускус волшебный' } });
+
+    fireEvent.click(await screen.findByTestId('recipe-create-product'));
+    fireEvent.click(screen.getByRole('button', { name: 'Добавить' }));
+
+    await waitFor(() => expect(api.post).toHaveBeenCalledWith('/admin/products', {
+      name: 'Кускус волшебный', unit: 'PCS', categoryId: 7,
+    }));
+    // продукт автоматически выбран в строке, free-text-панель исчезла
+    await waitFor(() => expect((screen.getByLabelText('Продукт') as HTMLInputElement).value).toBe('Кускус волшебный'));
+    expect(screen.queryByTestId('recipe-create-product')).toBeNull();
+
+    // блюдо сохраняется — в составе созданный продукт
+    fireEvent.change(screen.getByLabelText('Название'), { target: { value: 'Кускус-тест' } });
+    fireEvent.change(screen.getByLabelText('Количество'), { target: { value: '2' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Создать блюдо' }));
+    await waitFor(() => expect(api.post).toHaveBeenCalledWith('/admin/recipes', expect.objectContaining({
+      ingredients: [expect.objectContaining({ ingredientId: 'p77' })],
+    })));
+  });
+
+  it('п.5: не-админ — подсказка «продукты добавляет админ» вместо кнопки создания', async () => {
+    renderEditor();
+    await waitFor(() => expect(api.get).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole('button', { name: 'Добавить ингредиент' }));
+    const input = screen.getByLabelText('Продукт');
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: 'Кускус волшебный' } });
+    expect(await screen.findByText(/Новые продукты добавляет администратор/)).toBeTruthy();
+    expect(screen.queryByTestId('recipe-create-product')).toBeNull();
   });
 });

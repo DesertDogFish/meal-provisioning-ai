@@ -154,8 +154,7 @@ export default function RecipeIngredientsEditor({ recipe, products, onChange, di
               type="button"
               disabled={disabled}
               onClick={() => removeRow(row.ingredientId)}
-              className="p-1 rounded transition-colors"
-              style={{ color: 'var(--muted)' }}
+              className="icon-action p-1 rounded"
               title="Убрать продукт из блюда"
               aria-label={`Убрать ${nameOf(row.ingredientId)} из блюда`}
             >

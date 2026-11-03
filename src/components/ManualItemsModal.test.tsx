@@ -4,7 +4,7 @@
  * Проверяем: добавление (POST-контракт), удаление, валидацию «продукт+количество»,
  * список уже добавленных позиций.
  */
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import ManualItemsModal from './ManualItemsModal';
 import { ToastProvider } from './ToastProvider';
@@ -197,5 +197,23 @@ describe('ManualItemsModal (Fix-6, п.13) — продукта нет в спи�
     fireEvent.change(search, { target: { value: 'Динамометр' } });
     expect(await screen.findByText(/Новые продукты добавляет администратор/)).toBeTruthy();
     expect(screen.queryByTestId('manual-create-product')).toBeNull();
+  });
+});
+
+
+describe('ManualItemsModal — простой поиск в одну строку (bugs-trip-menu-stage п.4)', () => {
+  it('блок добавления — одна строка «поиск+кол-во+добавить» без лейблов-заголовков', () => {
+    renderModal();
+    // «составной искатель» разобран: отдельных лейблов-заголовков нет
+    expect(screen.queryByText('Продукт из справочника')).toBeNull();
+    expect(screen.queryByText('Количество')).toBeNull();
+    expect(screen.queryByText('Примечание (необязательно)')).toBeNull();
+    // поиск, количество и кнопка — в ОДНОЙ строке (общий flex-контейнер)
+    const row = screen.getByTestId('product-add-row');
+    expect(within(row).getByLabelText('Продукт ручной позиции')).toBeTruthy();
+    expect(within(row).getByTestId('manual-amount')).toBeTruthy();
+    expect(within(row).getByLabelText('Добавить позицию')).toBeTruthy();
+    // примечание осталось доступным (aria-label + placeholder, без лейбла)
+    expect(screen.getByLabelText('Примечание к позиции')).toBeTruthy();
   });
 });

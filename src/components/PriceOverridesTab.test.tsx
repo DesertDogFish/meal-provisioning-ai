@@ -75,8 +75,9 @@ describe('PriceOverridesTab — props-driven этап ④ (cleanup-п.5)', () =>
     renderTab({}, { boughtSet: new Set(['k1']) });
     // «Гречка» рендерится дважды: десктоп-таблица + мобильные строки
     expect((await screen.findAllByText('Гречка')).length).toBeGreaterThan(0);
-    expect(screen.getByTestId('who-owes')).toBeTruthy();
-    expect(screen.getByTestId('planfact-strip')).toBeTruthy();
+    // bugs-trip-checks-stage пп.1–2: блока «кто должен» и план-факт полосы нет
+    expect(screen.queryByTestId('who-owes')).toBeNull();
+    expect(screen.queryByTestId('planfact-strip')).toBeNull();
     expect(getMock).not.toHaveBeenCalled();
     expect(putMock).not.toHaveBeenCalled();
   });
@@ -109,11 +110,68 @@ describe('PriceOverridesTab — props-driven этап ④ (cleanup-п.5)', () =>
     expect(props.onToggleExcluded).toHaveBeenCalledWith('i1');
   });
 
-  it('итоги полосы: план/факт из общей view (совпадают с ②)', async () => {
+  // bugs-trip-checks-stage п.2: тест «итоги полосы план/факт» удалён вместе
+  // с полосой — итоги этапа ④ теперь ОДИН «Итог» по введённым чекам (см. ниже).
+});
+
+describe('PriceOverridesTab — bugs-trip-checks-stage пп.1–5: чек без «плана»', () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  it('п.1: на этапе ④ нет блока «Кто сколько должен» (живёт в отчёте)', async () => {
+    renderTab({}, { boughtSet: new Set(['k1']) });
+    await screen.findAllByText('Гречка');
+    expect(screen.queryByTestId('who-owes')).toBeNull();
+    expect(screen.queryByText(/Кто сколько должен/)).toBeNull();
+  });
+
+  it('п.2: липкой полосы «План · Факт · Δ» над таблицей нет', async () => {
+    renderTab({}, { boughtSet: new Set(['k1']) });
+    await screen.findAllByText('Гречка');
+    expect(screen.queryByTestId('planfact-strip')).toBeNull();
+    expect(screen.queryByTestId('planfact-fact')).toBeNull();
+    expect(screen.queryByTestId('planfact-delta')).toBeNull();
+  });
+
+  it('п.3: колонок «План ₽» и «Отклонение» нет ни в таблице, ни в моб. строке', async () => {
+    renderTab({}, { boughtSet: new Set(['k1']) });
+    await screen.findAllByText('Гречка');
+    expect(screen.queryByText('План ₽')).toBeNull();
+    expect(screen.queryByText('Отклонение')).toBeNull();
+    expect(screen.queryByText('план')).toBeNull();
+    expect(screen.queryByTestId('row-delta-i1')).toBeNull();
+  });
+
+  it('п.4: заголовок колонки — «Стоимость ₽» (вместо «Факт ₽»)', async () => {
+    renderTab({}, { boughtSet: new Set(['k1']) });
+    await screen.findAllByText('Гречка');
+    expect(screen.queryByText('Факт ₽')).toBeNull();
+    // основная таблица + таблица «по дням»
+    expect(screen.getAllByText('Стоимость ₽').length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('п.5: внизу один «Итог» по введённым чекам; пока чеков нет — «нет данных»', async () => {
+    renderTab({}, { boughtSet: new Set(['k1']) });
+    const totals = await screen.findByTestId('checks-sticky-totals');
+    expect(totals.textContent).toContain('Итог');
+    expect(totals.textContent).toContain('нет данных');
+    expect(totals.textContent).not.toContain('План');
+    expect(totals.textContent).not.toContain('Факт:');
+  });
+
+  it('п.5: после ввода чека «Итог» = сумма введённых чеков', async () => {
     renderTab({ draftOverrides: { i1: { price: 120, total: 120 } } }, { boughtSet: new Set(['k1']) });
-    const strip = await screen.findByTestId('planfact-strip');
-    expect(strip.textContent).toContain('100'); // план
-    expect(strip.textContent).toContain('120'); // факт
+    const totals = await screen.findByTestId('checks-sticky-totals');
+    expect(totals.textContent).toContain('120');
+    expect(totals.textContent).not.toContain('нет данных');
+    expect(totals.textContent).not.toContain('План');
+  });
+
+  it('п.3: таблица «по дням» — только день и стоимость (без плана/дельты)', async () => {
+    renderTab({ draftOverrides: { i1: { price: 120, total: 120 } } }, { boughtSet: new Set(['k1']) });
+    const dayRow = await screen.findByTestId('dayfact-row-2026-07-01');
+    expect(dayRow.textContent).toContain('120');
+    expect(dayRow.textContent).not.toContain('100'); // план не показывается
+    expect(dayRow.querySelectorAll('td')).toHaveLength(2);
   });
 });
 
@@ -142,56 +200,22 @@ describe('PriceOverridesTab — empty-state (navigation-п.3)', () => {
 });
 
 /**
- * UX-осмотр 31.10 (п.10): единый словарь этапов ②④ и «честный факт».
- * Сводки говорят «План/Факт», а таблица чека — «Думали ₽/Заплатили ₽»:
- * два имени одного числа в одном экране. Плюс при нуле введённых чеков
- * факт показывал копию плана и «+0%» — выглядело как уже посчитанные деньги.
+ * bugs-trip-checks-stage пп.2–5 (владелец 03.11.2026): прежний describe
+ * «словарь План/Факт» (UX-осмотр 31.10, п.10) УСТАРЕЛ — план-факт полоса,
+ * колонки «План ₽»/«Отклонение» и дельта-чипы с этапа ④ удалены; кейсы
+ * «честного факта» переехали в describe «чек без „плана"» выше (Итог —
+ * «нет данных» до первого чека) и в ChecksModel.test.ts (enteredFactsTotal).
+ * Здесь остаётся только «по дням»: день без чека — «нет данных».
  */
-describe('PriceOverridesTab — словарь «План/Факт» (UX-осмотр 31.10, п.10)', () => {
+describe('PriceOverridesTab — таблица «по дням» без план/дельты (bugs-trip-checks-stage п.3)', () => {
   beforeEach(() => { vi.clearAllMocks(); });
 
-  it('заголовки таблицы: «План ₽»/«Факт ₽», старых «Думали/Заплатили» нет', async () => {
-    renderTab({}, { boughtSet: new Set(['k1']) });
-    expect((await screen.findAllByText('План ₽')).length).toBeGreaterThan(0);
-    expect((await screen.findAllByText('Факт ₽')).length).toBeGreaterThan(0);
-    expect(screen.queryByText(/Думали/)).toBeNull();
-    expect(screen.queryByText(/Заплатили/)).toBeNull();
-  });
-
-  it('итоговая полоса при 0 чеков: «Факт — нет данных», дельта «—»', async () => {
-    renderTab({}, { boughtSet: new Set(['k1']) });
-    const strip = await screen.findByTestId('planfact-strip');
-    expect(strip.textContent).toContain('нет данных');
-    expect(screen.getByTestId('planfact-fact').textContent).toContain('нет данных');
-    expect(screen.getByTestId('planfact-delta').textContent).toBe('—');
-  });
-
-  it('липкий итог таблицы при 0 чеков: «Факт: нет данных»', async () => {
-    renderTab({}, { boughtSet: new Set(['k1']) });
-    const totals = await screen.findByTestId('checks-sticky-totals');
-    expect(totals.textContent).toContain('План:');
-    expect(totals.textContent).toContain('Факт: нет данных');
-  });
-
-  it('после первого чека суммы и дельта возвращаются', async () => {
-    renderTab({ draftOverrides: { i1: { price: 120, total: 120 } } }, { boughtSet: new Set(['k1']) });
-    const strip = await screen.findByTestId('planfact-strip');
-    expect(strip.textContent).not.toContain('нет данных');
-    expect(screen.getByTestId('planfact-delta').textContent).toBe('+20,0%');
-  });
-
-  it('строка без введённого чека: отклонение «—» (десктоп-таблица и моб. строка)', async () => {
-    renderTab({}, { boughtSet: new Set(['k1']) });
-    const chips = await screen.findAllByTestId('row-delta-i1');
-    expect(chips.length).toBeGreaterThanOrEqual(2);
-    for (const chip of chips) expect(chip.textContent).toBe('—');
-  });
-
-  it('таблица «по дням»: день без чека — «нет данных», день с чеком — сумма', async () => {
+  it('день без чека — «нет данных» (план за факт не выдаётся)', async () => {
     renderTab({}, { boughtSet: new Set(['k1']) });
     const dayRows = await screen.findAllByTestId('dayfact-row-2026-07-01');
     expect(dayRows.length).toBeGreaterThan(0);
     expect(dayRows[0].textContent).toContain('нет данных');
+    expect(dayRows[0].textContent).not.toContain('100'); // план не показывается
   });
 });
 

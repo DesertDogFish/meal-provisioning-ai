@@ -7,6 +7,7 @@
 import { CalendarDays } from 'lucide-react';
 import TabHeader from './TabHeader';
 import ExclusionCheckbox from './ExclusionCheckbox';
+import InfoTip from './InfoTip';
 import { EmptyState } from './EmptyState';
 import { formatAmount } from '../utils/calculations';
 import { formatRub } from '../utils/format' // cleanup-п.9: shim formatRub удалён;
@@ -33,10 +34,20 @@ export function TripDayShoppingTab({
   const tripManual = manualForTrip(manualItems);
   return (
     <div className="space-y-3 max-w-3xl">
-      {/* Fix-5 (п.2): на «по дням» теперь тоже есть заголовок — вкладки выглядят одинаково */}
+      {/* Fix-5 (п.2): на «по дням» теперь тоже есть заголовок — вкладки выглядят одинаково.
+          bugs-trip-shopping-stage пп.3–4: заголовок «Предварительная закупка по дням»
+          + подсказка про исключение позиций дня. */}
       <TabHeader
-        title="Закупка по дням"
-        subtitle={`Итого за поход: ${formatRub(dayShopping.reduce((a, d) => a + d.dayCost, 0))} · ${dayShopping.length} дн.`}
+        title="Предварительная закупка по дням"
+        subtitle={
+          <span className="keep-pair">
+            {`Итого за поход: ${formatRub(dayShopping.reduce((a, d) => a + d.dayCost, 0))} · ${dayShopping.length} дн.`}
+            <InfoTip
+              label="Про исключение позиций"
+              text="Позиции конкретного дня можно исключить, если они уже есть: снимите галочку у позиции — она останется в списке дня (полупрозрачной), но не будет учитываться в сумме дня и в общем итоге."
+            />
+          </span>
+        }
       />
       {/* navigation-п.3: нет дней и ручных позиций — выход на этап ① */}
       {dayShopping.length === 0 && tripManual.length === 0 && (
@@ -89,7 +100,9 @@ export function TripDayShoppingTab({
         <div className="rounded-xl overflow-hidden mob-scroll" style={{ background: 'var(--surface)', border: '1px dashed var(--line-strong)' }}>
           <div className="p-4 flex items-center justify-between" style={{ borderBottom: '1px solid var(--border)' }}>
             <div>
-              <p className="font-semibold" style={{ color: 'var(--text)' }}>На весь поход</p>
+              {/* bugs-trip-shopping-stage п.6: «На весь поход поровну» — дневная
+                  карточка этапа ① (TripDaysList) и печать (TripPrintPage) — не трогаем */}
+              <p className="font-semibold" style={{ color: 'var(--text)' }}>На весь поход поровну</p>
               <p className="text-xs" style={{ color: 'var(--muted)' }}>
                 Не привязаны к дням · учтены в итоговой сумме похода
               </p>

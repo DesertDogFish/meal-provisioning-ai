@@ -2,7 +2,12 @@
 <html lang="ru">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- bugs-trip-menu-stage п.6: viewport-fit=cover ОБЯЗАТЕЛЕН — без него на iOS
+         webview не заходит под home-indicator, env(safe-area-inset-*) всегда 0,
+         и в PWA-standalone под фиксированным .stage-bar оставалась полоса
+         системного фона («зазор»). Весь safe-area-паддинг (бар, модалки, топбар,
+         scroll-top) уже заложен в index.css — meta его активирует. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Провиант — Планировщик питания для походов</title>
     <!-- Fix-10 (п.5): «стили красоты» дизайн-кода в деле — OG-карточка
          (og-cover.png из design-pack копируется в dist плагином vite) +

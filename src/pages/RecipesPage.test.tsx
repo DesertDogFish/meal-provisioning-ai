@@ -123,17 +123,42 @@ describe('RecipesPage — ?edit= (U37, список 26.10)', () => {
   });
 });
 
-// Fix-8 (п.5): «кнопка "В меню" почему-то с переносом строки между В и меню» —
-// кнопка не должна переносить текст (whitespace-nowrap) и сжиматься соседями (shrink-0).
-describe('RecipesPage — кнопка «В меню» на карточке (Fix-8 п.5)', () => {
-  it('«В меню» — без переноса строки (whitespace-nowrap + shrink-0)', async () => {
+// Fix-8 (п.5) + bugs-recipes-catalog п.3: кнопка карточки больше НЕ текстовая
+// pill-кнопка с бренд-градиентом (забирала всё внимание на каждой карточке) —
+// иконочная PackagePlus в общем стиле действий (.icon-action, bugs-app-ui п.5);
+// nowrap/shrink-0 сохранены, aria-label и testid прежние (e2e navigation.spec).
+describe('RecipesPage — кнопка «В меню похода» на карточке (Fix-8 п.5; bugs-recipes-catalog п.3)', () => {
+  it('кнопка иконочная: .icon-action + svg, без текста и grad-brand, aria-label/testid прежние', async () => {
     renderPage();
     await screen.findByText('Уха из рыбных консервов');
     const btn = screen.getByTestId('recipe-to-menu-r1');
     expect(btn.className).toContain('whitespace-nowrap');
     expect(btn.className).toContain('shrink-0');
-    // текст — единая строка без разрывов
-    expect(btn.textContent?.trim()).toBe('В меню похода…');
+    expect(btn.className).toContain('icon-action');
+    expect(btn.textContent?.trim()).toBe('');
+    expect(btn.querySelector('svg')).toBeTruthy();
+    expect(btn.getAttribute('style') ?? '').not.toContain('grad-brand');
+    expect(btn.getAttribute('aria-label')).toBe('Добавить «Уха из рыбных консервов» в меню похода');
+  });
+});
+
+// bugs-recipes-catalog пп.1–2: счётчики в подзаголовке (паттерн ProductsPage)
+// и переименование «Только без огня» → «Без огня».
+describe('RecipesPage — bugs-recipes-catalog пп.1–2', () => {
+  it('п.1: подзаголовок — «1 блюдо · 1 категория», без голого «Блюда · N»', async () => {
+    renderPage();
+    await screen.findByText('Уха из рыбных консервов');
+    const h1 = screen.getByRole('heading', { level: 1 });
+    expect(h1.textContent).toContain('1 блюдо');
+    expect(h1.textContent).toContain('1 категория');
+    expect(h1.textContent).not.toContain('Блюда ·');
+  });
+
+  it('п.2: фильтр подписан «Без огня»; «Только без огня» отсутствует', async () => {
+    renderPage();
+    await screen.findByText('Уха из рыбных консервов');
+    expect(screen.getByTestId('recipes-nofire').textContent?.trim()).toBe('Без огня');
+    expect(screen.queryByText('Только без огня')).toBeNull();
   });
 });
 

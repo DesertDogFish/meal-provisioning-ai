@@ -72,7 +72,9 @@ export function KebabMenu({ label, items, testId }: KebabMenuProps) {
       <button
         ref={btnRef}
         type="button"
-        className="ibtn"
+        /* bugs-app-ui п.5: триггер действий — «рыжий» .icon-action (цвет/ховер
+           перекрывают .ibtn: правило ниже по каскаду), коробка 42×42 остаётся */
+        className="ibtn icon-action"
         aria-label={label}
         title={label}
         aria-haspopup="menu"

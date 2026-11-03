@@ -129,6 +129,15 @@ describe('ProductTable (рендер и взаимодействия)', () => {
     expect(screen.getAllByRole('row')).toHaveLength(products.length + 1); // + thead
   });
 
+  it('иконки «Правка»/«Удалить» — .icon-action, без инлайнового цвета (bugs-app-ui п.5)', () => {
+    renderTable();
+    for (const label of ['Правка: Гречка', 'Удалить: Гречка']) {
+      const btn = screen.getByLabelText(label);
+      expect(btn.classList.contains('icon-action')).toBe(true);
+      expect(btn.getAttribute('style') ?? '').not.toContain('muted');
+    }
+  });
+
   it('сортировка по клику на «Продукт»: сначала asc (стрелка ↑), повторный клик — desc (↓)', () => {
     renderTable();
     const th = screen.getByText(/Продукт/);
@@ -160,13 +169,26 @@ describe('ProductTable (рендер и взаимодействия)', () => {
     expect(baseProps.onResetFilters).toHaveBeenCalledTimes(1);
   });
 
-  it('чип «нет цены» для продуктов без цены, форматирование цены с источником', () => {
+  // bugs-products-catalog п.3: в колонке «Цена» — только сумма, без чипа источника
+  it('в ячейке цены нет чипа источника («ЕМИСС»/«API»/«ручная»)', () => {
     renderTable();
-    // Соль и Тушёнка без цены → 2 чипа «нет цены»
-    expect(screen.getAllByText('нет цены')).toHaveLength(2);
     expect(screen.getByText(/89 ₽/)).toBeTruthy();
-    expect(screen.getByText('ЕМИСС')).toBeTruthy();
-    expect(screen.getByText('ручная')).toBeTruthy();
+    expect(screen.queryByText('ЕМИСС')).toBeNull();
+    expect(screen.queryByText('ручная')).toBeNull();
+  });
+
+  it('без цены ячейка пустая — чип «нет цены» не рендерится', () => {
+    renderTable();
+    expect(screen.queryByText('нет цены')).toBeNull();
+    // Соль и Тушёнка без цены → пустые ячейки «Цена»
+    for (const name of ['Соль', 'Тушёнка']) {
+      const row = screen.getByText(name).closest('tr')!;
+      const cell = row.querySelector('td[data-label="Цена"]')!;
+      expect(cell.textContent).toBe('');
+    }
+    // с ценой — сумма на месте
+    const buckwheat = screen.getByText('Гречка').closest('tr')!;
+    expect(buckwheat.querySelector('td[data-label="Цена"]')!.textContent).toContain('89');
   });
 
   it('колонка «Упаковка»: packSize или «развес»; чип упаковки у названия только с packSize', () => {
@@ -196,9 +218,21 @@ describe('ProductTable (рендер и взаимодействия)', () => {
     expect(baseProps.onDelete).toHaveBeenCalledTimes(1);
     expect(baseProps.onDelete.mock.calls[0][0].id).toBe('c'); // Тушёнка при сортировке name asc: а,d,b,c
   });
+
+  // bugs-app-ui п.5: иконки действий — «рыжие» через класс .icon-action,
+  // без инлайнового цвета var(--muted)
+  it('иконки «Правка»/«Удалить» имеют класс .icon-action без инлайнового цвета', () => {
+    renderTable();
+    const edit = screen.getAllByTitle('Правка')[0];
+    const del = screen.getAllByTitle('Удалить')[0];
+    expect(edit.className).toContain('icon-action');
+    expect(del.className).toContain('icon-action');
+    expect(edit.style.color).toBe('');
+    expect(del.style.color).toBe('');
+  });
 });
 
-describe('ProductTable: значок общей привязки ЕМИСС (KB-8 + счётчик, BL-23)', () => {
+describe('ProductTable: колонка «Синхронизация» — иконка линка со счётчиком (bugs-products-catalog пп.1–2)', () => {
   const baseProps = {
     filters: filters(),
     onEdit: vi.fn(),
@@ -208,15 +242,44 @@ describe('ProductTable: значок общей привязки ЕМИСС (KB-
   const renderTable = (rows: ProductRow[]) =>
     render(<MemoryRouter><ProductTable products={rows} {...baseProps} /></MemoryRouter>);
 
-  it('значка нет, если позиция ЕМИСС у продукта одна (0, null и undefined равнозначны)', () => {
+  const syncCell = (name: string) =>
+    screen.getByText(name).closest('tr')!.querySelector('td[data-label="Синхронизация"]')!;
+
+  it('заголовок колонки — «Синхронизация» (короткий, без «цены»)', () => {
+    renderTable([mk({ id: 'a', name: 'Гречка' })]);
+    expect(screen.getByRole('columnheader', { name: /^Синхронизация/ })).toBeTruthy();
+    expect(screen.queryByText('Синхронизация цены')).toBeNull();
+  });
+
+  it('текстовых флагов статуса в ячейке нет (чип PRICE_SYNC_LABELS удалён)', () => {
     renderTable([
-      mk({ id: 'solo', name: 'Гречка', emisCode: '101', emisSharedCount: 0 }),
+      mk({ id: 'milk', name: 'Молоко', emisCode: '1115', priceSyncStatus: 'SYNCED' }),
+      mk({ id: 'match', name: 'Спички', emisCode: '5701', priceSyncStatus: 'NO_DATA' }),
+    ]);
+    expect(screen.queryByText('да, из ЕМИСС')).toBeNull();
+    expect(screen.queryByText('нет данных')).toBeNull();
+    expect(screen.queryByText('не привязан')).toBeNull();
+    expect(screen.queryAllByTestId('price-sync-status')).toHaveLength(0);
+  });
+
+  it('иконка видна и при единственной привязке (emisSharedCount 0/null/undefined → счётчик «1»)', () => {
+    renderTable([
+      mk({ id: 'solo', name: 'Гречка', emisCode: '101', emisSharedCount: 0, priceSyncStatus: 'SYNCED' }),
       mk({ id: 'nul', name: 'Соль', emisCode: '102', emisSharedCount: null }),
       mk({ id: 'undef', name: 'Сахар', emisCode: '103' }),
+    ]);
+    expect(screen.getAllByTestId('emis-shared-badge')).toHaveLength(3);
+    expect(screen.getAllByTestId('emis-shared-count').map(el => el.textContent)).toEqual(['1', '1', '1']);
+  });
+
+  it('нет привязки (нет emisCode / NOT_LINKED) → ячейка «Синхронизация» пустая', () => {
+    renderTable([
       mk({ id: 'unbound', name: 'Вода' }),
+      mk({ id: 'nl', name: 'Пенка', priceSyncStatus: 'NOT_LINKED' }),
     ]);
     expect(screen.queryAllByTestId('emis-shared-badge')).toHaveLength(0);
-    expect(screen.queryAllByTestId('emis-shared-count')).toHaveLength(0);
+    expect(syncCell('Вода').textContent).toBe('');
+    expect(syncCell('Пенка').textContent).toBe('');
   });
 
   it('счётчик показывает СКОЛЬКО ВСЕГО продуктов на позиции: emisSharedCount + 1', () => {
@@ -242,7 +305,7 @@ describe('ProductTable: значок общей привязки ЕМИСС (KB-
     expect(screen.getByTestId('emis-shared-count').textContent).toBe('17');
   });
 
-  it('склонение счётчика: 2–4 → «продукта», 5+ → «продуктов» («1 продукт» не бывает: значок рисуется только при ≥2)', () => {
+  it('склонение счётчика: 2–4 → «продукта», 5+ → «продуктов»', () => {
     renderTable([
       mk({ id: 'two', name: 'Бумага', emisCode: '6502', emisSharedCount: 1 }),   // всего 2
       mk({ id: 'four', name: 'Салфетки', emisCode: '6505', emisSharedCount: 3 }), // всего 4
@@ -254,15 +317,6 @@ describe('ProductTable: значок общей привязки ЕМИСС (KB-
     expect(titles[1]).toContain('используют 5 продуктов');
     expect(titles[2]).toContain('используют 4 продукта');
     expect(screen.getAllByTestId('emis-shared-count').map(el => el.textContent)).toEqual(['2', '5', '4']);
-  });
-
-  it('значок живёт рядом с чипом статуса синхронизации и не подменяет его', () => {
-    renderTable([
-      mk({ id: 'milk', name: 'Молоко сухое', emisCode: '1115', emisName: 'Молоко сухое, кг',
-        emisSharedCount: 1, priceSyncStatus: 'NO_DATA' }),
-    ]);
-    expect(screen.getByTestId('price-sync-status').textContent).toBe('нет данных');
-    expect(screen.getByTestId('emis-shared-badge')).toBeTruthy();
   });
 });
 

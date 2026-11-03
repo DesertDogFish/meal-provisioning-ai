@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { tripReadiness } from './readiness';
+import { tripReadiness, earliestOpenStage } from './readiness';
 
 describe('tripReadiness (Fix-3, п.2) — сквозной статус похода', () => {
   it('пустой поход: ничего не готово, чек вводить нельзя', () => {
@@ -50,5 +50,36 @@ describe('tripReadiness — checksTotal (Fix-4, п.11)', () => {
   it('без checksTotal знаменатель = checklistTotal (обратная совместимость)', () => {
     const r = tripReadiness({ mealsCount: 1, checklistTotal: 4, boughtCount: 4, factCount: 4 });
     expect(r.checks).toBe('done');
+  });
+});
+
+describe('earliestOpenStage (bugs-trip-list п.3) — этап по самой ранней незакрытой части', () => {
+  const r = (f: Parameters<typeof tripReadiness>[0]) => tripReadiness(f);
+
+  it('меню не собрано → «menu» (даже если чеки уже введены)', () => {
+    expect(earliestOpenStage(r({ mealsCount: 0, checklistTotal: 5, boughtCount: 5, factCount: 5 }), { checklistTotal: 5 }))
+      .toBe('menu');
+  });
+
+  it('меню собрано, чеклист пуст → «shopping» (этап ②)', () => {
+    expect(earliestOpenStage(r({ mealsCount: 2, checklistTotal: 0, boughtCount: 0, factCount: 0 }), { checklistTotal: 0 }))
+      .toBe('shopping');
+  });
+
+  it('закупка не закрыта (ничего не взято / частично) → «store», даже при введённых чеках', () => {
+    expect(earliestOpenStage(r({ mealsCount: 2, checklistTotal: 4, boughtCount: 0, factCount: 4, checksTotal: 4 }), { checklistTotal: 4 }))
+      .toBe('store');
+    expect(earliestOpenStage(r({ mealsCount: 2, checklistTotal: 4, boughtCount: 1, factCount: 4, checksTotal: 4 }), { checklistTotal: 4 }))
+      .toBe('store');
+  });
+
+  it('всё взято, чеки не до конца → «checks»', () => {
+    expect(earliestOpenStage(r({ mealsCount: 2, checklistTotal: 4, boughtCount: 4, factCount: 2 }), { checklistTotal: 4 }))
+      .toBe('checks');
+  });
+
+  it('поход готов → «checks» (финальный этап, полоса полная)', () => {
+    expect(earliestOpenStage(r({ mealsCount: 2, checklistTotal: 4, boughtCount: 4, factCount: 4 }), { checklistTotal: 4 }))
+      .toBe('checks');
   });
 });

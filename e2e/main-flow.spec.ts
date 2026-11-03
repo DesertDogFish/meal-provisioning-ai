@@ -68,7 +68,9 @@ test('E2E-04 создание похода со спаренными датам�
   await expect(page.getByText('Поход на Алтай').first()).toBeVisible({ timeout: 15_000 });
 });
 
-// UX-осмотр 31.10 (п.3, KB-32): native <input type="date"> принимает ISO,
+// UX-осмотр 31.10 (п.3, KB-32) + bugs-app-ui п.3: брендовый DatePicker
+// (react-datepicker, попапер .dark-calendar) — поле text: принимает ДД.ММ.ГГГГ
+// и ISO (вставка из буфера / e2e fill), отображает ДД.ММ.ГГГГ, форма хранит ISO;
 // заблокированное поле окончания объясняет причину.
 test('E2E-04b даты с клавиатуры: ISO, подсказка на disabled endDate', async ({ page }) => {
   await login(page);
@@ -84,9 +86,9 @@ test('E2E-04b даты с клавиатуры: ISO, подсказка на dis
   await expect(hint).toHaveText('Сначала укажите дату начала');
   await expect(hint).toBeVisible();
 
-  // 2) native date input принимает только ISO YYYY-MM-DD
+  // 2) ввод с клавиатуры/fill: ISO принимается, отображается ДД.ММ.ГГГГ (KB-32)
   await start.fill('2026-07-01');
-  await expect(start).toHaveValue('2026-07-01');
+  await expect(start).toHaveValue('01.07.2026');
   // значение формы: min у endDate подтянулся (контракт CR-3)
   await expect(end).toHaveAttribute('min', '2026-07-01');
   await expect(end).toBeEnabled();
@@ -94,7 +96,7 @@ test('E2E-04b даты с клавиатуры: ISO, подсказка на dis
 
   // 3) endDate: заполняем после разблокировки
   await end.fill('2026-07-05');
-  await expect(end).toHaveValue('2026-07-05');
+  await expect(end).toHaveValue('05.07.2026');
 
   // 5) форма уходит на сервер: поход создан
   await page.getByLabel('Количество человек').fill('3');
@@ -115,15 +117,14 @@ test('E2E-05 сводка поездки: закупки/стоимость/ка
   const card = page.locator('[data-testid^="trip-card-"]').first();
   await card.click();
   await expect(page).toHaveURL(/\/trips\/trip-/, { timeout: 15_000 });
-  // Вновь созданный поход без дней: «Список закупок» рендерится только на вкладке
-  // shopping; «Сводка»/«Калории/приём» — на вкладке person. Проверяем обе вкладки.
-  await page.getByRole('button', { name: 'Закупка на поход' }).click();
-  await expect(page.getByText('Список закупок на весь поход')).toBeVisible({ timeout: 15_000 });
-  await expect(page.getByText(/Итого:/)).toBeVisible();
-  await page.getByRole('button', { name: 'На человека' }).click();
-  await expect(page.getByText('Сводка')).toBeVisible();
-  await expect(page.getByText('Калории/приём')).toBeVisible();
-  await expect(page.getByText(/₽/).first()).toBeVisible();
+  // Вновь созданный поход без дней: этап ② «Закупка» (bugs-trip-shopping-stage:
+  // заголовок «Предварительная закупка»; вид «На человека» удалён — проверяем
+  // виды «На поход» и «По дням»).
+  await page.getByTestId('stage-bar-shopping').click();
+  await expect(page.getByText('Предварительная закупка')).toBeVisible({ timeout: 15_000 });
+  await page.getByTestId('shopping-view-days').click();
+  await expect(page.getByText('Предварительная закупка по дням')).toBeVisible();
+  await expect(page.getByTestId('shopping-view-person')).toHaveCount(0);
 });
 
 test('E2E-06 фолбэк: принудительный real без бэкенда → не падаем', async ({ page }) => {

@@ -9,8 +9,7 @@ import { describe, it, expect } from 'vitest';
 import { deriveTripView, type TripViewInput } from '../utils/tripDerived';
 import {
   buildCheckRows, groupCheckRows, dayPlanFacts, checkTotals,
-  calculateDelta, formatDelta, getDeltaChipClass,
-  hasEnteredFacts, rowHasFact,
+  hasEnteredFacts, rowHasFact, enteredFactsTotal,
 } from './ChecksModel';
 import type { TripManualItem } from '../api/tripManualItems';
 import type { Trip, Recipe, Price } from '../types/tripDetail';
@@ -107,14 +106,27 @@ describe('ChecksModel — строки этапа ④ из общей view (clea
     expect(day1.actualCost).toBe(200);  // гречка по факту
   });
 
-  it('дельта: расчёт, формат (−0,0% → 0%), класс чипа', () => {
-    expect(calculateDelta(100, 120)).toBeCloseTo(20);
-    expect(calculateDelta(0, 120)).toBe(0);
-    expect(formatDelta(-0.04)).toBe('0%');
-    expect(formatDelta(20)).toBe('+20,0%');
-    expect(getDeltaChipClass(0)).toBe('dim');
-    expect(getDeltaChipClass(5)).toBe('fire');
-    expect(getDeltaChipClass(-5)).toBe('ok');
+  // bugs-trip-checks-stage п.3: calculateDelta/formatDelta/getDeltaChipClass
+  // УДАЛЕНЫ из модели (колонки «План ₽»/«Отклонение» с этапа ④ сняты —
+  // потребителей не осталось; отчёт/печать считают дельту своей локальной
+  // логикой TripReportPage/TripPrintPage — они не тронуты).
+
+  it('п.5: enteredFactsTotal — null до первого чека, затем сумма ТОЛЬКО введённых', () => {
+    const v0 = deriveTripView(input());
+    expect(enteredFactsTotal(buildCheckRows(v0))).toBeNull(); // план за факт не выдаётся
+
+    const v1 = deriveTripView(input({ draftOverrides: { i1: { price: 200, total: 200 } } }));
+    // введён один чек (гречка, 200 ₽); позиция «Без цены» (i3) и тушёнка (i2)
+    // без чека — в итог не попадают (фолбэк плана не суммируется)
+    expect(enteredFactsTotal(buildCheckRows(v1))).toBe(200);
+  });
+
+  it('п.5: enteredFactsTotal игнорирует исключённые позиции', () => {
+    const v = deriveTripView(input({
+      draftOverrides: { i1: { price: 200, total: 200 }, i2: { price: 50, total: 50 } },
+      shoppingExcluded: new Set(['i2']),
+    }));
+    expect(enteredFactsTotal(buildCheckRows(v))).toBe(200);
   });
 });
 
