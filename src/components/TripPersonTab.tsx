@@ -23,7 +23,7 @@ export interface TripPersonTabProps {
     caloriesPerPersonMeal?: number | null;
   };
   /** U28: строки отсортированы по алфавиту; факт-цены применены */
-  personSummary: TripView['personSummary'];
+  personSummary: any[];
   /** navigation-п.3: CTA пустого состояния — переключить этап на «Меню ①» */
   onGoToMenu?: () => void;
 }
@@ -135,7 +135,7 @@ export function TripPersonTab({ trip, realPeople, tripSummary, personSummary, on
               </tr>
             </thead>
             <tbody style={{ borderTop: '1px solid var(--border)' }}>
-              {personSummary.map((item, i) => (
+              {personSummary.map((item: any, i: number) => (
                 <tr key={i} style={{ borderTop: '1px solid var(--border)' }}>
                   <td className="row-title px-4 py-2.5" data-label="" style={{ color: 'var(--text)' }}>{item.ingredientName}</td>
                   <td className="keep-num px-4 py-2.5 text-right" data-label="На человека" style={{ color: 'var(--muted)' }}>{formatAmount(item.amountPerDefaultPerson, item.unit)}</td>

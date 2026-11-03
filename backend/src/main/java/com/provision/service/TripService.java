@@ -142,6 +142,22 @@ public class TripService {
         return toResponse(trip);
     }
 
+    /**
+     * trip-workflow-redesign п.2: toggle утверждения меню этапа ① (owner-only).
+     * Утвердить ↔ снять; оптимистичная блокировка — общий {@code @Version} (V34),
+     * конфликт маппится GlobalExceptionHandler в 409 CONCURRENT_MODIFICATION.
+     */
+    @Transactional
+    public TripResponse toggleMenuApproval(Long tripId, Long userId) {
+        Trip trip = tripRepository.findByIdWithDaysAndMeals(tripId, userId)
+                .orElseThrow(() -> new NotFoundException("Trip not found or access denied"));
+        boolean approved = trip.getMenuApprovedAt() == null;
+        trip.setMenuApprovedAt(approved ? java.time.LocalDateTime.now() : null);
+        trip = tripRepository.save(trip);
+        log.info("Menu approval toggled for trip {}: {}", tripId, approved);
+        return toResponse(trip);
+    }
+
     @Transactional
     public void deleteTrip(Long tripId, Long userId) {
         Trip trip = tripRepository.findByIdWithDaysAndMeals(tripId, userId)
@@ -279,6 +295,7 @@ public class TripService {
                 trip.getEndDate(),
                 trip.getDefaultPeople(),
                 trip.getNotes(),
+                trip.getMenuApprovedAt() != null,
                 trip.getCreatedAt(),
                 days,
                 progress

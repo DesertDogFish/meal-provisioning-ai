@@ -25,11 +25,13 @@ const tripsFixture = [
   {
     id: 't1', userId: '1', name: 'Поход один', startDate: '2026-07-01', endDate: '2026-07-03',
     defaultPeople: 2, days: [{ id: 'd1', dayDate: '2026-07-01', meals: [{}, {}] }],
+    menuApproved: true, // redesign п.4: фикстура утверждена, чтобы воркфлоу шёл дальше ①
     progress: { stage: 'shopping', meals: 2, checklistTotal: 5, facts: 0, factsTotal: 5, totalCost: 1000, costPerPerson: 500 },
   },
   {
     id: 't2', userId: '1', name: 'Поход два', startDate: '2026-08-01', endDate: '2026-08-02',
     defaultPeople: 3, days: [{ id: 'd2', dayDate: '2026-08-01', meals: [{}] }],
+    menuApproved: true, // redesign п.4
     progress: { stage: 'checks', meals: 1, checklistTotal: 3, facts: 2, factsTotal: 3, totalCost: 900, costPerPerson: 300 },
   },
 ];
@@ -100,6 +102,7 @@ describe('TripsPage — прогресс по самой ранней незак
   const checksAheadTrip = [{
     id: 'x1', userId: '1', name: 'Поход чеки впереди', startDate: '2026-07-01', endDate: '2026-07-02',
     defaultPeople: 2, days: [{ id: 'dx', dayDate: '2026-07-01', meals: [{}] }],
+    menuApproved: true, // redesign п.4
     // все чеки введены (4/4), но закупка не закрыта (взято 1 из 4):
     // старая логика «по нарастающей» рисовала ПОЛНУЮ полосу этапа ④
     progress: { stage: 'checks', meals: 1, checklistTotal: 4, facts: 4, factsTotal: 4, totalCost: 800, costPerPerson: 400 },
@@ -129,6 +132,7 @@ describe('TripsPage — честный прогресс этапа ① (transpar
   const menuTrip = [{
     id: 't3', userId: '1', name: 'Поход меню', startDate: '2026-09-01', endDate: '2026-09-04',
     defaultPeople: 2,
+    menuApproved: true, // redesign п.4: меню утверждено → этап ② виден
     days: [
       { id: 'd31', dayDate: '2026-09-01', meals: [{}, {}] },
       { id: 'd32', dayDate: '2026-09-02', meals: [] },
@@ -149,10 +153,10 @@ describe('TripsPage — честный прогресс этапа ① (transpar
   // bugs-trip-list п.3: семантика «по нижней границе» — меню t3 собрано (2 приёма),
   // а список закупки пуст → самая ранняя незакрытая часть воркфлоу = этап ②.
   // Знаменатель «2/12» (дни×3) по-прежнему не выдумывается.
-  it('меню собрано, закупка пуста → этап ② «Закупка»: «0 поз.», НЕ «2/12»', async () => {
+  it('меню собрано, закупка пуста → этап ② «Проверка»: «0 поз.», НЕ «2/12»', async () => {
     renderPage();
     const row = await screen.findByTestId('trip-progress-t3');
-    expect(row.textContent).toContain('Закупка');
+    expect(row.textContent).toContain('Проверка'); // redesign п.1: подпись этапа ②
     expect(row.textContent).toContain('0 поз.');
     expect(row.textContent).not.toContain('2/12');
   });
@@ -161,7 +165,7 @@ describe('TripsPage — честный прогресс этапа ① (transpar
     (api.get as any).mockImplementation((path: string) => {
       if (path === '/auth/me') return Promise.resolve({ id: '1', email: 'a@b.c', role: 'ADMIN' });
       if (path === '/trips') return Promise.resolve([{
-        ...menuTrip[0], id: 't4', name: 'Пустое меню',
+        ...menuTrip[0], id: 't4', name: 'Пустое меню', menuApproved: false, // redesign п.4: не утверждено → ①
         days: [{ id: 'd41', dayDate: '2026-09-01', meals: [] }],
         progress: { stage: 'menu', meals: 0, checklistTotal: 0, facts: 0, factsTotal: 0, totalCost: 0, costPerPerson: 0 },
       }]);
@@ -171,7 +175,10 @@ describe('TripsPage — честный прогресс этапа ① (transpar
     const row = await screen.findByTestId('trip-progress-t4');
     expect(row.textContent).toContain('Меню');
     expect(row.textContent).toContain('0 приёмов');
-    expect(row.querySelector('.trip-card__bar')).toBeNull();
+    // redesign п.4: полоса есть всегда (5 равных сегментов); пустой поход — 0%
+    const bar = row.querySelector('.trip-card__bar > span') as HTMLElement | null;
+    expect(bar).toBeTruthy();
+    expect(bar!.style.width).toBe('0%');
   });
 });
 

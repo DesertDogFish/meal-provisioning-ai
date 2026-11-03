@@ -19,6 +19,9 @@ export interface Trip {
   endDate: string;
   defaultPeople: number;
   notes?: string;
+  /** trip-workflow-redesign п.2: меню этапа ① утверждено владельцем
+   * (контракт backend TripResponse.menuApproved, mock-паритет п.3). */
+  menuApproved?: boolean;
   days?: TripDay[];
   /** cleanup-п.8 (вариант A): прогресс карточки — только в ответе списка
    * GET /trips (backend TripProgressService / mock mockTripProgress);
@@ -79,13 +82,13 @@ export interface Price {
 /** Вкладки страницы похода. */
 /**
  * Plan plans/2026-10-30-mobile-workflow-ux.md (подзадача 2): 6 равноправных
- * вкладок заменены 4 этапами воркфлоу «Меню → Закупка → Магазин → Чеки и итог».
+ * вкладок заменены 4 этапами воркфлоу «Меню → Проверка → Магазин → Чеки и итог» (redesign п.1).
  * Прежние «Закупка по дням» и «На человека» — виды списка внутри этапа
- * «Закупка» (`ShoppingView`), «Чеклист» стал этапом «Магазин» (store),
+ * ② (`ShoppingView`), «Чеклист» стал этапом «Магазин» (store),
  * этапом ④ «Чеки и итог» (checks). Старые значения в URL
  * (?stage=dayShopping и т.п.) разбирает `parseStage` в StageTabBar.
  */
-export type TabType = 'menu' | 'shopping' | 'store' | 'checks';
+export type TabType = 'menu' | 'shopping' | 'store' | 'checks' | 'ready'; // ready — redesign п.5
 
 /** Виды списка закупки внутри этапа ② (подзадача 3): состояние локальное. */
 // bugs-trip-shopping-stage п.5: вид «На человека» ('person') удалён;

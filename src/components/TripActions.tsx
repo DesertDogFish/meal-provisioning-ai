@@ -8,20 +8,17 @@
  * здесь kebab-меню «Отчёт по походу» / «Печать / PDF» (случайное нажатие
  * исключено, действия только через меню).
  */
-import { ArrowLeft, FileDown, Printer } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react'; // redesign п.6: kebab удалён (FileDown/Printer жили в нём)
 import { Button } from './Button';
-import KebabMenu from './KebabMenu';
 import type { Trip } from '../types/tripDetail';
 
 export interface TripActionsProps {
   trip: Trip;
   /** возврат к списку походов */
   onBack: () => void;
-  /** in-app отчёт (подзадача 7): /trips/:id/report */
-  onOpenReport?: () => void;
 }
 
-export function TripActions({ trip, onBack, onOpenReport }: TripActionsProps) {
+export function TripActions({ trip, onBack }: TripActionsProps) {
   return (
     <div className="flex items-start gap-3 md:gap-4">
       {/* Ревизия скриншотов 29.10: на телефоне кнопка «назад» прижата к верхней
@@ -34,34 +31,6 @@ export function TripActions({ trip, onBack, onOpenReport }: TripActionsProps) {
         <p className="text-sm" style={{ color: 'var(--muted)' }}>
           {new Date(trip.startDate).toLocaleDateString('ru-RU')} — {new Date(trip.endDate).toLocaleDateString('ru-RU')} • {trip.defaultPeople} чел.
         </p>
-      </div>
-      {/* Fix-5 (п.10): отчёт переехал в полосу «Готовность похода» — кнопка
-          «Сформировать отчёт» живёт там же, где статус; дубль из шапки убран.
-          30.10.2026: на мобильном кнопка из полосы убрана вовсе (подзадача 1) —
-          отчёт доступен в kebab шапки и на этапе ④. */}
-      <div className="shrink-0 mt-0.5">
-        <KebabMenu
-          label={`Действия с походом: ${trip.name}`}
-          testId="trip-kebab"
-          items={[
-            ...(onOpenReport
-              ? [{
-                id: 'report',
-                label: 'Отчёт по походу',
-                icon: <FileDown size={16} aria-hidden />,
-                testId: 'kebab-report',
-                onSelect: onOpenReport,
-              }]
-              : []),
-            {
-              id: 'print',
-              label: 'Печать / PDF',
-              icon: <Printer size={16} aria-hidden />,
-              testId: 'kebab-print',
-              onSelect: () => window.open(`/trips/${trip.id}/print`, '_blank'),
-            },
-          ]}
-        />
       </div>
     </div>
   );

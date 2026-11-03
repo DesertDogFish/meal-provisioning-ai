@@ -6,6 +6,7 @@ import { NumberField } from '../components/NumberField';
 import { ProductTable, type ProductRow } from '../components/ProductTable';
 import { EmisLinkPicker } from '../components/EmisLinkPicker';
 import Modal from '../components/Modal';
+import PageHero from '../components/PageHero'; // BUG-002: hero-шапка страницы
 import CustomSelect from '../components/CustomSelect';
 import CustomMultiSelect from '../components/CustomMultiSelect';
 import FilterSheet from '../components/FilterSheet';
@@ -318,9 +319,7 @@ export default function ProductsPage() {
   if (loading) {
     return (
       <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-bold" style={{ color: 'var(--text)' }}>Продукты</h1>
-        </div>
+        <PageHero title="Продукты" />
         {/* Fix-10 (п.4): брендовый лоаджер вместо «Загрузка…» */}
         <PageLoader />
       </div>
@@ -330,30 +329,27 @@ export default function ProductsPage() {
   if (error) {
     return (
       <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-bold" style={{ color: 'var(--text)' }}>Продукты</h1>
-          <p className="mt-1" style={{ color: 'var(--fire)' }}>{error}</p>
-          <Button variant="ghost" onClick={loadData}>Повторить</Button>
-        </div>
+        <PageHero
+          title="Продукты"
+          subtitle={<span style={{ color: 'var(--fire)' }}>{error}</span>}
+          right={<Button variant="ghost" onClick={loadData}>Повторить</Button>}
+        />
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-bold" style={{ color: 'var(--text)' }}>Продукты</h1>
-          <p className="mt-1" style={{ color: 'var(--muted)' }}>
-            {products.length} {productsWord(products.length)} · {categories.length} {categoriesWord(categories.length)}
-          </p>
-        </div>
-        {/* Fix-7 (п.5): кнопка создания — справа, иконочная (единый паттерн);
-            aria-label «Добавить продукт» сохранён (E2E-03/04/05) */}
-        <Button variant="primary" iconOnly onClick={() => { resetForm(); setShowModal(true); }}
-                aria-label="Добавить продукт" title="Добавить продукт" icon={<Plus size={18} />} />
-      </div>
+      {/* Header — BUG-002 (tasks/bugs-page-headers.md): PageHero с арт-слоем;
+          Fix-7 (п.5): кнопка создания справа, иконочная; aria-label сохранён (E2E-03/04/05) */}
+      <PageHero
+        title="Продукты"
+        subtitle={<>{products.length} {productsWord(products.length)} · {categories.length} {categoriesWord(categories.length)}</>}
+        right={(
+          <Button variant="primary" iconOnly onClick={() => { resetForm(); setShowModal(true); }}
+                  aria-label="Добавить продукт" title="Добавить продукт" icon={<Plus size={18} />} />
+        )}
+      />
 
       {/* Toolbar */}
       <div className="filters-row flex gap-3 items-center flex-wrap">

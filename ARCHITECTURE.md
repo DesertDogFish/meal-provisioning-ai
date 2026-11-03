@@ -406,6 +406,8 @@ GET/POST /api/v1/trips/{id}/shopping-exclusions, DELETE .../{ingredientId}
                                           ingredientIds принимается); дневное исключение
                                           уменьшает количество дня и агрегат, но не вычёркивает
                                           позицию в другие дни
+POST /api/v1/trips/{id}/menu-approval       toggle утверждения меню ① (owner-only;
+                                          200 + полный TripResponse; 404 чужой поход)
 GET/POST/DELETE /api/v1/trips/{id}/substitutions[/{id}]   замены from→to (ratio)
 PUT/DELETE /api/v1/trips/{id}/price-overrides/{ingId}     факт-цены (чеки), за единицу
 GET/PUT /api/v1/trips/{id}/checklist-bought               отметки «взято» (см. ниже)
@@ -422,6 +424,14 @@ mock — `mockTripProgress.buildTripProgress` через клиентский `d
 `progress` заполняется ТОЛЬКО в списке, в `GET /trips/{id}` — null; сбой расчёта одного
 похода не роняет список (best effort: null). `stage` считается без отметок «взято»; клиент
 уточняет shopping → store по отметкам и считает `ready` через `utils/readiness`.
+
+**`menuApproved` похода** (`TripResponse`, trip-workflow-redesign п.2): boolean — меню
+этапа ① утверждено владельцем. Toggle `POST /api/v1/trips/{id}/menu-approval` (owner-only;
+404 чужой/неизвестный; 409 CONCURRENT_MODIFICATION при конфликте `@Version`, V34).
+Хранение — `trips.menu_approved_at TIMESTAMPTZ NULL` (V38, БЕЗ backfill: решение владельца
+03.11.2026). Mock — роут `menu-approval` в `mockTrips.handleTripsImpl` + сид-значения в
+`mockData.mockTrips`; паритет — `src/api/contractMenuApproval.test.ts`. Клиент:
+`done.menu` = menuApproved (redesign п.4), этап ⑤ «Поход готов» — п.5.
 
 **Отметки «взято» чеклиста** — серверные (`trip_checklist_bought`), сервер — источник истины,
 localStorage — кэш и буфер офлайн-записи:

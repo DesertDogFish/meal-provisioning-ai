@@ -1,5 +1,5 @@
 /**
- * Страница похода: 4 этапа воркфлоу «Меню → Закупка → Магазин → Чеки и итог»
+ * Страница похода: 4 этапа воркфлоу «Меню → Проверка → Магазин → Чеки и итог»
  * (plan plans/2026-10-30-mobile-workflow-ux.md, подзадачи 2/3).
  *
  * Подзадача 26 аудита (2026-10-29, R8/R9): страница декомпозирована —
@@ -13,14 +13,13 @@
  * - здесь остались только layout, переключатель этапов и модалки.
  *
  * Мобильный воркфлоу (30.10.2026): прежние 6 равноправных вкладок стали
- * 4 этапами; «Закупка по дням» — вид списка внутри этапа «Закупка» (локальный
+ * 4 этапами; «По дням» — вид списка внутри этапа ② «Проверка» (локальный
  * state `shopView`; вид «На человека» вырезан — bugs-trip-shopping-stage п.5);
  * этап живёт в URL (?stage=);
  * на мобильном навигация — нижний таб-бар + степпер (`StageTabBar`).
  */
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ShoppingCart, BookOpen, Receipt, ClipboardCheck } from 'lucide-react';
 import PageLoader from '../components/PageLoader';
 import ChecklistTab from '../components/ChecklistTab'; // подзадача 6: вкладка «Чеклист» вынесена из страницы (R8)
 import PriceOverridesTab from '../components/PriceOverridesTab';
@@ -36,6 +35,7 @@ import TripDaysList from '../components/TripDaysList';
 import TripShoppingTab from '../components/TripShoppingTab';
 import TripDayShoppingTab from '../components/TripDayShoppingTab';
 import StageTabBar, { type StageId } from '../components/StageTabBar';
+import TripReportView from '../components/TripReportView'; // redesign п.5: отчёт этапом ⑤
 import { StageNextCta } from '../components/StageNextCta';
 import { RecipeViewSheet } from '../components/RecipeViewSheet';
 import { ConflictDialog } from '../components/ConflictDialog'; // BL-41: 409 «данные изменились»
@@ -43,7 +43,7 @@ import { globalCatalogRecipeId } from '../utils/recipeRef'; // navigation-п.2: 
 import { Button } from '../components/Button';
 import { manualForDay, manualForTrip } from '../utils/manualItems'; // U40
 import { useTripDetail } from './useTripDetail';
-import type { TabType, ShoppingView } from '../types/tripDetail';
+import type { ShoppingView } from '../types/tripDetail'; // TabType убран вместе с seg-дублем (redesign п.6)
 
 export default function TripDetailPage() {
   const navigate = useNavigate();
@@ -82,14 +82,9 @@ export default function TripDetailPage() {
     shopping: view.checklistRowIds.length > 0,
     store: view.readiness.store === 'done',
     checks: view.readiness.checks === 'done',
+    ready: view.readiness.ready, // redesign п.5
   };
 
-  const stageTabs: { id: TabType; label: string; icon: React.ReactNode }[] = [
-    { id: 'menu', label: 'Меню', icon: <BookOpen size={16} /> },
-    { id: 'shopping', label: 'Закупка', icon: <ShoppingCart size={16} /> },
-    { id: 'store', label: 'Магазин', icon: <ClipboardCheck size={16} /> },
-    { id: 'checks', label: 'Чеки и итог', icon: <Receipt size={16} /> },
-  ];
 
   // bugs-trip-shopping-stage п.5: вид «На человека» вырезан (владелец: больше не нужен)
   const shopViews: { id: ShoppingView; label: string }[] = [
@@ -100,14 +95,15 @@ export default function TripDetailPage() {
   return (
     <div className="space-y-4 md:space-y-6 stage-page">
       {/* design-п.5 «стекло поверх арта» (tasks/design-atmosphere-art.md):
-          TripActions + сводка + десктопные сегменты — ОДНА glass-карточка с
-          арт-слоем обложки похода. На mobile обёртка уходит в display:contents
-          (CSS), чтобы sticky .trip-strip не терял липкость. */}
+          TripActions + сводка — ОДНА glass-карточка с арт-слоем обложки похода
+          (redesign п.6: десктопные сегменты из карточки удалены). На mobile
+          обёртка уходит в display:contents (CSS), чтобы sticky .trip-strip
+          не терял липкость. */}
       <div className="trip-header-glass" data-testid="trip-header-glass">
       <div className="trip-header-glass__art" aria-hidden style={{ backgroundImage: `url(${headerArt})` }} />
       <div className="trip-header-glass__in space-y-4 md:space-y-6">
       {/* Header — подзадача 26: TripActions (+ kebab с отчётом, подзадача 7) */}
-      <TripActions trip={trip} onBack={() => navigate('/trips')} onOpenReport={() => navigate(`/trips/${trip.id}/report`)} />
+      <TripActions trip={trip} onBack={() => navigate('/trips')} />
 
       {/* Мобильная sticky-полоса похода (подзадача 1); на десктопе — прежние KPI */}
       <TripSummaryPanel
@@ -122,37 +118,13 @@ export default function TripDetailPage() {
         stage={stage}
         done={done}
         onStage={(s) => { setActiveTab(s); }}
-        onOpenReport={() => navigate(`/trips/${trip.id}/report`)}
+        onOpenReport={() => setActiveTab('ready')} // redesign п.5/п.6: отчёт — этап ⑤
       />
-
-      {/* Десктоп: сегментированный контрол (.seg) из брендбука, 4 этапа.
-          `seg-desktop-only` — явное скрытие на mobile: утилита `hidden` из
-          Tailwind проигрывала вне-слойному `.seg{display:inline-flex}` (KB-33). */}
-      <div className="seg seg-scroll seg-desktop-only w-full overflow-x-auto hidden md:flex" role="tablist" aria-label="Этапы похода" data-testid="desktop-stage-seg">
-        {stageTabs.map(tab => (
-          <button
-            key={tab.id}
-            role="tab"
-            aria-selected={stage === tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            className={`seg-btn flex items-center gap-2 whitespace-nowrap ${stage === tab.id ? 'active' : ''}`}
-            data-testid={`desktop-tab-${tab.id}`}
-          >
-            {tab.icon}
-            {tab.label}
-            {/* transparency-п.2 (решение владельца — «кликабельные чипы»): нумерация/
-                статусы убраны из .seg — готовность этапов изображается ровно один раз,
-                в кликабельных чипах TripSummaryPanel (stage-chip-*). .seg остаётся
-                переключателем вкладок (иконка + подпись + active). */}
-          </button>
-        ))}
       </div>
       </div>
-      </div>
-
-      {/* Мобильный нижний таб-бар — ЕДИНСТВЕННЫЙ переключатель этапов на mobile
-          (UX-осмотр 31.10, п.5: степпер-дубль удалён, KB-33). Вне glass-обёртки:
-          fixed-бар не должен зависеть от её containing block (backdrop-filter). */}
+      {/* redesign п.6: десктопный .seg-дубль этапов удалён — этапы переключаются
+          чипами сводки (desktop) и нижним таб-баром (mobile); ⑤ доступен обоими */}
+      {/* Единственная мобильная навигация этапов — нижний таб-бар (5 этапов) */}
       <StageTabBar stage={stage} onStage={setActiveTab} done={done} />
 
       {/* Этап ①: меню по дням */}
@@ -253,10 +225,24 @@ export default function TripDetailPage() {
         />
       )}
 
+      {/* redesign п.5: этап ⑤ «Поход готов» — отчёт ВНУТРИ воркфлоу (R8: TripReportView);
+          оформление утверждено 03.11.2026: арт camp-ready.webp под вуалью .66→.88 + blur 3px */}
+      {stage === 'ready' && (
+        <div className="stage-ready" data-testid="stage-ready-wrap">
+          <div className="stage-ready__art" aria-hidden style={{ backgroundImage: `url(${headerArt})` }} />
+          <div className="stage-ready__veil" aria-hidden />
+          <div className="stage-ready__in">
+            <TripReportView trip={trip} view={view} />
+          </div>
+        </div>
+      )}
+
       {/* navigation-п.2: явный CTA «Далее» в конце каждого этапа — следующий шаг
           одним кликом; на незаполненном этапе — подсказка, чего не хватает */}
       <div className="stage-next-wrap">
-        <StageNextCta tripId={String(trip.id)} stage={stage} done={done} onStage={setActiveTab} />
+        {/* redesign п.4: CTA ① до утверждения — кнопка «Утвердить меню» (мутация) */}
+        <StageNextCta tripId={String(trip.id)} stage={stage} done={done} onStage={setActiveTab}
+                      onApproveMenu={d.approveMenu} />
       </div>
 
       {/* Модалка A — «Добавить приём пищи» (FORM-spec §2.1): одна commit-кнопка,

@@ -329,10 +329,9 @@ test('M-13 отчёт: in-app маршрут читается в одну кол
 test('M-11 KB-33: одна мобильная навигация этапов, .seg скрыт, обрезки нет', async ({ page }) => {
   await openSeededTrip(page);
 
-  // десктопный .seg этапов на mobile — display:none (unlayered .seg перебивал `hidden`)
-  const seg = page.getByTestId('desktop-stage-seg');
-  await expect(seg).toBeHidden();
-  expect(await seg.evaluate((el) => getComputedStyle(el).display)).toBe('none');
+  // redesign п.6: десктопный .seg-дубль этапов УДАЛЁН из DOM целиком
+  // (ранее — display:none на mobile; теперь этапы переключаются чипами/таб-баром)
+  await expect(page.getByTestId('desktop-stage-seg')).toHaveCount(0);
 
   // степпера-дубля больше нет
   await expect(page.locator('.stage-stepper')).toHaveCount(0);
@@ -346,7 +345,7 @@ test('M-11 KB-33: одна мобильная навигация этапов, .
 
   // ничего не обрезано справа (overflowX = 0), в т.ч. у под-навигации вида закупки
   const clipped = await page.evaluate(() => Array
-    .from(document.querySelectorAll('nav[aria-label="Этапы похода"], .seg-desktop-only'))
+    .from(document.querySelectorAll('nav[aria-label="Этапы похода"]'))
     .map((el) => el.scrollWidth - el.clientWidth)
     .filter((d) => d > 1));
   expect(clipped, 'обрезка справа у навигации этапов').toEqual([]);

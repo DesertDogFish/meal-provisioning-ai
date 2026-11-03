@@ -88,7 +88,7 @@ describe('TripActions', () => {
 });
 
 describe('TripSummaryPanel', () => {
-  const readiness = tripReadiness({ mealsCount: 2, checklistTotal: 2, boughtCount: 2, factCount: 2, checksTotal: 2 });
+  const readiness = tripReadiness({ mealsCount: 2, checklistTotal: 2, boughtCount: 2, factCount: 2, checksTotal: 2, menuApproved: true }); // redesign п.4
 
   it('KPI-карточки и шаги готовности; отчёт открывается в новой вкладке', () => {
     const open = vi.spyOn(window, 'open').mockImplementation(() => null);
@@ -111,9 +111,9 @@ describe('TripSummaryPanel', () => {
     expect(screen.getAllByText(/250/).length).toBeGreaterThan(0);
     expect(screen.getByText(/Меню собрано/)).toBeTruthy();
     // transparency-п.1: чипы = этапы ①②③④ одним словарём (STAGES)
-    expect(screen.getByText(/Закупка: 2 позиции/)).toBeTruthy();
+    expect(screen.getByText(/Проверка: 2 позиции/)).toBeTruthy(); // redesign п.1: чип этапа ②
     expect(screen.getByText(/Магазин: взято 2 из 2/)).toBeTruthy();
-    expect(screen.getByText(/Чек: введено 2 из 2/)).toBeTruthy();
+    expect(screen.getByText(/Чеки: введено 2 из 2/)).toBeTruthy(); // redesign п.7: ④ «Чеки»
     expect(screen.getByText('Поход готов ✓')).toBeTruthy();
     // bugs-trip-shopping-stage п.7: кнопка отчёта — яркая рыжая иконка без текста
     const reportBtn = screen.getByLabelText('Отчёт');
@@ -131,7 +131,7 @@ describe('TripSummaryPanel', () => {
       <TripSummaryPanel
         trip={trip} tripSummary={view.tripSummary} realPeople={view.realPeople}
         readiness={readiness} boughtInList={2} checklistTotal={2} factCount={2} factsTotal={2}
-        stage="menu" done={{ menu: true, shopping: true, store: true, checks: true }}
+        stage="menu" done={{ menu: true, shopping: true, store: true, checks: true, ready: true }}
         onStage={onStage}
       />
     );
@@ -158,7 +158,7 @@ describe('TripSummaryPanel', () => {
 
   it('не готов: «В процессе» и «Посмотреть отчёт»', () => {
     const view = deriveTripView(viewInput());
-    const notReady = tripReadiness({ mealsCount: 2, checklistTotal: 2, boughtCount: 0, factCount: 0, checksTotal: 2 });
+    const notReady = tripReadiness({ mealsCount: 2, checklistTotal: 2, boughtCount: 0, factCount: 0, checksTotal: 2, menuApproved: true }); // redesign п.4
     render(
       <TripSummaryPanel
         trip={trip} tripSummary={view.tripSummary} realPeople={view.realPeople}
@@ -623,5 +623,48 @@ describe('TripMealCard — ссылка на рецепт (navigation-п.5)', ()
     );
     expect(screen.queryByTestId('meal-recipe-link')).toBeNull();
     expect(screen.getByText('Уха')).toBeTruthy();
+  });
+});
+
+// trip-workflow-redesign п.7: мобильный drawer сводки — отчёт яркой рыжей
+// иконкой (вместо огромной текстовой кнопки), цепочка чипов — keep-pair.
+describe('TripSummaryPanel — redesign п.7: sheet-иконка отчёта и чипы', () => {
+  const readiness = tripReadiness({ mealsCount: 2, checklistTotal: 2, boughtCount: 2, factCount: 2, checksTotal: 2, menuApproved: true });
+  it('в sheet отчёт — иконочная amber-кнопка (aria-label), цепочка чипов keep-pair', () => {
+    const view = deriveTripView(viewInput());
+    const onOpenReport = vi.fn();
+    render(
+      <TripSummaryPanel
+        trip={trip} tripSummary={view.tripSummary} realPeople={view.realPeople}
+        readiness={readiness} boughtInList={2} checklistTotal={2} factCount={2} factsTotal={2}
+        stage="menu" done={{ menu: true, shopping: true, store: true, checks: true, ready: true }}
+        onStage={vi.fn()} onOpenReport={onOpenReport}
+      />,
+    );
+    fireEvent.click(screen.getByTestId('trip-strip'));
+    const btn = screen.getByTestId('sheet-open-report');
+    expect(btn.textContent?.trim()).toBe(''); // иконка без текста
+    expect(btn.getAttribute('aria-label')).toBe('Отчёт по походу');
+    expect(btn.className).toContain('icon-action');
+    fireEvent.click(btn);
+    expect(onOpenReport).toHaveBeenCalledTimes(1);
+    // цепочка чипов переносится парами «шеврон+чип» (keep-pair), высота единая
+    fireEvent.click(screen.getByTestId('trip-strip'));
+    const sheet2 = screen.getByTestId('trip-summary-sheet');
+    const chain = sheet2.querySelector('.readiness-chain')!;
+    expect(chain.querySelector('.keep-pair')).toBeTruthy();
+  });
+
+  it('чип ⑤ подписан «Готов»/«Не готов» по новым именам этапов', () => {
+    const view = deriveTripView(viewInput());
+    render(
+      <TripSummaryPanel
+        trip={trip} tripSummary={view.tripSummary} realPeople={view.realPeople}
+        readiness={readiness} boughtInList={2} checklistTotal={2} factCount={2} factsTotal={2}
+        stage="menu" done={{ menu: true, shopping: true, store: true, checks: true, ready: true }}
+        onStage={vi.fn()}
+      />,
+    );
+    expect(screen.getAllByTestId('stage-chip-ready')[0].textContent).toContain('Готов');
   });
 });

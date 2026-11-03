@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Info, Plus, Undo2, X } from 'lucide-react';
+import { Info, Undo2, X } from 'lucide-react'; // Plus удалён: неиспользуемый импорт (lint-error на HEAD)
 import Modal from './Modal';
 import { Button } from './Button';
 import RecipeSearchSelect from './RecipeSearchSelect';

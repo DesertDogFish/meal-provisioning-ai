@@ -23,6 +23,7 @@ import { api } from '../api/client';
 const tripsFixture = [{
   id: 't1', userId: '1', name: 'Поход один', startDate: '2026-07-01', endDate: '2026-07-03',
   defaultPeople: 2, days: [{ id: 'd1', dayDate: '2026-07-01', meals: [{}, {}] }],
+  menuApproved: true, // redesign п.4: фикстура утверждена
   progress: { stage: 'shopping', meals: 2, checklistTotal: 5, facts: 0, factsTotal: 5, totalCost: 1000, costPerPerson: 500 },
 }];
 

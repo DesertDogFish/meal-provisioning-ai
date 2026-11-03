@@ -8,12 +8,13 @@ import { Search, X } from 'lucide-react';
  * Требования владельца:
  *  (а) контрол прилипает к верху списка — хозяин ставит его в зону
  *      `.checklist-sticky` (position: sticky c учётом safe-area — index.css);
- *  (б) при вводе «фокус» переводится на найденный элемент: строка с
- *      `data-search-id` получает подсветку `.search-hit`,
- *      `scrollIntoView({ block: 'center' })` и программный фокус (tabindex=-1);
+ *  (б) при вводе строка с `data-search-id` получает подсветку `.search-hit` и
+ *      `scrollIntoView({ block: 'center' })`; ФОКУС ввода остаётся в поле поиска
+ *      (BUG-004, tasks/bugs-list-search-focus.md: программный фокус строки
+ *      отменён владельцем 03.11.2026 — иначе невозможно допечатать уточнение);
  *  (в) совпадений несколько — Enter/стрелки перебирают их по кругу;
  *      несовпадение — явная индикация «Не найдено» (role=status) + красная
- *      рамка поля.
+ *      рамка поля. Озвучка совпадений — aria-live на счётчике `i/N`.
  *
  * Совпадения считаются по ВИДИМЫМ строкам, которые хозяин передал в `items`
  * (фильтр «только недостающие» в ChecklistTab не конфликтует: ищем по тому,
@@ -92,11 +93,8 @@ export function ListSearch({
     el.setAttribute('data-search-hit', '');
     hitRef.current = el;
     el.scrollIntoView({ block: 'center' });
-    if (el instanceof HTMLElement) {
-      // фокус без рывка прокрутки: строка становится активной для скринридера
-      if (!el.hasAttribute('tabindex')) el.setAttribute('tabindex', '-1');
-      el.focus({ preventScroll: true });
-    }
+    // BUG-004: фокус НЕ переносим на строку — владелец допечатывает уточнение
+    // в поле поиска; озвучка совпадений — aria-live на счётчике.
   };
 
   // Ввод (или смена списка) — первое совпадение; пусто — снять подсветку

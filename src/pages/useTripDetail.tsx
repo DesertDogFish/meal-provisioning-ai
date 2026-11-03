@@ -29,7 +29,7 @@ import type { ActualAmount } from '../utils/checkUnits';
 import type { Trip, Recipe, Price, TabType, ShoppingSortField } from '../types/tripDetail';
 
 export function useTripDetail() {
-  const { showError } = useToast();
+  const { showError, showSuccess } = useToast();
   const { confirm, dialog: confirmDialog } = useConfirm(); // Fix-6 (п.7)
   const { id } = useParams<{ id: string }>();
   // Plan plans/2026-10-30-mobile-workflow-ux.md (подзадача 2): этап живёт в
@@ -80,7 +80,7 @@ export function useTripDetail() {
   const [compositionMeal, setCompositionMeal] = useState<{ dayId: string; mealId: string } | null>(null);
 
   // ===== Фаза 13 (п.6/7): общий стейдж фактических цен и исключений =====
-  // Поднят на уровень страницы: вкладки «Закупка», «По дням», «На человека» и
+  // Поднят на уровень страницы: виды этапа ② («На поход», «По дням»; «На человека»
   // этап ④ «Чеки и итог» читают ОДИН источник — цифры синхронны между этапами,
   // а черновики не теряются при размонтировании вкладок.
   // Сохранение между сессиями — per-trip localStorage (по требованию задачи).
@@ -345,6 +345,29 @@ export function useTripDetail() {
     setActualQtyState(loadActualQty(tripKey));
   };
 
+  /**
+   * trip-workflow-redesign п.4: toggle утверждения меню ① —
+   * POST /trips/{id}/menu-approval (owner-only, 409 — общий конфликт-флоу).
+   * TripResponse из ответа сразу обновляет trip.menuApproved (чипы/CTA/reactivity),
+   * без полной перечитки: мутация точечная.
+   */
+  const [approvingMenu, setApprovingMenu] = useState(false);
+  const approveMenu = async () => {
+    if (!trip || approvingMenu) return;
+    setApprovingMenu(true);
+    try {
+      const resp = await api.post<Trip>(`/trips/${trip.id}/menu-approval`, {});
+      const approved = resp?.menuApproved === true;
+      setTrip({ ...trip, menuApproved: approved });
+      showSuccess(approved ? 'Меню утверждено' : 'Утверждение меню снято');
+    } catch (err: any) {
+      console.error('Failed to toggle menu approval:', err);
+      showError(err?.detail || 'Не удалось изменить утверждение меню');
+    } finally {
+      setApprovingMenu(false);
+    }
+  };
+
   const setAllBought = (on: boolean, allKeys: string[]) => {
     const next = on ? new Set(allKeys) : new Set<string>();
     persistBought(tripKey, next);
@@ -424,7 +447,7 @@ export function useTripDetail() {
     loadData, reloadInBackground: () => loadData(true), commitCheckTotal,
     toggleDay, handleMealAdded, handleDeleteMeal, handleUpdateDayPeople,
     handleSortField, toggleShoppingExcluded, refreshManual, handleDeleteManual,
-    toggleBought, commitActualQty, setAllBought,
+    toggleBought, commitActualQty, setAllBought, approveMenu,
     reloadAfterConflict,
   };
 }

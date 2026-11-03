@@ -62,23 +62,28 @@ export function TripSummaryPanel({
 
   /**
    * transparency-п.1: ОДИН словарь этапов во всём UI — каждый чип соответствует
-   * своему этапу ①②③④ (STAGES из StageTabBar): «Меню собрано → Закупка: N поз. →
+   * своему этапу ①②③④ (STAGES из StageTabBar): «Меню собрано → Проверка: N поз. →
    * Магазин: взято N из M → Чек: введено N из M». Прежний чип «Закупка: взято…»
    * описывал этап ③ «Магазин» — исправлено.
    * transparency-п.2: чипы кликабельны (= переключение этапа), готовность этапа ② —
    * «в закупке есть позиции» (тот же критерий, что у `done.shopping` страницы).
    */
   const chipDefs: { id: StageId; text: string; ok: boolean }[] = [
-    { id: 'menu', text: `Меню ${readiness.menu === 'done' ? 'собрано' : 'пустое'}`, ok: readiness.menu === 'done' },
-    { id: 'shopping', text: `Закупка: ${checklistTotal} ${pluralize(checklistTotal, ['позиция', 'позиции', 'позиций'])}`, ok: checklistTotal > 0 },
+    // redesign п.4: ① готов = утверждено; блюда без утверждения — явное «не утверждено»
+    { id: 'menu', text: readiness.menu === 'done' ? 'Меню собрано' : readiness.menu === 'partial' ? 'Меню: не утверждено' : 'Меню пустое', ok: readiness.menu === 'done' },
+    { id: 'shopping', text: `Проверка: ${checklistTotal} ${pluralize(checklistTotal, ['позиция', 'позиции', 'позиций'])}`, ok: checklistTotal > 0 }, // redesign п.1
     { id: 'store', text: `Магазин: взято ${boughtInList} из ${checklistTotal}`, ok: readiness.store === 'done' },
-    { id: 'checks', text: `Чек: введено ${factCount} из ${factsTotal}`, ok: readiness.checks === 'done' },
+    { id: 'checks', text: `Чеки: введено ${factCount} из ${factsTotal}`, ok: readiness.checks === 'done' }, // redesign п.7: ④ «Чеки»
+    // redesign п.5: пятый чип цепочки — ⑤ «Поход готов»
+    { id: 'ready', text: readiness.ready ? 'Готов' : 'Не готов', ok: readiness.ready }, // redesign п.7: ⑤ «Готов»
   ];
 
   const readinessChips = (
     <>
       {chipDefs.map((st, i) => (
-        <span key={st.id} className="inline-flex items-center gap-1.5">
+        // redesign п.7: пара «шеврон+чип» переносится ЦЕЛИКОМ (keep-pair),
+        // высота/выравнивание единые — цепочка не идёт «вкривь и вкось»
+        <span key={st.id} className="keep-pair inline-flex items-center gap-1.5">
           {i > 0 && <ChevronRight size={13} style={{ color: 'var(--line-strong)' }} aria-hidden />}
           {onStage ? (
             <button
@@ -95,7 +100,7 @@ export function TripSummaryPanel({
               {st.ok ? '✓ ' : '○ '}{st.text}
             </button>
           ) : (
-            <span className="px-2 py-0.5 text-xs font-bold rounded-full whitespace-nowrap"
+            <span className="px-2 py-0.5 text-xs font-bold rounded-full whitespace-nowrap min-h-[32px] inline-flex items-center"
               style={st.ok
                 ? { background: 'color-mix(in srgb, var(--success) 16%, transparent)', color: 'var(--success)' }
                 : { background: 'var(--elev)', color: 'var(--muted)' }}
@@ -187,14 +192,17 @@ export function TripSummaryPanel({
               {readinessChips}
             </div>
             {onOpenReport && (
+              /* redesign п.7: огромную текстовую кнопку сменила яркая рыжая иконка */
               <Button
-                variant="soft"
-                icon={<FileDown size={15} />}
+                variant="ghost"
+                iconOnly
+                className="icon-action"
+                icon={<FileDown size={18} />}
+                aria-label="Отчёт по походу"
+                title="Отчёт по походу — этап ⑤ «Поход готов»"
                 onClick={() => { setSheetOpen(false); onOpenReport(); }}
                 data-testid="sheet-open-report"
-              >
-                Отчёт по походу
-              </Button>
+              />
             )}
           </div>
         </BottomSheet>

@@ -243,6 +243,7 @@ export function deriveTripView(input: TripViewInput) {
     boughtCount: boughtInList,
     factCount,
     checksTotal: factsTotal,
+    menuApproved: (trip as any).menuApproved === true, // redesign п.4
   });
 
   return {

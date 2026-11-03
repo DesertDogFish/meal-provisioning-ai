@@ -4,7 +4,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { StageTabBar, parseStage, STAGES } from './StageTabBar';
 import type { StageId } from './StageTabBar';
 
-const done = (v: boolean): Record<StageId, boolean> => ({ menu: v, shopping: v, store: v, checks: v });
+const done = (v: boolean): Record<StageId, boolean> => ({ menu: v, shopping: v, store: v, checks: v, ready: v });
 
 /**
  * UX-осмотр 31.10 (подзадача 5, KB-33): на мобильном было ТРИ интерактивных
@@ -23,14 +23,14 @@ describe('StageTabBar — 4 этапа воркфлоу (подзадача 2, 3
     expect(screen.getByTestId('stage-bar-store').getAttribute('aria-current')).toBe('page');
   });
 
-  it('KB-33: степпера-дубля больше нет — ровно одна nav и 4 кнопки', () => {
+  it('KB-33: степпера-дубля больше нет — ровно одна nav и 5 кнопок (redesign п.5: +⑤)', () => {
     const { container } = render(<StageTabBar stage="store" onStage={() => {}} done={done(false)} />);
     expect(screen.queryByTestId('stage-stepper')).toBeNull();
     expect(screen.queryByTestId('stage-step-menu')).toBeNull();
     expect(container.querySelectorAll('.stage-stepper')).toHaveLength(0);
     const navs = container.querySelectorAll('nav');
     expect(navs).toHaveLength(1);
-    expect(navs[0].querySelectorAll('button')).toHaveLength(4);
+    expect(navs[0].querySelectorAll('button')).toHaveLength(5);
   });
 
   it('тап по этапу зовёт onStage', () => {
@@ -57,5 +57,31 @@ describe('StageTabBar — 4 этапа воркфлоу (подзадача 2, 3
     expect(parseStage('overrides')).toBe('checks');
     expect(parseStage(null)).toBe('menu');
     expect(parseStage('garbage')).toBe('menu');
+  });
+});
+
+// trip-workflow-redesign п.1: этап ② переименован «Закупка» → «Проверка»
+// (id/URL `shopping` НЕ меняются — только пользовательская подпись).
+describe('StageTabBar — redesign п.1: этап ② «Проверка»', () => {
+  it('STAGES: id shopping подписан «Проверка»; в таб-баре нет слова «Закупка»', () => {
+    expect(STAGES.find(s => s.id === 'shopping')?.label).toBe('Проверка');
+    render(<StageTabBar stage="shopping" onStage={() => {}} done={done(false)} />);
+    expect(screen.queryByText('Закупка')).toBeNull();
+    expect(screen.getByText('Проверка')).toBeTruthy();
+  });
+});
+
+// trip-workflow-redesign п.5: пятый этап воркфлоу — ⑤ «Поход готов» (ready).
+describe('StageTabBar — redesign п.5: пятый этап', () => {
+  it('stage-bar содержит 5 этапов, ⑤ подписан «Поход готов»', () => {
+    expect(STAGES).toHaveLength(5);
+    render(<StageTabBar stage="ready" onStage={() => {}} done={{ menu: true, shopping: true, store: true, checks: true, ready: true }} />);
+    expect(screen.getByTestId('stage-bar-ready').getAttribute('aria-label')).toContain('Поход готов');
+    expect(screen.getByTestId('stage-bar-ready').getAttribute('aria-current')).toBe('page');
+  });
+
+  it('parseStage("ready") → ready; прежние маппинги сохранены', () => {
+    expect(parseStage('ready')).toBe('ready');
+    expect(parseStage('checklist')).toBe('store');
   });
 });

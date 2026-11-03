@@ -5,9 +5,10 @@ import { useToast } from '../components/ToastProvider';
 import { TripForm, type TripFormData } from '../components/TripForm';
 import { useConfirm } from '../components/ConfirmDialog'; // Fix-6 (п.7): красивые подтверждения
 import { KebabMenu } from '../components/KebabMenu';
+import PageHero from '../components/PageHero'; // BUG-002: hero-шапка страницы
 import { api } from '../api/client';
 import { loadBought, refreshBoughtFromServer, BOUGHT_SYNC_SOFT_TIMEOUT_MS } from '../utils/tripStaging';
-import { tripReadiness, earliestOpenStage } from '../utils/readiness';
+import { tripReadiness, earliestOpenStage, workflowProgress, workflowProgressFill } from '../utils/readiness';
 import type { Trip } from '../types/tripDetail'; // cleanup-п.9: общий тип (включая progress, п.8)
 import { STAGES, type StageId } from '../components/StageTabBar';
 import { getTripCover } from '../utils/getTripCover';
@@ -65,9 +66,11 @@ function buildProgressMap(tripsData: Trip[]): Record<string, TripProgress> {
     const facts = p.facts ?? 0;
     const factsTotal = p.factsTotal ?? checklistTotal;
     const meals = p.meals ?? (trip.days?.reduce((a: number, d: any) => a + (d.meals?.length || 0), 0) || 0);
-    const readiness = tripReadiness({
+    const rfacts = {
       mealsCount: meals, checklistTotal, boughtCount: bought, factCount: facts, checksTotal: factsTotal,
-    });
+      menuApproved: trip.menuApproved === true, // redesign п.4
+    };
+    const readiness = tripReadiness(rfacts);
     // bugs-trip-list п.3: этап — по самой ранней незакрытой части воркфлоу
     // (utils/readiness, единый источник), а не «по нарастающей»: введённые чеки
     // при незакрытой закупке/магазине больше не рисуют заполненную полосу.
@@ -90,6 +93,8 @@ function buildProgressMap(tripsData: Trip[]): Record<string, TripProgress> {
     next[trip.id] = {
       stage,
       ready: readiness.ready,
+      // redesign п.4: полоса = 5 равных сегментов (единый источник readiness)
+      fill: workflowProgressFill(workflowProgress(readiness, rfacts)),
       done, total,
       totalCost: p.totalCost ?? 0,
       costPerPerson: p.costPerPerson ?? 0,
@@ -109,6 +114,8 @@ function buildProgressMap(tripsData: Trip[]): Record<string, TripProgress> {
 interface TripProgress {
   stage: StageId;
   ready: boolean;
+  /** redesign п.4: заполненность полосы воркфлоу (0..1, 5 равных сегментов) */
+  fill: number;
   /** числитель прогресса этапа (взято / приёмы / чеки) */
   done: number;
   /** знаменатель прогресса этапа */
@@ -287,9 +294,7 @@ export default function TripsPage() {
   if (loading) {
     return (
       <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-bold" style={{ color: 'var(--text)' }}>Походы</h1>
-        </div>
+        <PageHero title="Походы" />
         {/* Fix-10 (п.4): брендовый лоаджер вместо «Загрузка…» */}
         <PageLoader />
       </div>
@@ -299,37 +304,28 @@ export default function TripsPage() {
   if (error) {
     return (
       <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-bold" style={{ color: 'var(--text)' }}>Походы</h1>
-          <p className="mt-1" style={{ color: 'var(--fire)' }}>{error}</p>
-          <Button variant="ghost" onClick={loadData} className="mt-4">Повторить</Button>
-        </div>
+        <PageHero
+          title="Походы"
+          subtitle={<span style={{ color: 'var(--fire)' }}>{error}</span>}
+          right={<Button variant="ghost" onClick={loadData}>Повторить</Button>}
+        />
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h1 className="text-2xl md:text-3xl font-bold" style={{ color: 'var(--text)' }}>Походы</h1>
-          {/* transparency-п.7: подзаголовок обещает только то, что приложение
-              реально делает (функции «запасов» нет) */}
-          {/* UX-осмотр 31.10 (п.7): «чеки» повисало сиротой на второй строке —
-              перечисление собрано в неразрывную связку (.keep-pair), поэтому на
-              узком экране на новую строку уезжает ЦЕЛИКОМ, а не одним словом. */}
-          <p className="mt-1" style={{ color: 'var(--muted)' }}>
-            Планирование питания: <span className="keep-pair">меню, закупка, чеки</span>
-          </p>
-        </div>
-        {/* Fix-7 (п.5): иконочная кнопка создания — единый паттерн всех шапок.
-            Подзадача 4: текстовый блок шапки с min-w-0 — кнопка не перекрывает подзаголовок.
-            bugs-trip-list п.1: мобильный FAB (.trips-fab, position:fixed внизу) удалён —
-            плюс остаётся справа вверху, как на Продуктах/Блюдах. */}
-        <Button variant="primary" iconOnly onClick={() => setShowCreate(true)}
-                className="touch-hit"
-                aria-label="Создать поход" title="Создать поход" icon={<Plus size={18} />} />
-      </div>
+      {/* Header — BUG-002 (tasks/bugs-page-headers.md): PageHero с арт-слоем;
+          Fix-7 (п.5): иконочная кнопка создания справа; bugs-trip-list п.1: FAB удалён */}
+      <PageHero
+        title="Походы"
+        subtitle={<>Планирование питания: <span className="keep-pair">меню, закупка, чеки</span></>}
+        right={(
+          <Button variant="primary" iconOnly onClick={() => setShowCreate(true)}
+                  className="touch-hit"
+                  aria-label="Создать поход" title="Создать поход" icon={<Plus size={18} />} />
+        )}
+      />
 
       {/* Create modal */}
       {showCreate && (
@@ -451,13 +447,11 @@ export default function TripsPage() {
                           {p.ready ? <Check size={14} aria-hidden /> : <span aria-hidden>{stageLabel?.num}</span>}
                           {p.ready ? 'Готов' : stageLabel?.label}
                         </span>
-                        {/* transparency-п.6: процентная полоса — только у этапов с
-                            реальным знаменателем (②③④); у ① — честное «N приёмов» */}
-                        {p.stage !== 'menu' && (
-                          <span className="trip-card__bar" aria-hidden>
-                            <span style={{ width: `${p.total > 0 ? Math.min(100, Math.round((p.done / p.total) * 100)) : 0}%` }} />
-                          </span>
-                        )}
+                        {/* redesign п.4: полоса = 5 равных сегментов воркфлоу
+                            (① мин(meals,10)/10 → ⑤ готов); честный ноль у пустого похода */}
+                        <span className="trip-card__bar" aria-hidden>
+                          <span style={{ width: `${Math.min(100, Math.round(p.fill * 100))}%` }} />
+                        </span>
                         <span className="keep-num" style={{ color: 'var(--text-2)' }}>
                           {p.stage === 'store' ? `${p.bought}/${p.checklistTotal}`
                             : p.stage === 'checks' ? `${p.facts}/${p.total}`

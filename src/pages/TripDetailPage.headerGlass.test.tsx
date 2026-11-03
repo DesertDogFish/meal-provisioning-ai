@@ -69,15 +69,16 @@ beforeEach(() => {
 });
 
 describe('TripDetailPage — glass-шапка «стекло поверх арта» (design-п.5)', () => {
-  it('обёртка trip-header-glass содержит TripActions, сводку и десктопные сегменты', async () => {
+  it('обёртка trip-header-glass содержит TripActions и сводку; .seg-дубля нет (redesign п.6)', async () => {
     renderPage();
     // дожидаемся отрисовки шапки похода
     await screen.findByRole('button', { name: /назад к походам/i });
     const glass = await screen.findByTestId('trip-header-glass');
     // название похода (TripActions) — внутри карточки
     expect(within(glass).getByText('У моря')).toBeTruthy();
-    // десктопный переключатель этапов — внутри карточки
-    expect(within(glass).getByTestId('desktop-stage-seg')).toBeTruthy();
+    // redesign п.6: десктопный переключатель этапов УДАЛЁН (дубль навигации)
+    expect(within(glass).queryByTestId('desktop-stage-seg')).toBeNull();
+    expect(screen.queryByTestId('desktop-stage-seg')).toBeNull();
     // мобильная sticky-полоса — тоже внутри (на mobile обёртка = display:contents)
     expect(within(glass).getByTestId('trip-strip')).toBeTruthy();
   });

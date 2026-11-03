@@ -99,3 +99,15 @@ describe('ProductsPage — фильтр по категориям (bugs-products
     expect(screen.getByText('Соль')).toBeTruthy();
   });
 });
+
+// BUG-002 (tasks/bugs-page-headers.md п.2): шапка страницы — hero-блок с арт-слоем.
+describe('ProductsPage — BUG-002: hero-шапка', () => {
+  it('шапка — page-hero: арт-слой aria-hidden, h1 «Продукты» внутри блока', async () => {
+    renderPage();
+    const hero = await screen.findByTestId('page-hero');
+    const art = hero.querySelector('.page-hero__art');
+    expect(art).toBeTruthy();
+    expect(art?.getAttribute('aria-hidden')).toBe('true');
+    expect(hero).toContainElement(screen.getByRole('heading', { level: 1 }));
+  });
+});

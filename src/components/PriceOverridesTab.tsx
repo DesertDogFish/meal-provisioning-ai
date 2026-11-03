@@ -51,7 +51,7 @@ export interface PriceOverridesTabProps {
   onToggleExcluded: (ingredientId: string) => void;
   onToggleBought: (key: string) => void;
   onCommitTook: (ingredientId: string, value: ActualAmount | null, needed?: number) => void;
-  /** navigation-п.3: CTA пустого состояния — переключить этап на «Закупка ②» */
+  /** navigation-п.3: CTA пустого состояния — переключить этап на «Проверка ②» */
   onGoToShopping?: () => void;
   /** navigation-п.3: кнопка в locked-ноте — переключить этап на «Магазин ③» */
   onGoToStore?: () => void;
