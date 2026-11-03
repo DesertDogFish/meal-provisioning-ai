@@ -61,6 +61,16 @@ self.addEventListener("activate", (event) => {
   );
 });
 
+// Background Sync: уведомляем клиентов о необходимости отправить очередь.
+self.addEventListener('sync', (event) => {
+  if (event.tag === 'sync-queue') {
+    event.waitUntil(
+      self.clients.matchAll().then((clients) => {
+        clients.forEach((client) => client.postMessage({ type: 'SYNC_QUEUE' }));
+      })
+    );
+  }
+});
 self.addEventListener("fetch", (event) => {
   const { request } = event;
   const url = new URL(request.url);
