@@ -6,6 +6,7 @@ import { TripForm, type TripFormData } from '../components/TripForm';
 import { useConfirm } from '../components/ConfirmDialog'; // Fix-6 (п.7): красивые подтверждения
 import { KebabMenu } from '../components/KebabMenu';
 import { api } from '../api/client';
+import { repositories, isOfflineMode } from '../repositories/RepositoryFactory';
 import { loadBought, refreshBoughtFromServer, BOUGHT_SYNC_SOFT_TIMEOUT_MS } from '../utils/tripStaging';
 import { tripReadiness, earliestOpenStage } from '../utils/readiness';
 import type { Trip } from '../types/tripDetail'; // cleanup-п.9: общий тип (включая progress, п.8)
@@ -145,7 +146,18 @@ export default function TripsPage() {
       setLoading(true);
       setError(null);
       // cleanup-п.7/п.8: список — ОДИН запрос; пользователь уже в AuthContext
-      const tripsData = await api.get<Trip[]>('/trips');
+      const tripsData = isOfflineMode()
+        ? (await repositories.trips.getAll()).map((t) => ({
+            id: t.id,
+            userId: t.userId,
+            name: t.name,
+            startDate: t.startDate,
+            endDate: t.endDate,
+            defaultPeople: t.defaultPeople,
+            notes: t.notes,
+            createdAt: t.createdAt,
+          }))
+        : await api.get<Trip[]>('/trips');
       if (!aliveRef.current) return;
       setTrips(tripsData);
       // cleanup-п.8: прогресс — из того же ответа (без отдельных запросов на поход)
@@ -260,6 +272,10 @@ export default function TripsPage() {
   };
 
   const handleDelete = async (trip: Trip) => {
+    if (isOfflineMode()) {
+      showError('Офлайн-режим: удаление недоступно');
+      return;
+    }
     // Fix-6 (п.7): важное удаление — красивое предупреждение с последствиями
     const daysCount = trip.days?.length ?? 0;
     const mealsCount = (trip.days ?? []).reduce((acc: number, d: any) => acc + (d.meals?.length ?? 0), 0);

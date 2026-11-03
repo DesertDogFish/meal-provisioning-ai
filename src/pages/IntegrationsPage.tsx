@@ -19,6 +19,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useToast } from '../components/ToastProvider';
 import { api } from '../api/client';
+import { isOfflineMode } from '../repositories/RepositoryFactory';
 import EmisSettingsTab, { formatFileSize, type IntegrationInfo } from '../components/EmisSettingsTab';
 import SyncLogsTab from '../components/SyncLogsTab';
 import CatalogImportTab from '../components/CatalogImportTab';
@@ -104,6 +105,10 @@ export default function IntegrationsPage() {
   }, []);
 
   const loadIntegrations = async () => {
+    if (isOfflineMode()) {
+      showError('Офлайн-режим: интеграции недоступны');
+      return;
+    }
     try {
       const data = await api.get<IntegrationInfo[]>('/admin/integrations');
       setIntegrations(data);

@@ -6,6 +6,7 @@ import { formatAmount } from '../utils/calculations';
 import { humanizeCategory, servingsWord, ingredientsWord, mealTypeLabels, dishesWord, categoriesWord } from '../utils/text';
 import CustomSelect from '../components/CustomSelect'; // Fix-5 (п.19): «Все категории» — как везде
 import { api, getRecipes } from '../api/client';
+import { repositories, isOfflineMode } from '../repositories/RepositoryFactory';
 import { useToast } from '../components/ToastProvider';
 import { useConfirm } from '../components/ConfirmDialog'; // Fix-6 (п.7)
 import Modal from '../components/Modal';
@@ -73,6 +74,10 @@ export default function RecipesPage() {
   };
 
   const handleDelete = async (recipe: Recipe) => {
+    if (isOfflineMode()) {
+      showError('Офлайн-режим: удаление недоступно');
+      return;
+    }
     // U16 (список багов 25.10) + Fix-6 (п.7): блюда — сущность верхнего уровня.
     // Походы с V20 живут на снапшотах рецептов, клиентская блокировка устарела —
     // сервер гарантирует изоляцию. Подтверждение — брендовым диалогом.
@@ -102,7 +107,20 @@ export default function RecipesPage() {
     try {
       setLoading(true);
       setError(null);
-      const data = await getRecipes();
+      const data = isOfflineMode()
+        ? (await repositories.recipes.getAll()).map((r) => ({
+            id: r.id,
+            name: r.name,
+            mealType: r.mealType as any,
+            category: r.category,
+            baseServings: r.baseServings,
+            caloriesPerServing: r.caloriesPerServing,
+            source: r.source as any,
+            ingredients: r.ingredients.map((ri) => ({ ingredientId: ri.ingredientId, amount: ri.amount })),
+            tripId: r.tripId,
+            createdAt: r.createdAt,
+          }))
+        : await getRecipes();
       setRecipes(data);
     } catch (err: any) {
       console.error('Failed to load recipes:', err);

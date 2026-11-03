@@ -196,6 +196,10 @@ export default function ProductsPage() {
       return;
     }
 
+    if (isOfflineMode()) {
+      showError('Офлайн-режим: редактирование недоступно');
+      return;
+    }
     try {
       const body = {
         name: formName,
@@ -255,6 +259,10 @@ export default function ProductsPage() {
   };
 
   const handleDelete = async (product: Product) => {
+    if (isOfflineMode()) {
+      showError('Офлайн-режим: удаление недоступно');
+      return;
+    }
     if (product.usageRecipes > 0) {
       showError(`Продукт используется в ${product.usageRecipes} ${recipesWord(product.usageRecipes)} и не может быть удалён`);
       return;
