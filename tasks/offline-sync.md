@@ -51,7 +51,7 @@ Closed:
 
 ## Этап 6 — Тестирование
 - [ ] 6.1. Unit-тесты репозиториев (online/offline).
-- [ ] 6.2. E2E офлайн-сценарии (Playwright с network throttling).
+ - [x] 6.2. E2E офлайн-сценарии (Playwright с network throttling).
  - [x] 6.3. Тесты конфликтов (409, merge).
 
 ## Этап 7 — Мобильная обёртка (Capacitor)

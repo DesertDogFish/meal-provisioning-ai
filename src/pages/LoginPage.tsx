@@ -42,6 +42,20 @@ export default function LoginPage() {
     setError('');
     setLoading(true);
 
+    // Офлайн-логин: если нет сети, но есть сохранённый токен — войти локально
+    if (!navigator.onLine) {
+      const token = localStorage.getItem('accessToken');
+      if (token) {
+        await refresh();
+        navigate('/trips');
+        setLoading(false);
+        return;
+      }
+      setError('Нет подключения к сети. Войдите при появлении сети.');
+      setLoading(false);
+      return;
+    }
+
     try {
       if (isRegister) {
         if (!firstName || !lastName || !email || !password) {

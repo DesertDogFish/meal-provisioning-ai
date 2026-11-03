@@ -35,7 +35,19 @@ if ('serviceWorker' in navigator) {
   });
 }
 
-// Запуск авто-синхронизации при появлении сети (только если офлайн-режим включён)
+// Refresh rotation при появлении сети
 if (import.meta.env.VITE_OFFLINE_ENABLED === 'true') {
+  window.addEventListener('online', async () => {
+    const refreshToken = localStorage.getItem('refreshToken');
+    if (refreshToken) {
+      const { api } = await import('./api/client');
+      const baseUrl = (import.meta as any).env?.VITE_API_URL || 'http://localhost:8080/api/v1';
+      try {
+        await api.get('/auth/me'); // триггерит refresh если 401
+      } catch {
+        // игнорируем — офлайн или сессия потеряна
+      }
+    }
+  });
   syncManager.startAutoSync();
 }
