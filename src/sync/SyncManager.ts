@@ -1,5 +1,6 @@
 import { syncQueue } from './SyncQueue';
 import { networkMonitor } from './NetworkMonitor';
+import { notifyConcurrentModification } from '../api/conflictSignal';
 
 export class SyncManager {
   private isSyncing = false;
@@ -23,6 +24,8 @@ export class SyncManager {
           }
           await syncQueue.remove(item.id);
         } catch (err) {
+          const status = (err as any)?.status ?? (err as any)?.error?.status;
+          if (status === 409) notifyConcurrentModification();
           await syncQueue.incrementRetry(item.id, String(err));
         }
       }
