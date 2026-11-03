@@ -42,20 +42,6 @@ export default function LoginPage() {
     setError('');
     setLoading(true);
 
-    // Офлайн-логин: если нет сети, но есть сохранённый токен — войти локально
-    if (!navigator.onLine) {
-      const token = localStorage.getItem('accessToken');
-      if (token) {
-        await refresh();
-        navigate('/trips');
-        setLoading(false);
-        return;
-      }
-      setError('Нет подключения к сети. Войдите при появлении сети.');
-      setLoading(false);
-      return;
-    }
-
     try {
       if (isRegister) {
         if (!firstName || !lastName || !email || !password) {
@@ -80,9 +66,6 @@ export default function LoginPage() {
 
         localStorage.setItem('accessToken', regResponse.accessToken);
         localStorage.setItem('refreshToken', regResponse.refreshToken);
-        // Офлайн: дублируем токены в IndexedDB
-        const { saveTokens } = await import('../db/authStorage');
-        await saveTokens(regResponse.accessToken, regResponse.refreshToken);
         await refresh(); // cleanup-п.7: контекст узнаёт пользователя ОДНИМ запросом
         navigate('/trips');
       } else {
@@ -95,8 +78,6 @@ export default function LoginPage() {
         const response = await api.post<AuthResponse>('/auth/login', { email, password });
         localStorage.setItem('accessToken', response.accessToken);
         localStorage.setItem('refreshToken', response.refreshToken);
-        const { saveTokens } = await import('../db/authStorage');
-        await saveTokens(response.accessToken, response.refreshToken);
         await refresh(); // cleanup-п.7: контекст узнаёт пользователя ОДНИМ запросом
         navigate('/trips');
       }

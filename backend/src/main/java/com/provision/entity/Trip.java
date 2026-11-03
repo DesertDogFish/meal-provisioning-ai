@@ -42,6 +42,13 @@ public class Trip {
     @Column(columnDefinition = "TEXT")
     private String notes;
 
+    /**
+     * trip-workflow-redesign п.2: момент утверждения меню этапа ① (null = не
+     * утверждено). Toggle-мутация POST /api/v1/trips/{id}/menu-approval, owner-only.
+     */
+    @Column(name = "menu_approved_at")
+    private LocalDateTime menuApprovedAt;
+
     @OneToMany(mappedBy = "trip", cascade = CascadeType.ALL, orphanRemoval = true)
     @OrderBy("dayDate ASC")
     @Builder.Default

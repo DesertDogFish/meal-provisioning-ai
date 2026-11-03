@@ -6,13 +6,12 @@ import { NumberField } from '../components/NumberField';
 import { ProductTable, type ProductRow } from '../components/ProductTable';
 import { EmisLinkPicker } from '../components/EmisLinkPicker';
 import Modal from '../components/Modal';
+import PageHero from '../components/PageHero'; // BUG-002: hero-шапка страницы
 import CustomSelect from '../components/CustomSelect';
 import CustomMultiSelect from '../components/CustomMultiSelect';
 import FilterSheet from '../components/FilterSheet';
 import { DatePicker } from '../components/DatePicker';
 import { api } from '../api/client';
-import { repositories, isOfflineMode } from '../repositories/RepositoryFactory';
-import { createProduct, updateProduct, deleteProduct, setProductPrice, loadProductsPage, checkProductName } from '../api/products';
 import type { UnitOfMeasure, ProductCategory, IngredientPrice } from '../types';
 import { humanizeUnit, recipesWord, productsWord, categoriesWord } from '../utils/text';
 import { Button } from '../components/Button';
@@ -69,40 +68,13 @@ export default function ProductsPage() {
       setLoading(true);
       setError(null);
       
-      // Чтение продуктов: при офлайн — из локального кэша (IndexedDB), иначе — с сервера.
-      const productsPromise = isOfflineMode()
-        ? repositories.products.getAll().then((items) =>
-            items.map((p) => ({
-              id: p.id,
-              name: p.name,
-              unit: p.unit,
-              category: p.categoryId ? { id: p.categoryId, name: p.category } : null,
-              categoryName: p.category,
-              categoryId: p.categoryId,
-              packSize: p.packSize,
-              roundToPacks: p.roundToPacks,
-              kcalPer100g: p.kcalPer100g,
-              pieceWeightG: p.pieceWeightG,
-              enabled: p.enabled,
-              emisCode: p.emisCode,
-              bindingStatus: p.emisCode ? 'BOUND' : 'UNBOUND',
-            }))
-          )
-        : null;
-
-      let productsData: any, categoriesData: any, pricesData: any;
-      if (isOfflineMode()) {
-        productsData = await productsPromise;
-        categoriesData = [];
-        pricesData = [];
-      } else {
-        const res = await loadProductsPage();
-        productsData = res.products;
-        categoriesData = res.categories;
-        pricesData = res.prices;
-      }
+      const [productsData, categoriesData, pricesData] = await Promise.all([
+        api.get<any>('/admin/products?size=1000'),
+        api.get<ProductCategory[]>('/product-categories'),
+        api.get<IngredientPrice[]>('/prices').catch(() => [] as IngredientPrice[])
+      ]);
       const pmap: Record<string, number> = {};
-      (pricesData || []).forEach((pr: any) => { pmap[String(pr.ingredientId)] = pr.pricePerUnit; });
+      (pricesData || []).forEach(pr => { pmap[String(pr.ingredientId)] = pr.pricePerUnit; });
       setPriceByIngredient(pmap);
 
       // FIX: бэкенд (/api/v1/admin/products) возвращает Spring Page (список в content),
@@ -152,7 +124,9 @@ export default function ProductsPage() {
     }
 
     try {
-      const response = await checkProductName(name, unit);
+      const response = await api.get<any>(
+        `/admin/products/check-name?name=${encodeURIComponent(name)}&unit=${unit}`
+      );
       if (seq !== dupCheckSeq.current) return; // уже запущена более новая проверка
 
       if (response.duplicate) {
@@ -201,10 +175,6 @@ export default function ProductsPage() {
       return;
     }
 
-    if (isOfflineMode()) {
-      showError('Офлайн-режим: редактирование недоступно');
-      return;
-    }
     try {
       const body = {
         name: formName,
@@ -220,10 +190,10 @@ export default function ProductsPage() {
 
       let savedId: string | number | undefined = editingProduct?.id;
       if (editingProduct) {
-        await updateProduct(editingProduct.id, body);
+        await api.put(`/admin/products/${editingProduct.id}`, body);
         showSuccess('Продукт обновлён');
       } else {
-        const created = await createProduct(body);
+        const created = await api.post<{ id?: string | number }>('/admin/products', body);
         savedId = created?.id ?? savedId;
         showSuccess('Продукт создан');
       }
@@ -236,7 +206,12 @@ export default function ProductsPage() {
           showError('Цена должна быть числом больше нуля');
         } else {
           try {
-            await setProductPrice(savedId, priceVal, formPriceDate || new Date().toISOString().slice(0, 10));
+            await api.post('/admin/ingredient-prices', {
+              ingredientId: savedId,
+              pricePerUnit: priceVal,
+              currency: 'RUB',
+              effectiveFrom: formPriceDate || new Date().toISOString().slice(0, 10),
+            });
             showSuccess('Цена установлена');
           } catch (priceErr: any) {
             showError(priceErr?.error?.detail || priceErr?.detail || 'Продукт сохранён, но цену установить не удалось');
@@ -259,10 +234,6 @@ export default function ProductsPage() {
   };
 
   const handleDelete = async (product: Product) => {
-    if (isOfflineMode()) {
-      showError('Офлайн-режим: удаление недоступно');
-      return;
-    }
     if (product.usageRecipes > 0) {
       showError(`Продукт используется в ${product.usageRecipes} ${recipesWord(product.usageRecipes)} и не может быть удалён`);
       return;
@@ -277,7 +248,7 @@ export default function ProductsPage() {
     if (!ok) return;
 
     try {
-      await deleteProduct(product.id);
+      await api.del(`/admin/products/${product.id}`);
       showSuccess('Продукт удалён');
       await loadData();
     } catch (error: any) {
@@ -348,9 +319,7 @@ export default function ProductsPage() {
   if (loading) {
     return (
       <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-bold" style={{ color: 'var(--text)' }}>Продукты</h1>
-        </div>
+        <PageHero title="Продукты" />
         {/* Fix-10 (п.4): брендовый лоаджер вместо «Загрузка…» */}
         <PageLoader />
       </div>
@@ -360,30 +329,27 @@ export default function ProductsPage() {
   if (error) {
     return (
       <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-bold" style={{ color: 'var(--text)' }}>Продукты</h1>
-          <p className="mt-1" style={{ color: 'var(--fire)' }}>{error}</p>
-          <Button variant="ghost" onClick={loadData}>Повторить</Button>
-        </div>
+        <PageHero
+          title="Продукты"
+          subtitle={<span style={{ color: 'var(--fire)' }}>{error}</span>}
+          right={<Button variant="ghost" onClick={loadData}>Повторить</Button>}
+        />
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-bold" style={{ color: 'var(--text)' }}>Продукты</h1>
-          <p className="mt-1" style={{ color: 'var(--muted)' }}>
-            {products.length} {productsWord(products.length)} · {categories.length} {categoriesWord(categories.length)}
-          </p>
-        </div>
-        {/* Fix-7 (п.5): кнопка создания — справа, иконочная (единый паттерн);
-            aria-label «Добавить продукт» сохранён (E2E-03/04/05) */}
-        <Button variant="primary" iconOnly onClick={() => { resetForm(); setShowModal(true); }}
-                aria-label="Добавить продукт" title="Добавить продукт" icon={<Plus size={18} />} />
-      </div>
+      {/* Header — BUG-002 (tasks/bugs-page-headers.md): PageHero с арт-слоем;
+          Fix-7 (п.5): кнопка создания справа, иконочная; aria-label сохранён (E2E-03/04/05) */}
+      <PageHero
+        title="Продукты"
+        subtitle={<>{products.length} {productsWord(products.length)} · {categories.length} {categoriesWord(categories.length)}</>}
+        right={(
+          <Button variant="primary" iconOnly onClick={() => { resetForm(); setShowModal(true); }}
+                  aria-label="Добавить продукт" title="Добавить продукт" icon={<Plus size={18} />} />
+        )}
+      />
 
       {/* Toolbar */}
       <div className="filters-row flex gap-3 items-center flex-wrap">

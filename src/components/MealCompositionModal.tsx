@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Info, Plus, Undo2, X } from 'lucide-react';
+import { Info, Undo2, X } from 'lucide-react'; // Plus удалён: неиспользуемый импорт (lint-error на HEAD)
 import Modal from './Modal';
 import { Button } from './Button';
 import RecipeSearchSelect from './RecipeSearchSelect';
@@ -12,8 +12,6 @@ import type { ProblemDetail } from '../types/errors';
 import {
   api, getMealComposition, putMealComposition, humanize, packHint, humanizeWeight,
 } from '../api/client';
-import { createFreeProduct } from '../api/freeProduct';
-import { getProducts, getCategories, checkProductName } from '../api/products';
 import { formatRub, categoryName } from '../utils/format'; // Release-1.0: единый формат чисел
 import type { CompositionItem, CompositionPutRequest, CompositionResponse } from '../api/client';
 import type { Ingredient, MealType, UnitOfMeasure } from '../types';
@@ -142,10 +140,10 @@ export default function MealCompositionModal({
     let cancelled = false;
     // U8 (список багов 25.10): «подгружается какой-то мизер» — бэкенд по умолчанию отдаёт
     // первую страницу (size=20 из 204). Просим весь справочник, как RecipeEditorModal.
-    getProducts({ size: '1000' })
+    api.get<any>('/admin/products', { params: { size: '1000' } })
       .then((res) => {
         if (cancelled) return;
-        const list = Array.isArray(res) ? res : [];
+        const list = Array.isArray(res) ? res : (res?.content ?? []);
         // Release-1.0: бэкенд отдаёт category ОБЪЕКТОМ (ProductCategoryDto {id,name,slug,…}),
         // а подсказки пикера интерполируют его строкой → «[object Object]».
         // Нормализуем один раз на входе (mock отдаёт строку — categoryName её не трогает).
@@ -157,10 +155,10 @@ export default function MealCompositionModal({
       })
       .catch(() => {});
     // Категории справочника — для создания продукта из свободного ввода (§2.2, save-flow).
-    getCategories()
+    api.get<any>('/product-categories')
       .then((res) => {
         if (cancelled) return;
-        const list = Array.isArray(res) ? res : [];
+        const list = Array.isArray(res) ? res : (res?.content ?? []);
         setCategories(list.map((c: any) => ({ id: String(c.id), name: String(c.name ?? '') })));
       })
       .catch(() => {});
@@ -447,7 +445,9 @@ export default function MealCompositionModal({
     }
     for (const row of freeRows) {
       try {
-        const chk = await checkProductName(row.name, row.unit).catch(() => null);
+        const chk = await api.get<any>(
+          `/admin/products/check-name?name=${encodeURIComponent(row.name)}&unit=${encodeURIComponent(row.unit)}`
+        );
         if (chk?.duplicate && chk?.existingId != null) {
           if (chk.sameUnit === false) {
             setSaveProblem({
@@ -467,7 +467,7 @@ export default function MealCompositionModal({
           });
           return null;
         }
-        const created = await createFreeProduct({
+        const created = await api.post<any>('/admin/products', {
           name: row.name, unit: row.unit, categoryId: Number(categoryId),
         });
         if (created?.id == null) throw { status: 500, detail: 'Сервер не вернул id созданного продукта' };

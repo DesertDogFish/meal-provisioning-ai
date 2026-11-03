@@ -109,3 +109,30 @@ describe('ListSearch — bugs-trip-checks-stage п.7', () => {
     expect(screen.getByTestId('ls-count').textContent).toBe('1/1');
   });
 });
+
+// BUG-004 (tasks/bugs-list-search-focus.md п.1): ввод не уводит фокус из строки
+// поиска — владелец должен мочь допечатать уточнение; подсветка/прокрутка остаются.
+describe('ListSearch — BUG-004: фокус остаётся в поле ввода', () => {
+  it('ввод: activeElement = input (не строка), .search-hit и прокрутка на месте', () => {
+    render(<><ListSearch items={ITEMS} testId="ls" /><Rows /></>);
+    const input = screen.getByTestId('ls-input');
+    input.focus();
+    fireEvent.change(input, { target: { value: 'греч' } });
+    expect(document.activeElement).toBe(input);
+    const hit = document.querySelector('[data-search-id="a"]')!;
+    expect(hit.classList.contains('search-hit')).toBe(true);
+    expect(Element.prototype.scrollIntoView).toHaveBeenCalledWith({ block: 'center' });
+    // строка не получает фокусируемой обвязки tabindex
+    expect(hit.getAttribute('tabindex')).toBeNull();
+  });
+
+  it('перебор Enter/стрелками тоже не уводит фокус из input', () => {
+    render(<><ListSearch items={ITEMS} testId="ls" /><Rows /></>);
+    const input = screen.getByTestId('ls-input');
+    input.focus();
+    fireEvent.change(input, { target: { value: 'греч' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(document.activeElement).toBe(input);
+    expect(screen.getByTestId('ls-count').textContent).toBe('2/2');
+  });
+});

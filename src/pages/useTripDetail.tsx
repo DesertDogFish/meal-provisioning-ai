@@ -10,9 +10,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { api } from '../api/client';
-import { deleteMeal, updateDay, updatePriceOverride } from '../api/tripDetail';
 import { useToast } from '../components/ToastProvider';
-import { isOfflineMode } from '../repositories/RepositoryFactory';
 import { useConfirm } from '../components/ConfirmDialog'; // Fix-6 (п.7)
 import { loadActualPrices, saveActualPrice, loadExcluded, setExcluded as persistExcluded, loadBought, setBought as persistBought, loadActualQty, setActualQty, onTripStageChange, refreshBoughtFromServer, forgetTripBoughtSyncState, refreshActualQtyFromServer, forgetTripActualQtySyncState, type ChecklistActual, type ActualPriceDraft } from '../utils/tripStaging'; // U32 + Fix-2(п.6) + Fix-5(п.21) + Fix-8(п.6)
 import { unitFromTotal } from '../utils/checkInput'; // cleanup-п.5: чек-мутация переехала со вкладки на страницу
@@ -31,7 +29,7 @@ import type { ActualAmount } from '../utils/checkUnits';
 import type { Trip, Recipe, Price, TabType, ShoppingSortField } from '../types/tripDetail';
 
 export function useTripDetail() {
-  const { showError } = useToast();
+  const { showError, showSuccess } = useToast();
   const { confirm, dialog: confirmDialog } = useConfirm(); // Fix-6 (п.7)
   const { id } = useParams<{ id: string }>();
   // Plan plans/2026-10-30-mobile-workflow-ux.md (подзадача 2): этап живёт в
@@ -82,7 +80,7 @@ export function useTripDetail() {
   const [compositionMeal, setCompositionMeal] = useState<{ dayId: string; mealId: string } | null>(null);
 
   // ===== Фаза 13 (п.6/7): общий стейдж фактических цен и исключений =====
-  // Поднят на уровень страницы: вкладки «Закупка», «По дням», «На человека» и
+  // Поднят на уровень страницы: виды этапа ② («На поход», «По дням»; «На человека»
   // этап ④ «Чеки и итог» читают ОДИН источник — цифры синхронны между этапами,
   // а черновики не теряются при размонтировании вкладок.
   // Сохранение между сессиями — per-trip localStorage (по требованию задачи).
@@ -179,10 +177,6 @@ export function useTripDetail() {
    * остаётся на месте, данные обновляются по ответу.
    */
   const loadData = async (background = false) => {
-    if (isOfflineMode()) {
-      if (!background) showError('Офлайн-режим: данные похода недоступны');
-      return;
-    }
     try {
       if (!background) setLoading(true);
       setError(null);
@@ -251,12 +245,8 @@ export function useTripDetail() {
       ),
     });
     if (!ok) return;
-    if (isOfflineMode()) {
-      showError('Офлайн-режим: изменение недоступно');
-      return;
-    }
     try {
-      await deleteMeal(trip.id, dayId, mealId);
+      await api.del(`/trips/${trip.id}/days/${dayId}/meals/${mealId}`);
       await loadData(true); // transparency-п.5: фоновая перечитка
     } catch (err: any) {
       console.error('Failed to delete meal:', err);
@@ -266,13 +256,9 @@ export function useTripDetail() {
 
   const handleUpdateDayPeople = async (dayId: string) => {
     if (!trip) return;
-    if (isOfflineMode()) {
-      showError('Офлайн-режим: изменение недоступно');
-      return;
-    }
     const val = dayPeopleOverride ? parseInt(dayPeopleOverride) : null;
     try {
-      await updateDay(trip.id, dayId, {
+      await api.put(`/trips/${trip.id}/days/${dayId}`, {
         peopleOverride: val ?? undefined
       });
       setEditingDay(null);
@@ -336,9 +322,8 @@ export function useTripDetail() {
     }
     setDraftOverrides(loadActualPrices(tripKey));
     try {
-      if (isOfflineMode()) return; // локальный стейдж уже сохранён
       const unit = total == null || Number.isNaN(total) ? null : unitFromTotal(total, row.totalAmount);
-      await updatePriceOverride(tripKey, row.ingredientId, {
+      await api.put(`/trips/${tripKey}/price-overrides/${row.ingredientId}`, {
         actualPrice: unit,
         comment: unit == null ? undefined : 'чек',
       });
@@ -358,6 +343,29 @@ export function useTripDetail() {
   const commitActualQty = (ingredientId: string, value: ActualAmount | null, _needed?: number) => {
     setActualQty(tripKey, ingredientId, value);
     setActualQtyState(loadActualQty(tripKey));
+  };
+
+  /**
+   * trip-workflow-redesign п.4: toggle утверждения меню ① —
+   * POST /trips/{id}/menu-approval (owner-only, 409 — общий конфликт-флоу).
+   * TripResponse из ответа сразу обновляет trip.menuApproved (чипы/CTA/reactivity),
+   * без полной перечитки: мутация точечная.
+   */
+  const [approvingMenu, setApprovingMenu] = useState(false);
+  const approveMenu = async () => {
+    if (!trip || approvingMenu) return;
+    setApprovingMenu(true);
+    try {
+      const resp = await api.post<Trip>(`/trips/${trip.id}/menu-approval`, {});
+      const approved = resp?.menuApproved === true;
+      setTrip({ ...trip, menuApproved: approved });
+      showSuccess(approved ? 'Меню утверждено' : 'Утверждение меню снято');
+    } catch (err: any) {
+      console.error('Failed to toggle menu approval:', err);
+      showError(err?.detail || 'Не удалось изменить утверждение меню');
+    } finally {
+      setApprovingMenu(false);
+    }
   };
 
   const setAllBought = (on: boolean, allKeys: string[]) => {
@@ -439,7 +447,7 @@ export function useTripDetail() {
     loadData, reloadInBackground: () => loadData(true), commitCheckTotal,
     toggleDay, handleMealAdded, handleDeleteMeal, handleUpdateDayPeople,
     handleSortField, toggleShoppingExcluded, refreshManual, handleDeleteManual,
-    toggleBought, commitActualQty, setAllBought,
+    toggleBought, commitActualQty, setAllBought, approveMenu,
     reloadAfterConflict,
   };
 }

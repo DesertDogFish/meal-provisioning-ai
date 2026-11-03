@@ -136,6 +136,8 @@ export interface Trip {
   endDate: string;
   defaultPeople: number;
   notes?: string;
+  /** trip-workflow-redesign п.2: меню этапа ① утверждено (контракт TripResponse.menuApproved). */
+  menuApproved?: boolean;
   createdAt: string;
   days?: TripDay[];
 }

@@ -20,7 +20,7 @@ frontend). Код писать только после подтверждени�
 
 ## Подзадачи
 
-- [ ] 1. Переименовать этап «Закупка» → «Проверка» во всём UI (можно отгрузить
+- [x] 1. Переименовать этап «Закупка» → «Проверка» во всём UI (можно отгрузить
   независимо от остальных пунктов). Файлы: `src/components/StageTabBar.tsx`
   (STAGES label; id/URL `shopping` НЕ менять — только подпись),
   `src/pages/TripDetailPage.tsx` (stageTabs ~строки 88–93),
@@ -33,7 +33,7 @@ frontend). Код писать только после подтверждени�
   Приёмка: RED — тест «этап ② подписан 'Проверка'» падает; GREEN — после
   переименования; grep «Закупка» остаётся только в заголовках вкладок ② и доках.
 
-- [ ] 2. Backend: утверждение меню. Миграция `V38__trip_menu_approval.sql`
+- [x] 2. Backend: утверждение меню. Миграция `V38__trip_menu_approval.sql`
   (колонка `menu_approved_at TIMESTAMPTZ NULL` в `trips`; БЕЗ backfill —
   РЕШЕНО владельцем 03.11.2026: продукт в бете, реальных походов нет, старые
   строки остаются неутверждёнными), `Trip` entity (+@Version уже есть),
@@ -49,7 +49,7 @@ frontend). Код писать только после подтверждени�
   тестовых БД; `UserPricesIntegrationTest`/`EconomicConsistencyTest`/
   `DockerStackSmokeTest` в песочнице не запускать (лимит памяти).
 
-- [ ] 3. Mock-паритет и контракт (R3, в той же задаче что п.2) + обновление
+- [x] 3. Mock-паритет и контракт (R3, в той же задаче что п.2) + обновление
   ТЕСТОВЫХ походов (напоминание владельца 03.11.2026):
   `src/api/mockServer.ts` (+`mockTrips.ts`/`mockState.ts`) — поле menuApproved
   и POST menu-approval; сид-походы в `src/data/mockData.ts` (`mockTrips`,
@@ -65,7 +65,7 @@ frontend). Код писать только после подтверждени�
   «menu-approval паритет» падает до мока; демо-походы в mock-режиме показывают
   новый прогресс корректно.
 
-- [ ] 4. Frontend: «Утвердить меню» + новая модель прогресса (пп.4 и 11 списка
+- [x] 4. Frontend: «Утвердить меню» + новая модель прогресса (пп.4 и 11 списка
   владельца). Кнопка «Утвердить меню» на этапе ① (заметная, в конце списка
   дней рядом со StageNextCta); CTA этапа ① до утверждения — «Утвердить меню»
   (вместо нынешнего «К закупке ②»), после — «К проверке ②». `done.menu` =
@@ -89,7 +89,7 @@ frontend). Код писать только после подтверждени�
   `TripPrintPage/TripsPage.boughtHydration.test.tsx` — grep по фикстурам trip)
   — поле `menuApproved` и новые подписи этапов.
 
-- [ ] 5. Этап ⑤ «Поход готов» — пятый экран в ряду (п.25 списка владельца).
+- [x] 5. Этап ⑤ «Поход готов» — пятый экран в ряду (п.25 списка владельца).
   STAGES += `{ id: 'ready', num: 5, label: 'Поход готов' }`; `.stage-bar`
   grid 4→5 колонок; `parseStage('ready')`; TripDetailPage рендерит контент
   отчёта на `?stage=ready`: вынести тело `src/pages/TripReportPage.tsx` в
@@ -110,7 +110,7 @@ frontend). Код писать только после подтверждени�
   .66 → .88, blur 3px), сегмент «Готово» активен — см. подзадачу 6
   `tasks/design-atmosphere-art.md` и мокап в `design-lab/index.html`.
 
-- [ ] 6. Убрать дубли навигации: десктопный `.seg` (п.13) и kebab шапки (п.26).
+- [x] 6. Убрать дубли навигации: десктопный `.seg` (п.13) и kebab шапки (п.26).
   Файлы: `src/pages/TripDetailPage.tsx` (~строки 128–152 — блок
   `desktop-stage-seg` удалить; переключатель этапов на десктопе — кликабельные
   чипы TripSummaryPanel, они уже умеют onStage), `src/components/TripActions.tsx`
@@ -122,7 +122,7 @@ frontend). Код писать только после подтверждени�
   чипами» падает; GREEN — после удаления; kebab отсутствует, печать доступна
   на ⑤.
 
-- [ ] 7. Мобильный drawer сводки (п.27): огромную кнопку «Отчёт по походу»
+- [x] 7. Мобильный drawer сводки (п.27): огромную кнопку «Отчёт по походу»
   заменить яркой рыжей иконкой (FileDown, `--amber-500`, iconOnly с aria-label);
   починить лейблы воркфлоу-чипов в sheet'е («вкривь и вкось»): единая высота/
   выравнивание чипов и шевронов, перенос цепочки целиком по сегментам
@@ -134,6 +134,43 @@ frontend). Код писать только после подтверждени�
   GREEN — после правки; визуальная проверка 360×640 и 390×844 (e2e в CI).
 
 ## Заметки
+- 03.11.2026 п.5: STAGES += ⑤ ready «Поход готов» (Flag), parseStage('ready'), grid 5 колонок;
+  контент отчёта вынесен в src/components/TripReportView.tsx (R8), TripReportPage удалена,
+  роут /trips/:id/report = ReportRedirect → ?stage=ready; экран ⑤ — арт camp-ready.webp под
+  вуалью .66→.88 + blur 3px (.stage-ready, утверждено владельцем); earliestOpenStage → 'ready'.
+  Защищено: StageTabBar.test (п.5, 2 кейса), ReportRedirect.test (1), TripDetailPage.readyStage.test (2).
+- 03.11.2026 п.6: десктопный .seg-дубль и kebab шапки (TripActions) удалены целиком; сиротское
+  CSS-правило .seg.seg-desktop-only удалено; этапы на десктопе — чипы сводки, отчёт/печать — на ⑤.
+  e2e/mobile.spec M-11 обновлён (seg toHaveCount(0)). Защищено: readyStage.test (п.6, 2 кейса),
+  headerGlass.test обновлён.
+- 03.11.2026 п.7: sheet-кнопка отчёта = иконочная amber (icon-action, aria-label «Отчёт по походу»);
+  чипы цепи: ④ «Чеки: …», ⑤ «Готов/Не готов», пары «шеврон+чип» = keep-pair, единая min-h 32px;
+  onOpenReport сводки ведёт на этап ⑤ (не /report). Защищено: TripDetailComponents.test (п.7, 2 кейса).
+- 03.11.2026 п.4: readiness: done.menu=menuApproved (partial без утверждения), workflowProgress()
+  = 5 равных сегментов (① min(meals,10)/10 … ⑤ ready); полоса карточки TripsPage = fill;
+  StageNextCta ① до утверждения = кнопка «Утвердить меню» (мутация approveMenu в useTripDetail,
+  POST menu-approval + showSuccess); чип ① «Меню: не утверждено» для partial.
+  Фикстуры тестов обновлены menuApproved (по напоминанию владельца). Защищено: readiness.test
+  (redesign п.4, 4 кейса), StageNextCta.test (redesign п.4, 2 кейса), TripsPage.progress 8/8.
+  Прогоны: components 403/403, pages+api+utils 652/652 (после фикстур), contract 72/72, build ok.
+  Гейты HEAD были красные ДО меня: TripPersonTab.tsx (мёртвый код после bugs-trip-shopping-stage п.5,
+  personSummary удалён из view) и неиспользуемый Plus в MealCompositionModal — удалил/почистил,
+  чтобы lint/typecheck:all прошли; теперь lint 0 errors, typecheck:all чисто.
+- 03.11.2026 п.3: TripResponse.menuApproved в mock (роут POST /trips/:id/menu-approval,
+  owner-only 404), сиды: trip1 утверждён, trip2 нет; новые походы menuApproved=false;
+  типы types/index.ts + types/tripDetail.ts; ARCHITECTURE.md — эндпоинт + поле.
+  Защищено: contractMenuApproval.test.ts 3/3 (npm run test:contract-файл).
+- 03.11.2026 п.2: V38__trip_menu_approval.sql (menu_approved_at TIMESTAMPTZ NULL, без backfill),
+  Trip.menuApprovedAt, TripResponse.menuApproved (Boolean), TripService.toggleMenuApproval
+  (owner-only через findByIdWithDaysAndMeals, 404 чужой), POST /api/v1/trips/{id}/menu-approval.
+  Защищено: TripMenuApprovalTest 2/2 (unit), TripMenuApprovalIntegrationTest 3/3 (MA-01 toggle,
+  MA-02 404 чужой, MA-03 stale-tx конфликт @Version); гейты миграций: SnapshotIsolation 3/3,
+  FlywayUpgrade 4/4 (+ чистка provision% БД перед прогоном). 409-маппинг — общий GlobalExceptionHandler.
+- 03.11.2026 п.1: STAGES/stageTabs/CTA/чипы ② = «Проверка» (id/URL `shopping` не тронуты);
+  заголовки вкладок ② («Предварительная закупка…») и доменные слова оставлены по приёмке.
+  Защищено: StageTabBar.test «redesign п.1», StageNextCta.test «К проверке ②»,
+  TripDetailComponents (чип «Проверка: N»), TripsPage.progress (карточка «Проверка»).
+  Прогоны: RED 4 кейса → GREEN 50/50 (4 файла), соседи 65/65 (8 файлов).
 
 - Порядок отгрузки: п.1 (переименование) независим и может уйти первым;
   пп.2–4 — одним релизом (контракт + mock + UI); пп.5–7 — после них (этап ⑤

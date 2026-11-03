@@ -117,7 +117,7 @@ test('E2E-05 сводка поездки: закупки/стоимость/ка
   const card = page.locator('[data-testid^="trip-card-"]').first();
   await card.click();
   await expect(page).toHaveURL(/\/trips\/trip-/, { timeout: 15_000 });
-  // Вновь созданный поход без дней: этап ② «Закупка» (bugs-trip-shopping-stage:
+  // Вновь созданный поход без дней: этап ② «Проверка» (redesign п.1; bugs-trip-shopping-stage:
   // заголовок «Предварительная закупка»; вид «На человека» удалён — проверяем
   // виды «На поход» и «По дням»).
   await page.getByTestId('stage-bar-shopping').click();

@@ -9,8 +9,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Check, Download, X } from 'lucide-react';
 import { api } from '../api/client';
-import { getStagingRecipes } from '../api/catalog';
-import { approveStaging, rejectStaging } from '../api/catalogImport';
 import { useToast } from './ToastProvider';
 import { Button } from './Button';
 import PageLoader from './PageLoader';
@@ -63,7 +61,7 @@ export function CatalogImportTab({ askRejectReason }: CatalogImportTabProps) {
     try {
       setLoading(true);
       setError(null);
-      const data = await getStagingRecipes();
+      const data = await api.get<StagingRecipe[]>('/admin/staging');
       setStagingRecipes(Array.isArray(data) ? data : []);
     } catch (err) {
       // R10: сбой загрузки виден в консоли и пользователю; есть путь «Повторить»
@@ -79,7 +77,7 @@ export function CatalogImportTab({ askRejectReason }: CatalogImportTabProps) {
 
   const handleApprove = async (staging: StagingRecipe) => {
     try {
-      await approveStaging(staging.id, {
+      await api.post(`/admin/staging/${staging.id}/approve`, {
         name: staging.suggestedName || 'Imported recipe',
         mealType: staging.suggestedMealType || 'DINNER',
         baseServings: 4,
@@ -103,7 +101,7 @@ export function CatalogImportTab({ askRejectReason }: CatalogImportTabProps) {
       : window.prompt('Причина отклонения:');
     if (reason == null) return;
     try {
-      await rejectStaging(staging.id, reason);
+      await api.post(`/admin/staging/${staging.id}/reject`, { reason });
       showSuccess('Черновик отклонён');
       await loadData();
     } catch (err: any) {

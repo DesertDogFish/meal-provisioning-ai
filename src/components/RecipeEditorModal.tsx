@@ -9,8 +9,6 @@ import { Button } from './Button';
 import Modal from './Modal';
 import { usePortalDropdown } from './CustomSelect';
 import { api } from '../api/client';
-import { updateRecipe, createRecipe } from '../api/recipeEditor';
-import { getProducts } from '../api/products';
 import { useToast } from './ToastProvider';
 import { validateRecipe } from '../utils/validation';
 // UX-осмотр 31.10 (п.2): ошибки — человеческие RU-тексты без префикса «field:»
@@ -127,7 +125,7 @@ export default function RecipeEditorModal({ recipe, categories, isAdmin = false,
     let alive = true;
     (async () => {
       try {
-        const res = await getProducts({ size: '1000' });
+        const res = await api.get<unknown>('/admin/products', { params: { size: '1000' } });
         const list = Array.isArray(res) ? res : ((res as { content?: EditorProduct[] })?.content ?? []);
         if (alive) setProducts(list);
       } catch (err: unknown) {
@@ -240,10 +238,10 @@ export default function RecipeEditorModal({ recipe, categories, isAdmin = false,
     try {
       setSaving(true);
       if (recipe) {
-        await updateRecipe(recipe.id, payload);
+        await api.put(`/admin/recipes/${recipe.id}`, payload);
         showSuccess('Рецепт обновлён');
       } else {
-        await createRecipe(payload);
+        await api.post('/admin/recipes', payload);
         showSuccess('Рецепт создан');
       }
       onSaved();

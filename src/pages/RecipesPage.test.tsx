@@ -145,13 +145,13 @@ describe('RecipesPage — кнопка «В меню похода» на кар�
 // bugs-recipes-catalog пп.1–2: счётчики в подзаголовке (паттерн ProductsPage)
 // и переименование «Только без огня» → «Без огня».
 describe('RecipesPage — bugs-recipes-catalog пп.1–2', () => {
-  it('п.1: подзаголовок — «1 блюдо · 1 категория», без голого «Блюда · N»', async () => {
+  it('п.1 (rev 03.11.2026, BUG-001): h1 — «Блюда», счётчики «1 блюдо · 1 категория» — подписью под h1', async () => {
     renderPage();
     await screen.findByText('Уха из рыбных консервов');
     const h1 = screen.getByRole('heading', { level: 1 });
-    expect(h1.textContent).toContain('1 блюдо');
-    expect(h1.textContent).toContain('1 категория');
-    expect(h1.textContent).not.toContain('Блюда ·');
+    expect(h1.textContent?.trim()).toBe('Блюда');
+    expect(h1.parentElement?.textContent).toContain('1 блюдо');
+    expect(h1.parentElement?.textContent).toContain('1 категория');
   });
 
   it('п.2: фильтр подписан «Без огня»; «Только без огня» отсутствует', async () => {
@@ -302,5 +302,17 @@ describe('RecipesPage — ?ingredient= (navigation-п.6)', () => {
     expect(await screen.findByLabelText('Название')).toBeTruthy();
     // … а фильтр по ингредиенту остался в URL
     expect(screen.getByTestId('loc').textContent).toContain('ingredient=i1');
+  });
+});
+
+// BUG-002 (tasks/bugs-page-headers.md п.2): шапка страницы — hero-блок с арт-слоем.
+describe('RecipesPage — BUG-002: hero-шапка', () => {
+  it('шапка — page-hero: арт-слой aria-hidden, h1 внутри блока', async () => {
+    renderPage();
+    const hero = await screen.findByTestId('page-hero');
+    const art = hero.querySelector('.page-hero__art');
+    expect(art).toBeTruthy();
+    expect(art?.getAttribute('aria-hidden')).toBe('true');
+    expect(hero).toContainElement(screen.getByRole('heading', { level: 1 }));
   });
 });

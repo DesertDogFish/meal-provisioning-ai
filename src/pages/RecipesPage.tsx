@@ -6,11 +6,10 @@ import { formatAmount } from '../utils/calculations';
 import { humanizeCategory, servingsWord, ingredientsWord, mealTypeLabels, dishesWord, categoriesWord } from '../utils/text';
 import CustomSelect from '../components/CustomSelect'; // Fix-5 (п.19): «Все категории» — как везде
 import { api, getRecipes } from '../api/client';
-import { deleteRecipe, loadMenuTrips } from '../api/recipes';
-import { repositories, isOfflineMode } from '../repositories/RepositoryFactory';
 import { useToast } from '../components/ToastProvider';
 import { useConfirm } from '../components/ConfirmDialog'; // Fix-6 (п.7)
 import Modal from '../components/Modal';
+import PageHero from '../components/PageHero'; // BUG-002: hero-шапка страницы
 import RecipeEditorModal from '../components/RecipeEditorModal';
 import FilterSheet from '../components/FilterSheet';
 import BottomSheet from '../components/BottomSheet';
@@ -75,10 +74,6 @@ export default function RecipesPage() {
   };
 
   const handleDelete = async (recipe: Recipe) => {
-    if (isOfflineMode()) {
-      showError('Офлайн-режим: удаление недоступно');
-      return;
-    }
     // U16 (список багов 25.10) + Fix-6 (п.7): блюда — сущность верхнего уровня.
     // Походы с V20 живут на снапшотах рецептов, клиентская блокировка устарела —
     // сервер гарантирует изоляцию. Подтверждение — брендовым диалогом.
@@ -95,7 +90,7 @@ export default function RecipesPage() {
     });
     if (!ok) return;
     try {
-      await deleteRecipe(recipe.id);
+      await api.del(`/admin/recipes/${recipe.id}`);
       showSuccess('Рецепт удалён');
       setSelectedRecipe(null);
       await loadRecipes();
@@ -108,20 +103,7 @@ export default function RecipesPage() {
     try {
       setLoading(true);
       setError(null);
-      const data = isOfflineMode()
-        ? (await repositories.recipes.getAll()).map((r) => ({
-            id: r.id,
-            name: r.name,
-            mealType: r.mealType as any,
-            category: r.category,
-            baseServings: r.baseServings,
-            caloriesPerServing: r.caloriesPerServing,
-            source: r.source as any,
-            ingredients: r.ingredients.map((ri) => ({ ingredientId: ri.ingredientId, amount: ri.amount })),
-            tripId: r.tripId,
-            createdAt: r.createdAt,
-          }))
-        : await getRecipes();
+      const data = await getRecipes();
       setRecipes(data);
     } catch (err: any) {
       console.error('Failed to load recipes:', err);
@@ -265,9 +247,7 @@ export default function RecipesPage() {
   if (loading) {
     return (
       <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-bold" style={{ color: 'var(--text)' }}>Каталог блюд</h1>
-        </div>
+        <PageHero title="Блюда" />
         {/* Fix-10 (п.4): брендовый лоаджер вместо «Загрузка…» */}
         <PageLoader />
       </div>
@@ -277,31 +257,29 @@ export default function RecipesPage() {
   if (error) {
     return (
       <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-bold" style={{ color: 'var(--text)' }}>Каталог блюд</h1>
-          <p className="mt-1" style={{ color: 'var(--fire)' }}>{error}</p>
-          <Button variant="ghost" onClick={loadRecipes}>Повторить</Button>
-        </div>
+        <PageHero
+          title="Блюда"
+          subtitle={<span style={{ color: 'var(--fire)' }}>{error}</span>}
+          right={<Button variant="ghost" onClick={loadRecipes}>Повторить</Button>}
+        />
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
-      {/* Fix-7 (п.5): кнопка создания — СПРАВА, иконочная (единый паттерн с
-          «Продукты»/«Походы»); счётчики типов переехали в слайдер-пресеты ниже */}
-      <div className="flex items-start justify-between gap-3">
-        <h1 className="text-2xl md:text-3xl font-bold" style={{ color: 'var(--text)' }}>
-          {/* bugs-recipes-catalog п.1: как в продуктах — «N блюд · M категорий»,
-              без голого «Блюда · 200» */}
-          {recipes.length} {dishesWord(recipes.length)} · {categories.length} {categoriesWord(categories.length)}
-        </h1>
-        {isAdmin && (
+      {/* Fix-7 (п.5) + BUG-001/BUG-002 (tasks/bugs-page-headers.md): шапка — PageHero:
+          h1 «Блюда», НИЖЕ строкой счётчики (паттерн «Продукты»), кнопка создания
+          справа; блок отделён фоновым арт-слоем */}
+      <PageHero
+        title="Блюда"
+        subtitle={<>{recipes.length} {dishesWord(recipes.length)} · {categories.length} {categoriesWord(categories.length)}</>}
+        right={isAdmin ? (
           <Button variant="primary" iconOnly onClick={openCreate}
                   aria-label="Создать блюдо" title="Создать блюдо"
                   icon={<Plus size={18} />} />
-        )}
-      </div>
+        ) : undefined}
+      />
 
       {/* Фильтры. Plan plans/2026-10-30-mobile-workflow-ux.md (подзадача 10):
           на мобильном строка фильтров = поиск + кнопка «Фильтры (N)», все
@@ -499,7 +477,7 @@ export default function RecipesPage() {
                         setMenuSheet(recipe);
                         setMenuTrip(null);
                         setMenuTrips(null);
-                        void loadMenuTrips().then((t) => setMenuTrips(t)).catch(() => setMenuTrips([]));
+                        void api.get<any[]>('/trips').then((t) => setMenuTrips(Array.isArray(t) ? t : [])).catch(() => setMenuTrips([]));
                       }}
                     >
                       <PackagePlus size={16} aria-hidden />
