@@ -11,6 +11,7 @@ import CustomMultiSelect from '../components/CustomMultiSelect';
 import FilterSheet from '../components/FilterSheet';
 import { DatePicker } from '../components/DatePicker';
 import { api } from '../api/client';
+import { repositories, isOfflineMode } from '../repositories/RepositoryFactory';
 import type { UnitOfMeasure, ProductCategory, IngredientPrice } from '../types';
 import { humanizeUnit, recipesWord, productsWord, categoriesWord } from '../utils/text';
 import { Button } from '../components/Button';
@@ -67,8 +68,29 @@ export default function ProductsPage() {
       setLoading(true);
       setError(null);
       
+      // Чтение продуктов: при офлайн — из локального кэша (IndexedDB), иначе — с сервера.
+      const productsPromise = isOfflineMode()
+        ? repositories.products.getAll().then((items) =>
+            items.map((p) => ({
+              id: p.id,
+              name: p.name,
+              unit: p.unit,
+              category: p.categoryId ? { id: p.categoryId, name: p.category } : null,
+              categoryName: p.category,
+              categoryId: p.categoryId,
+              packSize: p.packSize,
+              roundToPacks: p.roundToPacks,
+              kcalPer100g: p.kcalPer100g,
+              pieceWeightG: p.pieceWeightG,
+              enabled: p.enabled,
+              emisCode: p.emisCode,
+              bindingStatus: p.emisCode ? 'BOUND' : 'UNBOUND',
+            }))
+          )
+        : api.get<any>('/admin/products?size=1000');
+
       const [productsData, categoriesData, pricesData] = await Promise.all([
-        api.get<any>('/admin/products?size=1000'),
+        productsPromise,
         api.get<ProductCategory[]>('/product-categories'),
         api.get<IngredientPrice[]>('/prices').catch(() => [] as IngredientPrice[])
       ]);
