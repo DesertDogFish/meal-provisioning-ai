@@ -15,7 +15,7 @@ Closed:
 - **Аутентификация**: JWT в IndexedDB (зашифровано), refresh rotation.
 
 ## Этап 0 — Подготовка API-слоя (уже частично)
-- [ ] 0.1. Вынести все вызовы `fetch`/`api.*` из компонентов в единый слой `src/api/` (уже есть `src/api/*.ts` — проверить полноту).
+ - [x] 0.1. Вынести все вызовы `fetch`/`api.*` из компонентов в единый слой `src/api/` (уже есть `src/api/*.ts` — проверить полноту).
 - [x] 0.2. Ввести интерфейс `IRepository<T>` с методами `getAll`, `getById`, `save`, `delete`, `sync`.
 - [x] 0.3. Создать `src/repositories/OnlineRepository.ts` — обёртка над текущим API.
 
@@ -56,7 +56,7 @@ Closed:
 
 ## Этап 7 — Мобильная обёртка (Capacitor)
  - [x] 7.1. Добавить плагин `@capacitor/network` для отслеживания сети.
- - [x] 7.2. (Опционально) Добавить `@capacitor-community/sqlite` для нативного SQLite вместо IndexedDB.
+  - [ ] 7.2. (Опционально) Добавить `@capacitor-community/sqlite` для нативного SQLite вместо IndexedDB.
  - [x] 7.3. Обновить `meal-provisioning-mobile/scripts/pull-web.ps1` для копирования web build с офлайн-ассетами.
  - [x] 7.4. Тестировать APK на реальном устройстве.
 
