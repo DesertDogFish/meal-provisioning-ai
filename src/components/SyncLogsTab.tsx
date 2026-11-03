@@ -17,6 +17,7 @@ import Modal from './Modal';
 import PageLoader from './PageLoader';
 import { X, AlertCircle } from 'lucide-react';
 import { api, ApiClientError } from '../api/client';
+import { getSyncLogs, getSyncLogsKpi } from '../api/syncLogs';
 import { Button } from './Button';
 // UX-осмотр 31.10 (п.10): числа журнала — через единый ru-формат (запятая, а не toFixed)
 import { formatNum, formatPrice } from '../utils/format';
@@ -100,7 +101,7 @@ export function SyncLogsTab({ onGoToSettings }: SyncLogsTabProps) {
       if (filterStatus) params.status = filterStatus;
       if (filterFrom) params.from = filterFrom;
       if (filterTo) params.to = filterTo;
-      const data = await api.get<SyncLog[]>('/admin/sync-logs', { params });
+      const data = await getSyncLogs(params);
       setSyncLogs(data);
     } catch (error) {
       // R10: сбой виден в логе и тостом; 403 — отдельный человеческий текст
@@ -119,7 +120,7 @@ export function SyncLogsTab({ onGoToSettings }: SyncLogsTabProps) {
 
   const loadKpi = useCallback(async () => {
     try {
-      const data = await api.get<Kpi>('/admin/sync-logs/kpi', { params: { days: '7' } });
+      const data = await getSyncLogsKpi('7');
       setKpi(data);
     } catch (error) {
       console.error('Failed to load KPI:', error);

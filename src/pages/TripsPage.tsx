@@ -6,6 +6,7 @@ import { TripForm, type TripFormData } from '../components/TripForm';
 import { useConfirm } from '../components/ConfirmDialog'; // Fix-6 (п.7): красивые подтверждения
 import { KebabMenu } from '../components/KebabMenu';
 import { api } from '../api/client';
+import { createTrip, updateTrip, deleteTrip, loadTrips } from '../api/trips';
 import { repositories, isOfflineMode } from '../repositories/RepositoryFactory';
 import { loadBought, refreshBoughtFromServer, BOUGHT_SYNC_SOFT_TIMEOUT_MS } from '../utils/tripStaging';
 import { tripReadiness, earliestOpenStage } from '../utils/readiness';
@@ -157,7 +158,7 @@ export default function TripsPage() {
             notes: t.notes,
             createdAt: t.createdAt,
           }))
-        : await api.get<Trip[]>('/trips');
+        : await loadTrips();
       if (!aliveRef.current) return;
       setTrips(tripsData);
       // cleanup-п.8: прогресс — из того же ответа (без отдельных запросов на поход)
@@ -200,7 +201,7 @@ export default function TripsPage() {
 
   const handleCreate = async (formData: TripFormData) => {
     try {
-      const created = await api.post<any>('/trips', {
+      const created = await createTrip({
         name: formData.name,
         startDate: formData.startDate,
         endDate: formData.endDate,
@@ -256,7 +257,7 @@ export default function TripsPage() {
       }
     }
     try {
-      await api.put(`/trips/${trip.id}`, {
+      await updateTrip(trip.id, {
         name: formData.name,
         startDate: formData.startDate,
         endDate: formData.endDate,
@@ -292,7 +293,7 @@ export default function TripsPage() {
     });
     if (!ok) return;
     try {
-      await api.del(`/trips/${trip.id}`);
+      await deleteTrip(trip.id);
       showSuccess('Поход удалён');
       await loadData();
     } catch (err: any) {

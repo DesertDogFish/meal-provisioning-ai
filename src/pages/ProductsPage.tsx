@@ -12,6 +12,7 @@ import FilterSheet from '../components/FilterSheet';
 import { DatePicker } from '../components/DatePicker';
 import { api } from '../api/client';
 import { repositories, isOfflineMode } from '../repositories/RepositoryFactory';
+import { createProduct, updateProduct, deleteProduct, setProductPrice, loadProductsPage, checkProductName } from '../api/products';
 import type { UnitOfMeasure, ProductCategory, IngredientPrice } from '../types';
 import { humanizeUnit, recipesWord, productsWord, categoriesWord } from '../utils/text';
 import { Button } from '../components/Button';
@@ -87,15 +88,21 @@ export default function ProductsPage() {
               bindingStatus: p.emisCode ? 'BOUND' : 'UNBOUND',
             }))
           )
-        : api.get<any>('/admin/products?size=1000');
+        : null;
 
-      const [productsData, categoriesData, pricesData] = await Promise.all([
-        productsPromise,
-        api.get<ProductCategory[]>('/product-categories'),
-        api.get<IngredientPrice[]>('/prices').catch(() => [] as IngredientPrice[])
-      ]);
+      let productsData: any, categoriesData: any, pricesData: any;
+      if (isOfflineMode()) {
+        productsData = await productsPromise;
+        categoriesData = [];
+        pricesData = [];
+      } else {
+        const res = await loadProductsPage();
+        productsData = res.products;
+        categoriesData = res.categories;
+        pricesData = res.prices;
+      }
       const pmap: Record<string, number> = {};
-      (pricesData || []).forEach(pr => { pmap[String(pr.ingredientId)] = pr.pricePerUnit; });
+      (pricesData || []).forEach((pr: any) => { pmap[String(pr.ingredientId)] = pr.pricePerUnit; });
       setPriceByIngredient(pmap);
 
       // FIX: бэкенд (/api/v1/admin/products) возвращает Spring Page (список в content),
@@ -145,9 +152,7 @@ export default function ProductsPage() {
     }
 
     try {
-      const response = await api.get<any>(
-        `/admin/products/check-name?name=${encodeURIComponent(name)}&unit=${unit}`
-      );
+      const response = await checkProductName(name, unit);
       if (seq !== dupCheckSeq.current) return; // уже запущена более новая проверка
 
       if (response.duplicate) {
@@ -215,10 +220,10 @@ export default function ProductsPage() {
 
       let savedId: string | number | undefined = editingProduct?.id;
       if (editingProduct) {
-        await api.put(`/admin/products/${editingProduct.id}`, body);
+        await updateProduct(editingProduct.id, body);
         showSuccess('Продукт обновлён');
       } else {
-        const created = await api.post<{ id?: string | number }>('/admin/products', body);
+        const created = await createProduct(body);
         savedId = created?.id ?? savedId;
         showSuccess('Продукт создан');
       }
@@ -231,12 +236,7 @@ export default function ProductsPage() {
           showError('Цена должна быть числом больше нуля');
         } else {
           try {
-            await api.post('/admin/ingredient-prices', {
-              ingredientId: savedId,
-              pricePerUnit: priceVal,
-              currency: 'RUB',
-              effectiveFrom: formPriceDate || new Date().toISOString().slice(0, 10),
-            });
+            await setProductPrice(savedId, priceVal, formPriceDate || new Date().toISOString().slice(0, 10));
             showSuccess('Цена установлена');
           } catch (priceErr: any) {
             showError(priceErr?.error?.detail || priceErr?.detail || 'Продукт сохранён, но цену установить не удалось');
@@ -277,7 +277,7 @@ export default function ProductsPage() {
     if (!ok) return;
 
     try {
-      await api.del(`/admin/products/${product.id}`);
+      await deleteProduct(product.id);
       showSuccess('Продукт удалён');
       await loadData();
     } catch (error: any) {

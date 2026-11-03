@@ -10,6 +10,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { api } from '../api/client';
+import { deleteMeal, updateDay, updatePriceOverride } from '../api/tripDetail';
 import { useToast } from '../components/ToastProvider';
 import { isOfflineMode } from '../repositories/RepositoryFactory';
 import { useConfirm } from '../components/ConfirmDialog'; // Fix-6 (п.7)
@@ -255,7 +256,7 @@ export function useTripDetail() {
       return;
     }
     try {
-      await api.del(`/trips/${trip.id}/days/${dayId}/meals/${mealId}`);
+      await deleteMeal(trip.id, dayId, mealId);
       await loadData(true); // transparency-п.5: фоновая перечитка
     } catch (err: any) {
       console.error('Failed to delete meal:', err);
@@ -271,7 +272,7 @@ export function useTripDetail() {
     }
     const val = dayPeopleOverride ? parseInt(dayPeopleOverride) : null;
     try {
-      await api.put(`/trips/${trip.id}/days/${dayId}`, {
+      await updateDay(trip.id, dayId, {
         peopleOverride: val ?? undefined
       });
       setEditingDay(null);
@@ -337,7 +338,7 @@ export function useTripDetail() {
     try {
       if (isOfflineMode()) return; // локальный стейдж уже сохранён
       const unit = total == null || Number.isNaN(total) ? null : unitFromTotal(total, row.totalAmount);
-      await api.put(`/trips/${tripKey}/price-overrides/${row.ingredientId}`, {
+      await updatePriceOverride(tripKey, row.ingredientId, {
         actualPrice: unit,
         comment: unit == null ? undefined : 'чек',
       });
