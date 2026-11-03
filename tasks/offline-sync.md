@@ -31,7 +31,7 @@ Closed:
 - [ ] 2.2. Создать `src/sync/ConflictResolver.ts` — разрешение конфликтов при 409 (optimistic locking): стратегия "server wins" / "client wins" / "merge".
 - [ ] 2.3. Создать `src/sync/SyncManager.ts` — оркестрация: при появлении сети отправить очередь, обработать ответы, обновить локальную БД.
 - [ ] 2.4. Создать `src/sync/NetworkMonitor.ts` — отслеживание online/offline (navigator.onLine + fetch probe).
-- [ ] 2.5. Добавить интеграционные тесты синхронизации (mock-сервер).
+ - [x] 2.5. Добавить интеграционные тесты синхронизации (mock-сервер).
 
 ## Этап 3 — Service Worker и кэширование
  - [x] 3.1. Расширить `src/pwa/sw.js`: кэшировать GET-ответы API (network-first, fallback to cache).
