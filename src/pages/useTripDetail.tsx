@@ -10,7 +10,9 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { api } from '../api/client';
+import { deleteMeal, updateDay, updatePriceOverride } from '../api/tripDetail';
 import { useToast } from '../components/ToastProvider';
+import { isOfflineMode } from '../repositories/RepositoryFactory';
 import { useConfirm } from '../components/ConfirmDialog'; // Fix-6 (п.7)
 import { loadActualPrices, saveActualPrice, loadExcluded, setExcluded as persistExcluded, loadBought, setBought as persistBought, loadActualQty, setActualQty, onTripStageChange, refreshBoughtFromServer, forgetTripBoughtSyncState, refreshActualQtyFromServer, forgetTripActualQtySyncState, type ChecklistActual, type ActualPriceDraft } from '../utils/tripStaging'; // U32 + Fix-2(п.6) + Fix-5(п.21) + Fix-8(п.6)
 import { unitFromTotal } from '../utils/checkInput'; // cleanup-п.5: чек-мутация переехала со вкладки на страницу
@@ -177,6 +179,10 @@ export function useTripDetail() {
    * остаётся на месте, данные обновляются по ответу.
    */
   const loadData = async (background = false) => {
+    if (isOfflineMode()) {
+      if (!background) showError('Офлайн-режим: данные похода недоступны');
+      return;
+    }
     try {
       if (!background) setLoading(true);
       setError(null);
@@ -245,8 +251,12 @@ export function useTripDetail() {
       ),
     });
     if (!ok) return;
+    if (isOfflineMode()) {
+      showError('Офлайн-режим: изменение недоступно');
+      return;
+    }
     try {
-      await api.del(`/trips/${trip.id}/days/${dayId}/meals/${mealId}`);
+      await deleteMeal(trip.id, dayId, mealId);
       await loadData(true); // transparency-п.5: фоновая перечитка
     } catch (err: any) {
       console.error('Failed to delete meal:', err);
@@ -256,9 +266,13 @@ export function useTripDetail() {
 
   const handleUpdateDayPeople = async (dayId: string) => {
     if (!trip) return;
+    if (isOfflineMode()) {
+      showError('Офлайн-режим: изменение недоступно');
+      return;
+    }
     const val = dayPeopleOverride ? parseInt(dayPeopleOverride) : null;
     try {
-      await api.put(`/trips/${trip.id}/days/${dayId}`, {
+      await updateDay(trip.id, dayId, {
         peopleOverride: val ?? undefined
       });
       setEditingDay(null);
@@ -322,8 +336,9 @@ export function useTripDetail() {
     }
     setDraftOverrides(loadActualPrices(tripKey));
     try {
+      if (isOfflineMode()) return; // локальный стейдж уже сохранён
       const unit = total == null || Number.isNaN(total) ? null : unitFromTotal(total, row.totalAmount);
-      await api.put(`/trips/${tripKey}/price-overrides/${row.ingredientId}`, {
+      await updatePriceOverride(tripKey, row.ingredientId, {
         actualPrice: unit,
         comment: unit == null ? undefined : 'чек',
       });

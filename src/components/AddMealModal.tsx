@@ -4,6 +4,7 @@ import Modal from './Modal';
 import { Button } from './Button';
 import RecipeSearchSelect from './RecipeSearchSelect';
 import { api, getRecipes, humanize } from '../api/client';
+import { createMeal } from '../api/meals';
 import { productsWord } from '../utils/text'; // Release-1.0: «4 продукта», не «4 продуктов»
 import type { MealType } from '../types';
 import type { Recipe } from '../types';
@@ -141,7 +142,7 @@ export default function AddMealModal({
     try {
       // Fix-7 (п.7): peopleOverride приёма больше не отправляется — приём
       // наследует людей дня (изменить число людей можно в настройках дня)
-      const meal = await api.post<{ id: string }>(`/trips/${tripId}/days/${day.dayId}/meals`, {
+      const meal = await createMeal(tripId, day.dayId, {
         mealType,
         recipeId: selected.id,
       });

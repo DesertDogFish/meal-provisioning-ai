@@ -6,6 +6,9 @@ import Layout from './components/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
 import PageLoader from './components/PageLoader';
 import { AuthProvider } from './components/AuthProvider'; // cleanup-п.7: один /auth/me на сессию
+import { syncManager } from './sync/SyncManager';
+import { ConflictDialog } from './components/ConflictDialog';
+import NetworkStatus from './components/NetworkStatus';
 import LoginPage from './pages/LoginPage';
 import NotFoundPage from './pages/NotFoundPage';
 
@@ -112,6 +115,8 @@ function App() {
             </AuthProvider>
           </BrowserRouter>
         </ToastProvider>
+      <NetworkStatus />
+      <ConflictDialog onReload={() => syncManager.syncAll()} />
     </ErrorBoundary>
   );
 }

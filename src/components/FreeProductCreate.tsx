@@ -4,6 +4,8 @@ import CustomSelect from './CustomSelect';
 import { Button } from './Button';
 import { useToast } from './ToastProvider';
 import { api } from '../api/client';
+import { createFreeProduct } from '../api/freeProduct';
+import { getCategories, checkProductName } from '../api/products';
 import type { UnitOfMeasure } from '../types';
 
 /** Продукт, созданный (или найденный через check-name) из свободного ввода. */
@@ -27,10 +29,10 @@ export function useProductCategories(isAdmin: boolean): Array<{ id: string; name
   useEffect(() => {
     if (!isAdmin) return;
     let cancelled = false;
-    api.get<any>('/product-categories')
+    getCategories()
       .then((res) => {
         if (cancelled) return;
-        const list = Array.isArray(res) ? res : (res?.content ?? []);
+        const list = Array.isArray(res) ? res : [];
         setCategories(list.map((c: any) => ({ id: String(c.id), name: String(c.name ?? '') })));
       })
       .catch(() => { /* не-админ/офлайн — создание и так недоступно */ });
@@ -72,9 +74,7 @@ export default function FreeProductCreate({ query, isAdmin, categories, onCreate
     if (!name) return;
     setCreating(true);
     try {
-      const chk = await api.get<any>(
-        `/admin/products/check-name?name=${encodeURIComponent(name)}&unit=${encodeURIComponent(createUnit)}`
-      ).catch(() => null);
+      const chk = await checkProductName(name, createUnit).catch(() => null);
       let id: string;
       if (chk?.duplicate && chk?.existingId != null) {
         // Паритет с MealCompositionModal.resolveFreeRows: дубль не создаём —
@@ -86,7 +86,7 @@ export default function FreeProductCreate({ query, isAdmin, categories, onCreate
           showError('Не выбрана категория для нового продукта');
           return;
         }
-        const created = await api.post<any>('/admin/products', { name, unit: createUnit, categoryId: Number(categoryId) });
+        const created = await createFreeProduct({ name, unit: createUnit, categoryId: Number(categoryId) });
         if (created?.id == null) throw new Error('Сервер не вернул id продукта');
         id = String(created.id);
       }

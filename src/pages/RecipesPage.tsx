@@ -6,6 +6,8 @@ import { formatAmount } from '../utils/calculations';
 import { humanizeCategory, servingsWord, ingredientsWord, mealTypeLabels, dishesWord, categoriesWord } from '../utils/text';
 import CustomSelect from '../components/CustomSelect'; // Fix-5 (п.19): «Все категории» — как везде
 import { api, getRecipes } from '../api/client';
+import { deleteRecipe, loadMenuTrips } from '../api/recipes';
+import { repositories, isOfflineMode } from '../repositories/RepositoryFactory';
 import { useToast } from '../components/ToastProvider';
 import { useConfirm } from '../components/ConfirmDialog'; // Fix-6 (п.7)
 import Modal from '../components/Modal';
@@ -73,6 +75,10 @@ export default function RecipesPage() {
   };
 
   const handleDelete = async (recipe: Recipe) => {
+    if (isOfflineMode()) {
+      showError('Офлайн-режим: удаление недоступно');
+      return;
+    }
     // U16 (список багов 25.10) + Fix-6 (п.7): блюда — сущность верхнего уровня.
     // Походы с V20 живут на снапшотах рецептов, клиентская блокировка устарела —
     // сервер гарантирует изоляцию. Подтверждение — брендовым диалогом.
@@ -89,7 +95,7 @@ export default function RecipesPage() {
     });
     if (!ok) return;
     try {
-      await api.del(`/admin/recipes/${recipe.id}`);
+      await deleteRecipe(recipe.id);
       showSuccess('Рецепт удалён');
       setSelectedRecipe(null);
       await loadRecipes();
@@ -102,7 +108,20 @@ export default function RecipesPage() {
     try {
       setLoading(true);
       setError(null);
-      const data = await getRecipes();
+      const data = isOfflineMode()
+        ? (await repositories.recipes.getAll()).map((r) => ({
+            id: r.id,
+            name: r.name,
+            mealType: r.mealType as any,
+            category: r.category,
+            baseServings: r.baseServings,
+            caloriesPerServing: r.caloriesPerServing,
+            source: r.source as any,
+            ingredients: r.ingredients.map((ri) => ({ ingredientId: ri.ingredientId, amount: ri.amount })),
+            tripId: r.tripId,
+            createdAt: r.createdAt,
+          }))
+        : await getRecipes();
       setRecipes(data);
     } catch (err: any) {
       console.error('Failed to load recipes:', err);
@@ -480,7 +499,7 @@ export default function RecipesPage() {
                         setMenuSheet(recipe);
                         setMenuTrip(null);
                         setMenuTrips(null);
-                        void api.get<any[]>('/trips').then((t) => setMenuTrips(Array.isArray(t) ? t : [])).catch(() => setMenuTrips([]));
+                        void loadMenuTrips().then((t) => setMenuTrips(t)).catch(() => setMenuTrips([]));
                       }}
                     >
                       <PackagePlus size={16} aria-hidden />

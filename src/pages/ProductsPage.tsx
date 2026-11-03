@@ -11,6 +11,8 @@ import CustomMultiSelect from '../components/CustomMultiSelect';
 import FilterSheet from '../components/FilterSheet';
 import { DatePicker } from '../components/DatePicker';
 import { api } from '../api/client';
+import { repositories, isOfflineMode } from '../repositories/RepositoryFactory';
+import { createProduct, updateProduct, deleteProduct, setProductPrice, loadProductsPage, checkProductName } from '../api/products';
 import type { UnitOfMeasure, ProductCategory, IngredientPrice } from '../types';
 import { humanizeUnit, recipesWord, productsWord, categoriesWord } from '../utils/text';
 import { Button } from '../components/Button';
@@ -67,13 +69,40 @@ export default function ProductsPage() {
       setLoading(true);
       setError(null);
       
-      const [productsData, categoriesData, pricesData] = await Promise.all([
-        api.get<any>('/admin/products?size=1000'),
-        api.get<ProductCategory[]>('/product-categories'),
-        api.get<IngredientPrice[]>('/prices').catch(() => [] as IngredientPrice[])
-      ]);
+      // Чтение продуктов: при офлайн — из локального кэша (IndexedDB), иначе — с сервера.
+      const productsPromise = isOfflineMode()
+        ? repositories.products.getAll().then((items) =>
+            items.map((p) => ({
+              id: p.id,
+              name: p.name,
+              unit: p.unit,
+              category: p.categoryId ? { id: p.categoryId, name: p.category } : null,
+              categoryName: p.category,
+              categoryId: p.categoryId,
+              packSize: p.packSize,
+              roundToPacks: p.roundToPacks,
+              kcalPer100g: p.kcalPer100g,
+              pieceWeightG: p.pieceWeightG,
+              enabled: p.enabled,
+              emisCode: p.emisCode,
+              bindingStatus: p.emisCode ? 'BOUND' : 'UNBOUND',
+            }))
+          )
+        : null;
+
+      let productsData: any, categoriesData: any, pricesData: any;
+      if (isOfflineMode()) {
+        productsData = await productsPromise;
+        categoriesData = [];
+        pricesData = [];
+      } else {
+        const res = await loadProductsPage();
+        productsData = res.products;
+        categoriesData = res.categories;
+        pricesData = res.prices;
+      }
       const pmap: Record<string, number> = {};
-      (pricesData || []).forEach(pr => { pmap[String(pr.ingredientId)] = pr.pricePerUnit; });
+      (pricesData || []).forEach((pr: any) => { pmap[String(pr.ingredientId)] = pr.pricePerUnit; });
       setPriceByIngredient(pmap);
 
       // FIX: бэкенд (/api/v1/admin/products) возвращает Spring Page (список в content),
@@ -123,9 +152,7 @@ export default function ProductsPage() {
     }
 
     try {
-      const response = await api.get<any>(
-        `/admin/products/check-name?name=${encodeURIComponent(name)}&unit=${unit}`
-      );
+      const response = await checkProductName(name, unit);
       if (seq !== dupCheckSeq.current) return; // уже запущена более новая проверка
 
       if (response.duplicate) {
@@ -174,6 +201,10 @@ export default function ProductsPage() {
       return;
     }
 
+    if (isOfflineMode()) {
+      showError('Офлайн-режим: редактирование недоступно');
+      return;
+    }
     try {
       const body = {
         name: formName,
@@ -189,10 +220,10 @@ export default function ProductsPage() {
 
       let savedId: string | number | undefined = editingProduct?.id;
       if (editingProduct) {
-        await api.put(`/admin/products/${editingProduct.id}`, body);
+        await updateProduct(editingProduct.id, body);
         showSuccess('Продукт обновлён');
       } else {
-        const created = await api.post<{ id?: string | number }>('/admin/products', body);
+        const created = await createProduct(body);
         savedId = created?.id ?? savedId;
         showSuccess('Продукт создан');
       }
@@ -205,12 +236,7 @@ export default function ProductsPage() {
           showError('Цена должна быть числом больше нуля');
         } else {
           try {
-            await api.post('/admin/ingredient-prices', {
-              ingredientId: savedId,
-              pricePerUnit: priceVal,
-              currency: 'RUB',
-              effectiveFrom: formPriceDate || new Date().toISOString().slice(0, 10),
-            });
+            await setProductPrice(savedId, priceVal, formPriceDate || new Date().toISOString().slice(0, 10));
             showSuccess('Цена установлена');
           } catch (priceErr: any) {
             showError(priceErr?.error?.detail || priceErr?.detail || 'Продукт сохранён, но цену установить не удалось');
@@ -233,6 +259,10 @@ export default function ProductsPage() {
   };
 
   const handleDelete = async (product: Product) => {
+    if (isOfflineMode()) {
+      showError('Офлайн-режим: удаление недоступно');
+      return;
+    }
     if (product.usageRecipes > 0) {
       showError(`Продукт используется в ${product.usageRecipes} ${recipesWord(product.usageRecipes)} и не может быть удалён`);
       return;
@@ -247,7 +277,7 @@ export default function ProductsPage() {
     if (!ok) return;
 
     try {
-      await api.del(`/admin/products/${product.id}`);
+      await deleteProduct(product.id);
       showSuccess('Продукт удалён');
       await loadData();
     } catch (error: any) {
