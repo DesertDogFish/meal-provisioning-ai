@@ -19,8 +19,6 @@ import { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useToast } from '../components/ToastProvider';
 import { api } from '../api/client';
-import { getIntegrations, getSyncLogs, connectRosstat, disconnectRosstat, syncRosstatPrices, uploadRosstatFile } from '../api/integrations';
-import { isOfflineMode } from '../repositories/RepositoryFactory';
 import EmisSettingsTab, { formatFileSize, type IntegrationInfo } from '../components/EmisSettingsTab';
 import SyncLogsTab from '../components/SyncLogsTab';
 import CatalogImportTab from '../components/CatalogImportTab';
@@ -106,12 +104,8 @@ export default function IntegrationsPage() {
   }, []);
 
   const loadIntegrations = async () => {
-    if (isOfflineMode()) {
-      showError('Офлайн-режим: интеграции недоступны');
-      return;
-    }
     try {
-      const data = await getIntegrations();
+      const data = await api.get<IntegrationInfo[]>('/admin/integrations');
       setIntegrations(data);
     } catch (error) {
       // R10: сбой загрузки виден в логе и тостом; устаревший список сбрасываем
@@ -123,7 +117,7 @@ export default function IntegrationsPage() {
 
   const loadSyncLogs = async () => {
     try {
-      const data = await getSyncLogs();
+      const data = await api.get<SyncLogEntry[]>('/admin/integrations/sync-logs');
       setSyncLogs(data);
     } catch (error) {
       console.error('Failed to load sync logs:', error);
@@ -140,7 +134,7 @@ export default function IntegrationsPage() {
   const handleConnect = async () => {
     setLoading(true);
     try {
-      const result = await connectRosstat();
+      const result = await api.post<any>('/admin/integrations/ROSSTAT/connect');
       const failedByStatus = result?.status === 'ERROR' || result?.available === false;
       if (failedByStatus) {
         showError(`Ошибка: ${result?.errorMessage || extractErrorMessage(result) || 'Неизвестная ошибка'}`);
@@ -163,7 +157,7 @@ export default function IntegrationsPage() {
   const handleDisconnect = async () => {
     setLoading(true);
     try {
-      const result = await disconnectRosstat();
+      const result = await api.post<any>('/admin/integrations/ROSSTAT/disconnect');
       if (isFailureEnvelope(result)) {
         showError(extractErrorMessage(result));
       } else {
@@ -181,7 +175,7 @@ export default function IntegrationsPage() {
   const handleSyncPrices = async () => {
     setSyncing(true);
     try {
-      const result = await syncRosstatPrices();
+      const result = await api.post<any>('/admin/integrations/ROSSTAT/sync/prices');
       if (isFailureEnvelope(result)) {
         showError(extractErrorMessage(result));
         setSyncing(false);
@@ -228,7 +222,7 @@ export default function IntegrationsPage() {
     setUploading(true);
     setFileError(null);
     try {
-      const result = await uploadRosstatFile(selectedFile);
+      const result = await api.postFile<any>('/admin/integrations/ROSSTAT/upload', selectedFile);
       if (isFailureEnvelope(result)) {
         showError(extractErrorMessage(result));
         setUploading(false);

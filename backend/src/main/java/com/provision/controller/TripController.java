@@ -57,6 +57,12 @@ public class TripController {
         return tripService.updateTrip(id, request, user.getId());
     }
 
+    /** trip-workflow-redesign п.2: toggle утверждения меню этапа ① (owner-only). */
+    @PostMapping("/{id}/menu-approval")
+    public TripResponse toggleMenuApproval(@PathVariable Long id, @AuthenticationPrincipal User user) {
+        return tripService.toggleMenuApproval(id, user.getId());
+    }
+
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void deleteTrip(@PathVariable Long id, @AuthenticationPrincipal User user) {

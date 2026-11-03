@@ -97,7 +97,7 @@ test.describe('REAL mode (docker compose stack)', () => {
     await expect(page.getByText('Не удалось загрузить данные')).not.toBeVisible({ timeout: 20_000 });
     await expect(page.locator('h1, h2').first()).toBeVisible();
 
-    // 5. Вкладки с расчётом цен (Закупка/Сводка) открываются без ошибки загрузки
+    // 5. Вкладки с расчётом цен (Проверка/Сводка) открываются без ошибки загрузки
     // bugs-trip-shopping-stage: этап ② — «Предварительная закупка»
     const shoppingTab = page.getByTestId('stage-bar-shopping');
     if (await shoppingTab.isVisible().catch(() => false)) {

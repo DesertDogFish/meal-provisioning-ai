@@ -14,7 +14,6 @@
    ============================================================ */
 
 const CACHE = "providant-shell-v1";
-const API_CACHE = "providant-api-v1";
 const OFFLINE_URL = "/";
 
 /** Оболочка: без неё офлайн-запуск не имеет смысла. */
@@ -31,6 +30,7 @@ const APP_SHELL = [
 function isBypassed(url, request) {
   if (request.method !== "GET") return true;
   if (url.origin !== self.location.origin) return true;
+  if (url.pathname.startsWith("/api/")) return true;
   if (url.pathname.startsWith("/auth/")) return true;
   if (url.pathname === "/sw.js") return true;
   return false;
@@ -55,22 +55,12 @@ self.addEventListener("activate", (event) => {
   event.waitUntil(
     (async () => {
       const keys = await caches.keys();
-      await Promise.all(keys.filter((key) => key !== CACHE && key !== API_CACHE).map((key) => caches.delete(key)));
+      await Promise.all(keys.filter((key) => key !== CACHE).map((key) => caches.delete(key)));
       await self.clients.claim();
     })()
   );
 });
 
-// Background Sync: уведомляем клиентов о необходимости отправить очередь.
-self.addEventListener('sync', (event) => {
-  if (event.tag === 'sync-queue') {
-    event.waitUntil(
-      self.clients.matchAll().then((clients) => {
-        clients.forEach((client) => client.postMessage({ type: 'SYNC_QUEUE' }));
-      })
-    );
-  }
-});
 self.addEventListener("fetch", (event) => {
   const { request } = event;
   const url = new URL(request.url);
@@ -89,27 +79,6 @@ self.addEventListener("fetch", (event) => {
           return response;
         } catch (error) {
           const cached = (await caches.match(request)) || (await caches.match(OFFLINE_URL));
-          if (cached) return cached;
-          throw error;
-        }
-      })()
-    );
-    return;
-  }
-
-  // API GET: network-first, при офлайне — кэш.
-  if (url.pathname.startsWith("/api/")) {
-    event.respondWith(
-      (async () => {
-        const cache = await caches.open(API_CACHE);
-        try {
-          const response = await fetch(request);
-          if (response && response.ok) {
-            cache.put(request, response.clone()).catch(() => undefined);
-          }
-          return response;
-        } catch (error) {
-          const cached = await cache.match(request);
           if (cached) return cached;
           throw error;
         }

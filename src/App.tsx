@@ -4,11 +4,9 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { ToastProvider } from './components/ToastProvider';
 import Layout from './components/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
+import ReportRedirect from './components/ReportRedirect'; // redesign п.5
 import PageLoader from './components/PageLoader';
 import { AuthProvider } from './components/AuthProvider'; // cleanup-п.7: один /auth/me на сессию
-import { syncManager } from './sync/SyncManager';
-import { ConflictDialog } from './components/ConflictDialog';
-import NetworkStatus from './components/NetworkStatus';
 import LoginPage from './pages/LoginPage';
 import NotFoundPage from './pages/NotFoundPage';
 
@@ -24,7 +22,6 @@ import NotFoundPage from './pages/NotFoundPage';
 const TripsPage = lazy(() => import('./pages/TripsPage'));
 const TripDetailPage = lazy(() => import('./pages/TripDetailPage'));
 const TripPrintPage = lazy(() => import('./pages/TripPrintPage'));
-const TripReportPage = lazy(() => import('./pages/TripReportPage'));
 const RecipesPage = lazy(() => import('./pages/RecipesPage'));
 const IntegrationsPage = lazy(() => import('./pages/IntegrationsPage'));
 const ProductsPage = lazy(() => import('./pages/ProductsPage'));
@@ -61,13 +58,11 @@ function App() {
                   <TripPrintPage />
                 </ProtectedRoute>
               } />
-              {/* Plan plans/2026-10-30-mobile-workflow-ux.md (подзадача 7): in-app
-                  отчёт — финал воркфлоу на телефоне; без Layout, одна колонка.
-                  «Поделиться» — Web Share API с фолбэком «скопировать текст»;
-                  «PDF» открывает прежний print-маршрут (десктоп/печать). */}
+              {/* redesign п.5: отчёт — этап ⑤ «Поход готов» внутри похода;
+                  старый роут сохранён РЕДИРЕКТОМ на ?stage=ready (шаринг-ссылки). */}
               <Route path="/trips/:id/report" element={
                 <ProtectedRoute>
-                  <TripReportPage />
+                  <ReportRedirect />
                 </ProtectedRoute>
               } />
               <Route path="/trips/:id" element={
@@ -115,8 +110,6 @@ function App() {
             </AuthProvider>
           </BrowserRouter>
         </ToastProvider>
-      <NetworkStatus />
-      <ConflictDialog onReload={() => syncManager.syncAll()} />
     </ErrorBoundary>
   );
 }

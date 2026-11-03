@@ -17,6 +17,7 @@ import type { Trip, Recipe, Price } from '../types/tripDetail';
 
 const trip: Trip = {
   id: 't1', userId: 'u1', name: 'Тестовый поход',
+  menuApproved: true, // redesign п.4: фикстура утверждена (готовность/чипы)
   startDate: '2026-07-01', endDate: '2026-07-02', defaultPeople: 2,
   days: [
     { id: 'd1', tripId: 't1', dayDate: '2026-07-01', meals: [

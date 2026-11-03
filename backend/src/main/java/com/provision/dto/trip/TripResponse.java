@@ -11,6 +11,11 @@ public record TripResponse(
     LocalDate endDate,
     Integer defaultPeople,
     String notes,
+    /**
+     * trip-workflow-redesign п.2: меню этапа ① утверждено владельцем похода.
+     * Контракт mock↔real (п.3): поле присутствует во всех ответах TripResponse.
+     */
+    Boolean menuApproved,
     LocalDateTime createdAt,
     List<TripDayResponse> days,
     /**

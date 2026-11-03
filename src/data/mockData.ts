@@ -715,6 +715,8 @@ export const mockTrips: Trip[] = [
   {
     id: 'trip1', userId: '2', name: 'Поход на Карельский перешеек', startDate: '2024-07-15', endDate: '2024-07-18',
     defaultPeople: 4, notes: 'Озеро, рыбалка, палатки', createdAt: '2024-06-01',
+    // redesign п.3: демо-поход с закупкой/чеками — меню утверждено (воркфлоу выглядит естественно)
+    menuApproved: true,
     days: [
       {
         id: 'd1', tripId: 'trip1', dayDate: '2024-07-15',
@@ -754,6 +756,8 @@ export const mockTrips: Trip[] = [
   {
     id: 'trip2', userId: '2', name: 'Яхтенный поход по Финскому заливу', startDate: '2024-08-01', endDate: '2024-08-05',
     defaultPeople: 6, notes: 'Яхта, 5 дней в море', createdAt: '2024-06-15',
+    // redesign п.3: один демо-поход остаётся НЕутверждённым — для проверки этапа ①
+    menuApproved: false,
     days: [
       {
         id: 'd5', tripId: 'trip2', dayDate: '2024-08-01',

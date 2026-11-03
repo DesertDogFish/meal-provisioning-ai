@@ -161,3 +161,15 @@ describe('TripsPage — «Создать поход» в шапке и «Отч�
     await waitFor(() => expect(screen.getByTestId('loc').textContent).toBe('/trips/t1/report'));
   });
 });
+
+// BUG-002 (tasks/bugs-page-headers.md п.2): шапка страницы — hero-блок с арт-слоем.
+describe('TripsPage — BUG-002: hero-шапка', () => {
+  it('шапка — page-hero: арт-слой aria-hidden, h1 «Походы» внутри блока', async () => {
+    renderPage();
+    const hero = await screen.findByTestId('page-hero');
+    const art = hero.querySelector('.page-hero__art');
+    expect(art).toBeTruthy();
+    expect(art?.getAttribute('aria-hidden')).toBe('true');
+    expect(hero).toContainElement(screen.getByRole('heading', { level: 1 }));
+  });
+});

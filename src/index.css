@@ -542,17 +542,6 @@ h1, h2, h3, .logo-word, .font-display {
   box-shadow: var(--shadow-glow);
 }
 
-/* KB-33 (UX-осмотр 31.10, подзадача 5): десктопный переключатель этапов НЕ
-   должен быть виден на мобильном. Утилита Tailwind `hidden md:flex` здесь не
-   работает: весь index.css — ВНЕ слоёв, а unlayered-правила в каскаде выше
-   `@layer utilities`, поэтому `.seg { display:inline-flex }` перебивала
-   `display:none`. Явное правило с большей специфичностью (`.seg.seg-desktop-only`)
-   и source-order после `.seg` закрывает протечку без !important и без переноса
-   всего файла в @layer components (риск для :root/печатных правил). */
-@media (max-width: 767px) {
-  .seg.seg-desktop-only { display: none; }
-}
-
 /* transparency-п.2 (решение владельца 31.10 — «кликабельные чипы»): статусы
    готовности убраны из десктоп-.seg (класс .seg-badge удалён) — готовность
    этапов изображается ровно один раз: кликабельные чипы readiness-цепочки
@@ -1969,7 +1958,7 @@ textarea {
   bottom: 0;
   z-index: var(--z-nav);
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr); /* redesign п.5: пятый этап ⑤ */
   background: color-mix(in srgb, var(--bg-1) 94%, transparent);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
@@ -2483,10 +2472,89 @@ textarea {
   .trip-header-glass__art { display: none; }
 }
 
+/* --- redesign п.5: экран ⑤ «Поход готов» — арт под вуалью (утверждено 03.11.2026) --- */
+.stage-ready {
+  position: relative;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+}
+.stage-ready__art {
+  position: absolute;
+  inset: -6px; /* компенсация blur-краёв */
+  background-size: cover;
+  background-position: center 40%;
+  filter: blur(3px);
+  opacity: .5;
+  pointer-events: none;
+}
+.stage-ready__veil {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--bg-0) 66%, transparent) 0%,
+    color-mix(in srgb, var(--bg-0) 88%, transparent) 100%);
+}
+:root[data-theme="light"] .stage-ready__veil {
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--bg-0) 78%, transparent) 0%,
+    color-mix(in srgb, var(--bg-0) 94%, transparent) 100%);
+}
+.stage-ready__in {
+  position: relative;
+  z-index: 1;
+  padding: var(--sp-4);
+}
+@media print {
+  .stage-ready__art, .stage-ready__veil { display: none !important; }
+}
+
+/* --- BUG-002 (tasks/bugs-page-headers.md п.2): hero-шапка основных страниц ---
+   Паттерн glass-шапки похода (design-п.5): скруглённая карточка + ненавязчивый
+   арт-слой + вуаль, контент поверх (z-1). Арт существующий (camp-ready.webp);
+   анимаций нет — prefers-reduced-motion не требуется. */
+.page-hero {
+  position: relative;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-1);
+  background: linear-gradient(160deg,
+    color-mix(in srgb, var(--bg-2) 38%, transparent),
+    color-mix(in srgb, var(--bg-0) 55%, transparent));
+  overflow: hidden;
+}
+.page-hero__art {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center 30%;
+  opacity: .38;
+  pointer-events: none;
+}
+:root[data-theme="light"] .page-hero__art { opacity: .22; }
+.page-hero::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--bg-0) 16%, transparent) 0%,
+    color-mix(in srgb, var(--bg-0) 58%, transparent) 100%);
+}
+.page-hero__in {
+  position: relative;
+  z-index: 1;
+  padding: var(--sp-5) var(--sp-6);
+}
+@media (max-width: 767px) {
+  .page-hero__in { padding: var(--sp-4); }
+}
+
 /* --- печать: декоративные слои не печатаем --- */
 @media print {
   .login-art, .login-art-veil,
-  .trip-header-glass__art { display: none !important; }
+  .trip-header-glass__art, .page-hero__art { display: none !important; }
 }
 
 /* --- bugs-app-ui п.5: иконки действий — «рыжие» (янтарная ступень палитры) ---

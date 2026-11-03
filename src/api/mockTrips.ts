@@ -291,6 +291,17 @@ export function handleTripsImpl(srv: any, method: string, path: string, body?: a
     return null;
   }
 
+  // trip-workflow-redesign п.2/п.3: toggle утверждения меню ① — паритет с
+  // POST /api/v1/trips/{id}/menu-approval (owner-only: findOwnTrip, иначе 404).
+  if (parts.length === 3 && parts[2] === 'menu-approval' && method === 'POST') {
+    const trip = findOwnTrip(parts[1]);
+    if (!trip) {
+      throw { status: 404, message: 'Not found', detail: `Trip ${parts[1]} not found` };
+    }
+    trip.menuApproved = !trip.menuApproved;
+    return trip;
+  }
+
   // GET /trips/:id
   if (parts.length === 2 && method === 'GET') {
     const tripId = parts[1];
@@ -986,6 +997,7 @@ export function handleTripsImpl(srv: any, method: string, path: string, body?: a
       endDate: body.endDate,
       defaultPeople: body.defaultPeople ?? 1,
       notes: body.notes,
+      menuApproved: false, // redesign п.2: новый поход — меню не утверждено
       createdAt: new Date().toISOString(),
     };
     // Паритет с бэкендом (TripService.createTrip): дни создаются автоматически

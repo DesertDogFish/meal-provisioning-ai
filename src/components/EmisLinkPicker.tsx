@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom'; // navigation-п.7: текст-инструкция → ссылка
 import { Search, X, Link2, Link2Off, AlertTriangle } from 'lucide-react';
 import { api } from '../api/client';
-import { getEmisProducts } from '../api/catalog';
 import type { EmisProduct, UnitOfMeasure } from '../types';
 import { UNIT_LABELS } from '../types';
 
@@ -80,7 +79,7 @@ export function EmisLinkPicker({
       if (currentPrice != null && Number.isFinite(currentPrice) && currentPrice > 0) {
         params.price = String(currentPrice);
       }
-      const data = await getEmisProducts(params);
+      const data = await api.get<EmisProduct[]>('/admin/emis/products', { params });
       if (my !== seq.current) return; // ответ устарел — уже идёт более новый поиск
       setResults(Array.isArray(data) ? data : []);
       setError(null);
