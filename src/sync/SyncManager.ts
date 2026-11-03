@@ -11,8 +11,16 @@ export class SyncManager {
       const items = await syncQueue.getAll();
       for (const item of items) {
         try {
-          // TODO: отправить item на сервер через API
-          // await api.sync(item);
+          // Отправка на сервер через api
+          const { api } = await import('../api/client');
+          const path = `/${item.entityType}s/${item.entityId}`;
+          if (item.action === 'create') {
+            await api.post(path, item.payload);
+          } else if (item.action === 'update') {
+            await api.put(path, item.payload);
+          } else if (item.action === 'delete') {
+            await api.del(path);
+          }
           await syncQueue.remove(item.id);
         } catch (err) {
           await syncQueue.incrementRetry(item.id, String(err));

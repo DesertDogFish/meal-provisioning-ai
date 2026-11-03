@@ -26,6 +26,15 @@ if (import.meta.env.PROD && "serviceWorker" in navigator) {
   });
 }
 
+// Слушаем сообщения от Service Worker (background sync)
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.addEventListener('message', (event) => {
+    if (event.data?.type === 'SYNC_QUEUE') {
+      syncManager.syncAll();
+    }
+  });
+}
+
 // Запуск авто-синхронизации при появлении сети (только если офлайн-режим включён)
 if (import.meta.env.VITE_OFFLINE_ENABLED === 'true') {
   syncManager.startAutoSync();
