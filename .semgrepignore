@@ -1,0 +1,12 @@
+# BL-35: Semgrep ignore paths (generated/build artifacts and local env)
+node_modules/
+backend/target/
+coverage/
+dist/
+playwright-report/
+test-results/
+.env
+.env.*
+*.min.js
+" path">
+/d/Study/Code/meal-provisioning-ai/.semgrepignore
