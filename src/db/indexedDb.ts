@@ -1,4 +1,5 @@
 import Dexie, { Table } from 'dexie';
+
 import type { LocalProduct, LocalRecipe, LocalTrip, SyncQueueItem } from './schema';
 
 export class ProvisionDB extends Dexie {

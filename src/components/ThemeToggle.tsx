@@ -1,4 +1,5 @@
 import { Moon, Sun } from 'lucide-react';
+
 import { getStoredTheme, setTheme, type Theme } from '../theme';
 
 // Кнопка-переключатель тем по AGENTS.md design-pack:

@@ -1,8 +1,10 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Edit2, Trash2, Share2 } from 'lucide-react';
+
 import type { PriceSyncStatus, UnitOfMeasure } from '../types';
 import { humanizeUnit, productsWord } from '../utils/text';
+
 import { Button } from './Button';
 
 export interface ProductRow {
@@ -302,7 +304,7 @@ export function ProductTable({ products, filters, onEdit, onDelete, onResetFilte
                 )}
               </td>
               <td className="px-4 py-3" data-label="Категория">
-                <span className="chip-delta" style={{ background: 'color-mix(in srgb, var(--wave-400) 14%, transparent)', color: 'var(--wave-300)' }}>
+                <span className="chip-delta" style={{ background: 'color-mix(in srgb, var(--wave-400) 14%, transparent)', color: 'var(--wave-600)' }}>
                   {product.categoryName}
                 </span>
               </td>

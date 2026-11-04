@@ -2,6 +2,7 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import { readFileSync } from "node:fs";
+import { visualizer } from "rollup-plugin-visualizer";
 import { fileURLToPath } from "node:url";
 
 /**
@@ -83,7 +84,7 @@ function pwaAssets() {
 }
 
 export default defineConfig({
-  plugins: [react(), tailwindcss(), copyDesignPackAssets(), pwaAssets()],
+  plugins: [react(), tailwindcss(), copyDesignPackAssets(), pwaAssets(), visualizer({ filename: "dist/stats.html", open: false, gzipSize: true, brotliSize: true })],
   build: {
     rollupOptions: {
       output: {

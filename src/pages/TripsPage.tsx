@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Mountain, Calendar, Users, Trash2, Edit2, Check, FileDown } from 'lucide-react';
+
 import { useToast } from '../components/ToastProvider';
 import { TripForm, type TripFormData } from '../components/TripForm';
 import { useConfirm } from '../components/ConfirmDialog'; // Fix-6 (п.7): красивые подтверждения
@@ -9,7 +10,7 @@ import PageHero from '../components/PageHero'; // BUG-002: hero-шапка ст�
 import { api } from '../api/client';
 import { loadBought, refreshBoughtFromServer, BOUGHT_SYNC_SOFT_TIMEOUT_MS } from '../utils/tripStaging';
 import { tripReadiness, earliestOpenStage, workflowProgress, workflowProgressFill } from '../utils/readiness';
-import type { Trip } from '../types/tripDetail'; // cleanup-п.9: общий тип (включая progress, п.8)
+import type { Trip, TripDay } from '../types/tripDetail'; // cleanup-п.9: общий тип (включая progress, п.8)
 import { STAGES, type StageId } from '../components/StageTabBar';
 import { getTripCover } from '../utils/getTripCover';
 import { pluralize } from '../utils/pluralize'; // ревизия скриншотов 29.10: «4 дней» → «4 дня»
@@ -18,7 +19,6 @@ import { mealsWord, mealsCountLabel, daysCountLabel } from '../utils/text';
 import { formatRub } from '../utils/format';
 import { Button } from '../components/Button';
 import { useAuth } from '../components/AuthProvider'; // cleanup-п.7: без своего /auth/me
-
 import PageLoader from '../components/PageLoader';
 // cleanup-п.9: вместо локальных интерфейсов — общие типы (types/tripDetail)
 
@@ -65,7 +65,7 @@ function buildProgressMap(tripsData: Trip[]): Record<string, TripProgress> {
     const checklistTotal = p.checklistTotal ?? 0;
     const facts = p.facts ?? 0;
     const factsTotal = p.factsTotal ?? checklistTotal;
-    const meals = p.meals ?? (trip.days?.reduce((a: number, d: any) => a + (d.meals?.length || 0), 0) || 0);
+    const meals = p.meals ?? (trip.days?.reduce((a: number, d: TripDay) => a + (d.meals?.length || 0), 0) || 0);
     const rfacts = {
       mealsCount: meals, checklistTotal, boughtCount: bought, factCount: facts, checksTotal: factsTotal,
       menuApproved: trip.menuApproved === true, // redesign п.4
@@ -165,13 +165,14 @@ export default function TripsPage() {
       void hydrateBoughtBounded(tripsData.map(t => String(t.id))).then(() => {
         if (aliveRef.current) setProgress(buildProgressMap(tripsData));
       });
-    } catch (err: any) {
+    } catch (err) {
+      const e = err as { detail?: string; error?: { detail?: string } };
       console.error('Failed to load trips:', err);
       // ЗАДАЧА 3: тост + сброс устаревшего списка
       setTrips([]);
       setProgress({});
       setError('Не удалось загрузить данные');
-      showError(err?.detail || 'Не удалось загрузить список походов');
+      showError(e?.detail || 'Не удалось загрузить список походов');
     } finally {
       setLoading(false);
     }
@@ -195,7 +196,7 @@ export default function TripsPage() {
 
   const handleCreate = async (formData: TripFormData) => {
     try {
-      const created = await api.post<any>('/trips', {
+      const created = await api.post<{ id?: string | number }>('/trips', {
         name: formData.name,
         startDate: formData.startDate,
         endDate: formData.endDate,
@@ -214,8 +215,9 @@ export default function TripsPage() {
       }
       showSuccess('Поход успешно создан');
       await loadData();
-    } catch (err: any) {
-      showError(err.detail || 'Ошибка создания похода');
+    } catch (err) {
+      const e = err as { detail?: string; error?: { detail?: string } };
+      showError(e.detail || 'Ошибка создания похода');
     }
   };
 
@@ -231,8 +233,8 @@ export default function TripsPage() {
       // Fix-2 (п.1) + Fix-6 (п.7): стираются данные ТОЛЬКО дней, уходящих за новые
       // границы; предупреждение — брендовым диалогом с перечнем потерь.
       const lostDays = (trip.days ?? []).filter(
-        (d: any) => d.dayDate < formData.startDate || d.dayDate > formData.endDate);
-      const lostMeals = lostDays.reduce((acc: number, d: any) => acc + (d.meals?.length ?? 0), 0);
+        (d: TripDay) => d.dayDate < formData.startDate || d.dayDate > formData.endDate);
+      const lostMeals = lostDays.reduce((acc: number, d: TripDay) => acc + (d.meals?.length ?? 0), 0);
       if (lostDays.length > 0) {
         const ok = await confirm({
           title: 'Даты меняются — часть плана будет стёрта',
@@ -240,7 +242,7 @@ export default function TripsPage() {
           confirmLabel: 'Да, изменить даты',
           message: (
             <>
-              Из похода уйдут {lostDays.length} дн. ({lostDays.map((d: any) =>
+              Из похода уйдут {lostDays.length} дн. ({lostDays.map((d: TripDay) =>
                 new Date(d.dayDate).toLocaleDateString('ru-RU')).join(', ')}).
               {lostMeals > 0 && <> Вместе с ними удалятся <b>{mealsCountLabel(lostMeals)}</b>, их правки состава и позиции этих дней.</>}
               <br />Остальные дни сохранятся без изменений.
@@ -261,15 +263,16 @@ export default function TripsPage() {
       setEditingTrip(null);
       showSuccess('Поход обновлён');
       await loadData();
-    } catch (err: any) {
-      showError(err?.detail || err?.error?.detail || 'Не удалось обновить поход');
+    } catch (err) {
+      const e = err as { detail?: string; error?: { detail?: string } };
+      showError(e?.detail || e?.error?.detail || 'Не удалось обновить поход');
     }
   };
 
   const handleDelete = async (trip: Trip) => {
     // Fix-6 (п.7): важное удаление — красивое предупреждение с последствиями
     const daysCount = trip.days?.length ?? 0;
-    const mealsCount = (trip.days ?? []).reduce((acc: number, d: any) => acc + (d.meals?.length ?? 0), 0);
+    const mealsCount = (trip.days ?? []).reduce((acc: number, d: TripDay) => acc + (d.meals?.length ?? 0), 0);
     const ok = await confirm({
       title: `Удалить поход «${trip.name}»?`,
       confirmLabel: 'Удалить поход',
@@ -286,8 +289,9 @@ export default function TripsPage() {
       await api.del(`/trips/${trip.id}`);
       showSuccess('Поход удалён');
       await loadData();
-    } catch (err: any) {
-      showError(err.detail || 'Ошибка удаления похода');
+    } catch (err) {
+      const e = err as { detail?: string; error?: { detail?: string } };
+      showError(e.detail || 'Ошибка удаления похода');
     }
   };
 

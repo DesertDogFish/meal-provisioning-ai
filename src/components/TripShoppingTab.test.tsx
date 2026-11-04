@@ -13,9 +13,11 @@
 /// <reference types="vitest/globals" />
 import { render, screen } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
-import TripShoppingTab from './TripShoppingTab';
+
 import { deriveTripView, type TripViewInput } from '../utils/tripDerived';
 import type { Trip, Recipe, Price } from '../types/tripDetail';
+
+import TripShoppingTab from './TripShoppingTab';
 
 const trip: Trip = {
   id: 't1', userId: 'u1', name: 'Поход', startDate: '2026-07-01', endDate: '2026-07-01',

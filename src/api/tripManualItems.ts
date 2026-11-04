@@ -8,8 +8,9 @@
  *   POST   /trips/{id}/manual-items            → TripManualItem (201)
  *   DELETE /trips/{id}/manual-items/{itemId}   → 204
  */
-import { api } from './client';
 import type { UnitOfMeasure } from '../types';
+
+import { api } from './client';
 
 export interface TripManualItem {
   id: string;

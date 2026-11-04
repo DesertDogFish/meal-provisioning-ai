@@ -9,11 +9,13 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, it, expect, beforeEach } from 'vitest';
-import RecipesPage from './RecipesPage';
+
 import { ToastProvider } from '../components/ToastProvider';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import { AuthProvider } from '../components/AuthProvider'; // cleanup-п.7
 import { mockServer } from '../api/mockServer';
+
+import RecipesPage from './RecipesPage';
 
 beforeEach(() => {
   localStorage.setItem('apiMode', 'mock');

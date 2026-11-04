@@ -1,5 +1,6 @@
 import { db } from '../db/indexedDb';
 import type { LocalRecipe } from '../db/schema';
+
 import type { IRepository } from './IRepository';
 
 export class OfflineRecipeRepository implements IRepository<LocalRecipe> {

@@ -1,13 +1,15 @@
 import { useMemo } from 'react';
 import { Share2, Printer } from 'lucide-react';
-import { Button } from './Button';
-import { useToast } from './ToastProvider';
-import { WhoOwesBlock } from './WhoOwesBlock';
+
 import type { TripView } from '../utils/tripDerived';
 import type { Trip } from '../types/tripDetail';
 import { formatRub, formatQty } from '../utils/format';
 import { pluralize } from '../utils/pluralize';
 import { mealsWord, mealTypeLabels, daysCountLabel } from '../utils/text';
+
+import { WhoOwesBlock } from './WhoOwesBlock';
+import { useToast } from './ToastProvider';
+import { Button } from './Button';
 
 /**
  * trip-workflow-redesign п.5 (R8): тело отчёта похода — ОДИН компонент на два

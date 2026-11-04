@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+
 import { compareRu, compareNumAsc, sortRows, nextDir } from './rowSort';
 
 describe('rowSort (U26–U28, U41) — компараторы и сортировка строк', () => {

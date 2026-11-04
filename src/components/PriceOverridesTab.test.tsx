@@ -17,11 +17,12 @@ vi.mock('../api/client', () => ({
 }));
 vi.mock('./ToastProvider', () => ({ useToast: () => ({ showError: vi.fn(), showSuccess: vi.fn() }) }));
 
-import PriceOverridesTab from './PriceOverridesTab';
 import { deriveTripView, type TripViewInput } from '../utils/tripDerived';
 
 const NBSP = '\u00A0';
 import type { Trip, Recipe, Price } from '../types/tripDetail';
+
+import PriceOverridesTab from './PriceOverridesTab';
 
 const trip: Trip = {
   id: 't1', userId: 'u1', name: 'Поход', startDate: '2026-07-01', endDate: '2026-07-01',

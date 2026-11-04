@@ -1,6 +1,7 @@
 /// <reference types="vitest/globals" />
 import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
+
 import { StageTabBar, parseStage, STAGES } from './StageTabBar';
 import type { StageId } from './StageTabBar';
 

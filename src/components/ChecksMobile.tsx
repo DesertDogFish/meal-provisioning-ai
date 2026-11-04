@@ -10,15 +10,17 @@
  * (общий ListSearch, R8 — тот же контрол, что в чеклисте ③ и таблице ④).
  */
 import { useRef, useState } from 'react';
+
 import { formatAmount } from '../utils/calculations';
 import { formatUnitPrice } from '../utils/format';
-import { NumberField } from './NumberField';
-import FreeAmountInput from './FreeAmountInput';
-import ListSearch from './ListSearch';
 import { neededAsActual, type ActualAmount } from '../utils/checkUnits';
 import { enteredCheckTotal } from '../utils/checkInput';
 import { checklistRowKey } from '../utils/checklist';
 import type { ChecklistActual } from '../utils/tripStaging';
+
+import ListSearch from './ListSearch';
+import FreeAmountInput from './FreeAmountInput';
+import { NumberField } from './NumberField';
 import type { CheckRow, CheckGroup } from './ChecksModel';
 
 export interface ChecksMobileProps {

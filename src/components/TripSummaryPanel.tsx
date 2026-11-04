@@ -15,16 +15,18 @@
  */
 import { useState } from 'react';
 import { ChevronRight, ChevronDown, FileDown, Check } from 'lucide-react';
-import InfoTip from './InfoTip';
-import { Button } from './Button';
-import BottomSheet from './BottomSheet';
-import { STAGES, type StageId } from './StageTabBar';
+
 import { formatRub } from '../utils/format' // cleanup-п.9: shim formatRub удалён; // Фаза 13: итоги — целые рубли
 import { pluralize } from '../utils/pluralize';
 // UX-осмотр 31.10 (п.1): форма слова «N приёмов» — единый источник (utils/text)
 import { mealsWord } from '../utils/text';
 import type { TripReadiness } from '../utils/readiness';
 import type { Trip } from '../types/tripDetail';
+
+import { STAGES, type StageId } from './StageTabBar';
+import BottomSheet from './BottomSheet';
+import { Button } from './Button';
+import InfoTip from './InfoTip';
 
 export interface TripSummaryPanelProps {
   trip: Trip;
@@ -113,7 +115,7 @@ export function TripSummaryPanel({
       <ChevronRight size={13} style={{ color: 'var(--line-strong)' }} aria-hidden />
       <span className="px-2 py-0.5 text-xs font-extrabold rounded-full whitespace-nowrap"
         style={readiness.ready
-          ? { background: 'var(--success)', color: '#fff' }
+          ? { background: 'var(--success)', color: 'var(--snow)' }
           : { background: 'var(--elev)', color: 'var(--muted)' }}
       >
         {readiness.ready ? 'Поход готов ✓' : 'В процессе'}

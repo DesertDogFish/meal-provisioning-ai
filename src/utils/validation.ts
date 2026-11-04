@@ -1,4 +1,5 @@
 import { FieldError } from '../types/errors';
+
 import { ValidationError } from './errors';
 // UX-осмотр 31.10 (п.2): тексты ошибок — человеческие RU, единый маппинг field→копи.
 import { blankMessage, fieldLabel, fieldLabelGenitive, PASSWORD_MIN_LENGTH, passwordTooShort } from './validationMessages';

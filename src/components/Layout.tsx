@@ -1,6 +1,7 @@
 import { NavLink, useNavigate } from 'react-router-dom';
 import { ChevronUp, LogOut, Menu, Mountain, Package, RefreshCw, UtensilsCrossed } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
+
 import ApiModeBadge from './ApiModeBadge';
 import BrandMark from './BrandMark';
 import ThemeToggle from './ThemeToggle';

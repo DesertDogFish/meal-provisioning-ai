@@ -76,6 +76,7 @@ vi.mock('../api/client', () => {
 });
 
 import { api } from '../api/client';
+
 import { loadBought, setBought, refreshBoughtFromServer, flushBoughtPuts } from './tripStaging';
 
 const TRIP = 't1';

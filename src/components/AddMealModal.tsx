@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Minus, Plus, X } from 'lucide-react';
-import Modal from './Modal';
-import { Button } from './Button';
-import RecipeSearchSelect from './RecipeSearchSelect';
+
 import { api, getRecipes, humanize } from '../api/client';
 import { productsWord } from '../utils/text'; // Release-1.0: «4 продукта», не «4 продуктов»
 import type { MealType } from '../types';
 import type { Recipe } from '../types';
+
+import RecipeSearchSelect from './RecipeSearchSelect';
+import { Button } from './Button';
+import Modal from './Modal';
 import { useToast } from './ToastProvider';
 
 /**

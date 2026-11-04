@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { SlidersHorizontal } from 'lucide-react';
+
 import BottomSheet from './BottomSheet';
 import { Button } from './Button';
 

@@ -12,8 +12,10 @@
 /// <reference types="vitest/globals" />
 import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, afterEach } from 'vitest';
-import { ProblemDetailAlert } from './ProblemDetailAlert';
+
 import { ProblemDetail } from '../types/errors';
+
+import { ProblemDetailAlert } from './ProblemDetailAlert';
 
 function pd(status: number, extra: Partial<ProblemDetail> = {}): ProblemDetail {
   return { type: 'about:blank', title: `Ошибка ${status}`, status, ...extra };

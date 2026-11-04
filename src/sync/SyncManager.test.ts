@@ -1,5 +1,6 @@
 import 'fake-indexeddb/auto';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+
 import { db } from '../db/indexedDb';
 import { syncQueue } from '../sync/SyncQueue';
 import { syncManager } from '../sync/SyncManager';

@@ -391,7 +391,22 @@ jobs:
         run: npm run typecheck
       
       - run: npm run build
-      
+
+      - name: Bundle size gate (BL-47)
+        run: |
+          set -euo pipefail
+          total_gzip=$(node -e "const fs=require('fs');function walk(d){let r=[];for(const f of fs.readdirSync(d,{withFileTypes:true})){const p=require('path').join(d,f.name);if(f.isDirectory())r=r.concat(walk(p));else if(f.name.endsWith('.js'))r.push(p);}return r;}const files=walk('dist');let gz=0;for(const f of files)gz+=require('zlib').gzipSync(fs.readFileSync(f)).length;console.log((gz/1024).toFixed(2));")
+          baseline=220.24
+          limit=$(awk "BEGIN{printf \"%.2f\", $baseline*1.05}")
+          echo "JS gzip total: ${total_gzip} KB (baseline ${baseline} KB, limit ${limit} KB)"
+          awk "BEGIN{exit !($total_gzip <= $limit)}" || { echo "::error::Bundle gzip \${total_gzip} KB exceeds limit \${limit} KB"; exit 1; }
+
+      - name: Upload bundle stats (BL-47)
+        uses: actions/upload-artifact@v5
+        with:
+          name: bundle-stats
+          path: dist/stats.html
+
       - name: Frontend tests
         run: npm run test
       - name: Coverage include check (BL-34)

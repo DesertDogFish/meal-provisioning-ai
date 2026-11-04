@@ -1,7 +1,9 @@
 import { describe, it, expect } from 'vitest';
+
+import type { Trip, TripDay } from '../types';
+
 import { buildEffectiveIngredients, buildEffectiveRecipesMap } from './recipeEdits';
 import { calculateShoppingList, calculateMenuByDays } from './calculations';
-import type { Trip, TripDay } from '../types';
 
 const ing = (id: string, name: string, amount: number, unit = 'KG') =>
   ({ ingredientId: id, amount, ingredient: { id, name, unit, category: '' } });

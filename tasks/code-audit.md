@@ -45,3 +45,9 @@ Closed:
 - Dev-only (tinypool/vitest/vite/eslint): игнорировать — уязвимости затрагивают только dev-рантайм/тесты, не прод-бандл. Обновление vitest до 5.x — breaking, вынести в отдельную задачу.
 - Production: react-router-dom 6.30.6 содержит 2 moderate (open redirect, constructor injection). Фикс — v7.18.5 (breaking). Либо принять риск (SPA, нет SSR-hydration на клиенте), либо запланировать миграцию на v7 отдельной задачей.
 
+
+### Аудит пп.3–5 (BL-53/BL-54) — результаты (t_15e6c543)
+- Большие файлы: git-untracked source files >500 строк — 0 (проверено `git status --short` + wc -l). Оставшиеся >500 — принятые исключения: `ShoppingListCalculator.java` (520, логика перенесена байт-в-байт), тестовые классы и миграции SQL/документация.
+- `any`: в целевых файлах (calculations.ts, tripStaging.ts, tripDerived.ts, TripsPage.tsx, useTripDetail.tsx, mockSnapshot.ts) — 0 (до: 285 `: any` + 110 `<any>` + 49 `any[]` + 237 `as any` по src в целом; в целевых файлах до аудита ~40 вхождений). Заменены на точные типы (Recipe/RecipeIngredient, TripDay, IngredientPrice, Record<string, unknown>, unknown-casts).
+- console.log в src/: 0 (единственный — watchdog.ts removed). console.warn в watchdog/mode/checklist/tripStaging оставлены с префиксами (dev/операционные), console.error в компонентах сохранены для диагностики.
+- Проверки: `npm run typecheck` — 0 ошибок; `npm run build` — OK (3.10s); vitest targeted (tripDerived 15, calculations 39, pages 88) — зелёные.

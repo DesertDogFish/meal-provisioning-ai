@@ -1,12 +1,16 @@
 import { useState } from 'react';
 import { X } from 'lucide-react';
-import { DateRange } from './DateRange';
+
 import { validateTrip } from '../utils/validation';
-// UX-осмотр 31.10 (п.2): ошибки формы — человеческие RU-тексты, без префикса поля
 import { humanizeFieldError } from '../utils/validationMessages';
+import type { FieldError } from '../types/errors';
+
+import { DateRange } from './DateRange';
+// UX-осмотр 31.10 (п.2): ошибки формы — человеческие RU-тексты, без префикса поля
+
 import Modal from './Modal';
 import { Button } from './Button';
-import type { FieldError } from '../types/errors';
+
 
 export interface TripFormData {
   name: string;

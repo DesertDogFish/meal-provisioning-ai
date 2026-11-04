@@ -1,5 +1,6 @@
 /// <reference types="vitest/globals" />
 import { describe, it, expect, beforeEach } from 'vitest';
+
 import {
   neededStamp, factIsFresh,
   loadActualPrices, saveActualPrice,

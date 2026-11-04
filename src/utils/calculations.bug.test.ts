@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
+
 import { calculateShoppingList } from '../utils/calculations';
 
 describe('Баг агрегации стоимости по endDate', () => {

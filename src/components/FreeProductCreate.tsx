@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
 import { Plus } from 'lucide-react';
+
+import { api } from '../api/client';
+import type { UnitOfMeasure } from '../types';
+
 import CustomSelect from './CustomSelect';
 import { Button } from './Button';
 import { useToast } from './ToastProvider';
-import { api } from '../api/client';
-import type { UnitOfMeasure } from '../types';
 
 /** Продукт, созданный (или найденный через check-name) из свободного ввода. */
 export interface CreatedProduct {

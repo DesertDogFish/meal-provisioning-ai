@@ -1,9 +1,10 @@
+import { AlertCircle, X, AlertTriangle } from 'lucide-react';
+
 import { ProblemDetail } from '../types/errors';
 import { getValidationErrors, getConflictInfo, getErrorMessage, getErrorColor, ErrorColor } from '../utils/errorHandler';
 // UX-осмотр 31.10 (п.2): список ошибок — человеческая RU-копи; техническое имя
 // поля остаётся в «Технических деталях (RFC 7807)» ниже (логи/отладка).
 import { humanizeFieldError } from '../utils/validationMessages';
-import { AlertCircle, X, AlertTriangle } from 'lucide-react';
 
 interface Props {
   problemDetail: ProblemDetail;

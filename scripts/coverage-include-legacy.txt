@@ -169,3 +169,13 @@ src/utils/validation.ts
 src/utils/validationMessages.test.ts
 src/components/recipeEditorHelpers.ts
 src/components/ProductFormModal.test.tsx
+src/api/mockTripsPart1.ts
+src/api/mockTripsPart2.ts
+src/api/mockTripsPart3.ts
+src/api/mockTripsShared.ts
+src/components/useMealCompositionModal.tsx
+src/components/MealCompositionModalView.tsx
+src/components/MealCompositionModalView.tsx
+src/components/useMealCompositionModal.tsx
+src/pages/RecipesPageView.tsx
+src/pages/useRecipesPage.tsx

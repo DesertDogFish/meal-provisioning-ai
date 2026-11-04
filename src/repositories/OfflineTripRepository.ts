@@ -1,5 +1,6 @@
 import { db } from '../db/indexedDb';
 import type { LocalTrip } from '../db/schema';
+
 import type { IRepository } from './IRepository';
 
 export class OfflineTripRepository implements IRepository<LocalTrip> {

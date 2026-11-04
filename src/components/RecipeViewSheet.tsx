@@ -7,11 +7,13 @@
  * (удалённый из каталога рецепт — честная нота без битой ссылки).
  */
 import { X, BookOpen } from 'lucide-react';
-import Modal from './Modal';
-import { Button } from './Button';
+
 import { formatAmount } from '../utils/calculations';
 import { mealTypeLabels, servingsWord } from '../utils/text';
 import type { Recipe } from '../types/tripDetail';
+
+import { Button } from './Button';
+import Modal from './Modal';
 
 export interface RecipeViewSheetProps {
   /** блюдо из снепшота похода (или каталога) */

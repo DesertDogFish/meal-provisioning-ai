@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronDown, Check } from 'lucide-react';
+
 import { usePortalDropdown } from './CustomSelect';
 import './CustomSelect.css';
 

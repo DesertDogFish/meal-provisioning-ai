@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
+
 import type { Ingredient, Recipe } from '../types';
 import { UNIT_LABELS } from '../types';
 import { categoryName } from '../utils/format'; // Release-1.0: category может прийти объектом (ProductCategoryDto)
+
 import RecipeSearchSelect from './RecipeSearchSelect';
 
 /** Строка черновика состава блюда в окне «Добавить приём пищи». */

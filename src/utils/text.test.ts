@@ -6,6 +6,7 @@
  * TripsPage (R2: слой теста = слой изменения — утилита текста).
  */
 import { describe, expect, it } from 'vitest';
+
 import { mealsWord, mealsCountLabel, daysCountLabel } from './text';
 
 describe('mealsWord — форма слова «приём пищи»', () => {

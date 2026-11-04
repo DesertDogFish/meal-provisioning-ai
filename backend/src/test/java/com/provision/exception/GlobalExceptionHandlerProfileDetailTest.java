@@ -38,10 +38,13 @@ class GlobalExceptionHandlerProfileDetailTest {
     private MockMvc mvc(String... activeProfiles) {
         MockEnvironment environment = new MockEnvironment();
         environment.setActiveProfiles(activeProfiles);
-        GlobalExceptionHandler advice = new GlobalExceptionHandler(environment);
-        ReflectionTestUtils.setField(advice, "maxFileSize", "96MB");
+        AuthExceptionsHandler auth = new AuthExceptionsHandler(environment);
+        CatalogExceptionsHandler catalog = new CatalogExceptionsHandler(environment);
+        IntegrationExceptionsHandler integration = new IntegrationExceptionsHandler(environment);
+        WebExceptionsHandler web = new WebExceptionsHandler(environment);
+        ReflectionTestUtils.setField(web, "maxFileSize", "96MB");
         return MockMvcBuilders.standaloneSetup(new ProbeController())
-                .setControllerAdvice(advice)
+                .setControllerAdvice(auth, catalog, integration, web)
                 .build();
     }
 
@@ -83,11 +86,27 @@ class GlobalExceptionHandlerProfileDetailTest {
     }
 
     @Test
-    @DisplayName("без активного профиля (ручная сборка совета) — поведение dev")
-    void noActiveProfile_keepsIllegalArgumentMessage() throws Exception {
-        mvc().perform(get("/probe/illegal-argument"))
+    @DisplayName("test: detail IllegalArgumentException — текст исключения для отладки")
+    void test_keepsIllegalArgumentMessage() throws Exception {
+        mvc("test").perform(get("/probe/illegal-argument"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.detail").value(SECRET + ": так нельзя, id=42"));
+    }
+
+    @Test
+    @DisplayName("без активного профиля (ручная сборка совета) — prod/default политика: скрытый detail")
+    void noActiveProfile_hidesIllegalArgumentMessage() throws Exception {
+        mvc().perform(get("/probe/illegal-argument"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.detail").value(org.hamcrest.Matchers.startsWith("BAD_REQUEST:")));
+    }
+
+    @Test
+    @DisplayName("профиль default — скрытый detail")
+    void defaultProfile_hidesIllegalArgumentMessage() throws Exception {
+        mvc("default").perform(get("/probe/illegal-argument"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.detail").value(org.hamcrest.Matchers.startsWith("BAD_REQUEST:")));
     }
 
     @Test

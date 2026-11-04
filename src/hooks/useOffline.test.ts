@@ -1,5 +1,6 @@
 import { renderHook } from '@testing-library/react';
 import { describe, it, expect } from 'vitest';
+
 import { useOffline } from './useOffline';
 
 describe('useOffline', () => {

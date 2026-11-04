@@ -4,6 +4,7 @@
  * и событие auth:session-lost.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { AuthInterceptor } from './authInterceptor';
 
 const BASE = 'http://test.local/api/v1';

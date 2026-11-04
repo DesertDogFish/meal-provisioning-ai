@@ -1,6 +1,7 @@
 /// <reference types="vitest/globals" />
 import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+
 import ScrollTopButton from './ScrollTopButton';
 
 describe('ScrollTopButton (Fix-7 п.9) — плавающая кнопка «наверх»', () => {

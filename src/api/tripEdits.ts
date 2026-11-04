@@ -5,8 +5,9 @@
  * (Java: POST /trips/{id}/substitutions c флагами added/removed; mock — тот же контракт).
  * Исходный рецепт в каталоге НЕ трогается; закупка/дни/человек считаются с правками.
  */
-import { api } from './client';
 import type { Recipe } from '../types';
+
+import { api } from './client';
 
 export interface TripIngredientEdit {
   id: string;

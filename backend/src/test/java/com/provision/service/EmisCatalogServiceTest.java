@@ -310,4 +310,41 @@ class EmisCatalogServiceTest {
         assertThat(dto.pricePerUnit()).isEqualByComparingTo("4171.47");
         assertThat(dto.warning()).isNull();
     }
+
+    @Test
+    @DisplayName("BL-11: пустой/пробельный код — пустой ряд, репозиторий не вызывается")
+    void pricesBlankCodeReturnsEmpty() {
+        assertThat(service.prices(null)).isEmpty();
+        assertThat(service.prices("   ")).isEmpty();
+        verify(priceRepository, never()).findByRegionCodeAndEmisCodeOrderByPeriodYearAscPeriodMonthAsc(anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("BL-11: неизвестный код — пустой ряд")
+    void pricesUnknownCodeReturnsEmpty() {
+        when(priceRepository.findByRegionCodeAndEmisCodeOrderByPeriodYearAscPeriodMonthAsc(eq(REGION), eq("9999")))
+                .thenReturn(List.of());
+
+        assertThat(service.prices("9999")).isEmpty();
+    }
+
+    @Test
+    @DisplayName("BL-11: ряд цен возвращается в порядке (год, месяц), код обрезается")
+    void pricesReturnsSeriesOrderedByPeriod() {
+        EmisPrice jan = price("2307", 2026, 1, "100.00");
+        EmisPrice feb = price("2307", 2026, 2, "110.00");
+        EmisPrice dec = price("2307", 2025, 12, "95.00");
+        List<EmisPrice> ordered = List.of(dec, jan, feb);
+        when(priceRepository.findByRegionCodeAndEmisCodeOrderByPeriodYearAscPeriodMonthAsc(eq(REGION), eq("2307")))
+                .thenReturn(ordered);
+
+        List<EmisPrice> result = service.prices("  2307  ");
+
+        assertThat(result).containsExactly(dec, jan, feb);
+        assertThat(result).extracting(EmisPrice::getPeriodYear, EmisPrice::getPeriodMonth)
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple(2025, 12),
+                        org.assertj.core.groups.Tuple.tuple(2026, 1),
+                        org.assertj.core.groups.Tuple.tuple(2026, 2));
+    }
 }

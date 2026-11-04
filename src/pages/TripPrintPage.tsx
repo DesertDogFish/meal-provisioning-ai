@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { Printer, ArrowLeft } from 'lucide-react';
+
 import { formatAmount } from '../utils/calculations';
 import { formatRub } from '../utils/format' // cleanup-п.9: shim formatRub удалён;
 // UX-осмотр 31.10 (п.1): форма слова «N приёмов» — единый источник (utils/text)

@@ -7,6 +7,9 @@
  */
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+import { saveActualPrice, setBought, setActualQty } from '../utils/tripStaging';
+
 import MealCompositionModal from './MealCompositionModal';
 import { ToastProvider } from './ToastProvider';
 
@@ -129,7 +132,6 @@ describe('MealCompositionModal — U39 удаление добавленного
  * пользователь терял введённые суммы без предупреждения. Фикс: ConfirmDialog
  * (тон warning) со списком позиций ПЕРЕД batch PUT.
  */
-import { saveActualPrice, setBought, setActualQty } from '../utils/tripStaging';
 
 describe('MealCompositionModal — transparency-п.3: предупреждение о сбросе чека', () => {
   beforeEach(() => {

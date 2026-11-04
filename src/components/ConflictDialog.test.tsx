@@ -5,8 +5,10 @@
  */
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ConflictDialog } from './ConflictDialog';
+
 import { notifyConcurrentModification, resetConcurrentModificationListeners } from '../api/conflictSignal';
+
+import { ConflictDialog } from './ConflictDialog';
 
 afterEach(() => {
   resetConcurrentModificationListeners();

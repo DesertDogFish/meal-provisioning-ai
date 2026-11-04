@@ -1,6 +1,7 @@
 /// <reference types="vitest/globals" />
 import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+
 import InfoTip from './InfoTip';
 import TabHeader from './TabHeader';
 

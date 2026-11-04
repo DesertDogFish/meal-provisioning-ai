@@ -19,6 +19,7 @@
  * `npx vitest run src/api/contractEmis.test.ts`.
  */
 import { describe, it, expect } from 'vitest';
+
 import { mockServer } from './mockServer';
 
 const call = <T,>(method: string, path: string, body?: any): T =>

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
+
 import { useConfirm } from './ConfirmDialog';
 
 /** Мини-хост для useConfirm: кнопка запускает confirm(), результат пишет в DOM. */

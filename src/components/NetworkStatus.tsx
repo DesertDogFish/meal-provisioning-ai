@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+
 import { networkMonitor } from '../sync/NetworkMonitor';
 
 export default function NetworkStatus() {
@@ -18,8 +19,8 @@ export default function NetworkStatus() {
         bottom: 0,
         left: 0,
         right: 0,
-        background: '#b91c1c',
-        color: '#fff',
+        background: 'var(--danger)',
+        color: 'var(--snow)',
         textAlign: 'center',
         padding: '8px',
         fontSize: '14px',

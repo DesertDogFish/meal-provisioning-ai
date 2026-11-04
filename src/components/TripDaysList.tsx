@@ -8,17 +8,19 @@
 import {
   Plus, Users, ChevronDown, ChevronRight, PackagePlus, X,
 } from 'lucide-react';
+
 import { formatAmount } from '../utils/calculations';
 // UX-осмотр 31.10 (п.1): форма слова «N приёмов пищи» — из единого источника (text.ts)
 import { mealsCountLabel } from '../utils/text';
 import { manualForDay, manualForTrip } from '../utils/manualItems';
 import type { TripManualItem } from '../api/tripManualItems';
+import type { MenuDay } from '../types';
+import type { Trip } from '../types/tripDetail';
+
 import { Button } from './Button';
 import InfoTip from './InfoTip';
 import TripMealCard from './TripMealCard';
 import type { AddMealDayContext } from './AddMealModal';
-import type { MenuDay } from '../types';
-import type { Trip } from '../types/tripDetail';
 
 export interface TripDaysListProps {
   menuByDays: MenuDay[];

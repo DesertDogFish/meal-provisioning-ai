@@ -2,6 +2,7 @@ import React, { forwardRef } from 'react';
 import ReactDatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import { ru } from 'date-fns/locale';
+
 // KB-32 (UX-осмотр 31.10, п.3): единый контракт текста поля — пользователь
 // видит/набирает ДД.ММ.ГГГГ, форма и API хранят ISO YYYY-MM-DD.
 import { parseDateInput, formatDateInput, isCompleteDateText, DATE_INPUT_PATTERN } from '../utils/dateInput';

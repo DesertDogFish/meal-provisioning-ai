@@ -21,10 +21,13 @@ class GlobalExceptionHandlerTraceIdTest {
 
     private MockMvc mvc() {
         MockEnvironment environment = new MockEnvironment();
-        GlobalExceptionHandler advice = new GlobalExceptionHandler(environment);
-        ReflectionTestUtils.setField(advice, "maxFileSize", "96MB");
+        AuthExceptionsHandler auth = new AuthExceptionsHandler(environment);
+        CatalogExceptionsHandler catalog = new CatalogExceptionsHandler(environment);
+        IntegrationExceptionsHandler integration = new IntegrationExceptionsHandler(environment);
+        WebExceptionsHandler web = new WebExceptionsHandler(environment);
+        ReflectionTestUtils.setField(web, "maxFileSize", "96MB");
         return MockMvcBuilders.standaloneSetup(new ProbeController())
-                .setControllerAdvice(advice)
+                .setControllerAdvice(auth, catalog, integration, web)
                 .build();
     }
 

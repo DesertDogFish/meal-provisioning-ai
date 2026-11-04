@@ -10,7 +10,9 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+
 import TripsPage from './TripsPage';
+
 import { ToastProvider } from '../components/ToastProvider';
 import { AuthProvider } from '../components/AuthProvider';
 

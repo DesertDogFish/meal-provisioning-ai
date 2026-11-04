@@ -1,5 +1,6 @@
 import { db } from '../db/indexedDb';
 import type { LocalProduct } from '../db/schema';
+
 import type { IRepository } from './IRepository';
 
 export class OfflineProductRepository implements IRepository<LocalProduct> {

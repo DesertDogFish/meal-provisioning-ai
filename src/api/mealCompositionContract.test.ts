@@ -8,6 +8,7 @@
  *  (5) batch PUT идемпотентен при повторе того же тела.
  */
 import { beforeEach, describe, expect, it } from 'vitest';
+
 import { mockServer } from './mockServer';
 
 type Composition = {

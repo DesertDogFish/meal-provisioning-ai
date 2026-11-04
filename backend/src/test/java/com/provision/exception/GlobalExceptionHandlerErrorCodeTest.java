@@ -45,11 +45,15 @@ class GlobalExceptionHandlerErrorCodeTest {
 
     @BeforeEach
     void setUp() {
-        // Профиль не активен → политика detail как в dev (санитизация — только в prod, KB-27).
-        GlobalExceptionHandler advice = new GlobalExceptionHandler(new MockEnvironment());
-        ReflectionTestUtils.setField(advice, "maxFileSize", MAX_FILE_SIZE);
+        // Профиль не активен → prod/default-политика санитизации; здесь все detail стабильные.
+        MockEnvironment environment = new MockEnvironment();
+        AuthExceptionsHandler auth = new AuthExceptionsHandler(environment);
+        CatalogExceptionsHandler catalog = new CatalogExceptionsHandler(environment);
+        IntegrationExceptionsHandler integration = new IntegrationExceptionsHandler(environment);
+        WebExceptionsHandler web = new WebExceptionsHandler(environment);
+        ReflectionTestUtils.setField(web, "maxFileSize", MAX_FILE_SIZE);
         mockMvc = MockMvcBuilders.standaloneSetup(new ProbeController())
-                .setControllerAdvice(advice)
+                .setControllerAdvice(auth, catalog, integration, web)
                 .build();
     }
 

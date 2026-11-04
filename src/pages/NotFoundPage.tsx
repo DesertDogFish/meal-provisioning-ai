@@ -15,6 +15,7 @@
  */
 import { useNavigate } from 'react-router-dom';
 import { MapPinOff } from 'lucide-react';
+
 import { Button } from '../components/Button';
 
 export default function NotFoundPage() {

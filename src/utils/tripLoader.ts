@@ -18,10 +18,11 @@ import { api, getRecipes, getTripRecipes } from '../api/client';
 import { getManualItems, type TripManualItem } from '../api/tripManualItems';
 import { getTripEdits, type TripIngredientEdit } from '../api/tripEdits';
 import { getServerExclusions } from '../api/shoppingExclusions';
+import type { Trip, Recipe, Price } from '../types/tripDetail';
+
 import { loadActualPrices, loadExcluded, loadBought, refreshBoughtFromServer, BOUGHT_SYNC_SOFT_TIMEOUT_MS, type ActualPriceDraft } from './tripStaging';
 import { categoryName } from './format';
 import { deriveTripView, type TripView, type TripViewInput } from './tripDerived';
-import type { Trip, Recipe, Price } from '../types/tripDetail';
 
 export interface TripBundle {
   trip: Trip;

@@ -6,13 +6,15 @@
  * этого инварианта (раньше ④ считал закупку своей копией пайплайна).
  */
 import { describe, it, expect } from 'vitest';
+
 import { deriveTripView, type TripViewInput } from '../utils/tripDerived';
+import type { TripManualItem } from '../api/tripManualItems';
+import type { Trip, Recipe, Price } from '../types/tripDetail';
+
 import {
   buildCheckRows, groupCheckRows, dayPlanFacts, checkTotals,
   hasEnteredFacts, rowHasFact, enteredFactsTotal,
 } from './ChecksModel';
-import type { TripManualItem } from '../api/tripManualItems';
-import type { Trip, Recipe, Price } from '../types/tripDetail';
 
 const trip: Trip = {
   id: 't1', userId: 'u1', name: 'Тестовый поход',

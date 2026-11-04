@@ -1,7 +1,18 @@
-import { Trip, TripDay, TripMeal, IngredientPrice, ShoppingItem, DayShopping, MenuDay, PersonSummary, TripSummary, UnitOfMeasure } from '../types';
+import { Trip, TripDay, TripMeal, IngredientPrice, ShoppingItem, DayShopping, MenuDay, PersonSummary, TripSummary, UnitOfMeasure, Recipe, RecipeIngredient } from '../types';
+
 import { calculateKcal } from './calc';
 import { formatQty } from './format';
 import { mergeManualIntoShopping } from './manualItems';
+
+type RecipeIngredientLike = RecipeIngredient & {
+  ingredientName?: string;
+  unit?: UnitOfMeasure | string;
+  enabled?: boolean;
+  kcalPer100g?: number;
+  pieceWeightG?: number;
+  absolute?: boolean;
+  added?: boolean;
+};
 import type { TripManualItem } from '../api/tripManualItems';
 
 /**
@@ -10,12 +21,12 @@ import type { TripManualItem } from '../api/tripManualItems';
  * а mock и нормализованный GET /recipes — вложенный объект ingredient.
  * Читаем ОБЕ формы, иначе в UI протекает «Unknown» и единица «шт» по умолчанию.
  */
-export function ingOf(ri: any): { name: string; unit: any; enabled?: boolean; kcalPer100g?: number; pieceWeightG?: number } {
+export function ingOf(ri: RecipeIngredientLike): { name: string; unit: UnitOfMeasure; enabled?: boolean; kcalPer100g?: number; pieceWeightG?: number } {
   const ing = ri?.ingredient;
   if (ing && typeof ing === 'object') return ing;
   return {
     name: ri?.ingredientName ?? 'Unknown',
-    unit: ri?.unit ?? 'PCS',
+    unit: (ri?.unit ?? 'PCS') as UnitOfMeasure,
     enabled: ri?.enabled,
     kcalPer100g: ri?.kcalPer100g,
     pieceWeightG: ri?.pieceWeightG,
@@ -111,11 +122,11 @@ export function formatAmount(amount: number, unit: string): string {
  * FIX: признак «продукт отключён» (enabled=false). Отключённые продукты не должны
  * попадать ни в меню, ни в закупку, ни в чеки/сводки. undefined = включён (обратная совместимость).
  */
-export function isIngredientDisabled(ri: any): boolean {
+export function isIngredientDisabled(ri: RecipeIngredientLike): boolean {
   return ingOf(ri).enabled === false;
 }
 
-export function calculateMenuByDays(trip: Trip, recipes: Map<string, any>): MenuDay[] {
+export function calculateMenuByDays(trip: Trip, recipes: Map<string, Recipe>): MenuDay[] {
   if (!trip.days) return [];
   return trip.days.map(day => ({
     dayDate: day.dayDate,
@@ -131,11 +142,11 @@ export function calculateMenuByDays(trip: Trip, recipes: Map<string, any>): Menu
         recipeId: meal.recipeId,
         // FIX: отключённые продукты не отражаются в меню
         ingredients: (recipe?.ingredients || [])
-          .filter((ri: any) => !isIngredientDisabled(ri))
-          .map((ri: any) => ({
+          .filter((ri: RecipeIngredientLike) => !isIngredientDisabled(ri))
+          .map((ri: RecipeIngredientLike) => ({
             name: ingOf(ri).name || 'Unknown',
             // Fix-6 (п.22): EXTRA-строки (absolute) — абсолют на приём, людьми НЕ масштабируются
-            amount: ri.absolute ? Number(ri.amount) : calculateAmountPerPerson(ri.amount, recipe.baseServings, people),
+            amount: ri.absolute ? Number(ri.amount) : calculateAmountPerPerson(ri.amount, recipe!.baseServings, people),
             unit: ingOf(ri).unit || 'PCS',
             // U30: id ингредиента — для overlay серверных правок (EXTRA/SUBST/EXCLUDE)
             ingredientId: String(ri.ingredientId ?? ri?.ingredient?.id ?? ''),
@@ -148,7 +159,7 @@ export function calculateMenuByDays(trip: Trip, recipes: Map<string, any>): Menu
   }));
 }
 
-export function calculateShoppingList(trip: Trip, recipes: Map<string, any>, prices: IngredientPrice[], excluded?: ReadonlySet<string>): ShoppingItem[] {
+export function calculateShoppingList(trip: Trip, recipes: Map<string, Recipe>, prices: IngredientPrice[], excluded?: ReadonlySet<string>): ShoppingItem[] {
   const items: Map<string, ShoppingItem> = new Map();
   
   if (!trip.days) return [];
@@ -180,7 +191,7 @@ export function calculateShoppingList(trip: Trip, recipes: Map<string, any>, pri
         // Fix-2 (п.5): по-дневное исключение снимает количество ЭТОГО дня, глобальное — всех
         if (isRowExcluded(excluded, day.dayDate, ingId)) continue;
         // Fix-6 (п.22): EXTRA-строки (absolute) не масштабируются людьми
-        const amountPerMeal = ri.absolute ? Number(ri.amount) : calculateAmountPerPerson(ri.amount, recipe.baseServings, people);
+        const amountPerMeal = ri.absolute ? Number(ri.amount) : calculateAmountPerPerson(ri.amount, recipe!.baseServings, people);
         const existing = items.get(ingId);
         
         if (existing) {
@@ -225,7 +236,7 @@ export function shoppingPlannedTotal(items: ShoppingItem[], excluded?: ReadonlyS
 
 export function calculateDayShopping(
   trip: Trip,
-  recipes: Map<string, any>,
+  recipes: Map<string, Recipe>,
   prices: IngredientPrice[],
   excluded?: ReadonlySet<string>
 ): DayShopping[] {
@@ -256,7 +267,7 @@ export function calculateDayShopping(
         // Release-1.0: выключенные продукты не попадают ни в меню, ни в закупку (паритет)
         if (isIngredientDisabled(ri)) continue;
         // Fix-6 (п.22): EXTRA-строки (absolute) не масштабируются людьми
-        const amountPerMeal = ri.absolute ? Number(ri.amount) : calculateAmountPerPerson(ri.amount, recipe.baseServings, people);
+        const amountPerMeal = ri.absolute ? Number(ri.amount) : calculateAmountPerPerson(ri.amount, recipe!.baseServings, people);
         const existing = items.get(ingId);
         
         if (existing) {
@@ -297,7 +308,7 @@ export function calculateDayShopping(
 
 export function calculatePersonSummary(
   trip: Trip,
-  recipes: Map<string, any>,
+  recipes: Map<string, Recipe>,
   prices: IngredientPrice[],
   realPeople?: number,
   excluded?: ReadonlySet<string>,
@@ -335,7 +346,7 @@ export function calculatePersonSummary(
             if (!ing) continue;
             
             // Fix-6 (п.22): EXTRA-абсолют не масштабируем
-            const amountPerMeal = ri.absolute ? Number(ri.amount) : calculateAmountPerPerson(ri.amount, recipe.baseServings, people);
+            const amountPerMeal = ri.absolute ? Number(ri.amount) : calculateAmountPerPerson(ri.amount, recipe!.baseServings, people);
             const kcal = calculateKcal(
               amountPerMeal,
               ing.unit as UnitOfMeasure,

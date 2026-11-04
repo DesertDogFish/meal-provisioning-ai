@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+
 import { buildChecklist, toChecklistRow, OTHER_CATEGORY } from './checklist';
 
 describe('checklist (U38) — закупка в упаковках', () => {

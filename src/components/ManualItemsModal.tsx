@@ -1,5 +1,10 @@
 import { useState } from 'react';
 import { PackagePlus, Trash2, X } from 'lucide-react';
+
+import { addManualItem, deleteManualItem, type TripManualItem } from '../api/tripManualItems';
+import { formatQty } from '../utils/format';
+import type { UnitOfMeasure } from '../types';
+
 import Modal from './Modal';
 import { Button } from './Button';
 import ProductAddRow from './ProductAddRow';
@@ -8,9 +13,6 @@ import ProductAddRow from './ProductAddRow';
 import FreeProductCreate, { useProductCategories, normalizeProductName } from './FreeProductCreate';
 import { useToast } from './ToastProvider';
 import { useConfirm } from './ConfirmDialog'; // Fix-6 (п.7)
-import { addManualItem, deleteManualItem, type TripManualItem } from '../api/tripManualItems';
-import { formatQty } from '../utils/format';
-import type { UnitOfMeasure } from '../types';
 
 /**
  * U40 (список 26.10) / PLAN R3 (mock+UI-часть): ручные позиции закупки —

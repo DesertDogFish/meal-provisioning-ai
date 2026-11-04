@@ -1,5 +1,6 @@
-import { pluralize } from './pluralize';
 import type { MealType } from '../types';
+
+import { pluralize } from './pluralize';
 
 // cleanup-п.9: ЕДИНАЯ копия лейблов приёмов пищи (раньше три дубля:
 // TripMealCard, RecipesPage, CatalogImportTab).

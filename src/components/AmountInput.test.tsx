@@ -1,6 +1,7 @@
 /// <reference types="vitest/globals" />
 import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
+
 import AmountInput, { parseDecimal, isWeightUnit } from './AmountInput';
 
 describe('AmountInput (U31) — количество без «0,015 кг»', () => {

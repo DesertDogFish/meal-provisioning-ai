@@ -8,8 +8,9 @@
  * страница похода, этап ④ и отчёт строятся из ОДНОГО источника; расхождение
  * сумм невозможно по построению (критерий п.6).
  */
-import type { TripView } from './tripDerived';
 import { buildCheckRows, checkTotals, dayPlanFacts } from '../components/ChecksModel';
+
+import type { TripView } from './tripDerived';
 
 export interface PrintShoppingRow {
   ingredientId: string;

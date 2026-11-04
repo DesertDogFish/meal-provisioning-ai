@@ -15,9 +15,10 @@
  * соответствующие роуты гарантированно отдавали ОДИНАКОВЫЕ данные (без дубля
  * логики, cleanup-п.9).
  */
-import { products, recipes, prices, priceOverrides, shoppingExcluded, manualItems, allTripEdits, editRecipeKey, editIngredientKey, visibleTrips } from './mockState';
 import { deriveTripView } from '../utils/tripDerived';
 import type { TripProgressDto } from '../types/tripDetail';
+
+import { products, recipes, prices, priceOverrides, shoppingExcluded, manualItems, allTripEdits, editRecipeKey, editIngredientKey, visibleTrips } from './mockState';
 
 // cleanup-п.9: форма прогресса — общий контракт types/tripDetail (TripProgressDto)
 export type MockTripProgress = TripProgressDto;

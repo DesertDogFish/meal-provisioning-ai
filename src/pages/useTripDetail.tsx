@@ -9,6 +9,7 @@
  */
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
+
 import { api } from '../api/client';
 import { useToast } from '../components/ToastProvider';
 import { useConfirm } from '../components/ConfirmDialog'; // Fix-6 (п.7)
@@ -160,7 +161,7 @@ export function useTripDetail() {
   // чекбокс-чеклист «куплено» в рамках сессии (U38). =====
   const [tripEdits, setTripEdits] = useState<TripIngredientEdit[]>([]);
   const [manualItems, setManualItems] = useState<TripManualItem[]>([]);
-  const [products, setProducts] = useState<any[]>([]);
+  const [products, setProducts] = useState<Array<Record<string, unknown> & { id: string }>>([]);
   const [sortSpec, setSortSpec] = useState<{ field: ShoppingSortField; dir: SortDir }>({ field: 'ingredientName', dir: 'asc' });
   const [manualCtx, setManualCtx] = useState<{ dayId: string | null; dayLabel?: string } | null>(null);
 
@@ -191,7 +192,8 @@ export function useTripDetail() {
       setManualItems(b.manualItems);
       setProducts(b.products);
       setServerOverrides(b.serverOverrides);
-    } catch (err: any) {
+    } catch (err) {
+      const e = err as { status?: number; error?: { status?: number }; detail?: string };
       console.error('Failed to load trip:', err);
       // ЗАДАЧА 3: тост; устаревшие данные не сбрасываем намеренно —
       // показываем ошибку поверх, страница похода остаётся читаемой.
@@ -200,11 +202,11 @@ export function useTripDetail() {
       // ProblemDetail английский («Trip 77 not found»), показывать его нельзя.
       // status живёт в корне (mock бросает плоский объект) и в err.error (real:
       // ApiClientError оборачивает ProblemDetail) — учитываем оба.
-      const status = Number(err?.status ?? err?.error?.status);
+      const status = Number(e?.status ?? e?.error?.status);
       const notFound = status === 404;
       const message = notFound ? 'Поход не найден или недоступен' : 'Не удалось загрузить данные';
       setError(message);
-      showError(notFound ? message : (err?.detail || 'Не удалось загрузить данные похода'));
+      showError(notFound ? message : (e?.detail || 'Не удалось загрузить данные похода'));
     } finally {
       setLoading(false);
     }
@@ -248,9 +250,10 @@ export function useTripDetail() {
     try {
       await api.del(`/trips/${trip.id}/days/${dayId}/meals/${mealId}`);
       await loadData(true); // transparency-п.5: фоновая перечитка
-    } catch (err: any) {
+    } catch (err) {
+      const e = err as { status?: number; error?: { status?: number }; detail?: string };
       console.error('Failed to delete meal:', err);
-      showError(err?.detail || 'Не удалось удалить приём пищи');
+      showError(e?.detail || 'Не удалось удалить приём пищи');
     }
   };
 
@@ -264,10 +267,11 @@ export function useTripDetail() {
       setEditingDay(null);
       setDayPeopleOverride('');
       await loadData(true); // transparency-п.5: фоновая перечитка
-    } catch (err: any) {
+    } catch (err) {
+      const e = err as { status?: number; error?: { status?: number }; detail?: string };
       console.error('Failed to update day:', err);
       // ЗАДАЧА 3: действие пользователя должно давать видимый отклик
-      showError(err?.detail || 'Не удалось обновить количество людей на день');
+      showError(e?.detail || 'Не удалось обновить количество людей на день');
     }
   };
 
@@ -301,8 +305,9 @@ export function useTripDetail() {
     try {
       await deleteManualItem(String(id), itemId);
       await refreshManual();
-    } catch (err: any) {
-      showError(err?.detail || 'Не удалось удалить позицию');
+    } catch (err) {
+      const e = err as { status?: number; error?: { status?: number }; detail?: string };
+      showError(e?.detail || 'Не удалось удалить позицию');
     }
   };
 
@@ -360,9 +365,10 @@ export function useTripDetail() {
       const approved = resp?.menuApproved === true;
       setTrip({ ...trip, menuApproved: approved });
       showSuccess(approved ? 'Меню утверждено' : 'Утверждение меню снято');
-    } catch (err: any) {
+    } catch (err) {
+      const e = err as { status?: number; error?: { status?: number }; detail?: string };
       console.error('Failed to toggle menu approval:', err);
-      showError(err?.detail || 'Не удалось изменить утверждение меню');
+      showError(e?.detail || 'Не удалось изменить утверждение меню');
     } finally {
       setApprovingMenu(false);
     }

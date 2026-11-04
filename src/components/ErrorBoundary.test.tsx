@@ -1,6 +1,7 @@
 /// <reference types="vitest/globals" />
 import { describe, it, expect } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
+
 import { ErrorBoundary } from './ErrorBoundary';
 
 /**

@@ -5,6 +5,7 @@
  * `src/api/tripManualItems.ts`, хранение — сервер (mock-паритет: in-memory).
  */
 import type { TripManualItem } from '../api/tripManualItems';
+
 import { stripSnapshotSuffix } from './menuOverlay';
 
 export interface ShoppingRowLike {

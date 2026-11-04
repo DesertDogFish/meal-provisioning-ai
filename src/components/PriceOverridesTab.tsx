@@ -25,12 +25,14 @@
  */
 import { useMemo } from 'react';
 import { Receipt } from 'lucide-react';
-import { Button } from './Button';
-import { EmptyState } from './EmptyState';
+
 import type { ChecklistActual, ActualPriceDraft } from '../utils/tripStaging';
 import type { ActualAmount } from '../utils/checkUnits';
 import type { TripView } from '../utils/tripDerived';
 import type { Trip } from '../types/tripDetail';
+
+import { EmptyState } from './EmptyState';
+import { Button } from './Button';
 import {
   buildCheckRows, groupCheckRows, dayPlanFacts, enteredFactsTotal, type CheckRow,
 } from './ChecksModel';

@@ -20,6 +20,7 @@
  */
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+
 import PageLoader from '../components/PageLoader';
 import ChecklistTab from '../components/ChecklistTab'; // подзадача 6: вкладка «Чеклист» вынесена из страницы (R8)
 import PriceOverridesTab from '../components/PriceOverridesTab';
@@ -42,8 +43,9 @@ import { ConflictDialog } from '../components/ConflictDialog'; // BL-41: 409 «�
 import { globalCatalogRecipeId } from '../utils/recipeRef'; // navigation-п.2: CTA «Далее»
 import { Button } from '../components/Button';
 import { manualForDay, manualForTrip } from '../utils/manualItems'; // U40
-import { useTripDetail } from './useTripDetail';
 import type { ShoppingView } from '../types/tripDetail'; // TabType убран вместе с seg-дублем (redesign п.6)
+
+import { useTripDetail } from './useTripDetail';
 
 export default function TripDetailPage() {
   const navigate = useNavigate();

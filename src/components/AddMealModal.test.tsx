@@ -1,7 +1,9 @@
 /// <reference types="vitest/globals" />
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
+
 import { namelessButtons } from '../test/a11y';
+
 import AddMealModal from './AddMealModal';
 import { ToastProvider } from './ToastProvider';
 

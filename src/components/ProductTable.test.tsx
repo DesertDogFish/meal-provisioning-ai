@@ -4,6 +4,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, cleanup } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import React from 'react';
+
 import { ProductTable, filterAndSortProducts, EMPTY_FILTERS } from './ProductTable';
 import type { ProductRow, ProductFilters } from './ProductTable';
 

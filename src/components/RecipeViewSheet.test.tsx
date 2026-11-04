@@ -5,8 +5,10 @@
  */
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { RecipeViewSheet } from './RecipeViewSheet';
+
 import type { Recipe } from '../types/tripDetail';
+
+import { RecipeViewSheet } from './RecipeViewSheet';
 
 const RECIPE = {
   id: 'sr1', name: 'Уха', mealType: 'LUNCH', baseServings: 4,

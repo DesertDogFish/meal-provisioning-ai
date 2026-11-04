@@ -5,13 +5,15 @@
  * факт-цены и исключения уже применены в `deriveTripView`.
  */
 import { Users } from 'lucide-react';
-import TabHeader from './TabHeader';
-import InfoTip from './InfoTip';
-import { EmptyState } from './EmptyState';
+
 import { formatAmount } from '../utils/calculations';
 import { formatRub } from '../utils/format' // cleanup-п.9: shim formatRub удалён;
 import type { TripView } from '../utils/tripDerived';
 import type { Trip } from '../types/tripDetail';
+
+import { EmptyState } from './EmptyState';
+import InfoTip from './InfoTip';
+import TabHeader from './TabHeader';
 
 export interface TripPersonTabProps {
   trip: Trip;

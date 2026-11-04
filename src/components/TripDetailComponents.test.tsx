@@ -1,6 +1,14 @@
 /// <reference types="vitest/globals" />
 import { render, screen, fireEvent, cleanup } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+
+import { deriveTripView, type TripViewInput } from '../utils/tripDerived';
+import { namelessButtons } from '../test/a11y';
+import { tripReadiness } from '../utils/readiness';
+import type { MealType, UnitOfMeasure } from '../types';
+import type { Trip, Recipe, Price } from '../types/tripDetail';
+import type { TripManualItem } from '../api/tripManualItems';
+
 import TripActions from './TripActions';
 import TripSummaryPanel from './TripSummaryPanel';
 import TripMealCard from './TripMealCard';
@@ -9,12 +17,6 @@ import TripShoppingTab from './TripShoppingTab';
 import TripDayShoppingTab from './TripDayShoppingTab';
 import ChecklistTab from './ChecklistTab';
 import ExclusionCheckbox from './ExclusionCheckbox';
-import { deriveTripView, type TripViewInput } from '../utils/tripDerived';
-import { namelessButtons } from '../test/a11y';
-import { tripReadiness } from '../utils/readiness';
-import type { MealType, UnitOfMeasure } from '../types';
-import type { Trip, Recipe, Price } from '../types/tripDetail';
-import type { TripManualItem } from '../api/tripManualItems';
 
 /**
  * Подзадача 26 аудита (2026-10-29): компоненты, вынесенные из TripDetailPage.

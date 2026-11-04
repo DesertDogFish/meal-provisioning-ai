@@ -6,6 +6,7 @@
 
 import type { Ingredient, Recipe, IngredientPrice } from '../types';
 import { calculateRecipeKcal } from '../utils/calc';
+
 import { products, categories, recipes, trips, prices, normalize, UNIT_LABELS } from './mockState';
 import { emisByCode, priceSyncStatusOf } from './mockEmis';
 

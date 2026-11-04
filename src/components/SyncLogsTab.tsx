@@ -11,15 +11,18 @@
  * Статус провайдера здесь НЕ дублируется (витрина статуса — таб «Настройка»).
  */
 import { useCallback, useEffect, useState } from 'react';
+import { X, AlertCircle } from 'lucide-react';
+
+import { api, ApiClientError } from '../api/client';
+import { formatNum, formatPrice } from '../utils/format';
+
 import { useToast } from './ToastProvider';
 import { DatePicker } from './DatePicker';
 import Modal from './Modal';
 import PageLoader from './PageLoader';
-import { X, AlertCircle } from 'lucide-react';
-import { api, ApiClientError } from '../api/client';
 import { Button } from './Button';
+
 // UX-осмотр 31.10 (п.10): числа журнала — через единый ru-формат (запятая, а не toFixed)
-import { formatNum, formatPrice } from '../utils/format';
 
 interface SyncItem {
   productId: number;
@@ -159,9 +162,9 @@ export function SyncLogsTab({ onGoToSettings }: SyncLogsTabProps) {
 
   const getStatusChip = (status: string) => {
     const styles = {
-      SUCCESS: { background: 'var(--success-soft)', color: 'var(--wave-300)' },
+      SUCCESS: { background: 'var(--success-soft)', color: 'var(--wave-600)' },
       // Fix-15: PARTIAL — запуск с ошибками, но часть работы выполнена (янтарный)
-      PARTIAL: { background: 'color-mix(in srgb, var(--amber-500) 14%, transparent)', color: 'var(--amber-300)' },
+      PARTIAL: { background: 'color-mix(in srgb, var(--amber-500) 14%, transparent)', color: 'var(--amber-600)' },
       FAILED: { background: 'var(--danger-soft)', color: 'var(--danger)' },
       RUNNING: { background: 'color-mix(in srgb, var(--wave-400) 14%, transparent)', color: 'var(--wave-300)' },
     };

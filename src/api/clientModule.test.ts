@@ -5,6 +5,9 @@
  * форматтеры (humanize/packHint/humanizeWeight).
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
+import type { Recipe } from '../types';
+
 import {
   api,
   ApiClientError,
@@ -17,7 +20,6 @@ import {
   putMealComposition,
   updateRecipeIngredients,
 } from './client';
-import type { Recipe } from '../types';
 
 afterEach(() => {
   vi.restoreAllMocks();

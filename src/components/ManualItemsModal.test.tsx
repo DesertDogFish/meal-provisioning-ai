@@ -6,6 +6,7 @@
  */
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+
 import ManualItemsModal from './ManualItemsModal';
 import { ToastProvider } from './ToastProvider';
 

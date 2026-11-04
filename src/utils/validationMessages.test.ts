@@ -6,6 +6,7 @@
  * ProblemDetail.errors дают один и тот же человеческий текст (R2: слой утилиты).
  */
 import { describe, expect, it } from 'vitest';
+
 import { fieldLabel, humanizeFieldError } from './validationMessages';
 import { validateTrip, validateRecipe, validateRegistration } from './validation';
 

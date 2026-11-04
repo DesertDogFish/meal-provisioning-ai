@@ -12,9 +12,11 @@
  */
 import { useEffect, useState } from 'react';
 import { RefreshCw } from 'lucide-react';
+
+import { onConcurrentModification } from '../api/conflictSignal';
+
 import Modal from './Modal';
 import { Button } from './Button';
-import { onConcurrentModification } from '../api/conflictSignal';
 
 export interface ConflictDialogProps {
   /** Перечитать данные похода. Диалог закрывается после завершения. */

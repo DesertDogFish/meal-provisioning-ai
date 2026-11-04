@@ -6,6 +6,7 @@
  * (R2: слой утилиты); поведение компонента — в DatePicker.test.tsx.
  */
 import { describe, expect, it } from 'vitest';
+
 import {
   parseDateInput, formatDateInput, isCompleteDateText, DATE_INPUT_PATTERN,
 } from './dateInput';

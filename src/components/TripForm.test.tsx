@@ -14,10 +14,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
 import React from 'react';
-import { TripForm } from './TripForm';
-import type { TripFormData } from './TripForm';
+
 import { humanize } from '../utils/calc';
 import { formatDateInput } from '../utils/dateInput';
+
+import { TripForm } from './TripForm';
+import type { TripFormData } from './TripForm';
 
 /** ISO формы → то, что видно в поле (ДД.ММ.ГГГГ). См. utils/dateInput (KB-32). */
 beforeEach(() => cleanup());

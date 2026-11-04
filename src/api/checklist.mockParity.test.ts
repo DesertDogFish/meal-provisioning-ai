@@ -10,6 +10,7 @@
  * и клиент в mock-режиме не воспроизводил серверные ошибки (аудит KB-15, п.D).
  */
 import { describe, it, expect, beforeEach } from 'vitest';
+
 import { mockServer } from './mockServer';
 import { checklistBought } from './mockState';
 

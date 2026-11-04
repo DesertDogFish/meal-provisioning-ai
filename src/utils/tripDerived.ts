@@ -12,6 +12,13 @@
  * цены чека (draftOverrides) и исключения (shoppingExcluded) применяются
  * одинаково к «Закупка / По дням / На человека / Чеклист».
  */
+import type { ManualProductOption } from '../components/ManualItemsModal';
+import type { TripIngredientEdit } from '../api/tripEdits';
+import type { TripManualItem } from '../api/tripManualItems';
+import type { Trip, Recipe, Price, ShoppingSortField } from '../types/tripDetail';
+import type { Trip as GlobalTrip, Recipe as GlobalRecipe, IngredientPrice, Ingredient } from '../types';
+import type { UnitOfMeasure } from '../types';
+
 import {
   calculateMenuByDays, calculateShoppingList, calculateDayShopping,
   calculatePersonSummary, findPriceForDate, isRowExcluded, dayScopedExclusions,
@@ -20,13 +27,10 @@ import {
 import { mergeManualIntoShopping, manualForDay } from './manualItems';
 import { buildEffectiveRecipesMap } from './recipeEdits';
 import { buildChecklist, collectChecklistKeys, type ChecklistProductInfo } from './checklist';
-import { sortRows, compareRu, type SortDir } from './rowSort';
+import { sortRows, compareRu, type SortDir, type SortSpec } from './rowSort';
 import { tripReadiness } from './readiness';
 import { categoryName, unitShortLabel } from './format';
 import type { ActualPriceDraft } from './tripStaging';
-import type { TripIngredientEdit } from '../api/tripEdits';
-import type { TripManualItem } from '../api/tripManualItems';
-import type { Trip, Recipe, Price, ShoppingSortField } from '../types/tripDetail';
 
 export interface TripViewInput {
   trip: Trip;
@@ -41,7 +45,7 @@ export interface TripViewInput {
   /** U40: ручные позиции (к дню и к походу) */
   manualItems: TripManualItem[];
   /** U38/U40: справочник продуктов (фасовка/категории), best effort */
-  products: any[];
+  products: Array<Record<string, unknown> & { id: string }>;
   /** Фаза 13: черновики фактических цен из чека (общий стейдж tripStaging) */
   draftOverrides: Record<string, ActualPriceDraft>;
   /** Fix-2 (п.5): soft-disable — глобальные и по-дневные ключи */
@@ -71,11 +75,11 @@ export function deriveTripView(input: TripViewInput) {
   // продукты («Имбирь») не попадали в чек, а статус «введено X из Y» расходился.
   const snapshotOfMap = new Map<string, string>();
   for (const r of tripRecipes) {
-    const so = (r as any).snapshotOf;
+    const so = (r as { snapshotOf?: string | null }).snapshotOf;
     if (so != null) snapshotOfMap.set(String(r.id), String(so));
   }
-  const effectiveRecipesMap = buildEffectiveRecipesMap(recipesMap, tripEdits as any, snapshotOfMap);
-  const menuByDays = calculateMenuByDays(trip as any, effectiveRecipesMap);
+  const effectiveRecipesMap = buildEffectiveRecipesMap(recipesMap, tripEdits as unknown as Parameters<typeof buildEffectiveRecipesMap>[1], snapshotOfMap);
+  const menuByDays = calculateMenuByDays(trip as unknown as GlobalTrip, effectiveRecipesMap as unknown as Map<string, GlobalRecipe>);
   // Fix-5 (п.11): плановая цена ручной позиции — из trip-срезов цен (снепшот
   // продукта имеет замороженную цену; если цены нет — строка честно «без цены»).
   const manualPriceOf = (ingId: string): number | undefined => {
@@ -87,7 +91,7 @@ export function deriveTripView(input: TripViewInput) {
   // глобально исключённые строки остаются в списке (рисуются зачёркнутыми) и
   // вычитаются из итогов ниже (includedShoppingFinal).
   const baseShoppingList = mergeManualIntoShopping(
-    calculateShoppingList(trip as any, effectiveRecipesMap, prices, dayScopedExclusions(shoppingExcluded)),
+    calculateShoppingList(trip as unknown as GlobalTrip, effectiveRecipesMap as unknown as Map<string, GlobalRecipe>, prices as unknown as IngredientPrice[], dayScopedExclusions(shoppingExcluded)),
     manualItems,
     manualPriceOf,
   );
@@ -121,7 +125,7 @@ export function deriveTripView(input: TripViewInput) {
 
   // U40: позиции дня (dayId) добавляются к закупке этого дня; U27: алфавитная сортировка
   const dayIdByDate = new Map((trip.days ?? []).map(d => [d.dayDate, d.id]));
-  const baseDayShopping = calculateDayShopping(trip as any, effectiveRecipesMap, prices).map(day => ({
+  const baseDayShopping = calculateDayShopping(trip as unknown as GlobalTrip, effectiveRecipesMap as unknown as Map<string, GlobalRecipe>, prices as unknown as IngredientPrice[]).map(day => ({
     ...day,
     items: mergeManualIntoShopping(day.items, manualForDay(manualItems, dayIdByDate.get(day.dayDate) ?? '')),
   }));
@@ -151,12 +155,12 @@ export function deriveTripView(input: TripViewInput) {
 
   // U33: «на человека» — по реальному количеству людей (среднее по дням с учётом
   // peopleOverride), а не по defaultPeople
-  const realPeople = realTripPeople(trip as any);
+  const realPeople = realTripPeople(trip as unknown as GlobalTrip);
   // Fix-5 (п.7): ручные позиции входят в «на человека» — за аптечку платят все
   // bugs-trip-shopping-stage п.5: вид «На человека» удалён — из расчёта нужен
   // только tripSummary (KPI «на человека» живут в сводке)
   const { tripSummary: tripSummaryBase } = calculatePersonSummary(
-    trip as any, effectiveRecipesMap, prices, realPeople, shoppingExcluded, manualItems, manualPriceOf,
+    trip as unknown as GlobalTrip, effectiveRecipesMap as unknown as Map<string, GlobalRecipe>, prices as unknown as IngredientPrice[], realPeople, shoppingExcluded, manualItems as unknown as Parameters<typeof calculatePersonSummary>[5], manualPriceOf,
   );
   // Release-1.0 (UI-consistency): KPI шапки и «Итого» в закупке — ОДИН источник.
   // Раньше при отсутствии чеков/исключений KPI брал tripSummaryBase.totalCost, а с ними —
@@ -177,7 +181,7 @@ export function deriveTripView(input: TripViewInput) {
     costPerPersonMeal: totalCostFinal / Math.max(1, tripSummaryBase.totalPersonMeals || 1),
   };
   // U26: сортируемая таблица «Закупка на поход»
-  const sortedShopping = sortRows(visibleShopping, sortSpec as any);
+  const sortedShopping = sortRows(visibleShopping, sortSpec as SortSpec<(typeof visibleShopping)[number]>);
 
   // U38: чеклист закупки в упаковках. Информация о фасовке/категориях — из
   // справочника продуктов (best effort), фолбэк — вложенные ingredient-объекты
@@ -185,28 +189,28 @@ export function deriveTripView(input: TripViewInput) {
   // тогда строки идут «по потребности», backend-долг в PLAN).
   const productInfo = new Map<string, ChecklistProductInfo>();
   for (const r of [...recipes, ...tripRecipes]) {
-    for (const ri of ((r as any).ingredients || [])) {
-      const ing = ri?.ingredient ?? ri;
+    for (const ri of ((((r as { ingredients?: unknown[] }).ingredients) || []) as Array<Record<string, unknown>>)) {
+      const ing = (ri.ingredient ?? ri) as Record<string, unknown> | undefined;
       if (ing?.id != null && !productInfo.has(String(ing.id))) {
-        productInfo.set(String(ing.id), { packSize: ing.packSize, roundToPacks: ing.roundToPacks, category: categoryName(ing), pieceWeightG: ing.pieceWeightG });
+        productInfo.set(String(ing.id), { packSize: ing.packSize as number | undefined, roundToPacks: ing.roundToPacks as boolean | undefined, category: categoryName(ing), pieceWeightG: ing.pieceWeightG as number | undefined });
       }
     }
   }
   for (const p of products) {
-    productInfo.set(String(p.id), { packSize: p.packSize, roundToPacks: p.roundToPacks, category: categoryName(p), pieceWeightG: p.pieceWeightG });
+    productInfo.set(String(p.id), { packSize: p.packSize as number | undefined, roundToPacks: p.roundToPacks as boolean | undefined, category: categoryName(p as { category?: unknown }), pieceWeightG: p.pieceWeightG as number | undefined });
   }
   // U40: опции продуктов для модалки ручных позиций. Если /admin/products недоступен
   // (real-режим, не-админ) — фолбэк из ингредиентов блюд похода (ограниченный набор).
   const manualProductOptions = (() => {
-    if (products.length > 0) return products;
-    const seen = new Map<string, any>();
+    if (products.length > 0) return products as unknown as ManualProductOption[];
+    const seen = new Map<string, ManualProductOption>();
     for (const r of [...recipes, ...tripRecipes]) {
-      for (const ri of ((r as any).ingredients || [])) {
-        const ing = ri?.ingredient ?? ri;
+      for (const ri of ((((r as { ingredients?: unknown[] }).ingredients) || []) as Array<Record<string, unknown>>)) {
+        const ing = (ri.ingredient ?? ri) as Record<string, unknown> | undefined;
         if (ing?.id != null && ing?.name && !seen.has(String(ing.id))) {
           seen.set(String(ing.id), {
             id: String(ing.id), name: String(ing.name),
-            unit: ing.unit ?? 'PCS', category: categoryName(ing), enabled: ing.enabled,
+            unit: (ing.unit ?? 'PCS') as UnitOfMeasure, category: categoryName(ing as { category?: unknown }), enabled: ing.enabled as boolean | undefined,
           });
         }
       }
@@ -243,7 +247,7 @@ export function deriveTripView(input: TripViewInput) {
     boughtCount: boughtInList,
     factCount,
     checksTotal: factsTotal,
-    menuApproved: (trip as any).menuApproved === true, // redesign п.4
+    menuApproved: trip.menuApproved === true, // redesign п.4
   });
 
   return {

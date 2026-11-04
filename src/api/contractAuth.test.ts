@@ -13,12 +13,14 @@
  * Запуск: `npm run test:contract` или `npx vitest run src/api/contractAuth.test.ts`.
  */
 import { describe, it, expect } from 'vitest';
-import { mockServer } from './mockServer';
+
 import {
   humanizeFieldError,
   PASSWORD_MIN_LENGTH,
   passwordTooShort,
 } from '../utils/validationMessages';
+
+import { mockServer } from './mockServer';
 
 let seq = 0;
 const register = (password: string) =>

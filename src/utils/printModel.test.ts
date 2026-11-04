@@ -1,9 +1,11 @@
 /// <reference types="vitest/globals" />
 import { describe, it, expect } from 'vitest';
-import { deriveTripView, type TripViewInput } from './tripDerived';
-import { buildPrintModel } from './printModel';
+
 import { buildCheckRows, checkTotals } from '../components/ChecksModel';
 import type { Trip, Recipe, Price } from '../types/tripDetail';
+
+import { deriveTripView, type TripViewInput } from './tripDerived';
+import { buildPrintModel } from './printModel';
 
 /**
  * План plans/2026-10-31-ux-audit-cleanup-dedup.md (п.6, критерий): суммы

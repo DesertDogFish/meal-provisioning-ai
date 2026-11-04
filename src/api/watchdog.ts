@@ -58,7 +58,6 @@ async function pingApi(): Promise<void> {
     // Если API стал доступен после недоступности
     if (wasUnavailable) {
       // Можно показать тост "API снова доступен"
-      console.log('[Watchdog] API is back online');
     }
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';

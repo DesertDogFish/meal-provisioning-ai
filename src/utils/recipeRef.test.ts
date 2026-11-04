@@ -4,6 +4,7 @@
  * real-режим: копия имеет snapshotOf → id оригинала; mock-режим: суффикс '::t<id>'.
  */
 import { describe, it, expect } from 'vitest';
+
 import { globalCatalogRecipeId } from './recipeRef';
 
 const tripRecipes = [

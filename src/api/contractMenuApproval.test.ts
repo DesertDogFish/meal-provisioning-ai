@@ -12,6 +12,7 @@
  * Запуск: `npm run test:contract` или `npx vitest run src/api/contractMenuApproval.test.ts`.
  */
 import { describe, it, expect } from 'vitest';
+
 import { mockServer } from './mockServer';
 
 const TRIP_ID = 'trip1'; // сид: меню утверждено (mockData, redesign п.3)

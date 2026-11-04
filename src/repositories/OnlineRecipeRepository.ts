@@ -1,6 +1,7 @@
 import { api, normalizeRecipe } from '../api/client';
 import type { Recipe } from '../types';
 import type { LocalRecipe } from '../db/schema';
+
 import type { IRepository } from './IRepository';
 
 export class OnlineRecipeRepository implements IRepository<LocalRecipe> {

@@ -8,12 +8,14 @@
  */
 import { useCallback, useEffect, useState } from 'react';
 import { Check, Download, X } from 'lucide-react';
+
 import { api } from '../api/client';
+import type { MealType } from '../types';
+import { mealTypeLabels } from '../utils/text'; // cleanup-п.9
+
 import { useToast } from './ToastProvider';
 import { Button } from './Button';
 import PageLoader from './PageLoader';
-import type { MealType } from '../types';
-import { mealTypeLabels } from '../utils/text'; // cleanup-п.9
 
 /** Черновик импорта в форме StagingRecipeResponse (backend) / mockStaging. */
 export interface StagingRecipe {

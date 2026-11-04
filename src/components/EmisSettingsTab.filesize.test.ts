@@ -5,6 +5,7 @@
  */
 /// <reference types="vitest/globals" />
 import { describe, it, expect } from 'vitest';
+
 import { formatFileSize } from './EmisSettingsTab';
 
 describe('formatFileSize — ru-формат размера (UX-осмотр 31.10, п.10)', () => {

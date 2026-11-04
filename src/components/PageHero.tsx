@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+
 import headerArt from '../assets/atmosphere/camp-ready.webp';
 
 /**

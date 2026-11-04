@@ -8,6 +8,7 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+
 import { namelessButtons, namelessFields } from '../test/a11y';
 
 vi.mock('../api/client', () => ({
@@ -18,8 +19,9 @@ vi.mock('../components/AuthProvider', () => ({
   useAuth: () => ({ user: null, refresh: refreshMock, loading: false }),
 }));
 
-import LoginPage from './LoginPage';
 import { api } from '../api/client';
+
+import LoginPage from './LoginPage';
 
 function renderPage() {
   return render(<MemoryRouter><LoginPage /></MemoryRouter>);

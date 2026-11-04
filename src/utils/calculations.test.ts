@@ -9,7 +9,9 @@
  * это правила из ТЗ, фиксируем их как исполняемые спецификации.
  */
 import { describe, it, expect } from 'vitest';
+
 import type { IngredientPrice, Trip, TripDay } from '../types';
+
 import {
   getEffectivePeople,
   calculateAmountPerPerson,

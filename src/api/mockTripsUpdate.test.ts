@@ -7,6 +7,7 @@
  *    SubstitutionResponse: recipeName/fromIngredientName/toIngredientName).
  */
 import { describe, it, expect } from 'vitest';
+
 import { mockServer } from './mockServer';
 
 const req = <T,>(method: string, path: string, body?: unknown) =>

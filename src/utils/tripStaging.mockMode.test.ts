@@ -23,6 +23,7 @@ vi.mock('../api/client', async () => {
 });
 
 import { checklistBought } from '../api/mockState';
+
 import { loadBought, setBought, refreshBoughtFromServer, flushBoughtPuts } from './tripStaging';
 
 const TRIP = 'trip1';

@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { mockServer } from './mockServer';
+
 import { calculateKcal } from '../utils/calc';
+
+import { mockServer } from './mockServer';
 
 describe('MOCK-01: Формы ответов совпадают с ТЗ', () => {
   it('products response has content array', () => {

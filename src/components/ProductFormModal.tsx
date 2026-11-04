@@ -1,5 +1,10 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { X } from 'lucide-react';
+
+import { api } from '../api/client';
+import type { UnitOfMeasure, ProductCategory, IngredientPrice } from '../types';
+import { humanizeUnit, recipesWord, productsWord, categoriesWord } from '../utils/text';
+
 import { useToast } from './ToastProvider';
 import Modal from './Modal';
 import { NumberField } from './NumberField';
@@ -7,9 +12,6 @@ import CustomSelect from './CustomSelect';
 import { DatePicker } from './DatePicker';
 import { EmisLinkPicker } from './EmisLinkPicker';
 import { Button } from './Button';
-import { api } from '../api/client';
-import type { UnitOfMeasure, ProductCategory, IngredientPrice } from '../types';
-import { humanizeUnit, recipesWord, productsWord, categoriesWord } from '../utils/text';
 
 export interface ProductFormModalProduct {
   id?: string | number;
@@ -80,13 +82,14 @@ export default function ProductFormModal(props: ProductFormModalProps) {
   const [emisPriceSeries, setEmisPriceSeries] = useState<any[]>([]);
   const [duplicateWarning, setDuplicateWarning] = useState<{ type: 'hard' | 'soft'; message: string } | null>(null);
   useEffect(() => {
-    if (!editing?.emisCode) { setEmisPriceSeries([]); return; }
+    const code = formEmisCode.trim();
+    if (!code) { setEmisPriceSeries([]); return; }
     let cancelled = false;
-    api.get(`/admin/emis/products/${editing.emisCode}/prices`)
+    api.get(`/admin/emis/products/${code}/prices`)
       .then((data: any) => { if (!cancelled) setEmisPriceSeries(Array.isArray(data) ? data : []); })
       .catch(() => { if (!cancelled) setEmisPriceSeries([]); });
     return () => { cancelled = true; };
-  }, [editing?.emisCode]);
+  }, [formEmisCode]);
 
   // синхронизация при смене редактируемого продукта
   const lastEditingId = useRef<string | number | null | undefined>(editing?.id);

@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+
 import { unitOptions, defaultUnit, convertToBase, isActualLessThanNeeded, neededAsActual } from './checkUnits';
 
 describe('checkUnits (Fix-6, п.8) — свободные единицы факта', () => {

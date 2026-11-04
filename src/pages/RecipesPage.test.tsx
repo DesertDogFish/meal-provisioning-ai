@@ -2,7 +2,9 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+
 import RecipesPage from './RecipesPage';
+
 import { ToastProvider } from '../components/ToastProvider';
 import { AuthProvider } from '../components/AuthProvider'; // cleanup-п.7: роль из контекста
 

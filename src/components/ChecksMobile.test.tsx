@@ -14,10 +14,12 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import ChecksMobile from './ChecksMobile';
-import { buildCheckRows, groupCheckRows } from './ChecksModel';
+
 import { deriveTripView, type TripViewInput } from '../utils/tripDerived';
 import type { Trip, Recipe, Price } from '../types/tripDetail';
+
+import ChecksMobile from './ChecksMobile';
+import { buildCheckRows, groupCheckRows } from './ChecksModel';
 
 const trip: Trip = {
   id: 't1', userId: 'u1', name: 'Поход', startDate: '2026-07-01', endDate: '2026-07-01',

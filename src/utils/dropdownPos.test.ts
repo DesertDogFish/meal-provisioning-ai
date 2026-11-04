@@ -1,5 +1,6 @@
 /// <reference types="vitest/globals" />
 import { describe, it, expect } from 'vitest';
+
 import { computeDropdownPosition } from './dropdownPos';
 
 const vp = { width: 1280, height: 800 };

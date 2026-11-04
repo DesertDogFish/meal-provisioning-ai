@@ -11,6 +11,7 @@
  * Запуск: `npm run test:contract` или `npx vitest run src/api/contractMeta.test.ts`.
  */
 import { describe, it, expect } from 'vitest';
+
 import { mockServer } from './mockServer';
 
 /** Ключи real-ответа в порядке MetaController (LinkedHashMap). */

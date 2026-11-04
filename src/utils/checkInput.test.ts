@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+
 import { unitFromTotal, totalFromUnit, roundMoney, enteredCheckTotal } from './checkInput';
 
 describe('checkInput (Fix-3, п.5) — сумма чека ↔ цена за единицу', () => {

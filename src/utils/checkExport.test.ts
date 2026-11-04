@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
+
 import { buildShoppingCsv, csvCell, downloadTextFile } from './checkExport';
 
 describe('checkExport (R4-lite) — CSV закупки/чека', () => {

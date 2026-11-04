@@ -1,8 +1,10 @@
 /// <reference types="vitest/globals" />
 import { describe, it, expect, beforeAll } from 'vitest';
+
+import { loadTripView } from '../utils/tripLoader';
+
 import { api } from './client';
 import { mockServer } from './mockServer';
-import { loadTripView } from '../utils/tripLoader';
 
 /**
  * План plans/2026-10-31-ux-audit-cleanup-dedup.md (п.8, вариант A, R3):

@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
+import { Plus, Search, X } from 'lucide-react';
+
 import { useToast } from '../components/ToastProvider';
 import { useConfirm } from '../components/ConfirmDialog'; // Fix-6 (п.7)
-import { Plus, Search, X } from 'lucide-react';
 import { ProductTable, type ProductRow } from '../components/ProductTable';
 import { ProductFormModal } from '../components/ProductFormModal';
 import PageHero from '../components/PageHero'; // BUG-002: hero-шапка страницы
@@ -12,7 +13,6 @@ import { api } from '../api/client';
 import type { ProductCategory, IngredientPrice } from '../types';
 import { recipesWord, productsWord, categoriesWord } from '../utils/text';
 import { Button } from '../components/Button';
-
 import PageLoader from '../components/PageLoader';
 type Product = ProductRow;
 

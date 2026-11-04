@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import UnitChip from './UnitChip';
+
 import { formatQty } from '../utils/format';
+
+import UnitChip from './UnitChip';
 
 /**
  * U31 (список багов 26.10): «одни дроби какие-то… не хочу вводить 0,015 кг».

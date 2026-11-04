@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+
 import { calculateKcal, calculateRecipeKcal, humanize, getUnitLabel } from './calc';
 
 describe('calculateKcal', () => {

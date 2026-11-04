@@ -122,12 +122,12 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
 
 .chip-delta.fire {
   background: color-mix(in srgb, var(--amber-500) 14%, transparent);
-  color: var(--amber-300);
+  color: var(--amber-600);
 }
 
 .chip-delta.ok {
   background: var(--success-soft);
-  color: var(--wave-300);
+  color: var(--wave-600);
 }
 
 .sticky-totals {

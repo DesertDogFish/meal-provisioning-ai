@@ -1,9 +1,10 @@
 /// <reference types="vitest/globals" />
 import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { MemoryRouter } from 'react-router-dom';
+
 import ProductFormModal from './ProductFormModal';
 import { ToastProvider } from './ToastProvider';
-import { MemoryRouter } from 'react-router-dom';
 
 vi.mock('../api/client', () => ({
   api: { get: vi.fn(), post: vi.fn(), put: vi.fn(), del: vi.fn() },

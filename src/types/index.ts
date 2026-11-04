@@ -110,6 +110,10 @@ export interface RecipeIngredient {
   amount: number;
   /** CONTRACT-P1 (PLAN.md, Backlog P1 п.1): id замещаемого продукта (SubstitutionModal) */
   substitutedFrom?: string;
+  /** Fix-6 (п.22): EXTRA-строки (absolute) — абсолют на приём, не масштабируются людьми */
+  absolute?: boolean;
+  /** Fix-6: флаг добавленной в походе позиции */
+  added?: boolean;
 }
 
 export interface Recipe {

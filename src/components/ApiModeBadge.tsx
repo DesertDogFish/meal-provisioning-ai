@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
+import { X, AlertCircle, Wifi, WifiOff } from 'lucide-react';
+
 import { api } from '../api/client';
 import { startWatchdog, stopWatchdog, onWatchdogChange } from '../api/watchdog';
 import { mockModeAllowed } from '../api/modeResolver'; // transparency-п.4 (вариант A)
-import { X, AlertCircle, Wifi, WifiOff } from 'lucide-react';
+
 import { Button } from './Button';
 import Modal from './Modal';
 import { useToast } from './ToastProvider';

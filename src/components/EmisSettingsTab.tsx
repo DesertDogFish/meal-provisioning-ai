@@ -11,8 +11,10 @@
 import type { RefObject } from 'react';
 import { Link } from 'react-router-dom';
 import { Wifi, WifiOff, RefreshCw, Upload, X, CheckCircle, XCircle, Link as LinkIcon, Unlink, History } from 'lucide-react';
-import { Button } from './Button';
+
 import { formatNum } from '../utils/format';
+
+import { Button } from './Button';
 
 export interface IntegrationInfo {
   id: number;

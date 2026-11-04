@@ -1,6 +1,7 @@
 import { api } from '../api/client';
 import type { Ingredient } from '../types';
 import type { LocalProduct } from '../db/schema';
+
 import type { IRepository } from './IRepository';
 
 export class OnlineProductRepository implements IRepository<LocalProduct> {

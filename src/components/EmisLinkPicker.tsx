@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom'; // navigation-п.7: текст-инструкция → ссылка
 import { Search, X, Link2, Link2Off, AlertTriangle } from 'lucide-react';
+
 import { api } from '../api/client';
 import type { EmisProduct, UnitOfMeasure } from '../types';
 import { UNIT_LABELS } from '../types';

@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { mergeManualIntoShopping, manualForDay, manualForTrip } from './manualItems';
+
 import type { TripManualItem } from '../api/tripManualItems';
+
+import { mergeManualIntoShopping, manualForDay, manualForTrip } from './manualItems';
 
 const item = (over: Partial<TripManualItem> = {}): TripManualItem => ({
   id: 'mi1',

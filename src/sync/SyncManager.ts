@@ -1,6 +1,7 @@
+import { notifyConcurrentModification } from '../api/conflictSignal';
+
 import { syncQueue } from './SyncQueue';
 import { networkMonitor } from './NetworkMonitor';
-import { notifyConcurrentModification } from '../api/conflictSignal';
 
 export class SyncManager {
   private isSyncing = false;

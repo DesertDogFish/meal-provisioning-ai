@@ -7,6 +7,7 @@
  *  4. Категория продукта — всегда строка (объект ProductCategoryDto → name).
  */
 import { describe, expect, it } from 'vitest';
+
 import { formatRub, formatPrice, formatUnitPrice, formatQty, formatNum, unitShortLabel, categoryName } from './format';
 
 // неразрывный пробел — разделитель тысяч в ru-RU

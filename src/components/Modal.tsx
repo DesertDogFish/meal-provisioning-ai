@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
+
 import { pushOverlay, popOverlay, isTopOverlay, type OverlayEntry } from '../utils/overlayStack';
 import { trapTab } from '../utils/focusTrap';
 

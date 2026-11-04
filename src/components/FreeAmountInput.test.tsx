@@ -1,7 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import FreeAmountInput from './FreeAmountInput';
+
 import type { ActualAmount } from '../utils/checkUnits';
+
+import FreeAmountInput from './FreeAmountInput';
 
 describe('FreeAmountInput (Fix-6, п.8) — свободные единицы факта', () => {
   // подзадачи 5/9 (30.10.2026): юнит-стек заменён UnitChip — единица видна

@@ -9,6 +9,7 @@
  */
 import { useNavigate } from 'react-router-dom';
 import { ArrowRight, Share2, CheckCircle2 } from 'lucide-react'; // CheckCircle2 — redesign п.4
+
 import { Button } from './Button';
 import type { StageId } from './StageTabBar';
 

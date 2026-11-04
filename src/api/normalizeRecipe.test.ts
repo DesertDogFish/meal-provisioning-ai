@@ -6,8 +6,10 @@
  * фасовку (вкладки «Чеклист»/«Ввести чек» строят категории и упаковки из этих данных).
  */
 import { describe, it, expect } from 'vitest';
-import { normalizeRecipe } from './client';
+
 import type { Recipe } from '../types';
+
+import { normalizeRecipe } from './client';
 
 const flatRecipe = (ingredientRow: Record<string, unknown>): Recipe =>
   ({

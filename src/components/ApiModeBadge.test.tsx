@@ -4,8 +4,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, cleanup, act } from '@testing-library/react';
 import React from 'react';
-import ApiModeBadge from './ApiModeBadge';
+
 import { namelessButtons } from '../test/a11y';
+
+import ApiModeBadge from './ApiModeBadge';
 
 // Мок api-клиента: следим за setMode/resetSeedData/get
 const modeState = { mode: 'mock' as 'real' | 'mock' };

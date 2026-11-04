@@ -5,15 +5,17 @@
  * Компонент презентационный: строки и итоги приходят из `deriveTripView`.
  */
 import { ArrowUpDown, ShoppingBasket } from 'lucide-react';
-import TabHeader from './TabHeader';
-import { EmptyState } from './EmptyState';
-import ExclusionCheckbox from './ExclusionCheckbox';
-import InfoTip from './InfoTip';
+
 import { formatAmount } from '../utils/calculations';
 import { formatRub, formatUnitPrice } from '../utils/format' // cleanup-п.9: shim formatRub удалён;
 import type { SortDir } from '../utils/rowSort';
 import type { TripView } from '../utils/tripDerived';
 import type { ShoppingSortField } from '../types/tripDetail';
+
+import InfoTip from './InfoTip';
+import ExclusionCheckbox from './ExclusionCheckbox';
+import { EmptyState } from './EmptyState';
+import TabHeader from './TabHeader';
 
 export interface TripShoppingTabProps {
   /** отсортированные строки закупки (U26) — из deriveTripView().sortedShopping */

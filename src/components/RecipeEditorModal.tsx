@@ -1,56 +1,36 @@
 import { useEffect, useMemo, useState } from 'react';
-// bugs-recipes-catalog пп.4–5: подсказка категории — InfoTip; свободный ввод
-// продукта — общий блок создания (вынесен из ManualItemsModal, R8)
-import InfoTip from './InfoTip';
-import FreeProductCreate, { useProductCategories, normalizeProductName } from './FreeProductCreate';
 import { createPortal } from 'react-dom';
 import { Plus, Trash2, X } from 'lucide-react';
+
+import { api } from '../api/client';
+import { validateRecipe } from '../utils/validation';
+import { humanizeFieldError } from '../utils/validationMessages';
+import type { MealType, UnitOfMeasure } from '../types';
+
+import InfoTip from './InfoTip';
+import FreeProductCreate, { useProductCategories, normalizeProductName } from './FreeProductCreate';
 import { Button } from './Button';
 import Modal from './Modal';
 import { usePortalDropdown } from './CustomSelect';
-import { api } from '../api/client';
 import { useToast } from './ToastProvider';
-import { validateRecipe } from '../utils/validation';
-// UX-осмотр 31.10 (п.2): ошибки — человеческие RU-тексты без префикса «field:»
-import { humanizeFieldError } from '../utils/validationMessages';
 import AmountInput from './AmountInput';
-import type { MealType, UnitOfMeasure } from '../types';
 import {
   EditorProduct, EditableRecipe, Row, MEAL_TYPES, rowAmountValue, parseAmount,
 } from './recipeEditorHelpers';
-
 let rowSeq = 1;
-
-/**
- * Редактор блюда для ADMIN: создание и редактирование (включая состав).
- * Справочник блюд меняется только здесь; правки состава отдельного приёма пищи
- * в походе живут в trip_meal_adjustments (см. эпик «Закупки») и к этому редактору
- * отношения не имеют.
- *
- * Контракты: POST /admin/recipes, PUT /admin/recipes/{id} (RecipeRequest:
- * name, mealType, category, cookMinutes, baseServings, ingredients[{ingredientId, amount}]).
- * caloriesPerServing не отправляем — deprecated, считается на бэке из продуктов (CR-1).
- */
-
 interface Props {
   recipe: EditableRecipe | null; // null = создание
   categories: string[];
-  /** bugs-recipes-catalog п.5: админ может завести продукт прямо из редактора */
   isAdmin?: boolean;
   onClose: () => void;
   onSaved: () => void;
 }
-
 export type { EditorProduct, EditableRecipe } from './recipeEditorHelpers';
-
 export default function RecipeEditorModal({ recipe, categories, isAdmin = false, onClose, onSaved }: Props) {
   const { showError, showSuccess } = useToast();
-
   const [products, setProducts] = useState<EditorProduct[]>([]);
   const [productsLoading, setProductsLoading] = useState(true);
-  // bugs-recipes-catalog п.5: категории справочника — для формы создания продукта
   const productCategories = useProductCategories(isAdmin);
-
   const [name, setName] = useState(recipe?.name ?? '');
   const [mealType, setMealType] = useState<MealType>(recipe?.mealType ?? 'LUNCH');
   const [category, setCategory] = useState(recipe?.category ?? '');
@@ -60,24 +40,18 @@ export default function RecipeEditorModal({ recipe, categories, isAdmin = false,
   const [baseServings, setBaseServings] = useState<string>(
     recipe?.baseServings != null ? String(recipe.baseServings) : '1'
   );
-
   const [rows, setRows] = useState<Row[]>(() =>
     (recipe?.ingredients ?? []).map(ri => ({
       key: rowSeq++,
       ingredientId: ri.ingredientId,
-      // Release-1.0: плоские DTO (снапшоты походов) несут ingredientName — читаем обе формы,
-      // иначе строка редактора открывается с пустым названием.
       query: ri.ingredient?.name ?? (ri as { ingredientName?: string }).ingredientName ?? '',
       amount: String(ri.amount),
     }))
   );
   const [openPicker, setOpenPicker] = useState<number | null>(null);
-  // U15 (список багов 25.10): категория — свободный ввод со стилизованными
-  // подсказками существующих категорий (нативный datalist выглядел чужеродно).
   const [catOpen, setCatOpen] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
-
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -94,16 +68,12 @@ export default function RecipeEditorModal({ recipe, categories, isAdmin = false,
     return () => {
       alive = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
   const productById = useMemo(() => {
     const m = new Map<string, EditorProduct>();
     products.forEach(p => m.set(String(p.id), p));
     return m;
   }, [products]);
-
-  // Превью: ккал и вес на порцию (CR-1: из продуктов; PCS/PACK — через piece_weight_g)
   const preview = useMemo(() => {
     const servings = Number(baseServings.replace(',', '.')) || 1;
     let grams = 0;
@@ -121,7 +91,6 @@ export default function RecipeEditorModal({ recipe, categories, isAdmin = false,
     }
     return { kcalPerServing: Math.round(kcal / servings), gramsPerServing: Math.round(grams / servings) };
   }, [rows, baseServings, productById]);
-
   const suggestionsFor = (row: Row): EditorProduct[] => {
     if (row.ingredientId) return [];
     const q = row.query.trim().toLowerCase();
@@ -131,36 +100,25 @@ export default function RecipeEditorModal({ recipe, categories, isAdmin = false,
       .filter(p => p.name.toLowerCase().includes(q) && !taken.has(String(p.id)))
       .slice(0, 7);
   };
-
-  /** U15: подсказки категорий — фильтр по введённой подстроке, без точного дубля. */
   const catSuggestions = useMemo(() => {
     const q = category.trim().toLowerCase();
     return categories
       .filter(c => c.toLowerCase() !== q && (!q || c.toLowerCase().includes(q)))
       .slice(0, 8);
   }, [categories, category]);
-
-  // Fix-7 (п.14): подсказки категорий — ПОРТАЛ (position:fixed): список больше
-  // не растягивает контент модалки и не вызывает её скролл
   const { anchorRef: catAnchorRef, pos: catPos } =
     usePortalDropdown<HTMLDivElement>(catOpen && catSuggestions.length > 0);
-
   const updateRow = (key: number, patch: Partial<Row>) =>
     setRows(prev => prev.map(r => (r.key === key ? { ...r, ...patch } : r)));
-
   const addRow = () => setRows(prev => [...prev, { key: rowSeq++, ingredientId: null, query: '', amount: '' }]);
-
   const removeRow = (key: number) => setRows(prev => prev.filter(r => r.key !== key));
-
   const handleSave = async () => {
-    // Пустые строки (ничего не выбрано и нет количества) игнорируем, остальные валидируем строго
     const meaningful = rows.filter(r => r.ingredientId || r.query.trim() || r.amount.trim());
     const rowErrors: string[] = [];
     meaningful.forEach((r, i) => {
       if (!r.ingredientId) rowErrors.push(`Строка ${i + 1}: выберите продукт из списка`);
       if (parseAmount(r.amount) == null) rowErrors.push(`Строка ${i + 1}: укажите количество больше нуля`);
     });
-
     const servings = parseAmount(baseServings);
     const cook = cookMinutes.trim() === '' ? 0 : Number(cookMinutes.replace(',', '.'));
     const fieldErrors = validateRecipe({
@@ -172,14 +130,12 @@ export default function RecipeEditorModal({ recipe, categories, isAdmin = false,
     if (cookMinutes.trim() !== '' && (Number.isNaN(cook) || cook < 0)) {
       fieldErrors.push('Время готовки не может быть отрицательным');
     }
-
     const all = [...fieldErrors, ...rowErrors];
     if (all.length > 0) {
       setErrors(all);
       return;
     }
     setErrors([]);
-
     const payload = {
       name: name.trim(),
       mealType,
@@ -191,7 +147,6 @@ export default function RecipeEditorModal({ recipe, categories, isAdmin = false,
         amount: parseAmount(r.amount) as number,
       })),
     };
-
     try {
       setSaving(true);
       if (recipe) {
@@ -212,14 +167,8 @@ export default function RecipeEditorModal({ recipe, categories, isAdmin = false,
       setSaving(false);
     }
   };
-
   const inputStyle = { background: 'var(--elev)', border: '1px solid var(--border)', color: 'var(--text)' };
-
   return (
-    /* Список багов 25.10 (U3/U14): единый оверлей приложения — общий <Modal>
-       (портал в body + .modal-overlay: затемнение+blur, всегда по центру вьюпорта).
-       Прежний собственный `fixed bg-black/60` без портала центрировался по
-       скролл-контейнеру страницы и «уезжал» за экран. */
     <Modal onClose={onClose}>
       <div
         className="modal-sheet rounded-2xl shadow-xl w-full max-w-2xl p-6"
@@ -236,7 +185,6 @@ export default function RecipeEditorModal({ recipe, categories, isAdmin = false,
             <X size={18} />
           </Button>
         </div>
-
         <div className="space-y-3">
           <div>
             <label className="block text-sm mb-1" style={{ color: 'var(--muted)' }} htmlFor="recipe-name">
@@ -252,7 +200,6 @@ export default function RecipeEditorModal({ recipe, categories, isAdmin = false,
               style={inputStyle}
             />
           </div>
-
           <div>
             <span className="block text-sm mb-1" style={{ color: 'var(--muted)' }}>Тип приёма</span>
             {/* Fix-7 (п.3): выбор «или-или» — сегментированный контрол (.seg),
@@ -271,7 +218,6 @@ export default function RecipeEditorModal({ recipe, categories, isAdmin = false,
               ))}
             </div>
           </div>
-
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div>
               {/* bugs-recipes-catalog п.4: подсказка «Свободный ввод…» ломала
@@ -365,7 +311,6 @@ export default function RecipeEditorModal({ recipe, categories, isAdmin = false,
               />
             </div>
           </div>
-
           <div>
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm font-semibold" style={{ color: 'var(--text)' }}>
@@ -377,17 +322,13 @@ export default function RecipeEditorModal({ recipe, categories, isAdmin = false,
                       aria-label="Добавить ингредиент" title="Добавить ингредиент"
                       icon={<Plus size={16} />} />
             </div>
-
             {productsLoading && (
               <p className="text-sm py-2" style={{ color: 'var(--muted)' }}>Загрузка продуктов…</p>
             )}
-
             <div className="space-y-2">
               {rows.map(row => {
                 const product = row.ingredientId ? productById.get(String(row.ingredientId)) : undefined;
                 const suggestions = openPicker === row.key ? suggestionsFor(row) : [];
-                // bugs-recipes-catalog п.5: свободный ввод без совпадения (≥2 символов)
-                // — предложение завести продукт (админ) / подсказка (не-админ)
                 const nq = normalizeProductName(row.query);
                 const freeRow = !row.ingredientId && nq.length >= 2
                   && !products.some(p => normalizeProductName(p.name).includes(nq));
@@ -407,8 +348,6 @@ export default function RecipeEditorModal({ recipe, categories, isAdmin = false,
                       />
                       {suggestions.length > 0 && (
                         <ul
-                          /* Fix-7 (п.14): ограниченная высота + внутренний скролл —
-                             длинный список подсказок не растягивает модалку */
                           className="absolute z-10 mt-1 w-full overflow-y-auto text-sm"
                           style={{ background: 'var(--elev)', border: '1px solid var(--border)', borderRadius: 'var(--r-input, 8px)', maxHeight: 224 }}
                         >
@@ -463,7 +402,6 @@ export default function RecipeEditorModal({ recipe, categories, isAdmin = false,
                           categories={productCategories}
                           testId="recipe-create-product"
                           onCreated={(np) => {
-                            // продукт сразу попадает в справочник редактора и выбирается в строке
                             setProducts(prev => prev.some(x => String(x.id) === np.id)
                               ? prev
                               : [...prev, { id: np.id, name: np.name, unit: np.unit, kcalPer100g: null, pieceWeightG: null }]);
@@ -477,12 +415,10 @@ export default function RecipeEditorModal({ recipe, categories, isAdmin = false,
                 );
               })}
             </div>
-
             <p className="text-xs mt-2" style={{ color: 'var(--muted)' }}>
               ≈ {preview.kcalPerServing} ккал/порция · {preview.gramsPerServing} г/порция (расчёт из продуктов, CR-1)
             </p>
           </div>
-
           {errors.length > 0 && (
             <ul className="text-sm space-y-1 rounded-lg px-3 py-2" style={{ background: 'color-mix(in srgb, var(--danger) 12%, transparent)', color: 'var(--danger)' }}>
               {errors.map((e, i) => (
@@ -491,7 +427,6 @@ export default function RecipeEditorModal({ recipe, categories, isAdmin = false,
             </ul>
           )}
         </div>
-
         <div className="modal-foot flex justify-end gap-3 mt-6">
           <Button variant="ghost" onClick={onClose}>Отмена</Button>
           <Button variant="primary" onClick={handleSave} loading={saving}>

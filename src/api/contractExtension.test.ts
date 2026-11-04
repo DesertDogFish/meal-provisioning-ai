@@ -15,6 +15,7 @@
  * зафиксировано в отчёте и PLAN.md (2026-10-22).
  */
 import { describe, it, expect } from 'vitest';
+
 import { mockServer } from './mockServer';
 
 const PAGE_KEYS = ['content', 'page', 'size', 'totalElements', 'totalPages', 'first', 'last'] as const;

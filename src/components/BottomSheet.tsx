@@ -1,8 +1,10 @@
 import { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { lockBodyScroll, unlockBodyScroll } from './Modal';
+
 import { pushOverlay, popOverlay, isTopOverlay, type OverlayEntry } from '../utils/overlayStack';
 import { trapTab } from '../utils/focusTrap';
+
+import { lockBodyScroll, unlockBodyScroll } from './Modal';
 
 /**
  * Plan plans/2026-10-30-mobile-workflow-ux.md (подзадачи 1/5/9/10): нижний

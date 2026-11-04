@@ -5,15 +5,17 @@
  * Компонент презентационный.
  */
 import { CalendarDays } from 'lucide-react';
-import TabHeader from './TabHeader';
-import ExclusionCheckbox from './ExclusionCheckbox';
-import InfoTip from './InfoTip';
-import { EmptyState } from './EmptyState';
+
 import { formatAmount } from '../utils/calculations';
 import { formatRub } from '../utils/format' // cleanup-п.9: shim formatRub удалён;
 import { manualForTrip } from '../utils/manualItems';
 import type { TripManualItem } from '../api/tripManualItems';
 import type { TripView } from '../utils/tripDerived';
+
+import { EmptyState } from './EmptyState';
+import InfoTip from './InfoTip';
+import ExclusionCheckbox from './ExclusionCheckbox';
+import TabHeader from './TabHeader';
 
 export interface TripDayShoppingTabProps {
   /** дни с пересчитанными позициями (U27: алфавит; п.6: факт-цены) */

@@ -12,8 +12,9 @@
  *
  * Округляем только на этапе вывода; внутренние расчёты живут с полной точностью.
  */
-import { humanizeUnit } from './text';
 import type { UnitOfMeasure } from '../types';
+
+import { humanizeUnit } from './text';
 
 /** «1 234 ₽» (без копеек). null/undefined/NaN → '—'. */
 export function formatRub(amount: number | string | null | undefined): string {

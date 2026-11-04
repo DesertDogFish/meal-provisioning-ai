@@ -6,6 +6,8 @@
  * публичную поверхность объекта (тесты и ApiClient вызывают те же методы).
  */
 
+import type { Ingredient, Recipe } from '../types';
+
 import { normalizeEmisCodeImpl, tryEmisRoutes } from './mockEmis';
 import { handleIntegrationsImpl, trySyncRoutes } from './mockSync';
 import { tryStagingRoutes } from './mockStaging'; // cleanup-п.2: стагинг импорта каталога (R3 mock-паритет)
@@ -15,7 +17,6 @@ import { applyCompositionPutImpl, buildCompositionResponseImpl, handleMealCompos
 import { currentPriceOfImpl, handleCategoriesImpl, handleProductsImpl, handleRecipesImpl, recipeToResponseImpl } from './mockCatalog';
 import { handleTripsImpl } from './mockTrips';
 import { handleAuthImpl } from './mockAuth';
-import type { Ingredient, Recipe } from '../types';
 import {  } from './mockState';
 
 /** «Момент старта приложения» mock-сессии — паритет с MetaController.startedAt. */

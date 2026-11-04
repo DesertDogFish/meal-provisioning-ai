@@ -10,11 +10,13 @@
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+import { namelessButtons } from '../test/a11y';
+
 import { ProductTable, EMPTY_FILTERS } from './ProductTable';
 import type { ProductRow } from './ProductTable';
 import { ToastProvider } from './ToastProvider';
 import { ProblemDetailAlert } from './ProblemDetailAlert';
-import { namelessButtons } from '../test/a11y';
 
 const mk = (over: Partial<ProductRow>): ProductRow => ({
   id: 'x', name: 'Продукт', unit: 'KG', category: '1', categoryName: 'Категория',

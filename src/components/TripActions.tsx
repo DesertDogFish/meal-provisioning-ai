@@ -9,8 +9,10 @@
  * исключено, действия только через меню).
  */
 import { ArrowLeft } from 'lucide-react'; // redesign п.6: kebab удалён (FileDown/Printer жили в нём)
-import { Button } from './Button';
+
 import type { Trip } from '../types/tripDetail';
+
+import { Button } from './Button';
 
 export interface TripActionsProps {
   trip: Trip;

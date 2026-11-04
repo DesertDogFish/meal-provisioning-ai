@@ -1,9 +1,11 @@
 import type { ReactNode } from 'react';
 import { Plus } from 'lucide-react';
+
+import type { UnitOfMeasure } from '../types';
+
 import RecipeSearchSelect, { type RecipeSearchOption } from './RecipeSearchSelect';
 import AmountInput from './AmountInput';
 import { Button } from './Button';
-import type { UnitOfMeasure } from '../types';
 
 export interface ProductAddRowProps {
   /** опции поиска (справочник продуктов) */

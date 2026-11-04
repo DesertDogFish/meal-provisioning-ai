@@ -1,8 +1,10 @@
 /// <reference types="vitest/globals" />
 import { describe, it, expect } from 'vitest';
-import { deriveTripView, type TripViewInput } from './tripDerived';
+
 import type { TripManualItem } from '../api/tripManualItems';
 import type { Trip, Recipe, Price } from '../types/tripDetail';
+
+import { deriveTripView, type TripViewInput } from './tripDerived';
 
 /**
  * Подзадача 26 аудита (2026-10-29): производные view-модели страницы похода —

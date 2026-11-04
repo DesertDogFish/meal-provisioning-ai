@@ -13,6 +13,7 @@
  * числа людей (Fix-8 п.6).
  */
 import { describe, it, expect, beforeEach } from 'vitest';
+
 import { mockServer } from './mockServer';
 import { checklistActualQty } from './mockState';
 

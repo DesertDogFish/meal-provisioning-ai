@@ -11,6 +11,7 @@
  *  - client.ts поднимает сигнал на 409 от mock-сервера (сквозная проводка).
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import {
   CONCURRENT_MODIFICATION_CODE,
   isConcurrentModification,

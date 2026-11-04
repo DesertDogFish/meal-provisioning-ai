@@ -1,6 +1,7 @@
 /// <reference types="vitest/globals" />
 import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
+
 import UnitChip from './UnitChip';
 
 describe('UnitChip — единица чипом + bottom-sheet (подзадачи 5/9, 30.10.2026)', () => {

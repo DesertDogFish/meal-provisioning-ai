@@ -2,8 +2,10 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import ChecklistTab from './ChecklistTab';
+
 import { checklistRowKey, collectChecklistKeys, type ChecklistGroup, type ChecklistRow } from '../utils/checklist';
+
+import ChecklistTab from './ChecklistTab';
 
 /**
  * Подзадачи 6/7/10 (plans/done/2026-10-29-ui-nowrap-and-mobile.md):

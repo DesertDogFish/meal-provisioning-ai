@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Mail, Lock, User, Eye, EyeOff } from 'lucide-react';
+
 import { api } from '../api/client';
 import { PASSWORD_MIN_LENGTH, passwordTooShort } from '../utils/validationMessages';
 import { useAuth } from '../components/AuthProvider'; // cleanup-п.7
-import { Mail, Lock, User, Eye, EyeOff } from 'lucide-react';
 import BrandMark from '../components/BrandMark';
 // design-п.3 (tasks/design-atmosphere-art.md, утверждено 03.11.2026): фон-арт
 import seaLogin from '../assets/atmosphere/sea-login.webp';

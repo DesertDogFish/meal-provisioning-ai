@@ -1,5 +1,6 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
+
 // design-pack: tokens.css подключается ПЕРВЫМ (единственный источник правды токенов),
 // затем приложение переопределяет/дополняет их алиасами совместимости.
 import "../provisions/design-pack/tokens.css";

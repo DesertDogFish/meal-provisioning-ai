@@ -40,8 +40,9 @@ vi.mock('../components/AuthProvider', () => ({
   }),
 }));
 
-import TripDetailPage from './TripDetailPage';
 import { ToastProvider } from '../components/ToastProvider';
+
+import TripDetailPage from './TripDetailPage';
 
 function renderPage(url = '/trips/77?stage=ready') {
   return render(

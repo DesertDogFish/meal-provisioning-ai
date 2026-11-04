@@ -4,6 +4,7 @@
  * (Fix-11: real только для JSON-API), single-flight резолва, персист и сид-версия.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { ModeResolver, readInjectedEnv } from './modeResolver';
 
 const BASE = 'http://test.local/api/v1';

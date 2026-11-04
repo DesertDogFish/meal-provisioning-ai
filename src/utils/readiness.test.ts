@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+
 import { tripReadiness, earliestOpenStage , workflowProgress, workflowProgressFill } from './readiness';
 
 describe('tripReadiness (Fix-3, п.2) — сквозной статус похода', () => {

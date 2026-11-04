@@ -88,6 +88,12 @@ Closed:
   без диффов; vitest/build/tsc зелёные. Источник: аудит 02.11.2026 (замер R8: 2292 строки).
   Статус: READY
 
-## Результаты (заполнить при закрытии, затем `git mv` файла в `tasks/done/<YYYY-MM>/`)
+## Результаты (закрыто 2026-11-04)
 
-(заполняется при закрытии)
+- BL-16: ProductFormModal.tsx извлечён (425 строк), 20 component tests, coverage.include обновлён (check:coverage-include OK).
+- BL-54: GlobalExceptionHandler (462) → 4 хендлера (89/116/74/169 строк), ErrorResponseFactory, traceId в extensions. 35/35 exception tests зелёные.
+- BL-49: профиль-зависимая санитизация detail (prod-only → diagnostic-only dev/development/test), traceId остаётся. 35/35 tests.
+- BL-53: незарегистрированные >500-строк файлы закрыты; frontend tests 1133/1133, typecheck 0.
+- BL-64: src/index.css → 23 модуля в src/styles/ (каждый <15KB, <500 строк), index.css — @import entrypoint. Визуальная проверка dark/light × desktop/mobile без регрессий.
+- code-audit pp.3-5: untracked source >500 строк = 0; `any` удалён из целевых файлов; console.log удалён из src. typecheck 0, build OK, vitest 1133/1133.
+- Файлы <15KB (CSS-модули, max 10.5KB); grep untracked >500 строк = 0 (accepted: ShoppingListCalculator.java 520, test classes).

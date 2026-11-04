@@ -16,6 +16,7 @@
  * реальный API на запрос без токена отвечает 401, а не данными).
  */
 import { describe, it, expect, beforeEach } from 'vitest';
+
 import { mockServer } from './mockServer';
 
 function req<T>(method: string, path: string, body?: unknown): T {

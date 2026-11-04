@@ -2,7 +2,9 @@
 import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+
 import ProductsPage from './ProductsPage';
+
 import { ToastProvider } from '../components/ToastProvider';
 
 /**

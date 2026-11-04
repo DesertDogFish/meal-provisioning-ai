@@ -13,15 +13,17 @@
  * контрол с чеклистом ③ и мобильными строками).
  */
 import { useRef } from 'react';
+
 import { formatAmount } from '../utils/calculations';
 import { formatRub, formatUnitPrice } from '../utils/format';
+import { neededAsActual, type ActualAmount } from '../utils/checkUnits';
+import { enteredCheckTotal } from '../utils/checkInput';
+import type { ChecklistActual } from '../utils/tripStaging';
+
 import { NumberField } from './NumberField';
 import InfoTip from './InfoTip';
 import FreeAmountInput from './FreeAmountInput';
 import ListSearch from './ListSearch';
-import { neededAsActual, type ActualAmount } from '../utils/checkUnits';
-import { enteredCheckTotal } from '../utils/checkInput';
-import type { ChecklistActual } from '../utils/tripStaging';
 import type { CheckRow, CheckGroup, DayPlanFact } from './ChecksModel';
 
 export interface ChecksTableProps {

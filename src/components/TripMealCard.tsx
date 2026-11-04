@@ -4,6 +4,7 @@
  * состав/удаление — колбэками наверх (модалки и подтверждения живут в странице).
  */
 import { ListChecks, Trash2 } from 'lucide-react';
+
 import { formatAmount } from '../utils/calculations';
 import { servingsWord } from '../utils/text';
 import type { MealType, MenuDay } from '../types';

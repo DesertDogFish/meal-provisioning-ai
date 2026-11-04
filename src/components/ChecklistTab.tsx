@@ -1,16 +1,19 @@
 import { useMemo, useState } from 'react';
 import { ChevronDown, ChevronRight, ClipboardList, Filter } from 'lucide-react';
+
+import { isActualLessThanNeeded, neededAsActual, type ActualAmount } from '../utils/checkUnits';
+import { formatAmount } from '../utils/calculations';
+import { checklistRowKey, type ChecklistGroup } from '../utils/checklist';
+import type { ChecklistActual } from '../utils/tripStaging';
+
 import InfoTip from './InfoTip';
 import FreeAmountInput from './FreeAmountInput';
 import ListSearch from './ListSearch'; // bugs-trip-checks-stage п.7 (общий с ④)
 import { Button } from './Button';
 import { KebabMenu } from './KebabMenu';
 import { useConfirm } from './ConfirmDialog';
-import { isActualLessThanNeeded, neededAsActual, type ActualAmount } from '../utils/checkUnits';
-import { formatAmount } from '../utils/calculations';
-import { checklistRowKey, type ChecklistGroup } from '../utils/checklist';
 import { EmptyState } from './EmptyState';
-import type { ChecklistActual } from '../utils/tripStaging';
+
 
 /**
  * Подзадача 6 (plans/done/2026-10-29-ui-nowrap-and-mobile.md): вкладка «Чеклист»

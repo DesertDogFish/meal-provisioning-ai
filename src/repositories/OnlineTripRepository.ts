@@ -1,6 +1,7 @@
 import { api } from '../api/client';
 import type { Trip } from '../types';
 import type { LocalTrip } from '../db/schema';
+
 import type { IRepository } from './IRepository';
 
 export class OnlineTripRepository implements IRepository<LocalTrip> {

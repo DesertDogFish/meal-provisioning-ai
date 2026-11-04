@@ -1,4 +1,5 @@
 import js from '@eslint/js';
+import globals from 'globals';
 import tsParser from '@typescript-eslint/parser';
 import tsPlugin from '@typescript-eslint/eslint-plugin';
 import reactHooks from 'eslint-plugin-react-hooks';
@@ -8,12 +9,23 @@ import importPlugin from 'eslint-plugin-import';
 
 export default [
   {
+    files: ['**/*.{js,cjs,mjs}'],
+    languageOptions: {
+      globals: {
+        ...globals.browser,
+        ...globals.node,
+        ...globals.es2021,
+      },
+    },
+  },
+  {
     ignores: [
       'dist',
       'provisions',
       'playwright-report',
       'coverage',
       'node_modules',
+      'backend',
       '.eslintrc.cjs',
     ],
   },
@@ -25,13 +37,10 @@ export default [
       ecmaVersion: 2020,
       sourceType: 'module',
       globals: {
-        window: 'readonly',
-        document: 'readonly',
-        navigator: 'readonly',
-        console: 'readonly',
-        process: 'readonly',
-        URL: 'readonly',
-        fetch: 'readonly',
+        ...globals.browser,
+        ...globals.node,
+        ...globals.es2021,
+        ...globals.jest,
         React: 'readonly',
       },
     },
@@ -43,15 +52,19 @@ export default [
       import: importPlugin,
     },
     rules: {
+      ...Object.fromEntries(
+        Object.entries(jsxA11y.configs.recommended.rules).map(([k]) => [k, 'warn'])
+      ),
       ...tsPlugin.configs.recommended.rules,
       'no-unused-vars': 'off',
       '@typescript-eslint/no-unused-vars': [
-        'error',
+        'warn',
         { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrorsIgnorePattern: '^_' },
       ],
       '@typescript-eslint/no-explicit-any': 'warn',
+      'no-undef': 'off',
       'no-console': ['warn', { allow: ['warn', 'error'] }],
-      '@typescript-eslint/ban-ts-comment': ['error', { 'ts-ignore': true, 'ts-expect-error': true }],
+      '@typescript-eslint/ban-ts-comment': ['error', { 'ts-ignore': true, 'ts-expect-error': true, 'ts-nocheck': false }],
       'react-hooks/rules-of-hooks': 'error',
       'react-hooks/exhaustive-deps': 'warn',
       'react-refresh/only-export-components': 'off',

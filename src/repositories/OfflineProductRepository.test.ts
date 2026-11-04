@@ -1,5 +1,6 @@
 import 'fake-indexeddb/auto';
 import { describe, it, expect, beforeEach } from 'vitest';
+
 import { db } from '../db/indexedDb';
 import { OfflineProductRepository } from '../repositories/OfflineProductRepository';
 

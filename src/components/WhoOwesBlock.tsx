@@ -6,8 +6,9 @@
  * по дням — факт дня ÷ люди дня. Деньги на клиенте не пересчитываются сверх
  * этой формулы (AGENTS §12).
  */
-import InfoTip from './InfoTip';
 import { formatRub } from '../utils/format';
+
+import InfoTip from './InfoTip';
 
 export interface WhoOwesDay {
   dayDate: string;

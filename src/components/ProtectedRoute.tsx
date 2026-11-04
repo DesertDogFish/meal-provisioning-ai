@@ -5,6 +5,7 @@
  * из провайдера (api.onSessionLost → user=null → редирект на /login).
  */
 import { Navigate } from 'react-router-dom';
+
 import PageLoader from './PageLoader';
 import { useAuth } from './AuthProvider';
 
