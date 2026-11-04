@@ -28,6 +28,10 @@ export default defineConfig({
       // изменения в гейт не входят (R5: «не гнаться за 100% legacy»).
       thresholds: {
         lines: 80,
+        // BL-34 (R5): thresholds.branches рассмотрен. Глобально ветви покрыты на
+        // ~86%, но ≥15 файлов из include имеют <80% ветвей (focusTrap 38%, ...),
+        // поэтому perFile-порог по ветвям сейчас валит сборку. Оставлен только
+        // lines (perFile); ветви отложены до роста покрытия (шаги 6/10).
         perFile: true,
       },
       include: [

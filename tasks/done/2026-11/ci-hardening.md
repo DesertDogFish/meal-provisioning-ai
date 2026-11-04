@@ -1,8 +1,8 @@
 # Задача: CI: e2e в CI, coverage-гейт фронта, dependabot, версии Java/Actions
 
-Status: READY
+Status: DONE
 Created: 2026-11-02
-Closed:
+Closed: 2026-11-05
 Источник: реестр `plans/backlog.md`/`plans/knownbugs.md` (расформированы 02.11.2026 —
 старый формат; номера BL-n/KB-n сохранены для преемственности, правила — `skills/create-task.md`).
 
@@ -10,7 +10,7 @@ Closed:
 
 - [x] BL-32. Прогнать e2e в CI обычным test-runner'ом. Что сделать: `npm run test:e2e`
 - [x] BL-33. Починить E2E-nightly и отделить real-mode от mock-прогона (M). Что сделать:
-- [ ] BL-34. Включить coverage-гейт R5 в CI и расширить whitelist (M). Что сделать: шаг
+- [x] BL-34. Включить coverage-гейт R5 в CI и расширить whitelist (M). Что сделать: шаг
 - [x] BL-36. Dependabot + `npm audit` в CI + фикс текущих CVE (S). Что сделать:
 - [x] BL-37. Одна версия Java в pom, CI, nightly и Dockerfile (S). Что сделать: выбрать одну
 - [x] BL-51. Обновить GitHub Actions и запинить runner-образ (S). Что сделать: поднять actions
@@ -55,7 +55,8 @@ Closed:
   обязан попасть в `include`»; рассмотреть `thresholds.branches` (сейчас только `lines`).
   Критерий приёмки: coverage-шаг виден в job summary с обоими числами; добавление
   `src/utils/foo.ts` без внесения в `include` валит проверку. Источник: внешний аудит 30.10.2026, AU-07 (сводка 30 задач — `tasks/done/2026-10/2026-10-30-external-audit-p0-block.md`).
-  Статус: READY
+  Статус: DONE
+  Closed: 2026-11-05
 
 - **BL-36. Dependabot + `npm audit` в CI + фикс текущих CVE** (S). Что сделать:
   `.github/dependabot.yml` для экосистем `npm`, `maven`, `github-actions` (`schedule: weekly`,
