@@ -22,7 +22,7 @@ jobs:
 
     steps:
       # nosemgrep: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: Java version consistency (BL-37)
         run: |
@@ -82,7 +82,7 @@ jobs:
     timeout-minutes: 5
     steps:
       # nosemgrep: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - name: Validate commit messages / PR title
@@ -117,7 +117,7 @@ jobs:
     
     steps:
       # nosemgrep: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       
       # nosemgrep: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag
       - uses: actions/setup-java@v5
@@ -237,7 +237,7 @@ jobs:
 
     steps:
       # nosemgrep: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0   # нужны теги и история, чтобы достать предыдущую версию дерева
 
@@ -369,7 +369,7 @@ jobs:
     
     steps:
       # nosemgrep: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       
       # nosemgrep: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag
       - uses: actions/setup-node@v5
@@ -487,7 +487,7 @@ jobs:
 
     steps:
       # nosemgrep: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       # nosemgrep: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag
       - uses: actions/setup-node@v5
@@ -519,7 +519,7 @@ jobs:
     
     steps:
       # nosemgrep: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       
       # compose fail-fast без JWT_SECRET (${JWT_SECRET:?...}) — задаём CI-only секрет.
       # Значение не используется в рантайме (config/build только интерполируют файл),
@@ -543,7 +543,7 @@ jobs:
     
     steps:
       # nosemgrep: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       
       - name: Semgrep (blocking)
         run: |
@@ -597,7 +597,7 @@ jobs:
 
     steps:
       # nosemgrep: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       # nosemgrep: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag
       - uses: actions/setup-java@v5
