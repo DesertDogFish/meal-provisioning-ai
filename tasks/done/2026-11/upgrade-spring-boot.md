@@ -1,15 +1,15 @@
 # Задача: Обновление Spring Boot на поддерживаемую линию
 
-Status: READY
+Status: DONE
 Created: 2026-11-02
-Closed:
+Closed: 2026-11-05
 Источник: реестр `plans/backlog.md`/`plans/knownbugs.md` (расформированы 02.11.2026 —
 старый формат; номера BL-n/KB-n сохранены для преемственности, правила — `skills/create-task.md`).
 
 ## Состав (индекс — отмечать здесь; подробности в карточках ниже)
 
 - [x] BL-40. Обновить Spring Boot 3.2.5 → актуальную поддерживаемую линию (XL — при взятии
-- [ ] KB-17. Spring Boot 3.2.5: вся линия 3.x вышла из поддержки, OSS-патчей безопасности нет
+- [x] KB-17. Spring Boot 3.2.5: вся линия 3.x вышла из поддержки, OSS-патчей безопасности нет
 
 ## Карточки (текст перенесён дословно)
 
@@ -54,4 +54,10 @@ Closed:
 
 ## Результаты (заполнить при закрытии, затем `git mv` файла в `tasks/done/<YYYY-MM>/`)
 
-(заполняется при закрытии)
+Закрыто 2026-11-05 (umbrella t_49b30217).
+
+- Spring Boot 3.2.5 → 4.1.2 (pom parent). Java 21. mapstruct 1.6.3, jjwt 0.13.0, springdoc 3.2.0, flyway/testcontainers управляются BOM. Jackson 3 миграция (JacksonConfig).
+- mvn compile: BUILD SUCCESS (clean compile недоступен офлайн — clean-plugin не скачан; обычный compile успешен).
+- mvn test (unit): 286 passed, 0 failed (integration/smoke исключены — требуют Docker/PostgreSQL, демон отсутствует).
+- ARCHITECTURE.md и backend/README.md обновлены (4.1.2).
+- Не верифицировано: ProductPageQueryCountTest, EconomicConsistencyTest, docker compose/stack (нет Docker-демона и PostgreSQL).

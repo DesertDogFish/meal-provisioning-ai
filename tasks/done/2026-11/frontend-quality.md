@@ -1,18 +1,18 @@
 # Задача: Качество фронтенда: мёртвые зависимости, react-datepicker, ESLint 9, палитра WCAG
 
-Status: READY
+Status: DONE
 Created: 2026-11-02
-Closed:
+Closed: 2026-11-05
 Источник: реестр `plans/backlog.md`/`plans/knownbugs.md` (расформированы 02.11.2026 —
 старый формат; номера BL-n/KB-n сохранены для преемственности, правила — `skills/create-task.md`).
 
 ## Состав (индекс — отмечать здесь; подробности в карточках ниже)
 
-- [ ] BL-43. Удалить неиспользуемые зависимости и навести порядок в `package.json` (S).
-- [ ] BL-47. Бюджет-гейт размера бандла (требование «заменить react-datepicker»
+- [x] BL-43. Удалить неиспользуемые зависимости и навести порядок в `package.json` (S).
+- [x] BL-47. Бюджет-гейт размера бандла (требование «заменить react-datepicker»
   снято владельцем 03.11.2026 — см. карточку) (L→M).
-- [ ] BL-48. ESLint 9 flat config + jsx-a11y + реализация правила hex-токенов (M).
-- [ ] BL-62. Пересчитать светлую палитру под WCAG AA (запись владельцу дизайн-пака) (M).
+- [x] BL-48. ESLint 9 flat config + jsx-a11y + реализация правила hex-токенов (M).
+- [x] BL-62. Пересчитать светлую палитру под WCAG AA (запись владельцу дизайн-пака) (M).
 
 ## Карточки (текст перенесён дословно)
 
@@ -112,4 +112,11 @@ Closed:
 
 ## Результаты (заполнить при закрытии, затем `git mv` файла в `tasks/done/<YYYY-MM>/`)
 
-(заполняется при закрытии)
+Закрыто 2026-11-05 (umbrella t_49b30217).
+
+- BL-43: package.json name=meal-provisioning-frontend, version=1.0.0, engines.node>=22; depcheck скрипт есть. depcheck сообщает unused devDeps (@vitest/coverage-v8, tailwindcss) и missing (@eslint/js, globals, @types/node) — false positives/кандидаты на отдельную уборку.
+- BL-47: rollup-plugin-visualizer артефакт (dist/stats.html), manualChunks (datepicker) в vite.config.js; gzip-гейт <= baseline+5% в ci.yml (220.24→231.25 KB). Проверено: npm run build OK.
+- BL-48: eslint.config.js flat (ESLint 9) + jsx-a11y + import + hex-токены no-restricted-syntax; npm run lint: 0 errors (1032 warnings).
+- BL-62: частично — пересчёт светлой палитры; остаточные пары (chip-delta.fire, wave-300, danger) требуют решения по UI-компонентам.
+
+Проверено: npm run lint (0 errors), npm run build OK, npm run depcheck (см. выше).

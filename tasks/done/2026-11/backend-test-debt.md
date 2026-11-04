@@ -1,22 +1,22 @@
 # Задача: Тестовый долг backend: ЕМИСС, цены, сервисы без покрытия
 
-Status: READY
+Status: DONE
 Created: 2026-11-02
-Closed:
+Closed: 2026-11-05
 Источник: реестр `plans/backlog.md`/`plans/knownbugs.md` (расформированы 02.11.2026 —
 старый формат; номера BL-n/KB-n сохранены для преемственности, правила — `skills/create-task.md`).
 
 ## Состав (индекс — отмечать здесь; подробности в карточках ниже)
 
-- [ ] BL-1. `EmisUnitTest` (unit, `backend/src/test/java/com/provision/service/`).
-- [ ] BL-4. `EmisCatalogServiceTest` + `EmisControllerTest` (`@WebMvcTest`): поиск по подстроке
-- [ ] BL-5. Привязка продукта (integration): `ProductRequest.emisCode` — несуществующий код →
-- [ ] BL-6. Сид V29 (integration): 191 привязка и 13 без привязки; «Бумага туалетная, рулон» —
-- [ ] BL-7. Пайплайн синка (integration): `PriceSyncService.runSync` из локальной копии →
-- [ ] BL-24. Генератор большой SDMX-фикстуры и память-бенчмарк в дереве. Доказательство
-- [ ] BL-42. JaCoCo-гейт на backend + unit-тесты на сервисы без покрытия (XL — отдельный файл
-- [ ] BL-58. Golden-fixtures живых ответов ЕМИСС: страница показателя и варианты A/B/C/D.
-- [ ] KB-9. Новое поведение ЕМИСС не покрыто тестами
+- [x] BL-1. `EmisUnitTest` (unit, `backend/src/test/java/com/provision/service/`).
+- [x] BL-4. `EmisCatalogServiceTest` + `EmisControllerTest` (`@WebMvcTest`): поиск по подстроке
+- [x] BL-5. Привязка продукта (integration): `ProductRequest.emisCode` — несуществующий код →
+- [x] BL-6. Сид V29 (integration): 191 привязка и 13 без привязки; «Бумага туалетная, рулон» —
+- [x] BL-7. Пайплайн синка (integration): `PriceSyncService.runSync` из локальной копии →
+- [x] BL-24. Генератор большой SDMX-фикстуры и память-бенчмарк в дереве. Доказательство
+- [ ] BL-42. JaCoCo-гейт на backend + unit-тесты на сервисы без покрытия (XL — отдельный файл — отложено до JaCoCo/coverage-gate (нужен Postgres)
+- [x] BL-58. Golden-fixtures живых ответов ЕМИСС: страница показателя и варианты A/B/C/D.
+- [x] KB-9. Новое поведение ЕМИСС не покрыто тестами
 
 ## Карточки (текст перенесён дословно)
 

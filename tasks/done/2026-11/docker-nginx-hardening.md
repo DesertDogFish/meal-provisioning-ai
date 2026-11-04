@@ -1,16 +1,16 @@
 # Задача: Docker/nginx hardening (compose, заголовки, пины образов)
 
-Status: READY
+Status: DONE
 Created: 2026-11-02
-Closed:
+Closed: 2026-11-05
 Источник: реестр `plans/backlog.md`/`plans/knownbugs.md` (расформированы 02.11.2026 —
 старый формат; номера BL-n/KB-n сохранены для преемственности, правила — `skills/create-task.md`).
 
 ## Состав (индекс — отмечать здесь; подробности в карточках ниже)
 
-- [ ] BL-35. Снять `continue-on-error` с security-сканов, починив compose и nginx (M).
-- [ ] BL-38. nginx: CSP и security-заголовки, XFF, gzip, кэш ассетов, таймауты (M).
-- [ ] BL-50. Docker/compose hardening (M, пересекается с BL-35). Что сделать: запинить все
+- [x] BL-35. Снять `continue-on-error` с security-сканов, починив compose и nginx (M).
+- [x] BL-38. nginx: CSP и security-заголовки, XFF, gzip, кэш ассетов, таймауты (M).
+- [x] BL-50. Docker/compose hardening (M, пересекается с BL-35). Что сделать: запинить все
 
 ## Карточки (текст перенесён дословно)
 
@@ -65,3 +65,4 @@ Closed:
 - Проверки: `docker compose config -q` OK; Trivy FS 0; Semgrep 0 findings; smoke-шаг заголовков в docker-stack.yml.
 
 Закрыто 2026-11-04 (BL-35/38/50).
+- Примечание: runtime smoke (полный `docker compose up` + healthchecks) не выполнялся — Docker-демон недоступен в песочнице; конфиги проверены (`docker compose config -q` OK, Trivy/Semgrep 0).

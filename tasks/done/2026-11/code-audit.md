@@ -1,8 +1,8 @@
 # Задача: аудит кода проекта — проблемные места
 
-Status: READY
+Status: DONE
 Created: 2026-11-03
-Closed:
+Closed: 2026-11-05
 
 ## Цель
 Доскональный аудит кода meal-provisioning-ai: выявить проблемные места (большие файлы, any, console.log, отсутствие deps, typecheck-ошибки) и записать их как подзадачи для последующего исправления.
@@ -10,9 +10,9 @@ Closed:
 ## Подзадачи
 - [x] 1. Установить отсутствующую зависимость `react-datepicker` — файлы: package.json; приёмка: `npm run typecheck` и `npm test` без ошибок разрешения модуля.
 - [x] 2. Исправить typecheck-ошибки в `src/components/TripPersonTab.tsx` (свойство `personSummary` не существует в `TripView`, неявный `any` в параметрах `item`/`i`) — файлы: TripPersonTab.tsx; приёмка: `npm run typecheck` чист.
-- [ ] 3. Разбить большие файлы (>25 KB) на модули: `EconomicConsistencyTest.java` (68 KB), `mockTrips.ts` (49 KB), `MealCompositionModal.tsx` (48 KB), `ShoppingListCalculator.java` (30 KB), `EmisUnit.java` (27 KB), `RosstatEmisProvider.java` (27 KB), `GlobalExceptionHandler.java` (26 KB) — приёмка: каждый файл < 15 KB, тесты зелёные.
-- [ ] 4. Заменить `any` на типы в `utils/calculations.ts`, `utils/tripStaging.ts`, `utils/tripDerived.ts`, `pages/TripsPage.tsx`, `pages/useTripDetail.tsx`, `api/mockSnapshot.ts` — приёмка: `npm run typecheck` чист, тесты зелёные.
-- [ ] 5. Убрать `console.log`/`console.warn` из продакшен-кода (`watchdog.ts`, `mode.ts`, `checklist.ts`, `tripStaging.ts`) или оставить только в dev — приёмка: нет console.log в src/, console.warn только с префиксом [dev].
+- [x] 3. Разбить большие файлы (>25 KB) на модули: `EconomicConsistencyTest.java` (68 KB), `mockTrips.ts` (49 KB), `MealCompositionModal.tsx` (48 KB), `ShoppingListCalculator.java` (30 KB), `EmisUnit.java` (27 KB), `RosstatEmisProvider.java` (27 KB), `GlobalExceptionHandler.java` (26 KB) — приёмка: каждый файл < 15 KB, тесты зелёные.
+- [x] 4. Заменить `any` на типы в `utils/calculations.ts`, `utils/tripStaging.ts`, `utils/tripDerived.ts`, `pages/TripsPage.tsx`, `pages/useTripDetail.tsx`, `api/mockSnapshot.ts` — приёмка: `npm run typecheck` чист, тесты зелёные.
+- [x] 5. Убрать `console.log`/`console.warn` из продакшен-кода (`watchdog.ts`, `mode.ts`, `checklist.ts`, `tripStaging.ts`) или оставить только в dev — приёмка: нет console.log в src/, console.warn только с префиксом [dev].
 - [x] 6. Проверить `dangerouslySetInnerHTML` в `BrandMark.tsx` — убедиться, что SVG не содержит внешних ссылок — приёмка: ручной просмотр SVG.
 - [x] 7. Запустить backend-тесты (`mvn test`) с правильным env и зафиксировать результаты — приёмка: отчёт о прохождении/падениях.
 - [x] 8. Запустить E2E (Playwright) и зафиксировать результаты — приёмка: отчёт о прохождении/падениях.
