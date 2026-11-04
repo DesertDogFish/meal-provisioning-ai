@@ -1,0 +1,67 @@
+/* ============================================================
+   2.5/3. Токеннизация index.css: никаких hex/rgba вне токенов.
+   Полупрозрачные наслоения — color-mix от токенов темы.
+   ============================================================ */
+* {
+  box-sizing: border-box;
+}
+
+body {
+  /* п.1 DESIGN_MIGRATION: фон следует теме через --grad-dusk (в нём --bg-0 + подсветки) */
+  background-image: var(--grad-dusk);
+  color: var(--text-1);
+  font-family: var(--font-body);
+}
+
+/* Эффект «зерна плёнки» из брендбука */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.05;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='0.7'/%3E%3C/svg%3E");
+}
+
+h1, h2, h3, .logo-word, .font-display {
+  font-family: var(--font-display);
+  letter-spacing: -.015em;
+}
+
+::placeholder {
+  color: var(--text-3);
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--bg-3);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--line-strong);
+}
+
+/* Toast animation */
+@keyframes slide-in {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.animate-slide-in {
+  animation: slide-in var(--t-slow) var(--ease);
+}
+

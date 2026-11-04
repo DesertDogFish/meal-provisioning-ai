@@ -70,6 +70,9 @@ spring:
 
 server:
   port: 8080
+  # BL-38: доверяем X-Forwarded-* от nginx (proxy_set_header в nginx.conf),
+  # иначе Spring видит IP контейнера, а не клиента.
+  forward-headers-strategy: framework
   error:
     include-message: always
     include-binding-errors: always

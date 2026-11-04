@@ -1,0 +1,295 @@
+
+.nf-btn:hover {
+  color: var(--text-1);
+  border-color: var(--line-strong);
+  background: var(--bg-3);
+}
+
+.nf-btn:active {
+  color: var(--amber-500);
+  border-color: var(--amber-500);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--amber-500) 18%, transparent);
+}
+
+.nf-input {
+  width: 86px;
+  background: color-mix(in srgb, var(--bg-0) 70%, transparent);
+  border: 1px solid var(--line-strong);
+  color: var(--text-1);
+  border-radius: var(--r-sm);
+  padding: var(--sp-2) var(--sp-2);
+  font: 700 12px Manrope;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.nf-input:focus {
+  outline: 2px solid var(--amber-500);
+  outline-offset: 0;
+  border-color: var(--amber-500);
+}
+
+.nf-input::placeholder {
+  color: var(--text-3);
+  font-weight: 600;
+}
+
+.nf-sm .nf-input {
+  width: 74px;
+}
+
+/* Fix-10 (п.3): компактный NumberField — той же высоты, что составные
+   контролы количества (input.compact-input, 28px): в строке чека «Взяли»
+   и «Заплатили» теперь одного размера. Специфичность .nf-sm input.nf-input
+   перекрывает глобальное правило min-height 36px у input[type=number]. */
+.nf-sm input.nf-input {
+  min-height: 28px;
+  padding-top: 4px;
+  padding-bottom: 4px;
+  font-size: 12px;
+}
+
+.nf-sm .nf-btn {
+  width: 20px;
+  height: 20px;
+  font: 800 var(--fs-caption)/1 var(--font-body);
+}
+
+.nf-sm {
+  gap: 4px;
+}
+
+/* Перчаточная зона на мобиле */
+@media (pointer: coarse) {
+  .nf-btn {
+    width: 44px;
+    height: 44px;
+  }
+}
+
+/* CR-4 → DESIGN_MIGRATION 1.3: цветовую схему нативных контролов (календарь,
+   select, скроллбары) задаёт color-scheme из tokens.css по активной теме —
+   захардкоженный `color-scheme: dark` убран. Иконку даты осветляем инверсией
+   только в тёмной теме (в светлой нативная иконка видна сама). */
+:root:not([data-theme="light"]) input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(0.75);
+  opacity: 0.75;
+  cursor: pointer;
+}
+
+:root[data-theme="light"] input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: none;
+  opacity: 1;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+}
+
+/* CR-1: чипы отсутствия ккал */
+.kcal-missing {
+  display: inline-block;
+  border-radius: var(--r-pill);
+  padding: var(--sp-1) var(--sp-2);
+  font: 700 var(--fs-caption) var(--font-body);
+  background: color-mix(in srgb, var(--amber-500) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--amber-500) 34%, transparent);
+  color: var(--amber-300);
+}
+
+/* CR-1: расчётная калорийность */
+.kcal-calculated {
+  background: var(--success-soft);
+  border: 1px solid color-mix(in srgb, var(--success) 34%, transparent);
+  border-radius: var(--r-sm);
+  padding: var(--sp-3) var(--sp-3);
+  font-size: 13px;
+  margin-top: 10px;
+  color: var(--text-1);
+}
+
+.chip-delta {
+  display: inline-block;
+  border-radius: var(--r-pill);
+  padding: var(--sp-1) var(--sp-2);
+  font: 700 var(--fs-caption) var(--font-body);
+}
+
+.chip-delta.dim {
+  background: color-mix(in srgb, var(--line) 55%, transparent);
+  color: var(--text-3);
+}
+
+.chip-delta.fire {
+  background: color-mix(in srgb, var(--amber-500) 14%, transparent);
+  color: var(--amber-300);
+}
+
+.chip-delta.ok {
+  background: var(--success-soft);
+  color: var(--wave-300);
+}
+
+.sticky-totals {
+  position: sticky;
+  bottom: 10px;
+  margin-top: 12px;
+  padding: var(--sp-3) var(--sp-3);
+  display: flex;
+  gap: 18px;
+  align-items: center;
+  flex-wrap: wrap;
+  background: linear-gradient(160deg, color-mix(in srgb, var(--bg-2) 86%, transparent), color-mix(in srgb, var(--bg-0) 90%, transparent));
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-1);
+}
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: color-mix(in srgb, var(--bg-0) 66%, transparent);
+  backdrop-filter: blur(6px);
+  /* flex, а не `display: grid; place-items: center`: у сетки авто-дорожка
+     растягивается до max-content содержимого, поэтому лист шириной 512px на
+     вьюпорте 360px ВЫЛЕЗАЛ за экран и не центрировался. Во flex процент ширины
+     .modal-wrap разрешается против самого оверлея (за вычетом --modal-pad). */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: var(--z-modal);
+}
+
+.modal-sheet {
+  width: min(560px, 92vw);
+  max-height: 86vh;
+  overflow: auto;
+  /* Fix-6 (п.12): скроллбар модалки не «торчит» — зарезервированная колея
+     и симметричные отступы, полоса тонкая (глобальный scrollbar-width) */
+  scrollbar-gutter: stable;
+  padding: var(--sp-6);
+  background: linear-gradient(160deg, color-mix(in srgb, var(--bg-2) 90%, transparent), color-mix(in srgb, var(--bg-0) 94%, transparent));
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-1);
+}
+
+.reset-btn {
+  background: none;
+  border: 0;
+  color: var(--text-2);
+  cursor: pointer;
+  font-size: 14px;
+  padding: var(--sp-1);
+  transition: color var(--t-base) var(--ease);
+}
+
+.reset-btn:hover {
+  color: var(--amber-500);
+}
+
+/* Глобальные поля ввода в стиле брендбука: bg-0 поверх панелей, line-strong бордер, янтарный фокус */
+input:not([type="checkbox"]):not([type="radio"]),
+select,
+textarea {
+  background-color: color-mix(in srgb, var(--bg-0) 70%, transparent);
+  border: 1px solid var(--line-strong);
+  color: var(--text-1);
+}
+input:not([type="checkbox"]):not([type="radio"]):focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--amber-500);
+  outline-offset: 0;
+}
+
+/* Fix Date Picker icon color */
+input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(0.6);
+  cursor: pointer;
+}
+
+/* Fix Autofill background: переопределяем нативный жёлтый/белый фон и ЧЁРНЫЙ текст автозаполнения */
+/* ФИКС 1: box-shadow накрывает фон целиком (1000px вместо 30px), цвета — из переменных темы */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active {
+  -webkit-text-fill-color: var(--text-1) !important;
+  caret-color: var(--text-1) !important;
+  -webkit-box-shadow: 0 0 0 1000px var(--bg-1) inset !important;
+  border-radius: inherit;
+  transition: background-color 5000s ease-in-out 0s;
+}
+
+/* ФИКС 2: аккуратный бейдж категории блюда (без КАПСА) — стиль teal/wave */
+.recipe-category-badge {
+  display: inline-block;
+  padding: var(--sp-1) var(--sp-2);
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--wave-300);
+  background: var(--success-soft);
+  border: 1px solid color-mix(in srgb, var(--success) 34%, transparent);
+  border-radius: var(--r-pill);
+  text-transform: none; /* явно убираем КАПС, если где-то остался */
+}
+
+/* Бейджи статусов (Badge) по брендбуку */
+.badge-success {
+  background: var(--success-soft);
+  border: 1px solid color-mix(in srgb, var(--success) 34%, transparent);
+  color: var(--wave-300);
+}
+.badge-warning {
+  background: color-mix(in srgb, var(--amber-500) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--amber-500) 34%, transparent);
+  color: var(--amber-300);
+}
+.badge-neutral {
+  background: color-mix(in srgb, var(--line) 55%, transparent);
+  border: 1px solid var(--line);
+  color: var(--text-2);
+}
+/* Fix-3 (п.1): «Ужин» больше не badge-neutral (серый = «словно дизейблед») —
+   собственный акцент в палитре волны, все четыре приёма различимы. */
+.badge-info {
+  background: color-mix(in srgb, var(--wave-400) 20%, transparent);
+  border: 1px solid color-mix(in srgb, var(--wave-400) 52%, transparent);
+  color: var(--wave-300);
+}
+/* Fix-3 (п.2): NumberField в заблокированном состоянии (чек не вводится до
+   подтверждения закупки в чеклисте) */
+.nf-disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+/* Fix-3 / R4-lite: печатная раскладка («Печать» на этапе ④ «Чеки и итог») —
+   только таблицы и итоги, без сайдбара, табов и управляющих элементов. */
+@media print {
+  aside,
+  header,
+  .seg,
+  button,
+  .nf-btn,
+  .note-box,
+  input[type="checkbox"] {
+    display: none !important;
+  }
+  main {
+    padding: 0 !important;
+    overflow: visible !important;
+  }
+  body {
+    background: #fff !important;
+  }
+  .rounded-xl {
+    break-inside: avoid;
+    border-color: #ccc !important;
+  }
+}
+
+

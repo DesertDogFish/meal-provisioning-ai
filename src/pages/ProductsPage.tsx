@@ -2,18 +2,15 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { useToast } from '../components/ToastProvider';
 import { useConfirm } from '../components/ConfirmDialog'; // Fix-6 (п.7)
 import { Plus, Search, X } from 'lucide-react';
-import { NumberField } from '../components/NumberField';
 import { ProductTable, type ProductRow } from '../components/ProductTable';
-import { EmisLinkPicker } from '../components/EmisLinkPicker';
-import Modal from '../components/Modal';
+import { ProductFormModal } from '../components/ProductFormModal';
 import PageHero from '../components/PageHero'; // BUG-002: hero-шапка страницы
-import CustomSelect from '../components/CustomSelect';
 import CustomMultiSelect from '../components/CustomMultiSelect';
+import CustomSelect from '../components/CustomSelect';
 import FilterSheet from '../components/FilterSheet';
-import { DatePicker } from '../components/DatePicker';
 import { api } from '../api/client';
-import type { UnitOfMeasure, ProductCategory, IngredientPrice } from '../types';
-import { humanizeUnit, recipesWord, productsWord, categoriesWord } from '../utils/text';
+import type { ProductCategory, IngredientPrice } from '../types';
+import { recipesWord, productsWord, categoriesWord } from '../utils/text';
 import { Button } from '../components/Button';
 
 import PageLoader from '../components/PageLoader';
@@ -38,24 +35,8 @@ export default function ProductsPage() {
   const [usageStatus, setUsageStatus] = useState('');
   
   
-  // Form
-  const [formName, setFormName] = useState('');
-  const [formCategory, setFormCategory] = useState('');
-  const [formUnit, setFormUnit] = useState<UnitOfMeasure>('KG');
-  const [formPackSize, setFormPackSize] = useState<number | null>(null);
-  const [formRoundToPacks, setFormRoundToPacks] = useState(false);
-  const [formCalories, setFormCalories] = useState<number | null>(null);
-  const [formPieceWeightG, setFormPieceWeightG] = useState<number | null>(null);
-  // V20-ux: цена продукта правится прямо из карточки продукта (ранее — только отдельной
-  // вкладкой «Цены» в админке, из-за чего цену «невозможно было установить» на месте)
-  const [formPrice, setFormPrice] = useState('');
-  const [formPriceDate, setFormPriceDate] = useState('');
-  // V26/V28: источник цены — позиция локального справочника ЕМИСС («софт»-привязка).
-  // Пустая строка = не привязан, цену ведёт человек.
-  const [formEmisCode, setFormEmisCode] = useState('');
-  const [formEmisName, setFormEmisName] = useState<string | null>(null);
+    // priceByIngredient still used for displaying current price in modal
   const [priceByIngredient, setPriceByIngredient] = useState<Record<string, number>>({});
-  const [duplicateWarning, setDuplicateWarning] = useState<{ type: 'hard' | 'soft'; message: string } | null>(null);
 
   // Загрузка данных
   useEffect(() => {
@@ -107,131 +88,6 @@ export default function ProductsPage() {
   };
 
 
-  // Проверка дубликата.
-  // U23 (flaky e2e): две защиты от гонок —
-  // 1) отменяемый debounce: клик по единице отменяет незавершённую проверку
-  //    со старой единицей (иначе медленный ответ перезаписывал свежий warning);
-  // 2) сторож по порядковому номеру: устаревший асинхронный ответ не влияет
-  //    на состояние, если уже запущена более новая проверка.
-  const dupCheckSeq = useRef(0);
-  const dupDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const checkDuplicate = async (name: string, unit: UnitOfMeasure) => {
-    const seq = ++dupCheckSeq.current;
-    if (!name) {
-      setDuplicateWarning(null);
-      return;
-    }
-
-    try {
-      const response = await api.get<any>(
-        `/admin/products/check-name?name=${encodeURIComponent(name)}&unit=${unit}`
-      );
-      if (seq !== dupCheckSeq.current) return; // уже запущена более новая проверка
-
-      if (response.duplicate) {
-        if (response.sameUnit) {
-          setDuplicateWarning({
-            type: 'hard',
-            message: `Продукт «${response.existingName}» (${humanizeUnit(unit)}) уже существует.`
-          });
-        } else {
-          setDuplicateWarning({
-            type: 'soft',
-            message: `Есть «${response.existingName}» в другой единице. Создаёте отдельный продукт (${humanizeUnit(unit)})?`
-          });
-        }
-      } else {
-        setDuplicateWarning(null);
-      }
-    } catch (error) {
-      if (seq !== dupCheckSeq.current) return;
-      console.error('Failed to check duplicate:', error);
-      // ЗАДАЧА 3: пользователь узнаёт, что проверка дубля не выполнена
-      showError('Не удалось проверить наличие такого же продукта');
-    }
-  };
-
-  /** Отменяет незавершённый debounce и планирует проверку дубля через 300 мс. */
-  const scheduleDuplicateCheck = (name: string, unit: UnitOfMeasure) => {
-    if (dupDebounce.current) clearTimeout(dupDebounce.current);
-    dupDebounce.current = setTimeout(() => checkDuplicate(name, unit), 300);
-  };
-
-  const handleSave = async () => {
-    if (!formName || !formCategory) {
-      showError('Заполните обязательные поля');
-      return;
-    }
-
-    if (duplicateWarning?.type === 'hard') {
-      showError('Продукт с таким именем и единицей уже существует');
-      return;
-    }
-
-    // CR-1: валидация pieceWeightG для PCS/PACK
-    if ((formUnit === 'PCS' || formUnit === 'PACK') && formCalories && !formPieceWeightG) {
-      showError('Для шт/уп с калорийностью обязателен вес 1 шт/уп в граммах');
-      return;
-    }
-
-    try {
-      const body = {
-        name: formName,
-        categoryId: parseInt(formCategory),
-        unit: formUnit,
-        packSize: formPackSize,
-        roundToPacks: formRoundToPacks,
-        kcalPer100g: formCalories,
-        pieceWeightG: formPieceWeightG,
-        // null = отвязать источник цены (бэкенд: пусто → null)
-        emisCode: formEmisCode.trim() || null
-      };
-
-      let savedId: string | number | undefined = editingProduct?.id;
-      if (editingProduct) {
-        await api.put(`/admin/products/${editingProduct.id}`, body);
-        showSuccess('Продукт обновлён');
-      } else {
-        const created = await api.post<{ id?: string | number }>('/admin/products', body);
-        savedId = created?.id ?? savedId;
-        showSuccess('Продукт создан');
-      }
-
-      // Цена (новый срез ingredient_prices): отдельно от карточки продукта,
-      // чтобы ошибка цены не откатывала сохранение самого продукта
-      const priceVal = Number(formPrice.replace(',', '.'));
-      if (formPrice.trim() && savedId != null) {
-        if (!(priceVal > 0)) {
-          showError('Цена должна быть числом больше нуля');
-        } else {
-          try {
-            await api.post('/admin/ingredient-prices', {
-              ingredientId: savedId,
-              pricePerUnit: priceVal,
-              currency: 'RUB',
-              effectiveFrom: formPriceDate || new Date().toISOString().slice(0, 10),
-            });
-            showSuccess('Цена установлена');
-          } catch (priceErr: any) {
-            showError(priceErr?.error?.detail || priceErr?.detail || 'Продукт сохранён, но цену установить не удалось');
-          }
-        }
-      }
-
-      setShowModal(false);
-      resetForm();
-      await loadData();
-    } catch (error: any) {
-      // P0-4: перехватываем машиночитаемый код DUPLICATE_PRODUCT и показываем понятный текст без KG/PCS/ID
-      const raw = String(error?.message ?? '') + ' ' + String(error?.error?.detail ?? error?.detail ?? '');
-      if (raw.includes('DUPLICATE_PRODUCT') || /already exists/i.test(raw)) {
-        showError('Продукт с таким названием и единицей измерения уже существует.');
-      } else {
-        showError(error.error?.detail || error.detail || error.message || 'Ошибка сохранения');
-      }
-    }
-  };
 
   const handleDelete = async (product: Product) => {
     if (product.usageRecipes > 0) {
@@ -258,34 +114,7 @@ export default function ProductsPage() {
 
   const openEditModal = (product: Product) => {
     setEditingProduct(product);
-    setFormName(product.name);
-    setFormCategory(product.categoryId || '');
-    setFormUnit(product.unit);
-    setFormPackSize(product.packSize ?? null);
-    setFormRoundToPacks(product.roundToPacks ?? false);
-    setFormCalories(product.kcalPer100g ?? null);
-    setFormPieceWeightG(product.pieceWeightG ?? null);
-    setFormPrice('');
-    setFormPriceDate(new Date().toISOString().slice(0, 10));
-    setFormEmisCode(product.emisCode ?? '');
-    setFormEmisName(product.emisName ?? null);
     setShowModal(true);
-  };
-
-  const resetForm = () => {
-    setEditingProduct(null);
-    setFormName('');
-    setFormCategory('');
-    setFormUnit('KG');
-    setFormPackSize(null);
-    setFormRoundToPacks(false);
-    setFormCalories(null);
-    setFormPieceWeightG(null);
-    setFormPrice('');
-    setFormPriceDate('');
-    setFormEmisCode('');
-    setFormEmisName(null);
-    setDuplicateWarning(null);
   };
 
   const resetFilters = () => {
@@ -308,14 +137,7 @@ export default function ProductsPage() {
 
 
 
-  // KB-5: пикеру привязки нужен контекст продукта, чтобы сервер вернул цену, пересчитанную
-  // на нашу единицу, и предупреждение о сомнительной паре. Текущая цена — из формы, если её
-  // ввели, иначе действующая цена редактируемого продукта.
-  const formPriceNumber = Number(String(formPrice).replace(',', '.'));
-  const emisCurrentPrice = Number.isFinite(formPriceNumber) && formPriceNumber > 0
-    ? formPriceNumber
-    : (editingProduct?.currentPrice?.value ?? null);
-
+  // KB-5: ...
   if (loading) {
     return (
       <div className="space-y-6">
@@ -346,7 +168,7 @@ export default function ProductsPage() {
         title="Продукты"
         subtitle={<>{products.length} {productsWord(products.length)} · {categories.length} {categoriesWord(categories.length)}</>}
         right={(
-          <Button variant="primary" iconOnly onClick={() => { resetForm(); setShowModal(true); }}
+          <Button variant="primary" iconOnly onClick={() => { setEditingProduct(null); setShowModal(true); }}
                   aria-label="Добавить продукт" title="Добавить продукт" icon={<Plus size={18} />} />
         )}
       />
@@ -454,198 +276,13 @@ export default function ProductsPage() {
 
       {/* Modal */}
       {showModal && (
-        <Modal onClose={() => setShowModal(false)}>
-          <div className="modal-sheet rounded-2xl shadow-xl w-full max-w-md p-6" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
-            {/* U21: единый крестик в шапке модалки */}
-            <div className="flex items-start justify-between gap-3 mb-4">
-              <h2 className="text-xl font-bold" style={{ color: 'var(--text)' }}>
-                {editingProduct ? 'Редактировать продукт' : 'Новый продукт'}
-              </h2>
-              <button
-                type="button"
-                onClick={() => setShowModal(false)}
-                aria-label="Закрыть"
-                className="p-2 rounded-lg transition-colors shrink-0"
-                style={{ color: 'var(--muted)' }}
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium mb-1" style={{ color: 'var(--muted)' }}>
-                  Название *
-                </label>
-                <input
-                  type="text"
-                  value={formName}
-                  onChange={e => {
-                    setFormName(e.target.value);
-                    scheduleDuplicateCheck(e.target.value, formUnit);
-                  }}
-                  className="w-full px-3 py-2.5 rounded-lg outline-none"
-                  style={{ background: 'var(--elev)', border: '1px solid var(--border)', color: 'var(--text)' }}
-                  placeholder="Например: Гречка ядрица"
-                />
-                {duplicateWarning && (
-                  <div className="mt-2 p-3 rounded-lg text-sm" style={{
-                    background: duplicateWarning.type === 'hard' ? 'color-mix(in srgb, var(--danger) 10%, transparent)' : 'color-mix(in srgb, var(--amber-500) 10%, transparent)',
-                    border: `1px solid ${duplicateWarning.type === 'hard' ? 'color-mix(in srgb, var(--danger) 30%, transparent)' : 'color-mix(in srgb, var(--amber-500) 30%, transparent)'}`,
-                    color: duplicateWarning.type === 'hard' ? 'var(--danger)' : 'var(--amber-300)'
-                  }}>
-                    {duplicateWarning.message}
-                  </div>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-1" style={{ color: 'var(--muted)' }}>
-                  Категория *
-                </label>
-                {/* U12 (список багов 25.10): нативный <select> выглядел чужеродно —
-                    кастомный dropdown в стиле приложения (Фаза 13, CustomSelect). */}
-                <CustomSelect
-                  value={formCategory}
-                  onChange={setFormCategory}
-                  options={categories.map(cat => ({ value: String(cat.id), label: cat.name }))}
-                  placeholder="Выберите категорию..."
-                  ariaLabel="Категория"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-1" style={{ color: 'var(--muted)' }}>
-                  Единица измерения *
-                </label>
-                {/* Fix-5 (п.16): компактные чипы-единицы вместо кнопок «на пол-лица» */}
-                <div className="flex gap-1.5" role="group" aria-label="Единица измерения">
-                  {(['KG', 'L', 'PCS', 'PACK'] as const).map(u => (
-                    <button
-                      key={u}
-                      onClick={() => {
-                        setFormUnit(u);
-                        // U23: отменяем незавершённый debounce-чек со старой единицей
-                        scheduleDuplicateCheck(formName, u);
-                      }}
-                      aria-pressed={formUnit === u}
-                      className="px-3.5 py-1.5 text-sm font-semibold transition-all"
-                      style={{
-                        borderRadius: 'var(--r-input, 8px)',
-                        background: formUnit === u ? 'var(--grad-brand)' : 'transparent',
-                        border: formUnit === u ? '1px solid transparent' : '1px solid var(--border)',
-                        color: formUnit === u ? 'var(--on-fire)' : 'var(--text-2)'
-                      }}
-                    >
-                      {u === 'KG' ? 'кг' : u === 'L' ? 'л' : u === 'PCS' ? 'шт' : 'уп'}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-1" style={{ color: 'var(--muted)' }}>
-                  {/* Fix-5 (п.18): калорийность — НЕ обязательна («могу не знать»);
-                      длинная подсказка переехала из плейсхолдера (не влезал) в подпись */}
-                  Калорийность на 100 г / 100 мл (опционально)
-                </label>
-                <NumberField
-                  value={formCalories}
-                  stepRef={formCalories ?? 100}
-                  maxDecimals={0}
-                  onCommit={v => setFormCalories(v)}
-                  placeholder="ккал"
-                  ariaLabel="Калорийность на 100 г или 100 мл"
-                />
-                <p className="text-xs mt-1" style={{ color: 'var(--muted)' }}>Как на упаковке. Можно оставить пустым.</p>
-              </div>
-
-              {/* Fix-5 (п.18): вес штуки/упаковки показываем ВСЕГДА для шт/уп —
-                  он не зависит от того, знаете ли вы калорийность */}
-              {(formUnit === 'PCS' || formUnit === 'PACK') && (
-                <div>
-                  <label className="block text-sm font-medium mb-1" style={{ color: 'var(--muted)' }}>
-                    Вес 1 {formUnit === 'PCS' ? 'шт' : 'уп'}, г{formCalories ? ' *' : ''}
-                  </label>
-                  <NumberField
-                    value={formPieceWeightG}
-                    stepRef={formPieceWeightG ?? 100}
-                    maxDecimals={0}
-                    onCommit={v => setFormPieceWeightG(v)}
-                    placeholder={formUnit === 'PCS' ? "325" : "600"}
-                    ariaLabel={`Вес одной штуки или упаковки в граммах`}
-                  />
-                  {formCalories ? (
-                    <p className="text-xs mt-1" style={{ color: 'var(--fire)' }}>
-                      ⚠ Обязательно: без веса ккал для шт/уп не рассчитать
-                    </p>
-                  ) : (
-                    <p className="text-xs mt-1" style={{ color: 'var(--muted)' }}>
-                      Например: 325 для банки тушёнки, 600 для блока лапши
-                    </p>
-                  )}
-                </div>
-              )}
-
-              {/* V26/V28: откуда брать цену — позиция ЕМИСС (ищется по локальной копии).
-                  Ручная цена ниже остаётся доступной, но у привязанного продукта
-                  синхронизация её перезапишет. */}
-              <EmisLinkPicker
-                value={formEmisCode}
-                linkedName={formEmisName}
-                unit={formUnit}
-                pieceWeightG={formPieceWeightG}
-                currentPrice={emisCurrentPrice}
-                onChange={(code, name) => {
-                  setFormEmisCode(code);
-                  setFormEmisName(name);
-                }}
-              />
-
-              <div>
-                <label className="block text-sm font-medium mb-1" style={{ color: 'var(--muted)' }}>
-                  {editingProduct
-                    ? `Цена, ₽ за ${formUnit === 'KG' ? 'кг' : formUnit === 'L' ? 'л' : formUnit === 'PCS' ? 'шт' : 'уп'}${
-                        priceByIngredient[String(editingProduct.id)] != null
-                          ? ` (сейчас ${priceByIngredient[String(editingProduct.id)]})`
-                          : ' (сейчас не задана)'
-                      }`
-                    : `Цена при создании, ₽ за ${formUnit === 'KG' ? 'кг' : formUnit === 'L' ? 'л' : formUnit === 'PCS' ? 'шт' : 'уп'} (опционально)`}
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    inputMode="decimal"
-                    value={formPrice}
-                    onChange={e => setFormPrice(e.target.value)}
-                    placeholder="например, 210"
-                    aria-label="Цена"
-                    className="flex-1 px-3 py-2 rounded-lg outline-none"
-                    style={{ background: 'var(--elev)', border: '1px solid var(--border)', color: 'var(--text)' }}
-                  />
-                  {/* U10 (список багов 25.10): единый календарь приложения —
-                      DatePicker (react-datepicker, ru-локаль), а не нативный
-                      input[type=date] с системным пикером. */}
-                  <div style={{ width: 170 }}>
-                    <DatePicker
-                      value={formPriceDate || null}
-                      onChange={setFormPriceDate}
-                      placeholder="Дата действия цены"
-                    />
-                  </div>
-                </div>
-                <p className="text-xs mt-1" style={{ color: 'var(--muted)' }}>
-                  Пусто = не менять. Новая цена добавляется срезом с даты (история сохраняется).
-                </p>
-              </div>
-            </div>
-
-            <div className="flex gap-3 mt-6">
-              <Button variant="ghost" size="sm" onClick={() => setShowModal(false)}>Отмена</Button>
-              <Button variant="primary" size="sm" onClick={handleSave} disabled={!formName || !formCategory || duplicateWarning?.type === 'hard'} aria-label="Сохранить продукт">Сохранить</Button>
-            </div>
-          </div>
-        </Modal>
+        <ProductFormModal
+          product={editingProduct}
+          categories={categories}
+          priceByIngredient={priceByIngredient}
+          onClose={() => { setShowModal(false); setEditingProduct(null); }}
+          onSaved={loadData}
+        />
       )}
 
       {/* Fix-6 (п.7): брендовый диалог подтверждений */}

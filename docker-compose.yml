@@ -1,7 +1,29 @@
 services:
   postgres:
-    image: postgres:15-alpine
+    image: postgres@sha256:54e0dd8e8cddcdbb9156c2486eed5a43eccb7214d7c6828097d41ce049fb3984  # postgres:15-alpine
     container_name: provision-postgres
+    restart: unless-stopped
+    security_opt:
+      - "no-new-privileges:true"
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETGID
+      - SETUID
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/run/postgresql
+    pids_limit: 256
+    mem_limit: ${POSTGRES_MEM_LIMIT:-512m}
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     environment:
       POSTGRES_DB: provision
       POSTGRES_USER: provision
@@ -23,19 +45,27 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: provision-backend
-    # BL-18: лимит памяти виден в compose, а не в комментарии. Heap считается от него
-    # (Dockerfile: -XX:MaxRAMPercentage=70.0). Потоковый разбор SDMX (KB-1) разбирает ответ
-    # 66 МБ в 128 МБ heap, поэтому 1 ГБ покрывает и выгрузку, и применение цен в БД.
+    restart: unless-stopped
+    security_opt:
+      - "no-new-privileges:true"
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp
+    pids_limit: 512
     mem_limit: ${BACKEND_MEM_LIMIT:-1g}
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       postgres:
         condition: service_healthy
     environment:
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
       SEED_DEMO_USERS: ${SEED_DEMO_USERS:-false}
-      # Пароли демо-учёток из .env (баг 02.11.2026): без этих строк compose не прокидывал
-      # переменные в контейнер, Spring видел пустые значения → «ADMIN_PASSWORD is not set»
-      # и логин паролем из .env не работал. Пустое значение = сгенерировать для НОВОЙ записи.
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
       DEMO_USER_PASSWORD: ${DEMO_USER_PASSWORD:-}
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/provision
@@ -44,34 +74,14 @@ services:
       SPRING_JPA_HIBERNATE_DDL_AUTO: validate
       SPRING_FLYWAY_ENABLED: "true"
       JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env}
-      # Fix-13 (интеграция): Росстат/ЕМИСС (fedstat.ru) — официальные средние
-      # потребительские цены. Ключи/пароли НЕ нужны; переменные ниже — только
-      # для переопределения дефолтов (показатель 31448 = месячные цены, регион РФ).
-      # ВНИМАНИЕ: ЕМИСС блокирует зарубежные дата-центры (403 анти-бот) —
-      # контейнер должен выходить в интернет из сети РФ (как и хост пользователя).
       ROSSTAT_INDICATOR_ID: ${ROSSTAT_INDICATOR_ID:-31448}
       ROSSTAT_REGION: ${ROSSTAT_REGION:-Российская Федерация без учета новых субъектов (с 01.01.2023)}
       ROSSTAT_REGION_CODE: ${ROSSTAT_REGION_CODE:-643004.АГ}
-      # Сколько последних месяцев выгружать из поля «Период». Полный ряд ЕМИСС даёт ответ
-      # ~65 МБ; с 29.10.2026 разбор ПОТОКОВЫЙ (StAX, KB-1): 66 МБ разбираются в 128 МБ heap,
-      # поэтому 0 (все 12 месяцев) больше не требует гигантского -Xmx. 1 месяц ≈ 5,6 МБ,
-      # 2 ≈ 11 МБ. Сужать поле «Год» нельзя — портал отвечает 302 (см. ARCHITECTURE.md).
       ROSSTAT_PERIOD_MONTHS: ${ROSSTAT_PERIOD_MONTHS:-0}
       ROSSTAT_PERIOD_YEARS: ${ROSSTAT_PERIOD_YEARS:-2}
-      # Предохранитель от runaway-ответа: при превышении ЧТЕНИЕ обрывается (раньше отказ
-      # случался уже после полной загрузки ответа в память). 96 МБ — с запасом над полным
-      # рядом 65 МБ, чтобы окно выгрузки можно было расширять.
       ROSSTAT_MAX_RESPONSE_BYTES: ${ROSSTAT_MAX_RESPONSE_BYTES:-100663296}
-      # Лимит ручной загрузки выгрузки ЕМИСС (multipart) — см. также client_max_body_size в nginx.conf
       EMIS_UPLOAD_MAX_FILE_SIZE: ${EMIS_UPLOAD_MAX_FILE_SIZE:-96MB}
       INTEGRATION_CONTACT_EMAIL: ${INTEGRATION_CONTACT_EMAIL:-}
-    # Подзадача 6 аудита 02.11.2026: backend НЕ публикуется наружу — API доступен
-    # только через nginx (security-заголовки, limit_req, client_max_body_size,
-    # access-лог) и внутри docker-сети (фронт ходит сюда же). Прежняя публикация
-    # 0.0.0.0:8080 открывала эндпоинты МИМО nginx на публичном хосте.
-    # Для локальной отладки и CI-джоб, которым нужен прямой доступ на :8080, —
-    # overlay docker-compose.debug.yml (127.0.0.1-only):
-    #   docker compose -f docker-compose.yml -f docker-compose.debug.yml up -d
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/api/v1/meta"]
       interval: 30s
@@ -88,13 +98,30 @@ services:
         - VITE_API_URL=/api/v1
         - VITE_API_MODE=real
     container_name: provision-frontend
+    restart: unless-stopped
+    security_opt:
+      - "no-new-privileges:true"
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/cache/nginx
+      - /var/run
+    pids_limit: 128
+    mem_limit: ${FRONTEND_MEM_LIMIT:-256m}
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       backend:
         condition: service_healthy
     ports:
-      - "3000:80"
+      - "3000:8080"
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:80"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:8080"]
       interval: 10s
       timeout: 5s
       retries: 3

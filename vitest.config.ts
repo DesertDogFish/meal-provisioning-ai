@@ -49,6 +49,8 @@ export default defineConfig({
         'src/utils/format.ts',
         // новые компоненты, выделенные в Фазе 10
         'src/components/ProductTable.tsx',
+        // BL-16: extracted product create/edit modal
+        'src/components/ProductFormModal.tsx',
         // bugs-products-catalog п.4: мультиселект фильтра категорий
         'src/components/CustomMultiSelect.tsx',
         // BL-63 (аудит 02.11.2026, подзадача 7): алерты на токенах — зона изменения

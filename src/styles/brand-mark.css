@@ -1,0 +1,29 @@
+/* ============================================================
+   1. Знак (design-pack assets/, не перерисовывается): переключение
+   dark/light-версии — только CSS по data-theme (п.4.1).
+   Охранное поле и min-размер задаются использованием (≥24px).
+   ============================================================ */
+.brand-mark { position: relative; display: inline-flex; flex: none; }
+.brand-mark__dark, .brand-mark__light { display: block; width: 100%; height: 100%; }
+.brand-mark__dark > svg, .brand-mark__light > svg { width: 100%; height: 100%; display: block; }
+.brand-mark__light { display: none; }
+:root[data-theme="light"] .brand-mark__dark { display: none; }
+:root[data-theme="light"] .brand-mark__light { display: block; }
+
+/* 1.1 ThemeToggle: icon-button в стиле .ibtn пакета (42×42, --r-md) */
+.ibtn {
+  width: 42px;
+  height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--r-md);
+  border: 1px solid var(--line-strong);
+  background: color-mix(in srgb, var(--bg-2) 40%, transparent);
+  color: var(--text-2);
+  cursor: pointer;
+  transition: color var(--t-base) var(--ease), background var(--t-base) var(--ease),
+              border-color var(--t-base) var(--ease);
+}
+.ibtn:hover { color: var(--text-1); background: var(--bg-2); }
+

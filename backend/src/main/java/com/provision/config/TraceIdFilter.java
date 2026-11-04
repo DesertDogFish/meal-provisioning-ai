@@ -52,7 +52,7 @@ public class TraceIdFilter extends OncePerRequestFilter {
     }
 
     /** Защита от log-injection: только безопасные символы, ограниченная длина. */
-    private static String sanitize(String header) {
+    public static String sanitize(String header) {
         if (header == null || header.isBlank() || header.length() > MAX_HEADER_ID_LENGTH) {
             return null;
         }

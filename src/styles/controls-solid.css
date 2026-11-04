@@ -1,0 +1,93 @@
+/* ============================================================
+   Fix-4 (список 26.10, итерация 4): ЕДИНЫЙ SOLID-СТИЛЬ КОНТРОЛОВ
+   - все поля ввода — одинаковый «квадратный» радиус и предсказуемая высота;
+   - обособленные кнопки остаются pill (Button.module.css .btn);
+   - бейджи приёмов пищи — 4 различимых цвета (завтрак/обед/ужин/перекус).
+   ============================================================ */
+:root {
+  --r-input: 8px;      /* «более квадратные» инпуты — запрос пользователя */
+  --h-control: 36px;   /* Fix-7 (п.15): единая высота контролов — компактнее (было 40px) */
+}
+
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="hidden"]):not(.compact-input),
+textarea,
+select {
+  border-radius: var(--r-input) !important;
+}
+
+/* Fix-10 (п.2): инпут составных контролов количества (AmountInput/
+   FreeAmountInput) — ПЛОСКИЙ: справа к нему вплотную примыкают кнопки единиц,
+   слева скругление даёт обёртка (единый радиус + overflow-hidden, Fix-7 п.13).
+   Глобальный !important-радиус раньше скруглял сам инпут с обеих сторон —
+   на стыке с кнопками возникала «ступенька». */
+input.compact-input {
+  border-radius: 0 !important;
+}
+
+/* поисковый комбобокс, кастомный селект и NumberField — тот же радиус */
+.rss-field,
+.cselect-trigger,
+.nf-input {
+  border-radius: var(--r-input);
+}
+
+/* Бейджи приёмов: янтарь / волна / сумерки / коралл — различимы в обе темы */
+.badge-meal-breakfast {
+  background: color-mix(in srgb, var(--amber-500) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--amber-500) 34%, transparent);
+  color: var(--amber-300);
+}
+.badge-meal-lunch {
+  background: var(--success-soft);
+  border: 1px solid color-mix(in srgb, var(--success) 34%, transparent);
+  color: var(--wave-300);
+}
+.badge-meal-dinner {
+  background: color-mix(in srgb, var(--card-hull-dark) 72%, transparent);
+  border: 1px solid color-mix(in srgb, var(--card-hull-dark) 92%, transparent);
+  color: var(--snow);
+}
+.badge-meal-snack {
+  background: var(--danger-soft);
+  border: 1px solid color-mix(in srgb, var(--danger) 34%, transparent);
+  color: var(--danger);
+}
+
+/* Чеклист: крупные тач-таргеты (телефон в магазине — Fix-4 п.8) */
+.checklist-row input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+}
+.checklist-row {
+  cursor: pointer;
+}
+
+/* Печатный документ (Экспорт PDF): каждая секция/день — отдельная страница */
+.print-page {
+  break-after: page;
+  page-break-after: always;
+}
+.print-page:last-child {
+  break-after: auto;
+  page-break-after: auto;
+}
+/* Fix-6 (п.4): стили печатного документа — НА ЭКРАНЕ тоже (раньше жили только
+   внутри @media print, и на /trips/:id/print таблицы были без рамок). */
+.print-doc {
+  color: #10202b;
+}
+.print-doc .print-muted { color: #5b6b76; }
+.print-doc table { width: 100%; border-collapse: collapse; }
+.print-doc th, .print-doc td {
+  border: 1px solid #c9d2d8;
+  padding: 6px 8px;
+  text-align: left;
+  font-size: 13px;
+}
+.print-doc th { background: #f2f5f7; color: #435663; font-weight: 700; font-size: 11px; text-transform: uppercase; }
+.print-doc tbody tr:nth-child(even) { background: #fafbfc; }
+@media print {
+  .print-doc { color: #10202b; }
+}
+
+

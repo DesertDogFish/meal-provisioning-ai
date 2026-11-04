@@ -1,0 +1,87 @@
+/* ============================================================
+   Подзадача 4 — модалки и попапы: всегда по центру и в пределах экрана.
+   .modal-overlay — грид с центрированием (уже был); добавляем отступ от
+   краёв, а лист модалки ограничиваем по высоте dvh (на телефоне 100vh
+   включает динамический тулбар браузера — лист «уезжал» под него).
+   ============================================================ */
+.modal-overlay {
+  padding: var(--modal-pad);
+  padding-bottom: calc(var(--modal-pad) + env(safe-area-inset-bottom, 0px));
+}
+/* Обёртка, которую рендерит <Modal> (портал в body): именно она держит
+   ограничение по высоте, чтобы лист скроллился ВНУТРИ, а не уезжал за экран. */
+.modal-wrap {
+  display: flex;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  justify-content: center;
+  align-items: flex-start;
+}
+.modal-wrap > * {
+  width: 100%;
+  max-width: 100%;
+  /* my-8 у листов больше не нужен: оверлей не скроллится, скроллится лист */
+  margin-top: 0;
+  margin-bottom: 0;
+  /* ВАЖНО: без процентов. `min(86dvh, 100%)` НЕ работал: высота .modal-wrap —
+     auto, процент против auto-высоты не разрешается и max-height схлопывался
+     в none (лист на 360×640 вырастал до 820px). dvh учитывает динамический
+     тулбар телефона; vh — фолбэк для браузеров без dvh. */
+  max-height: 86vh;
+  max-height: 86dvh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+@supports not (height: 100dvh) {
+  .modal-wrap > * { max-height: 86vh; }
+}
+/* ВНИМАНИЕ, специфичность: у `.modal-wrap > *` она ТАКАЯ ЖЕ (0,1,0) —
+   универсальный `*` не добавляет веса, — поэтому ширина листа берётся отсюда
+   (правило позже по файлу), а не из `width: 100%` выше. Это желаемое
+   поведение: лист не шире 560px на десктопе и равен доступной ширине
+   (оверлей минус --modal-pad) на телефоне. Все 10 потребителей <Modal>
+   рендерят лист с классом .modal-sheet, исключений нет. */
+.modal-sheet {
+  width: min(560px, 100%);
+  max-height: 86vh;
+  max-height: 86dvh;
+}
+
+/* Липкие шапка/футер листа: тело скроллится, заголовок и кнопки видны всегда.
+   Отрицательные поля компенсируют p-6 листа, фон — из токена (непрозрачный). */
+.modal-head,
+.modal-foot {
+  position: sticky;
+  z-index: 2;
+  margin-left: calc(-1 * var(--sp-6));
+  margin-right: calc(-1 * var(--sp-6));
+  padding-left: var(--sp-6);
+  padding-right: var(--sp-6);
+  background: var(--bg-1);
+}
+.modal-head {
+  top: calc(-1 * var(--sp-6));
+  margin-top: calc(-1 * var(--sp-6));
+  padding-top: var(--sp-5);
+  padding-bottom: var(--sp-3);
+  border-bottom: 1px solid var(--line);
+}
+.modal-foot {
+  bottom: calc(-1 * var(--sp-6));
+  margin-bottom: calc(-1 * var(--sp-6));
+  padding-top: var(--sp-3);
+  padding-bottom: var(--sp-5);
+  border-top: 1px solid var(--line);
+}
+
+/* KB-29 (UX-осмотр 31.10, п.13): лист модалки не «прыгает» под курсором.
+   1) резерв высоты слота превью, пока deep-link догружает предвыбранное блюдо
+      (иначе лист вырастает на ~110px после открытия и центрированная модалка
+      съезжает — координатный клик по commit-кнопке глотался);
+   2) scroll anchoring выключен: догрузка контента ВЫШЕ точки просмотра не
+      должна прокручивать лист (тот же сдвиг между pointerdown и pointerup). */
+.meal-preview-slot--reserved { min-height: 8rem; }
+.modal-wrap > * { overflow-anchor: none; }
+

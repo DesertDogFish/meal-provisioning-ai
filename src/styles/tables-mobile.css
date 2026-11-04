@@ -1,0 +1,105 @@
+/* ============================================================
+   Подзадача 8 — адаптивные таблицы: на телефоне строка таблицы
+   превращается в карточку «подпись: значение» (вместо горизонтального
+   скролла всей таблицы). Подписи берутся из data-label ячейки.
+   ============================================================ */
+@media (max-width: 767px) {
+  .table-cards { overflow-x: visible !important; }
+  .table-cards > table,
+  .table-cards table {
+    min-width: 0 !important;
+    table-layout: auto !important;
+    width: 100% !important;
+  }
+  .table-cards colgroup { display: none; }
+  /* Шапка остаётся в a11y-дереве, но визуально скрыта: подписи колонок
+     дублируются через data-label в каждой карточке-строке. */
+  .table-cards thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+  }
+  .table-cards tbody { display: block; width: auto; }
+  /* Строка — карточка: чекбокс/иконка в левой колонке, название и все значения —
+     в правой. Подписи значений берутся из data-label (::before). */
+  .table-cards tbody tr {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    column-gap: var(--sp-3);
+    width: auto;
+    padding: var(--sp-3) var(--sp-4);
+    border-top: 1px solid var(--line) !important;
+  }
+  .table-cards tbody tr:first-child { border-top: 0 !important; }
+  .table-cards tbody td {
+    display: flex;
+    grid-column: 2;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--sp-3);
+    width: auto;
+    padding: 2px 0 !important;
+    border: 0 !important;
+    text-align: right;
+  }
+  /* ячейка-чекбокс — в левую колонку, на одну строку с названием */
+  .table-cards tbody td.cell-check {
+    grid-column: 1;
+    grid-row: 1;
+    align-self: center;
+    justify-content: flex-start;
+    padding: 0 !important;
+  }
+  .table-cards tbody td.cell-check::before { content: none; }
+  /* строка-заголовок группы (colSpan) — во всю ширину карточки */
+  .table-cards tbody td.cell-group {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+    text-align: left;
+  }
+  .table-cards tbody td.cell-group::before { content: none; }
+  .table-cards tbody td::before {
+    content: attr(data-label);
+    flex: 0 1 auto;
+    min-width: 0;
+    text-align: left;
+    color: var(--text-2);
+    font-size: var(--fs-caption);
+    font-weight: 700;
+  }
+  /* ячейка без подписи (чекбокс, действия) — во всю ширину, без ::before */
+  .table-cards tbody td[data-label=""]::before,
+  .table-cards tbody td.no-label::before { content: none; }
+  .table-cards tbody td.no-label { justify-content: flex-start; }
+  /* «название позиции» в карточке — крупнее и слева, на одной строке с чекбоксом */
+  .table-cards tbody td.row-title {
+    grid-row: 1;
+    justify-content: flex-start;
+    text-align: left;
+    font-weight: 700;
+    font-size: var(--fs-body);
+    color: var(--text-1);
+    padding-bottom: var(--sp-1) !important;
+  }
+  .table-cards tbody td.row-title::before { content: none; }
+  .table-cards .sticky-thead thead th { position: static; }
+}
+
+/* Чеклист на телефоне: блок «беру N» переезжает на отдельную строку во всю
+   ширину — палец не промахивается, строка остаётся тач-таргетом отметки. */
+@media (max-width: 767px) {
+  .checklist-amount {
+    flex-basis: 100%;
+    justify-content: flex-end;
+    margin-left: auto;
+  }
+  .checklist-row { gap: var(--sp-3); }
+}
+

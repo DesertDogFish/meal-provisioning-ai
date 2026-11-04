@@ -30,4 +30,7 @@ public interface EmisPriceRepository extends JpaRepository<EmisPrice, Long> {
     List<EmisPrice> findLatestPerProduct(@Param("regionCode") String regionCode);
 
     long countByRegionCode(String regionCode);
+
+    /** Точки цены одной позиции ЕМИСС по региону приложения, по возрастанию периода (BL-11). */
+    List<EmisPrice> findByRegionCodeAndEmisCodeOrderByPeriodYearAscPeriodMonthAsc(String regionCode, String emisCode);
 }

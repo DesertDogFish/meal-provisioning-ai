@@ -1,0 +1,275 @@
+/* ============================================================
+   Plan plans/2026-10-30-mobile-workflow-ux.md
+   Мобильный воркфлоу «4 этапа похода»: нижний таб-бар, степпер,
+   компактная полоса похода, bottom-sheet, UnitChip, компактные
+   строки чеклиста/чека, карточка похода целиком-тап.
+   Десктоп не трогаем: все новые блоки скрыты на ≥768px, кроме
+   оговорённого (степпер-стрелки заменяют .seg только на мобильном).
+   ============================================================ */
+
+/* --- 1. Компактная sticky-полоса похода (вместо KPI-плиток на телефоне) --- */
+.trip-strip {
+  position: sticky;
+  top: calc(52px + env(safe-area-inset-top, 0px)); /* под липкой шапкой Layout */
+  z-index: calc(var(--z-nav) - 22);
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  width: 100%;
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: color-mix(in srgb, var(--bg-1) 92%, transparent);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  color: var(--text-1);
+  font: 600 var(--fs-body)/1.2 var(--font-body);
+  text-align: left;
+  cursor: pointer;
+  min-height: var(--touch-target);
+  /* подзадача 8: узкий экран (360px) — дети переносятся, а не обрезаются */
+  flex-wrap: wrap;
+}
+.trip-strip:focus-visible { outline: 2px solid var(--amber-500); outline-offset: 2px; }
+.trip-strip__kpis {
+  display: inline-flex;
+  align-items: center;
+  /* UX-осмотр 31.10 (подзадача 8): было nowrap + overflow:hidden — на 360–390px
+     последняя KPI молча обрезалась на «435 ₽/ч…» (единицы терялись). Теперь
+     ряд переносится целиком: `.keep-num` не рвёт пару «число + единица», а
+     overflow видим, поэтому «₽» и «/чел» остаются на экране при любой ширине. */
+  flex-wrap: wrap;
+  gap: var(--sp-1) var(--sp-2);
+  min-width: 0;
+  overflow: visible;
+  row-gap: 2px;
+}
+.trip-strip__sep { color: var(--text-3); }
+.trip-strip__sum { color: var(--amber-300); font-weight: 800; }
+.trip-strip .chev { margin-left: auto; flex: none; color: var(--text-2); }
+@media (min-width: 768px) {
+  .trip-strip { display: none; }
+}
+
+/* Мини-степпер этапов внутри полосы и в sheet-сводке */
+.mini-steps { display: inline-flex; align-items: center; gap: 2px; flex: none; }
+.mini-step {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  font: 800 11px/1 var(--font-body);
+  background: var(--elev);
+  color: var(--text-2);
+}
+.mini-step.done { background: color-mix(in srgb, var(--success) 22%, transparent); color: var(--success); }
+.mini-step.active { background: var(--grad-brand); color: var(--on-fire); }
+
+/* --- 2. Верхний степпер-прогресс УДАЛЁН (UX-осмотр 31.10, подзадача 5, KB-33):
+   на мобильном он был вторым кликабельным переключателем этапов и обрезался
+   справа. Единственная мобильная навигация этапов — нижний .stage-bar (2b);
+   прогресс — mini-steps липкой полосы сводки. См. DESIGN_MIGRATION.md. --- */
+
+/* --- 2b. Нижний таб-бар этапов (мобильный) --- */
+.stage-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: var(--z-nav);
+  display: grid;
+  grid-template-columns: repeat(5, 1fr); /* redesign п.5: пятый этап ⑤ */
+  background: color-mix(in srgb, var(--bg-1) 94%, transparent);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border-top: 1px solid var(--line);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+.stage-bar__btn {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  min-height: 56px;
+  padding: 6px 2px 8px;
+  border: 0;
+  background: transparent;
+  color: var(--text-2);
+  font: 700 11px/1.1 var(--font-body);
+  cursor: pointer;
+}
+.stage-bar__btn:focus-visible { outline: 2px solid var(--amber-500); outline-offset: -2px; }
+.stage-bar__btn.active { color: var(--amber-300); }
+.stage-bar__btn.done { color: var(--success); }
+.stage-bar__btn.active.done { color: var(--success); }
+.stage-bar__badge {
+  position: absolute;
+  top: 4px;
+  right: calc(50% - 20px);
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: var(--r-pill);
+  background: var(--fire);
+  color: var(--on-fire);
+  font: 800 10px/16px var(--font-body);
+  text-align: center;
+}
+.stage-bar__badge.ok {
+  background: color-mix(in srgb, var(--success) 26%, transparent);
+  color: var(--success);
+}
+@media (min-width: 768px) {
+  .stage-bar { display: none; }
+}
+/* контент страницы похода не прячется под таб-бар */
+@media (max-width: 767px) {
+  .stage-page { padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px)); }
+}
+
+/* --- Bottom-sheet (сводка похода, единицы, фильтры) --- */
+.sheet-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal);
+  background: color-mix(in srgb, #000 55%, transparent);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+.sheet {
+  width: 100%;
+  max-width: 560px;
+  max-height: 82dvh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: var(--bg-1);
+  border: 1px solid var(--line-strong);
+  border-bottom: 0;
+  border-radius: var(--r-lg) var(--r-lg) 0 0;
+  padding: var(--sp-3) var(--sp-4) calc(var(--sp-5) + env(safe-area-inset-bottom, 0px));
+  animation: sheet-up var(--t-base) var(--ease) both;
+}
+.sheet:focus { outline: none; }
+@keyframes sheet-up {
+  from { transform: translateY(24px); opacity: .6; }
+  to   { transform: none; opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sheet { animation: none; }
+}
+.sheet__grab {
+  width: 36px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--line-strong);
+  margin: 0 auto var(--sp-3);
+}
+.sheet__title {
+  font: 800 var(--fs-body)/1.2 var(--font-body);
+  color: var(--text-1);
+  margin: 0 0 var(--sp-3);
+}
+.sheet-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  width: 100%;
+  min-height: var(--touch-target);
+  padding: var(--sp-2) var(--sp-3);
+  border: 0;
+  border-radius: var(--r-md);
+  background: transparent;
+  color: var(--text-1);
+  font: 600 var(--fs-body)/1.2 var(--font-body);
+  text-align: left;
+  cursor: pointer;
+}
+.sheet-option:hover { background: var(--bg-2); }
+.sheet-option:focus-visible { outline: 2px solid var(--amber-500); outline-offset: -2px; }
+.sheet-option[aria-checked="true"] { background: color-mix(in srgb, var(--wave-400) 14%, transparent); color: var(--w1); }
+
+/* --- Kebab-меню (поповер действий) --- */
+.kebab-pop {
+  position: fixed;
+  z-index: var(--z-pop);
+  min-width: 180px;
+  padding: var(--sp-1);
+  background: var(--bg-2);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-1);
+  animation: infotip-in var(--t-fast) var(--ease) both;
+}
+.kebab-pop button {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  width: 100%;
+  min-height: var(--touch-target);
+  padding: var(--sp-2) var(--sp-3);
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--text-1);
+  font: 600 var(--fs-body)/1.2 var(--font-body);
+  text-align: left;
+  cursor: pointer;
+}
+.kebab-pop button:hover { background: var(--bg-3); }
+.kebab-pop button:focus-visible { outline: 2px solid var(--amber-500); outline-offset: -2px; }
+.kebab-pop button.danger { color: var(--danger); }
+
+/* --- UnitChip: единица измерения чипом вместо вертикального стека --- */
+.unit-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  min-height: 32px;
+  padding: 0 var(--sp-2);
+  border: 1px solid var(--border);
+  border-left: 0;
+  background: var(--elev);
+  color: var(--w1);
+  font: 700 13px/1 var(--font-body);
+  cursor: pointer;
+}
+.unit-chip:disabled { opacity: .5; cursor: default; }
+.unit-chip:focus-visible { outline: 2px solid var(--amber-500); outline-offset: 1px; }
+.unit-chip--solo {
+  border-left: 1px solid var(--border);
+  color: var(--text-2);
+  cursor: default;
+}
+
+/* --- 5. Чеклист «в магазине»: первый экран рабочий, строки под палец --- */
+.checklist-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2) var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md) var(--r-md) 0 0;
+}
+.checklist-head__count { font: 800 var(--fs-body)/1 var(--font-body); color: var(--text-1); }
+.checklist-toolbar {
+  display: flex;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-4) var(--sp-3);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-top: 0;
+  border-radius: 0 0 var(--r-md) var(--r-md);
+}
+.checklist-toolbar .btn { flex: 1 1 auto; min-height: var(--touch-target); }
+@media (max-width: 767px) {
+  .checklist-row { min-height: 64px; }
+  .checklist-row input[type="checkbox"] { width: 24px; height: 24px; }
+}

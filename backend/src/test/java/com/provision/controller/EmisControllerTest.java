@@ -152,4 +152,13 @@ class EmisControllerTest {
                 .andExpect(jsonPath("$[0].warning").value(
                         "Масштаб не сопоставим: позиция указана за «50 л», а штука продукта — 220 г."));
     }
+
+    @Test
+    @DisplayName("BL-11: GET /admin/emis/products/{code}/prices возвращает ряд цен позиции")
+    void pricesSeries() throws Exception {
+        when(catalogService.prices("2307")).thenReturn(List.of());
+        mockMvc.perform(get("/api/v1/admin/emis/products/2307/prices"))
+                .andExpect(status().isOk());
+        verify(catalogService).prices("2307");
+    }
 }

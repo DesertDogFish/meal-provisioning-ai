@@ -1,0 +1,71 @@
+/* ============================================================
+   Подзадача 6/7 — чеклист как мобильный сценарий (магазин, одной рукой).
+   ============================================================ */
+.checklist-row input[type="checkbox"] {
+  width: 22px;
+  height: 22px;
+  flex: none;
+}
+@media (pointer: coarse) {
+  /* «Перчаточная» зона чекбокса задаётся обёрткой-<label> .check-hit (п.7):
+     ::after на <input> браузеры не рисуют — прежнее правило было мёртвым. */
+  .checklist-row { padding-top: var(--sp-3); padding-bottom: var(--sp-3); }
+}
+
+/* UX-осмотр 31.10 (п.14): строка чеклиста — контейнер, а переключатель «взято»
+   настоящая <button> (раньше div[role=button] с чекбоксом и полем ввода внутри —
+   interactive-в-interactive, паттерн KB-31). Хит-зона ::after растянута на всю
+   строку: «тап по строке» работает как раньше, а Enter/Space/фокус — нативные.
+   Соседние контролы (чекбокс, «беру») подняты над хит-зоной (.checklist-row__hit). */
+.checklist-row { position: relative; }
+.checklist-row__toggle {
+  display: block;
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.checklist-row__toggle::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  min-height: var(--touch-min, 40px);
+}
+.checklist-row__toggle:focus-visible { outline: 2px solid var(--amber-500); outline-offset: -2px; }
+.checklist-row__hit { position: relative; z-index: 1; }
+/* Липкая шапка чеклиста: прогресс «Взято N из M» и массовые действия видны всегда */
+.checklist-sticky {
+  position: sticky;
+  top: 0;
+  z-index: calc(var(--z-nav) - 20);
+  background: var(--bg-1);
+}
+/* На телефоне скроллится документ, а над липким итогом ещё две липкие
+   полосы: шапка (52px) и trip-strip (~52px) —.offset считаем от них.
+   Используется только на странице похода, где trip-strip есть всегда. */
+@media (max-width: 767px) {
+  .checklist-sticky {
+    top: calc(104px + env(safe-area-inset-top, 0px));
+  }
+}
+.checklist-group-toggle {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--bg-2);
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  color: var(--text-1);
+  font: 700 var(--fs-body)/1.2 var(--font-body);
+  cursor: pointer;
+  text-align: left;
+}
+.checklist-group-toggle:focus-visible { outline: 2px solid var(--amber-500); outline-offset: -2px; }
+

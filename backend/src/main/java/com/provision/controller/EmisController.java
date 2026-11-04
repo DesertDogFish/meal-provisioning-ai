@@ -1,6 +1,7 @@
 package com.provision.controller;
 
 import com.provision.dto.emis.EmisProductDto;
+import com.provision.entity.EmisPrice;
 import com.provision.service.EmisCatalogService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -8,6 +9,8 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+
+import org.springframework.web.bind.annotation.PathVariable;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -44,5 +47,13 @@ public class EmisController {
             @RequestParam(required = false) BigDecimal price) {
         return catalogService.search(query, limit,
                 new EmisCatalogService.LinkContext(unit, pieceWeightG, price));
+    }
+
+    /**
+     * BL-11: ряд цен позиции ЕМИСС по месяцам (для графика в карточке продукта).
+     */
+    @GetMapping("/products/{code}/prices")
+    public List<EmisPrice> prices(@PathVariable String code) {
+        return catalogService.prices(code);
     }
 }

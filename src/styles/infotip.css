@@ -1,0 +1,70 @@
+/* ============================================================
+   Подзадача 3 — InfoTip: управляемый поповер вместо нативного title
+   (на тач-устройстве ховера нет, подсказка была недоступна вовсе).
+   ============================================================ */
+.infotip-trigger {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: transparent;
+  /* --text-2, не --text-3: контраст пары text-2/bg-1 заявлен в tokens.json → a11y.contrast */
+  color: var(--text-2);
+  cursor: help;
+  vertical-align: middle;
+  transition: color var(--t-fast) var(--ease), background var(--t-fast) var(--ease);
+}
+.infotip-trigger:hover,
+.infotip-trigger[aria-expanded="true"] {
+  /* dark: --amber-300 на color-mix(amber-500 14%, transparent) → 8.51:1 ✅ */
+  /* light: --amber-300 на том же фоне → 2.77:1 ❌ (amber-300 не проходит AA на белом фоне).
+     Заменяем на --amber-600 (#C2570E): на чистом bg-1 → 4.50:1 ✅, убираем color-mix фон
+     (он только ухудшает контраст на белом). */
+  color: var(--amber-600);
+  background: transparent;
+}
+.infotip-trigger:focus-visible {
+  outline: 2px solid var(--amber-500);
+  outline-offset: 2px;
+}
+/* Тач-таргет ≥44×44px без изменения вёрстки: прозрачная «перчаточная» зона
+   псевдоэлементом (иконка остаётся 13px, как в брендбуке). */
+@media (pointer: coarse) {
+  .infotip-trigger::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: var(--touch-target);
+    height: var(--touch-target);
+    transform: translate(-50%, -50%);
+  }
+}
+
+.infotip-pop {
+  position: fixed;
+  z-index: var(--z-pop);
+  box-sizing: border-box;
+  max-width: min(320px, 90vw);
+  padding: var(--sp-3);
+  background: var(--bg-2);
+  color: var(--text-1);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  box-shadow: var(--shadow-1);
+  font: 400 var(--fs-small)/1.45 var(--font-body);
+  text-align: left;
+  white-space: normal;
+  animation: infotip-in var(--t-fast) var(--ease) both;
+}
+@keyframes infotip-in {
+  from { opacity: 0; transform: translateY(-2px); }
+  to   { opacity: 1; transform: none; }
+}
+

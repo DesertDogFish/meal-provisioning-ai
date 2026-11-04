@@ -1,0 +1,22 @@
+/* ============================================================
+   Подзадача 9 — каркас и навигация на мобильном.
+   ============================================================ */
+.app-drawer { max-width: 85vw; }
+/* Вкладки: горизонтальный скролл, подписи не рвутся на две строки */
+.seg { flex-wrap: nowrap; }
+.seg-btn { flex: none; white-space: nowrap; }
+.seg-scroll {
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.seg-scroll::-webkit-scrollbar { display: none; }
+
+/* Плавающая кнопка «наверх» и контент не прячутся под тулбар/«чёлку» */
+.scroll-top-btn {
+  right: calc(18px + env(safe-area-inset-right, 0px));
+  bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+}
+@media (pointer: coarse) {
+  .scroll-top-btn { width: var(--touch-target); height: var(--touch-target); }
+}
+

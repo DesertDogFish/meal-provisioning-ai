@@ -1,0 +1,31 @@
+/* ============================================================
+   Подзадача 5 — читаемость основного текста (без зума).
+   Классы вместо инлайн-fontSize 9–11px; печать (.print-doc) не трогаем.
+   ============================================================ */
+.cap {
+  font-size: var(--fs-caption);
+  line-height: 1.35;
+}
+.cap-muted { color: var(--text-2); }
+
+/* Шапки таблиц: подписи колонок — 12px, неразрывные пары с InfoTip */
+.table-head th {
+  font-size: var(--fs-caption);
+  font-weight: 700;
+  color: var(--text-2);
+}
+
+/* Поля ввода: 14px на десктопе, 16px на тач-экране (iOS не зумит при фокусе) */
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="hidden"]):not([type="submit"]):not([type="button"]),
+select,
+textarea {
+  font-size: var(--fs-input);
+}
+@media (pointer: coarse) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="hidden"]):not([type="submit"]):not([type="button"]),
+  select,
+  textarea {
+    font-size: var(--fs-input-touch);
+  }
+}
+

@@ -57,6 +57,14 @@ public class Ingredient {
     @Column(name = "emis_code", length = 16)
     private String emisCode;
 
+    /**
+     * BL-14: коэффициент фасовки на привязке («наш продукт = N упаковок ЕМИСС»).
+     * {@code null}/1 — цена переносится 1:1 (как раньше). При синхронизации цена позиции
+     * ЕМИСС умножается на этот коэффициент перед записью в {@code ingredient_prices}.
+     */
+    @Column(name = "emis_factor", precision = 10, scale = 3)
+    private BigDecimal emisFactor;
+
     // V20: trip_id NULL = глобальный справочник; иначе копия продукта для похода
     @Column(name = "trip_id")
     private Long tripId;

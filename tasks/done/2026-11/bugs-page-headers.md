@@ -1,8 +1,8 @@
 # Пачка багов: шапки основных страниц (заголовок «Блюда», hero-блок с фоновой графикой)
 
-Status: READY
+Status: DONE
 Created: 2026-11-03
-Closed:
+Closed: 2026-11-04
 Источник: bugs-inbox владельца 03.11.2026 (BUG-001, BUG-002), скриншоты в uploads/.
 Каждый баг подтверждён осмотром `RecipesPage.tsx`, `ProductsPage.tsx`, `TripsPage.tsx`.
 

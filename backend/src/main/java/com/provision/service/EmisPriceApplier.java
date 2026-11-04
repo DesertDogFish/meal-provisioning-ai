@@ -158,6 +158,11 @@ public class EmisPriceApplier {
                 skipped++;
                 continue;
             }
+            // BL-14: коэффициент фасовки на привязке («наш продукт = N упаковок ЕМИСС»).
+            BigDecimal factor = ingredient.getEmisFactor();
+            if (factor != null && factor.compareTo(BigDecimal.ONE) != 0 && factor.compareTo(BigDecimal.ZERO) > 0) {
+                unitPrice = unitPrice.multiply(factor).setScale(2, java.math.RoundingMode.HALF_UP);
+            }
             Optional<IngredientPrice> existing =
                     priceRepository.findByIngredientIdAndEffectiveFrom(ingredient.getId(), point.date());
             BigDecimal oldPrice = null;

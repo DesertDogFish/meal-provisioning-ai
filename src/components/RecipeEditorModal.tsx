@@ -15,6 +15,11 @@ import { validateRecipe } from '../utils/validation';
 import { humanizeFieldError } from '../utils/validationMessages';
 import AmountInput from './AmountInput';
 import type { MealType, UnitOfMeasure } from '../types';
+import {
+  EditorProduct, EditableRecipe, Row, MEAL_TYPES, rowAmountValue, parseAmount,
+} from './recipeEditorHelpers';
+
+let rowSeq = 1;
 
 /**
  * Редактор блюда для ADMIN: создание и редактирование (включая состав).
@@ -27,35 +32,6 @@ import type { MealType, UnitOfMeasure } from '../types';
  * caloriesPerServing не отправляем — deprecated, считается на бэке из продуктов (CR-1).
  */
 
-export interface EditorProduct {
-  id: string;
-  name: string;
-  unit: UnitOfMeasure;
-  kcalPer100g?: number | null;
-  pieceWeightG?: number | null;
-}
-
-export interface EditableRecipe {
-  id: string;
-  name: string;
-  mealType: MealType;
-  category?: string;
-  cookMinutes?: number;
-  baseServings: number;
-  ingredients: Array<{
-    ingredientId: string | number;
-    amount: number;
-    ingredient?: { name?: string; unit?: string } | null;
-  }>;
-}
-
-interface Row {
-  key: number;
-  ingredientId: string | number | null; // как пришёл из API: number (real) / string (mock)
-  query: string;
-  amount: string;
-}
-
 interface Props {
   recipe: EditableRecipe | null; // null = создание
   categories: string[];
@@ -65,26 +41,7 @@ interface Props {
   onSaved: () => void;
 }
 
-const MEAL_TYPES: Array<{ value: MealType; label: string }> = [
-  { value: 'BREAKFAST', label: 'Завтрак' },
-  { value: 'LUNCH', label: 'Обед' },
-  { value: 'DINNER', label: 'Ужин' },
-  { value: 'SNACK', label: 'Перекус' },
-];
-
-/** U31: значение строки состава — число|null для AmountInput (запятая/точка). */
-const rowAmountValue = (raw: string): number | null => {
-  const n = Number(String(raw).replace(',', '.'));
-  return Number.isFinite(n) && String(raw).trim() !== '' ? n : null;
-};
-
-export function parseAmount(raw: string): number | null {
-  const n = Number(raw.replace(',', '.').trim());
-  if (!raw.trim() || Number.isNaN(n) || n <= 0) return null;
-  return n;
-}
-
-let rowSeq = 1;
+export type { EditorProduct, EditableRecipe } from './recipeEditorHelpers';
 
 export default function RecipeEditorModal({ recipe, categories, isAdmin = false, onClose, onSaved }: Props) {
   const { showError, showSuccess } = useToast();

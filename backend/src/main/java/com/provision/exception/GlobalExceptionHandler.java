@@ -1,6 +1,7 @@
 package com.provision.exception;
 
 import com.provision.dto.error.ErrorResponse;
+import com.provision.exception.ErrorResponseFactory;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -80,16 +81,11 @@ public class GlobalExceptionHandler {
             HttpServletRequest request
     ) {
         log.warn("Not found: {}", ex.getMessage());
-        ErrorResponse error = new ErrorResponse(
-                "about:blank",
+        ErrorResponse error = ErrorResponseFactory.body(
                 "Not Found",
                 HttpStatus.NOT_FOUND.value(),
                 ex.getMessage(),
-                request.getRequestURI(),
-                LocalDateTime.now(),
-                null,
-                null,
-                null
+                request
         );
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error);
     }
@@ -100,16 +96,11 @@ public class GlobalExceptionHandler {
             HttpServletRequest request
     ) {
         log.warn("Conflict: {}", ex.getMessage());
-        ErrorResponse error = new ErrorResponse(
-                "about:blank",
+        ErrorResponse error = ErrorResponseFactory.body(
                 "Conflict",
                 HttpStatus.CONFLICT.value(),
                 ex.getMessage(),
-                request.getRequestURI(),
-                LocalDateTime.now(),
-                null,
-                null,
-                null
+                request
         );
         return ResponseEntity.status(HttpStatus.CONFLICT).body(error);
     }
@@ -125,16 +116,13 @@ public class GlobalExceptionHandler {
     ) {
         log.warn("Conflict (PRODUCT_IN_USE): {} — usedIn={}", ex.getMessage(),
                 ex.getUsedIn() != null ? ex.getUsedIn().size() : 0);
-        ErrorResponse error = new ErrorResponse(
-                "about:blank",
+        ErrorResponse error = ErrorResponseFactory.body(
                 "Conflict",
                 HttpStatus.CONFLICT.value(),
                 ex.getMessage(),
-                request.getRequestURI(),
-                LocalDateTime.now(),
+                request,
                 null,
-                ex.getUsedIn(),
-                null
+                ex.getUsedIn()
         );
         return ResponseEntity.status(HttpStatus.CONFLICT).body(error);
     }
@@ -152,15 +140,12 @@ public class GlobalExceptionHandler {
                 ))
                 .toList();
 
-        ErrorResponse error = new ErrorResponse(
-                "about:blank",
+        ErrorResponse error = ErrorResponseFactory.body(
                 "Validation Error",
                 HttpStatus.BAD_REQUEST.value(),
                 "Validation failed",
-                request.getRequestURI(),
-                LocalDateTime.now(),
+                request,
                 fieldErrors,
-                null,
                 null
         );
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
@@ -172,16 +157,11 @@ public class GlobalExceptionHandler {
             HttpServletRequest request
     ) {
         log.warn("Access denied: {}", ex.getMessage());
-        ErrorResponse error = new ErrorResponse(
-                "about:blank",
+        ErrorResponse error = ErrorResponseFactory.body(
                 "Forbidden",
                 HttpStatus.FORBIDDEN.value(),
                 "Access denied",
-                request.getRequestURI(),
-                LocalDateTime.now(),
-                null,
-                null,
-                null
+                request
         );
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(error);
     }
@@ -192,16 +172,11 @@ public class GlobalExceptionHandler {
             HttpServletRequest request
     ) {
         log.warn("Forbidden: {}", ex.getMessage());
-        ErrorResponse error = new ErrorResponse(
-                "about:blank",
+        ErrorResponse error = ErrorResponseFactory.body(
                 "Forbidden",
                 HttpStatus.FORBIDDEN.value(),
                 ex.getMessage(),
-                request.getRequestURI(),
-                LocalDateTime.now(),
-                null,
-                null,
-                null
+                request
         );
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(error);
     }
@@ -212,16 +187,11 @@ public class GlobalExceptionHandler {
             HttpServletRequest request
     ) {
         log.warn("Unauthorized: {}", ex.getMessage());
-        ErrorResponse error = new ErrorResponse(
-                "about:blank",
+        ErrorResponse error = ErrorResponseFactory.body(
                 "Unauthorized",
                 HttpStatus.UNAUTHORIZED.value(),
                 ex.getMessage(),
-                request.getRequestURI(),
-                LocalDateTime.now(),
-                null,
-                null,
-                null
+                request
         );
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(error);
     }
@@ -236,16 +206,11 @@ public class GlobalExceptionHandler {
             HttpServletRequest request
     ) {
         log.warn("Too many requests: {} (retryAfterSec={})", ex.getMessage(), ex.getRetryAfterSeconds());
-        ErrorResponse error = new ErrorResponse(
-                "about:blank",
+        ErrorResponse error = ErrorResponseFactory.body(
                 "Too Many Requests",
                 HttpStatus.TOO_MANY_REQUESTS.value(),
                 ex.getMessage(),
-                request.getRequestURI(),
-                LocalDateTime.now(),
-                null,
-                null,
-                null
+                request
         );
         return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
                 .header("Retry-After", String.valueOf(ex.getRetryAfterSeconds()))
@@ -258,16 +223,11 @@ public class GlobalExceptionHandler {
             HttpServletRequest request
     ) {
         log.warn("Validation error: {}", ex.getMessage());
-        ErrorResponse error = new ErrorResponse(
-                "about:blank",
+        ErrorResponse error = ErrorResponseFactory.body(
                 "Validation Error",
                 HttpStatus.BAD_REQUEST.value(),
                 ex.getMessage(),
-                request.getRequestURI(),
-                LocalDateTime.now(),
-                null,
-                null,
-                null
+                request
         );
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
     }
@@ -280,16 +240,11 @@ public class GlobalExceptionHandler {
         // Fix-13: внешний интеграционный сервис (ЕМИСС/Росстат) недоступен или
         // ответил не тем — не наш баг: 502 вместо 500.
         log.error("Integration unavailable: {}", ex.getMessage());
-        ErrorResponse error = new ErrorResponse(
-                "about:blank",
+        ErrorResponse error = ErrorResponseFactory.body(
                 "Bad Gateway",
                 HttpStatus.BAD_GATEWAY.value(),
                 ex.getMessage(),
-                request.getRequestURI(),
-                LocalDateTime.now(),
-                null,
-                null,
-                null
+                request
         );
         return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(error);
     }
@@ -301,16 +256,11 @@ public class GlobalExceptionHandler {
     ) {
         log.warn("Illegal argument: {}", ex.getMessage());
         // KB-27: сообщение IAE — внутреннее (имена полей/состояний), в prod наружу не отдаём.
-        ErrorResponse error = new ErrorResponse(
-                "about:blank",
+        ErrorResponse error = ErrorResponseFactory.body(
                 "Bad Request",
                 HttpStatus.BAD_REQUEST.value(),
                 internalDetail(ex, SAFE_BAD_REQUEST),
-                request.getRequestURI(),
-                LocalDateTime.now(),
-                null,
-                null,
-                null
+                request
         );
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
     }
@@ -326,16 +276,11 @@ public class GlobalExceptionHandler {
             HttpServletRequest request
     ) {
         log.warn("Malformed request body for {}: {}", request.getRequestURI(), ex.getMessage());
-        ErrorResponse error = new ErrorResponse(
-                "about:blank",
+        ErrorResponse error = ErrorResponseFactory.body(
                 "Bad Request",
                 HttpStatus.BAD_REQUEST.value(),
                 "Malformed request body",
-                request.getRequestURI(),
-                LocalDateTime.now(),
-                null,
-                null,
-                null
+                request
         );
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
     }
@@ -347,16 +292,11 @@ public class GlobalExceptionHandler {
             HttpServletRequest request
     ) {
         log.warn("Argument type mismatch for {}: {}", request.getRequestURI(), ex.getMessage());
-        ErrorResponse error = new ErrorResponse(
-                "about:blank",
+        ErrorResponse error = ErrorResponseFactory.body(
                 "Bad Request",
                 HttpStatus.BAD_REQUEST.value(),
                 "Invalid value for parameter '" + ex.getName() + "'",
-                request.getRequestURI(),
-                LocalDateTime.now(),
-                null,
-                null,
-                null
+                request
         );
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
     }
@@ -369,16 +309,11 @@ public class GlobalExceptionHandler {
     ) {
         log.warn("Method not supported for {}: {}", request.getRequestURI(), ex.getMessage());
         // KB-27: текст ошибки каркаса (перечень поддерживаемых методов) — внутренний.
-        ErrorResponse error = new ErrorResponse(
-                "about:blank",
+        ErrorResponse error = ErrorResponseFactory.body(
                 "Method Not Allowed",
                 HttpStatus.METHOD_NOT_ALLOWED.value(),
                 internalDetail(ex, SAFE_METHOD_NOT_ALLOWED),
-                request.getRequestURI(),
-                LocalDateTime.now(),
-                null,
-                null,
-                null
+                request
         );
         return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED).body(error);
     }
@@ -480,18 +415,8 @@ public class GlobalExceptionHandler {
     private ResponseEntity<ErrorResponse> build(
             HttpStatus status, String title, String detail, HttpServletRequest request
     ) {
-        ErrorResponse error = new ErrorResponse(
-                "about:blank",
-                title,
-                status.value(),
-                detail,
-                request.getRequestURI(),
-                LocalDateTime.now(),
-                null,
-                null,
-                null
-        );
-        return ResponseEntity.status(status).body(error);
+        return ResponseEntity.status(status).body(
+                ErrorResponseFactory.body(title, status.value(), detail, request));
     }
 
     /**
@@ -526,16 +451,11 @@ public class GlobalExceptionHandler {
             HttpServletRequest request
     ) {
         log.error("Unexpected error", ex);
-        ErrorResponse error = new ErrorResponse(
-                "about:blank",
+        ErrorResponse error = ErrorResponseFactory.body(
                 "Internal Server Error",
                 HttpStatus.INTERNAL_SERVER_ERROR.value(),
                 "An unexpected error occurred",
-                request.getRequestURI(),
-                LocalDateTime.now(),
-                null,
-                null,
-                null
+                request
         );
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
     }

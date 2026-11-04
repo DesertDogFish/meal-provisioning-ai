@@ -117,6 +117,13 @@ public class EmisCatalogService {
         return byCode;
     }
 
+    /** BL-11: ряд цен позиции ЕМИСС по месяцам (для графика в UI продукта). */
+    @Transactional(readOnly = true)
+    public List<EmisPrice> prices(String code) {
+        if (code == null || code.isBlank()) return List.of();
+        return priceRepository.findByRegionCodeAndEmisCodeOrderByPeriodYearAscPeriodMonthAsc(regionCode, code.trim());
+    }
+
     /** Есть ли позиция с таким кодом в локальном справочнике (валидация привязки). */
     @Transactional(readOnly = true)
     public boolean exists(String emisCode) {

@@ -80,6 +80,15 @@ jobs:
       - name: Smoke — frontend index
         run: curl -fsS http://localhost:3000/ | grep -qi '<div id="root">'
 
+      - name: Smoke — security headers (BL-38)
+        run: |
+          set -euo pipefail
+          hdr=$(curl -sI http://localhost:3000/)
+          echo "$hdr" | grep -qi '^Content-Security-Policy:'
+          echo "$hdr" | grep -qi '^X-Frame-Options: DENY'
+          echo "$hdr" | grep -qi '^X-Content-Type-Options: nosniff'
+          echo "OK: security headers present"
+
       - name: Smoke — register/login roundtrip against the stack
         run: |
           EMAIL="ci-smoke-$GITHUB_RUN_ID@test.local"

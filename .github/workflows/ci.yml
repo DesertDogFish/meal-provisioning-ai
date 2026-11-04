@@ -60,6 +60,39 @@ jobs:
           fi
           echo "OK: BOM не найден, проверено $(git ls-files | wc -l) файлов"
 
+  commitlint:
+    name: Conventional Commits (BL-39)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Validate commit messages / PR title
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          types='feat|fix|refactor|test|docs|chore|ci|perf'
+          pattern="^(${types})(\\([a-z0-9._/-]+\\))?!?: .{1,}$"
+          if [ "$EVENT" = "pull_request" ]; then
+            msg="$PR_TITLE"
+          else
+            msg="$(git log -1 --pretty=%s)"
+          fi
+          echo "checking: $msg"
+          if ! printf '%s' "$msg" | grep -Eq "$pattern"; then
+            echo "::error::Заголовок не соответствует Conventional Commits: '$msg'"
+            echo "Ожидается: type(scope): subject, type ∈ {feat,fix,refactor,test,docs,chore,ci,perf}"
+            exit 1
+          fi
+          if [ "${#msg}" -gt 100 ]; then
+            echo "::error::Заголовок длиннее 100 символов"
+            exit 1
+          fi
+          echo "OK: conventional commit title"
+
   backend:
     name: Backend Tests
     runs-on: ubuntu-latest
@@ -71,7 +104,7 @@ jobs:
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'  # синхронно с backend/pom.xml (<java.version>17</java.version>)
+          java-version: '21'  # синхронно с backend/pom.xml (<java.version>21</java.version>)
           cache: maven
       
 
@@ -189,7 +222,7 @@ jobs:
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'   # синхронно с backend/pom.xml
+          java-version: '21'   # синхронно с backend/pom.xml
           cache: maven
 
       - name: Resolve base ref (previous version of the tree)
@@ -319,7 +352,10 @@ jobs:
           cache: npm
       
       - run: npm ci
-      
+
+      - name: Dependency audit (BL-36)
+        run: npm audit --omit=dev --audit-level=high
+
       - run: npm run lint
       
       # FIX (T0, гейты CI): typecheck как отдельный blocking-шаг — ловит ошибки
@@ -332,30 +368,68 @@ jobs:
       
       - name: Frontend tests
         run: npm run test
-      - name: Coverage gate
+      - name: Coverage include check (BL-34)
+        run: npm run check:coverage-include
+
+      - name: Coverage gate (whitelisted, blocking)
+        run: npm run test:coverage
+
+      - name: Coverage summary (two numbers, non-blocking)
+        continue-on-error: true
         run: |
-          coverage=$(npx vitest run --coverage 2>&1 | grep 'Line coverage' | awk '{print $3}' | tr -d '%')
-          if [ -z "$coverage" ]; then
-            echo "::error::Coverage step failed to run"
-            exit 1
-          fi
-          echo "Coverage: ${coverage}%"
-          if [ "$coverage" -lt 60 ]; then
-            echo "::error::Coverage ${coverage}% below R5 minimum 60%"
-            exit 1
-          fi
-          echo "✅ Coverage gate passed: ${coverage}% >= 60%"
+          set -euo pipefail
+          # Число 1 — по whitelist'у (coverage.include из vitest.config.ts)
+          out1=$(npm run test:coverage 2>&1)
+          cov1=$(printf '%s' "$out1" | grep 'All files' | head -1 | awk -F'|' '{gsub(/ /,"",$5); print $5}' | tr -d '%')
+          # Число 2 — по всему src/
+          out2=$(npx vitest run --coverage --coverage.include='src/**/*.{ts,tsx}' 2>&1)
+          cov2=$(printf '%s' "$out2" | grep 'All files' | head -1 | awk -F'|' '{gsub(/ /,"",$5); print $5}' | tr -d '%')
+          {
+            echo "### Frontend coverage (BL-34 R5)"
+            echo ""
+            echo "- По whitelist'у (coverage.include): **${cov1}%**"
+            echo "- По всему src/: **${cov2}%**"
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "whitelisted=${cov1}% all_src=${cov2}%"
       
-      - name: Check MD files (non-blocking)
-        continue-on-error: true  # TODO: через неделю перевести в blocking (exit 1)
+      - name: Check MD files (whitelist, BL-45)
         run: |
-          count=$(git ls-files '*.md' | grep -v '^backend/README.md$' | wc -l)
-          if [ "$count" -ne 4 ]; then
-            echo "::warning::Expected 4 MD files (README.md, ARCHITECTURE.md, PLAN.md, AGENTS.md), found $count"
-            git ls-files '*.md'
-          else
-            echo "✅ MD files check passed: 4 files"
+          set -euo pipefail
+          bad=$(git ls-files '*.md' | grep -vE '^(README\.md|ARCHITECTURE\.md|PLAN\.md|AGENTS\.md|backend/README\.md|skills/.*\.md|tasks/.*\.md|provisions/design-pack/.*\.md|plans/backlog\.md|plans/knownbugs\.md)$' || true)
+          if [ -n "$bad" ]; then
+            echo "::error::MD-файлы вне белого списка (skills/docs-sync.md):"
+            printf '%s\n' "$bad"
+            exit 1
           fi
+          echo "✅ MD whitelist: $(git ls-files '*.md' | wc -l) файлов"
+
+      - name: Check internal Markdown links (BL-55)
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import re, pathlib, subprocess, sys
+          files = subprocess.check_output(['git','ls-files','*.md'], text=True).splitlines()
+          bad = []
+          for f in files:
+              p = pathlib.Path(f)
+              try:
+                  text = p.read_text(encoding='utf-8')
+              except Exception as e:
+                  bad.append((f, f'<read error: {e}>'))
+                  continue
+              for m in re.finditer(r'\[[^\]]*\]\(([^)]+)\)', text):
+                  link = m.group(1).strip()
+                  if link.startswith(('http://','https://','#','mailto:')):
+                      continue
+                  target = (p.parent / link.split('#')[0])
+                  if not target.exists():
+                      bad.append((f, link))
+          if bad:
+              for f, l in bad:
+                  print(f'{f}: {l}')
+              sys.exit(1)
+          print(f'OK: internal links checked in {len(files)} MD files')
+          PY
       
       - name: Upload vitest reports
         if: failure()
@@ -448,7 +522,7 @@ jobs:
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: '21'
           cache: maven
 
       - name: Install PostgreSQL 15 (for integration tests)

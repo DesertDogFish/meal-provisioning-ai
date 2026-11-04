@@ -1,0 +1,183 @@
+/* ============================================================
+   Атмосфера (tasks/design-atmosphere-art.md, утверждено владельцем
+   03.11.2026): фон входа и glass-шапка похода. Отклонено 2-й волной
+   отзывов и НЕ применяется: wash каталога, волны (лента/текстура чеков),
+   фото-обложки карточек походов.
+   Все цвета — токены; декоративные слои — aria-hidden + pointer-events:none;
+   анимации отключаются prefers-reduced-motion; печать их не получает.
+   ============================================================ */
+
+/* --- п.3 LoginPage: арт «море целиком» + вуаль + лёгкий Ken Burns --- */
+.login-art {
+  position: absolute;
+  inset: -12% 0;
+  z-index: 0;
+  background-size: cover;
+  background-position: center 38%;
+  animation: login-kenburns 44s var(--ease) infinite alternate;
+  will-change: transform;
+  pointer-events: none;
+}
+@keyframes login-kenburns {
+  from { transform: scale(1) translate3d(0, 0, 0); }
+  to   { transform: scale(1.07) translate3d(0, -1.2%, 0); }
+}
+.login-art-veil {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--bg-0) 30%, transparent) 0%,
+    color-mix(in srgb, var(--bg-0) 62%, transparent) 55%,
+    color-mix(in srgb, var(--bg-0) 90%, transparent) 100%);
+}
+/* светлая тема: вуаль плотнее, чтобы тёмный арт не пробивался сквозь светлый UI */
+:root[data-theme="light"] .login-art-veil {
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--bg-0) 58%, transparent) 0%,
+    color-mix(in srgb, var(--bg-0) 84%, transparent) 55%,
+    color-mix(in srgb, var(--bg-0) 96%, transparent) 100%);
+}
+.login-content { position: relative; z-index: 1; }
+@media (prefers-reduced-motion: reduce) {
+  .login-art { animation: none; }
+}
+
+/* --- п.5 TripDetailPage: шапка «стекло поверх арта» --- */
+.trip-header-glass {
+  position: relative;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-1);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  background: linear-gradient(160deg,
+    color-mix(in srgb, var(--bg-2) 38%, transparent),
+    color-mix(in srgb, var(--bg-0) 55%, transparent));
+}
+.trip-header-glass__art {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background-size: cover;
+  background-position: center 30%;
+  opacity: .45;
+  pointer-events: none;
+}
+:root[data-theme="light"] .trip-header-glass__art { opacity: .28; }
+.trip-header-glass__in {
+  position: relative;
+  z-index: 1;
+  padding: var(--sp-5) var(--sp-6);
+}
+/* Mobile: обёртка НЕ создаёт коробку — sticky .trip-strip липнет к странице,
+   как до введения карточки; арт-слой скрыт (экономия памяти/батареи). */
+@media (max-width: 767px) {
+  .trip-header-glass,
+  .trip-header-glass__in { display: contents; }
+  .trip-header-glass__art { display: none; }
+}
+
+/* --- redesign п.5: экран ⑤ «Поход готов» — арт под вуалью (утверждено 03.11.2026) --- */
+.stage-ready {
+  position: relative;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+}
+.stage-ready__art {
+  position: absolute;
+  inset: -6px; /* компенсация blur-краёв */
+  background-size: cover;
+  background-position: center 40%;
+  filter: blur(3px);
+  opacity: .5;
+  pointer-events: none;
+}
+.stage-ready__veil {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--bg-0) 66%, transparent) 0%,
+    color-mix(in srgb, var(--bg-0) 88%, transparent) 100%);
+}
+:root[data-theme="light"] .stage-ready__veil {
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--bg-0) 78%, transparent) 0%,
+    color-mix(in srgb, var(--bg-0) 94%, transparent) 100%);
+}
+.stage-ready__in {
+  position: relative;
+  z-index: 1;
+  padding: var(--sp-4);
+}
+@media print {
+  .stage-ready__art, .stage-ready__veil { display: none !important; }
+}
+
+/* --- BUG-002 (tasks/bugs-page-headers.md п.2): hero-шапка основных страниц ---
+   Паттерн glass-шапки похода (design-п.5): скруглённая карточка + ненавязчивый
+   арт-слой + вуаль, контент поверх (z-1). Арт существующий (camp-ready.webp);
+   анимаций нет — prefers-reduced-motion не требуется. */
+.page-hero {
+  position: relative;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-1);
+  background: linear-gradient(160deg,
+    color-mix(in srgb, var(--bg-2) 38%, transparent),
+    color-mix(in srgb, var(--bg-0) 55%, transparent));
+  overflow: hidden;
+}
+.page-hero__art {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center 30%;
+  opacity: .38;
+  pointer-events: none;
+}
+:root[data-theme="light"] .page-hero__art { opacity: .22; }
+.page-hero::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--bg-0) 16%, transparent) 0%,
+    color-mix(in srgb, var(--bg-0) 58%, transparent) 100%);
+}
+.page-hero__in {
+  position: relative;
+  z-index: 1;
+  padding: var(--sp-5) var(--sp-6);
+}
+@media (max-width: 767px) {
+  .page-hero__in { padding: var(--sp-4); }
+}
+
+/* --- печать: декоративные слои не печатаем --- */
+@media print {
+  .login-art, .login-art-veil,
+  .trip-header-glass__art, .page-hero__art { display: none !important; }
+}
+
+/* --- bugs-app-ui п.5: иконки действий — «рыжие» (янтарная ступень палитры) ---
+   Мелкие иконки добавить/править/удалить были серыми var(--muted) и сливались;
+   владелец хочет видеть их главными элементами взаимодействия. Токен --amber-500
+   сам переключается по теме (dark #FF9E2C / light #D96A10). Hover/active —
+   --amber-600 solid (фикс-паттерн coding-rules «Контраст в светлой теме»:
+   amber-600 на чистом bg-1 = 4.50:1 ✅, color-mix в light НЕ использовать).
+   Никаких инлайновых JS-hover'ов (onMouseEnter/Leave) — только CSS. */
+.icon-action {
+  color: var(--amber-500);
+  transition: color .15s ease, background-color .15s ease;
+}
+.icon-action:hover { color: var(--amber-600); }
+.icon-action:active { color: var(--amber-600); }
+.icon-action:focus-visible {
+  outline: 2px solid var(--amber-500);
+  outline-offset: 2px;
+}

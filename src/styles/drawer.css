@@ -1,0 +1,42 @@
+/* ============================================================
+   Подзадача 9 — мобильный drawer: закрытая панель НЕ доступна
+   с клавиатуры и скринридеру (visibility:hidden убирает её из
+   tab-order и a11y-дерева), но анимация выезда сохраняется
+   (visibility переключается с задержкой на время трансформации).
+   Только <lg: на десктопе панель sticky и видна всегда.
+   ============================================================ */
+@media (max-width: 1023px) {
+  .app-drawer {
+    visibility: hidden;
+    transition: transform var(--t-base) var(--ease), visibility 0s linear var(--t-base);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .app-drawer.app-drawer--open {
+    visibility: visible;
+    transition: transform var(--t-base) var(--ease), visibility 0s linear 0s;
+  }
+  /* Шапка телефона липкая: гамбургер и тема доступны при любом скролле */
+  .app-topbar {
+    position: sticky;
+    top: 0;
+    z-index: calc(var(--z-nav) - 10);
+    padding-top: calc(var(--sp-3) + env(safe-area-inset-top, 0px));
+  }
+  .app-main {
+    padding-bottom: calc(var(--sp-4) + env(safe-area-inset-bottom, 0px));
+    /* Скролл-контейнер на телефоне — документ, а не main: иначе sticky
+       (trip-strip, .checklist-sticky) липнет к непроворачиваемому боксу main
+       и уезжает за экран. overflow-x: clip не создаёт scroll-контейнер,
+       но страхует от горизонтального скролла документа. */
+    overflow-y: visible;
+    overflow-x: clip;
+  }
+}
+
+/* Подзадача 5/6: компактный степпер NumberField на тач-устройстве — не 20px,
+   а 32px (минимум WCAG 2.5.8), иначе в «Заплатили» невозможно попасть пальцем. */
+@media (pointer: coarse) {
+  .nf-sm .nf-btn { width: 32px; height: 32px; }
+  .nf-sm { gap: var(--sp-1); }
+}
+

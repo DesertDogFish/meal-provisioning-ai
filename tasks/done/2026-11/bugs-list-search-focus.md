@@ -1,8 +1,8 @@
 # Пачка багов: липкий поиск списка (ListSearch) — фокус остаётся в поле ввода
 
-Status: READY
+Status: DONE
 Created: 2026-11-03
-Closed:
+Closed: 2026-11-04
 Источник: bugs-inbox владельца 03.11.2026 (BUG-004), скриншот в uploads/.
 Подтверждён осмотром `src/components/ListSearch.tsx`: `goTo()` делает
 `el.focus({preventScroll:true})` на строке совпадения, эффект на ввод вызывает

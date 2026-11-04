@@ -4,7 +4,7 @@
 
 ## Технологический стек
 
-- Java 17 (target — `pom.xml <java.version>`), Spring Boot 3.2.5
+- Java 21 (target — `pom.xml <java.version>`), Spring Boot 3.2.5
 - Spring Data JPA + Hibernate (`ddl-auto=validate`), PostgreSQL 15
 - Spring Security: stateless JWT (access 1 ч / refresh 7 д с ротацией, хэш refresh в БД), CORS из ENV, fail-fast `JWT_SECRET`
 - Flyway (apply at startup; список версий — источник правды `src/main/resources/db/migration/`)
@@ -189,5 +189,7 @@ Flyway, `src/main/resources/db/migration`; нумерация сквозная (
   уникальность `(trip_id, ingredient_id)` + `version` под `@Version`; PUT — идемпотентная
   полная замена набора;
 - V29 — решения владельца по единицам и фасовке: «Туалетная бумага, 4 рулона» → «Бумага туалетная, рулон» (÷4), «Влажные салфетки, упаковка 100 шт» → «Салфетки влажные, упаковка 20 шт.» (÷5), «Спички влагозащищённые (20 шт)» → «Спички, коробок» (÷20) с пересчётом `piece_weight_g` и истории цен; новые привязки `antiseptic`→8016, `sunscreen`→5311, `toilet_paper`→6502, `wipes_wet`→6505; `gas_canister`/`soy_sauce`/`vinegar` явно без привязки. Правило «плотность ≈ 1» (MASS↔VOLUME, `piece_weight_g` как мл) — в `EmisUnit.pricePerUnit`, не в схеме.
+
+- V39 — `ingredients.emis_factor NUMERIC(10,3)` (BL-14): коэффициент фасовки на привязке («наш продукт = N упаковок ЕМИСС»), NULL/1 — как раньше; применяется в `EmisPriceApplier`. Повторный прогон безопасен.
 
 Правила для новых миграций — `AGENTS.md` раздел 11.

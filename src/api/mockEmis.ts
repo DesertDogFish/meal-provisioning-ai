@@ -221,5 +221,32 @@ export function tryEmisRoutes<T>(method: string, pathWithoutQuery: string, path:
       warning: unit ? emisLinkWarning(c, c.latestPrice, unit, pieceWeightG, currentPrice) : null,
     })) as T };
   }
+  // BL-11: ряд цен позиции ЕМИСС по месяцам — GET /admin/emis/products/{code}/prices
+  const priceMatch = pathWithoutQuery.match(/^\/admin\/emis\/products\/([^/]+)\/prices$/);
+  if (priceMatch && method === 'GET') {
+    const code = decodeURIComponent(priceMatch[1]);
+    const c = emisByCode(code);
+    const points: any[] = [];
+    if (c && c.latestPrice != null) {
+      const end = new Date(`${c.latestPriceDate || '2026-04-01'}T00:00:00`);
+      for (let i = 23; i >= 0; i--) {
+        const d = new Date(end);
+        d.setMonth(d.getMonth() - i);
+        const y = d.getFullYear();
+        const m = d.getMonth() + 1;
+        points.push({
+          id: 24 - i,
+          emisCode: code,
+          regionCode: '643004.АГ',
+          periodYear: y,
+          periodMonth: m,
+          price: c.latestPrice,
+          loadedAt: '2026-04-01T00:00:00',
+          effectiveFrom: `${y}-${String(m).padStart(2, '0')}-01`,
+        });
+      }
+    }
+    return { hit: true, result: points as T };
+  }
   return { hit: false };
 }

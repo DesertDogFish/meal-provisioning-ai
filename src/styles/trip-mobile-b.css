@@ -1,0 +1,240 @@
+
+/* --- 6. Чеки и итог: компактная мобильная строка ---
+   KB-31 (UX-осмотр 31.10, п.4): строка — <div>, а не <button>: внутри неё
+   живут чекбокс «взято» и ввод факта, а interactive-в-interactive — невалидный
+   DOM. Раскрытие Details — отдельная кнопка .checkline__toggle, чья хит-зона
+   растянута на всю строку (::after), поэтому «тап по строке» работает как раньше.
+   Интерактив внутри строки поднят над хит-зоной через .checkline__hit. */
+.checkline {
+  position: relative;
+  display: block;
+  width: 100%;
+  padding: var(--sp-3) var(--sp-4);
+  border-top: 1px solid var(--border);
+  background: transparent;
+  text-align: left;
+  color: var(--text-1);
+}
+.checkline__toggle {
+  display: block;
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+/* Растянутая хит-зона: клик в любом месте строки (кроме поднятого интерактива)
+   раскрывает детали. Минимальная высота — тач-таргет ≥40px (подзадача 7). */
+.checkline__toggle::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  min-height: var(--touch-target, 40px);
+}
+.checkline__toggle:focus-visible { outline: 2px solid var(--amber-500); outline-offset: -2px; }
+/* Чекбокс/поле факта — поверх хит-зоны toggle, клики не «съедаются» строкой */
+.checkline__hit { position: relative; z-index: 1; }
+.checkline:focus-visible { outline: 2px solid var(--amber-500); outline-offset: -2px; }
+.checkline__top { display: flex; align-items: center; gap: var(--sp-3); }
+.checkline__name { font: 700 var(--fs-body)/1.2 var(--font-body); min-width: 0; flex: 1; }
+.checkline__qty {
+  flex: none;
+  padding: 3px 8px;
+  border-radius: var(--r-pill);
+  background: var(--elev);
+  color: var(--text-2);
+  font: 700 12px/1.4 var(--font-body);
+}
+.checkline__fact {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-top: var(--sp-2);
+  color: var(--text-2);
+  font-size: var(--fs-small);
+}
+.fact-add {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 40px;
+  padding: 0 var(--sp-4);
+  border: 1.5px dashed var(--amber-500);
+  border-radius: var(--r-input, 8px);
+  background: transparent;
+  color: var(--amber-300);
+  font: 800 var(--fs-body)/1 var(--font-body);
+  cursor: pointer;
+}
+.fact-add:focus-visible { outline: 2px solid var(--amber-500); outline-offset: 2px; }
+.checkline__details {
+  padding: var(--sp-2) var(--sp-4) var(--sp-3);
+  border-top: 1px dashed var(--line);
+  background: color-mix(in srgb, var(--bg-2) 60%, transparent);
+}
+.who-owes {
+  border-radius: var(--r-md);
+  padding: var(--sp-4);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--amber-500) 10%, transparent), color-mix(in srgb, var(--wave-400) 10%, transparent));
+  border: 1px solid var(--border);
+}
+.who-owes__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding: var(--sp-2) 0;
+  font: 600 var(--fs-body)/1.2 var(--font-body);
+  color: var(--text-1);
+}
+.who-owes__row + .who-owes__row { border-top: 1px solid color-mix(in srgb, var(--line) 60%, transparent); }
+/* bugs-trip-checks-stage п.2: .planfact-strip УДАЛЁН (сирота) — липкая сводка
+   «План · Факт · Δ» снята с этапа ④ решением владельца 03.11.2026. */
+
+/* bugs-trip-checks-stage п.6: строка, требующая внимания (не отмечена «взято»
+   в чеклисте ③ / не введён чек в ④) — мягкая янтарная подложка + левый акцент.
+   Закрытые строки подсветку теряют; контраст токена --amber-500 сверен с BL-62
+   (8–10% подложка не спорит с текстом --text-1 в обеих темах). */
+.row-attention {
+  background: color-mix(in srgb, var(--amber-500) 8%, var(--surface));
+  box-shadow: inset 3px 0 0 var(--amber-500);
+}
+[data-theme="light"] .row-attention {
+  background: color-mix(in srgb, var(--amber-500) 10%, var(--surface));
+}
+
+/* bugs-trip-checks-stage п.7: общий липкий поиск по списку (ListSearch —
+   магазин ③ и чек ④, R8). Хозяин ставит контрол в зону .checklist-sticky. */
+.list-search {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--r-md);
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+}
+.list-search__input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--text-1);
+  font: 500 var(--fs-body)/1.2 var(--font-body);
+  padding: var(--sp-1) 0;
+}
+.list-search__input::placeholder { color: var(--text-3); }
+.list-search:focus-within { border-color: var(--amber-500); }
+/* Совпадение поиска: строка, к которой ListSearch прокрутил (scrollIntoView
+   center) и перевёл фокус — янтарный контур, виден в обеих темах. */
+.search-hit {
+  outline: 2px solid var(--amber-500);
+  outline-offset: -2px;
+  border-radius: var(--r-sm);
+}
+@media (min-width: 768px) {
+  .checkline-mobile { display: none; }
+  .check-table-mobile-hide { display: table; }
+}
+@media (max-width: 767px) {
+  .check-table-mobile-hide { display: none; }
+}
+
+/* --- 4. Список походов: карточка целиком — тап --- */
+.trip-card {
+  position: relative;
+  display: block;
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: var(--sp-4) var(--sp-5);
+  text-align: left;
+  cursor: pointer;
+  color: var(--text-1);
+  background-size: cover;
+  background-position: center;
+}
+.trip-card:focus-visible { outline: 2px solid var(--amber-500); outline-offset: 2px; }
+.trip-card__progress {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-top: var(--sp-3);
+  font: 700 var(--fs-small)/1.2 var(--font-body);
+}
+.trip-card__bar {
+  flex: 1 1 6rem;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--bg-3);
+  overflow: hidden;
+}
+.trip-card__bar > span { display: block; height: 100%; background: var(--wave-400); }
+/* transparency-п.6: .stage-menu удалён — у этапа ① больше нет процентной полосы */
+.trip-card__kebab { position: absolute; top: var(--sp-3); right: var(--sp-3); }
+@media (max-width: 767px) {
+  .trip-card { background-image: none !important; }
+  .trip-card__cover {
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background-size: cover;
+    background-position: center;
+    opacity: .45;
+    pointer-events: none;
+  }
+}
+
+/* --- 10. Карточка-строка блюд/продуктов на мобильном --- */
+.card-row__head {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  width: 100%;
+  min-height: 52px;
+  padding: var(--sp-3) var(--sp-4);
+  border: 0;
+  background: transparent;
+  color: var(--text-1);
+  font: 700 var(--fs-body)/1.25 var(--font-body);
+  text-align: left;
+  cursor: pointer;
+}
+.card-row__head:focus-visible { outline: 2px solid var(--amber-500); outline-offset: -2px; }
+.card-row__title { flex: 1 1 auto; min-width: 0; }
+.card-row__meta { flex: none; color: var(--text-2); font-weight: 600; font-size: var(--fs-small); }
+@media (max-width: 767px) {
+  .filters-bar { display: none; }
+}
+.filters-fab {
+  display: none;
+}
+@media (max-width: 767px) {
+  .filters-fab { display: inline-flex; }
+}
+
+/* --- 8. Модалки: контент не прячется под липким футером --- */
+.modal-wrap > * {
+  scroll-padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+}
+.modal-foot {
+  padding-bottom: calc(var(--sp-5) + env(safe-area-inset-bottom, 0px));
+}
+/* превью-заглушка больше не занимает пол-модалки до выбора блюда */
+.preview-hint {
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--r-md);
+  background: var(--bg-2);
+  color: var(--text-2);
+  font-size: var(--fs-small);
+}
+
+/* обложка карточки похода: слой только на мобильном (подзадача 4) */
+.trip-card__cover { display: none; }
+

@@ -1,0 +1,282 @@
+/* ============================================================
+   BL-63 (аудит 02.11.2026, подзадача 7): алерты — на токенах
+   дизайн-пака, без сырой палитры Tailwind (прежние bg-amber-50/
+   text-amber-900 были только светлыми — в тёмной теме алерт
+   рисовался белёсой коробкой). Паттерн тот же, что у .toast*:
+   tint состояния поверх непрозрачной подложки --bg-2 + accent
+   из var(--…); обе темы переключаются автоматически.
+   Контраст (расчёт WCAG 2.1, text-1 / icon на tinted bg-2):
+   dark — текст 10.95…13.88, иконка 5.29…8.93;
+   light — текст 12.09…13.84, иконка 3.41…7.42 (норма: текст
+   ≥ 4.5:1, иконка ≥ 3:1 — WCAG 1.4.11).
+   ============================================================ */
+.alert {
+  --alert-tint: transparent;        /* soft-цвет состояния поверх --bg-2 */
+  --alert-accent: var(--text-2);    /* иконка/граница состояния */
+
+  background: linear-gradient(var(--alert-tint), var(--alert-tint)), var(--bg-2);
+  color: var(--text-1);
+  border: 1px solid color-mix(in srgb, var(--alert-accent) 32%, var(--line));
+  border-radius: var(--r-lg);
+}
+
+.alert--danger  { --alert-tint: var(--danger-soft); --alert-accent: var(--danger); }
+.alert--warn    { --alert-tint: color-mix(in srgb, var(--amber-500) 12%, transparent); --alert-accent: var(--amber-500); }
+.alert--info    { --alert-tint: color-mix(in srgb, var(--wave-400) 10%, transparent); --alert-accent: var(--wave-400); }
+.alert--ok      { --alert-tint: var(--success-soft); --alert-accent: var(--success); }
+.alert--neutral { --alert-tint: transparent; --alert-accent: var(--text-2); }
+
+.alert__icon {
+  /* тот же приём, что .toast__icon: акцент, смешанный с текстом темы
+     на 18 % — в светлой теме тёмный текст усиливает акцент */
+  color: color-mix(in srgb, var(--alert-accent) 82%, var(--text-1));
+}
+
+.alert__close {
+  color: color-mix(in srgb, var(--alert-accent) 82%, var(--text-1));
+  transition: color var(--t-fast) var(--ease);
+}
+
+.alert__close:hover,
+.alert__close:focus-visible {
+  color: var(--text-1);
+}
+
+.alert__muted { color: var(--text-2); }
+
+/* Midnight Harbor theme classes */
+.bg-midnight { background: var(--bg); }
+.bg-surface { background: var(--surface); }
+.bg-elev { background: var(--elev); }
+.border-midnight { border-color: var(--border); }
+.text-midnight { color: var(--text); }
+.text-muted-midnight { color: var(--muted); }
+.text-water { color: var(--w1); }
+.text-water-2 { color: var(--w2); }
+.text-fire { color: var(--fire); }
+
+.glass {
+  background: linear-gradient(160deg, color-mix(in srgb, var(--bg-2) 72%, transparent), color-mix(in srgb, var(--bg-0) 78%, transparent));
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-1);
+}
+
+/* Карточки/панели попроще — фон bg-1, бордер line */
+.panel {
+  background: var(--bg-1);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+}
+
+/* Метрики в стиле .stat из брендбука */
+.stat {
+  background: var(--bg-1);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  padding: var(--sp-4);
+}
+.stat-value {
+  color: var(--amber-300);
+  font-family: var(--font-display);
+  letter-spacing: -.015em;
+}
+/* KPI-карточка на телефоне — столбиком: подпись с подсказкой сверху, значение
+   снизу. В сетке 2 колонки на 360px внутренняя ширина карточки ~134px, и
+   nowrap-связка «Стоимость ⓘ» + «1 630 ₽» в одну строку не помещалась: значение
+   выползало за правую границу карточки и обрезалось (видно на скриншоте
+   360-shopping). Правило НЕ в слое, поэтому перебивает tailwind-утилиты
+   `flex items-baseline justify-between` на самих карточках. */
+@media (max-width: 480px) {
+  .stat {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--sp-1);
+  }
+}
+
+.grad-btn {
+  background: var(--grad-brand);
+  color: var(--on-fire);
+  border: none;
+  box-shadow: var(--shadow-glow);
+  border-radius: var(--r-pill);
+  padding: var(--sp-3) var(--sp-5);
+  font: 800 13px Manrope;
+  cursor: pointer;
+  transition: filter var(--t-base) var(--ease), box-shadow var(--t-base) var(--ease);
+}
+
+.grad-btn:hover {
+  filter: brightness(1.07);
+}
+
+.ghost-btn {
+  background: color-mix(in srgb, var(--bg-2) 40%, transparent);
+  border: 1px solid var(--line-strong);
+  color: var(--text-1);
+  border-radius: var(--r-pill);
+  padding: var(--sp-3) var(--sp-5);
+  font: 600 13px Manrope;
+  cursor: pointer;
+  transition: all var(--t-base) var(--ease);
+}
+
+.ghost-btn:hover {
+  background: var(--bg-2);
+}
+
+/* Сегментированный контрол (.seg) из брендбука */
+.seg {
+  display: inline-flex;
+  gap: var(--sp-1);
+  padding: var(--sp-1);
+  background: color-mix(in srgb, var(--bg-0) 70%, transparent);
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+}
+.seg-btn {
+  border: 0;
+  background: transparent;
+  color: var(--text-2);
+  font: 700 12px Manrope;
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--r-pill);
+  cursor: pointer;
+  transition: all var(--t-base) var(--ease);
+}
+.seg-btn:hover {
+  color: var(--text-1);
+  background: var(--bg-2);
+}
+.seg-btn.active {
+  background: var(--grad-brand);
+  color: var(--on-fire);
+  box-shadow: var(--shadow-glow);
+}
+
+/* transparency-п.2 (решение владельца 31.10 — «кликабельные чипы»): статусы
+   готовности убраны из десктоп-.seg (класс .seg-badge удалён) — готовность
+   этапов изображается ровно один раз: кликабельные чипы readiness-цепочки
+   (TripSummaryPanel, testid stage-chip-*), они же переключают этап. */
+
+/* navigation-п.2: CTA «Далее» в конце этапа — заметный, но не перекрывает
+   контент; подсказка на незаполненном этапе — тот же слот (без скачков вёрстки). */
+/* navigation-п.5: название блюда в карточке приёма — ссылка на рецепт */
+.meal-name-link {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+.meal-name-link:hover {
+  color: var(--w1) !important;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.stage-next-wrap {
+  display: flex;
+  justify-content: center;
+  padding: var(--sp-3) 0 calc(var(--sp-4) + env(safe-area-inset-bottom, 0px));
+}
+.stage-next-cta {
+  min-height: 44px; /* тач-цель ≥44px (DESIGN_MIGRATION §11) */
+}
+.stage-next-hint {
+  max-width: 34rem;
+  text-align: center;
+  margin: 0 auto;
+}
+
+/* Строки блюд с пунктирным бордером (.meal-row) */
+.meal-row {
+  border-bottom: 1px dashed var(--line);
+}
+.meal-row:last-child {
+  border-bottom: 0;
+}
+
+/* Появление контента. Важно: финальный кадр — `transform: none`, а не translateY(0):
+   ненулевой transform (даже «нулевой») создаёт containing block для position:fixed
+   потомков — модалки/бейджи внутри анимированного контейнера «уезжают» (список
+   багов 25.10: «формы появляются черт пойми где»). */
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: none; }
+}
+.fade-in-up {
+  animation: fade-in-up var(--t-slow) var(--ease) both;
+}
+
+/* 6.4 reduced-motion: глобальное глушение декоративных анимаций/переходов
+   (float/drift/pulse/slide-in/fade-in-up и пр.); состояния читаются без движения */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .fade-in-up { animation: none; }
+}
+
+/* Подсветка интерактивных карточек при наведении — БЕЗ сдвига: элемент не сдвигается,
+   «загорается» только граница/тень (иначе у соседей «едет» верстка). */
+.lift {
+  transition: border-color var(--t-base) var(--ease), box-shadow var(--t-base) var(--ease);
+}
+.lift:hover {
+  border-color: var(--line-strong);
+  box-shadow: var(--shadow-1);
+}
+
+/* Price Overrides v2 */
+.note-box {
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--r-sm);
+  padding: var(--sp-2) var(--sp-3);
+  color: var(--text-2);
+  font-size: 12px;
+  margin: var(--sp-3) 0;
+}
+
+/* Нативные спиннеры не существуют нигде в приложении */
+input[type=number] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+input[type=number]::-webkit-inner-spin-button,
+input[type=number]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* Тематический степпер Midnight Harbor */
+.nf {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.nf-btn {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 1px solid var(--line-strong);
+  background: var(--bg-2);
+  color: var(--text-2);
+  font: 800 13px/1 Manrope;
+  cursor: pointer;
+  user-select: none;
+  transition: border-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
