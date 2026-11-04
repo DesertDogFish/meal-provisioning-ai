@@ -24,6 +24,8 @@
 | Поведение, видимое пользователю | `README.md` |
 | Дизайн/UX-паттерн | `provisions/design-pack/` + `src/index.css` токены |
 | Правила работы агентов | `AGENTS.md` / соответствующий `skills/*.md` |
+| Удаление мёртвого кода / junk (`git rm`) | `tasks/done/2026-11/repo-hygiene.md` (список `git rm`) + CI-шаги в `.github/workflows/ci.yml` (job `frontend`: «Check MD files», «Check internal Markdown links») |
+| `provisions/logo`, `provisions/site` (решение владельца) | `skills/docs-sync.md` § «Белый список MD» + `tasks/done/2026-11/repo-hygiene.md` (запись решения) |
 
 ## Антисоветы (урок «Flyway V1–V29»)
 - В прозе НЕ дублировать то, что стареет молча: номера версий, число миграций, списки

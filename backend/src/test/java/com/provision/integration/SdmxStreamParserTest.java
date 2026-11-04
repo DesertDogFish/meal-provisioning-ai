@@ -4,6 +4,7 @@ import com.provision.exception.IntegrationUnavailableException;
 import com.provision.integration.EmisSnapshot.PricePoint;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.ByteArrayInputStream;
@@ -442,6 +443,42 @@ class SdmxStreamParserTest {
         assertThat(snap.prices().get("105")).hasSize(12);
         assertThat(snap.prices().get("105").get(0).date()).isEqualTo(LocalDate.of(2025, 1, 1));
         assertThat(snap.prices().get("105").get(11).date()).isEqualTo(LocalDate.of(2025, 12, 1));
+    }
+
+    @Test
+    @EnabledIfSystemProperty(named = "benchmark.sdmx", matches = "true")
+    @DisplayName("BL-24: большой SDMX (>=60MB) разбирается в пределах heap-порога")
+    void bigDocumentMemoryBenchmark(@TempDir Path dir) throws Exception {
+        Path file = dir.resolve("big-sdmx.xml");
+        SdmxFixtureGenerator.generate(file, 1500, 12, "643");
+        long size = Files.size(file);
+        org.assertj.core.api.Assertions.assertThat(size).isGreaterThanOrEqualTo(60L * 1024 * 1024);
+
+        java.util.concurrent.atomic.AtomicLong peak = new java.util.concurrent.atomic.AtomicLong(0);
+        java.util.concurrent.atomic.AtomicBoolean done = new java.util.concurrent.atomic.AtomicBoolean(false);
+        Thread sampler = new Thread(() -> {
+            while (!done.get()) {
+                long used = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
+                peak.updateAndGet(v -> Math.max(v, used));
+                try { Thread.sleep(50); } catch (InterruptedException ignored) { }
+            }
+        });
+        sampler.setDaemon(true);
+        sampler.start();
+        try (java.io.InputStream in = java.nio.file.Files.newInputStream(file)) {
+            EmisSnapshot snap = SdmxStreamParser.parse(in, "Российская Федерация", 0L);
+            org.assertj.core.api.Assertions.assertThat(snap.catalog()).hasSize(1500);
+            org.assertj.core.api.Assertions.assertThat(snap.prices()).hasSize(1500);
+            long totalObs = snap.prices().values().stream().mapToLong(java.util.List::size).sum();
+            org.assertj.core.api.Assertions.assertThat(totalObs).isEqualTo(1500L * 12);
+        } finally {
+            done.set(true);
+            sampler.join(1000);
+        }
+        long threshold = 128L * 1024 * 1024;
+        org.assertj.core.api.Assertions.assertThat(peak.get())
+                .as("peak heap used during parse")
+                .isLessThanOrEqualTo(threshold);
     }
 
     // ==================== помощники ====================
