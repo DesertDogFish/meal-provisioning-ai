@@ -1,9 +1,5 @@
 name: E2E (Playwright) nightly
 
-# Ночной полный прогон Playwright e2e как отдельная таска.
-# Тот же workflow запускается на PR, но НЕ блокирует его (continue-on-error):
-# падение e2e видно как красный шаг/аннотация, но required-гейт CI не валит.
-
 on:
   schedule:
     - cron: '30 3 * * *'  # Каждый день в 3:30 UTC (после contract-nightly в 3:00)
@@ -15,17 +11,19 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  e2e:
-    name: Playwright e2e
-    runs-on: ubuntu-latest
+  e2e-mock:
+    name: Playwright e2e (mock mode, BL-33)
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
 
     steps:
-      - uses: actions/checkout@v4
+      # nosemgrep: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      # nosemgrep: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag
+      - uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       - run: npm ci
@@ -33,24 +31,49 @@ jobs:
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
 
-      - name: Run e2e (blocking on schedule/dispatch, non-blocking on PR)
-        # На расписании/ручном запуске падение валит job; на PR — только предупреждение.
+      - name: Run e2e (mock mode)
         continue-on-error: ${{ github.event_name == 'pull_request' }}
-        run: npm run test:e2e
+        run: npx playwright test $(ls e2e/*.spec.ts | grep -v real-mode.spec.ts)
 
-      # P0-3: прогон real-mode e2e против поднятого docker compose стека.
-      # Только на nightly-schedule/manual (на PR не тратим Docker-ресурсы).
+      - name: Upload Playwright report
+        if: always()
+        # nosemgrep: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag
+        uses: actions/upload-artifact@v5
+        with:
+          name: playwright-report-mock
+          path: playwright-report/
+          retention-days: 7
+
+  e2e-real:
+    name: Playwright e2e (real mode, BL-33)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    if: github.event_name != 'pull_request'
+
+    steps:
+      # nosemgrep: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag
+      - uses: actions/checkout@v5
+
+      # nosemgrep: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      # nosemgrep: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
       - name: Start docker compose stack (real mode)
-        if: github.event_name != 'pull_request'
         env:
-          # Подзадача 6 аудита 02.11.2026: backend в базовом compose не публикуется;
-          # real-mode e2e бьёт в localhost:8080 напрямую — нужен debug-overlay.
           COMPOSE_FILE: docker-compose.yml:docker-compose.debug.yml
         run: |
           cp .env.example .env
           sed -i "s|^JWT_SECRET=.*|JWT_SECRET=$(openssl rand -base64 48)|" .env
           docker compose up -d --build
-          # ждём готовности backend и frontend (healthcheck'и из compose)
           for c in provision-backend provision-frontend; do
             for i in $(seq 1 60); do
               st=$(docker inspect -f '{{.State.Health.Status}}' "$c" 2>/dev/null || echo starting)
@@ -60,24 +83,28 @@ jobs:
             docker inspect -f '{{.Name}} {{.State.Health.Status}}' "$c"
           done
 
+      - run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
       - name: Run e2e REAL mode (P0-3 regression)
-        if: github.event_name != 'pull_request'
-        continue-on-error: true
         env:
           E2E_BASE_URL: http://localhost:3000
           E2E_BACKEND_URL: http://localhost:8080
         run: npx playwright test e2e/real-mode.spec.ts
 
       - name: Tear down stack
-        if: always() && github.event_name != 'pull_request'
+        if: always()
         env:
           COMPOSE_FILE: docker-compose.yml:docker-compose.debug.yml
         run: docker compose down -v
 
       - name: Upload Playwright report
         if: always()
-        uses: actions/upload-artifact@v4
+        # nosemgrep: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag
+        uses: actions/upload-artifact@v5
         with:
-          name: playwright-report
+          name: playwright-report-real
           path: playwright-report/
           retention-days: 7

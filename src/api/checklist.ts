@@ -172,6 +172,7 @@ export async function syncServerBought(tripId: string, keys: Iterable<string>): 
   }
   if (rejected.length > 0) {
     console.warn(
+      // nosemgrep: javascript.lang.security.audit.unsafe-formatstring.unsafe-formatstring
       `[checklist-bought] ${rejected.length} unsendable key(s) skipped for trip ${tripId}:`,
       rejected.slice(0, 10),
     );

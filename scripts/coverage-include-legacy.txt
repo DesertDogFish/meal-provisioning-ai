@@ -168,3 +168,4 @@ src/utils/tripStaging.ts
 src/utils/validation.ts
 src/utils/validationMessages.test.ts
 src/components/recipeEditorHelpers.ts
+src/components/ProductFormModal.test.tsx

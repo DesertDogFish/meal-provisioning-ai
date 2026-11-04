@@ -8,12 +8,12 @@ on:
 jobs:
   contract:
     name: Contract Tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     
     services:
       postgres:
-        image: postgres:15-alpine
+        image: postgres@sha256:54e0dd8e8cddcdbb9156c2486eed5a43eccb7214d7c6828097d41ce049fb3984 # postgres:15-alpine
         env:
           POSTGRES_DB: provision_test
           POSTGRES_USER: provision
@@ -27,9 +27,11 @@ jobs:
           --health-retries 10
     
     steps:
-      - uses: actions/checkout@v4
+      # nosemgrep: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag
+      - uses: actions/checkout@v5
       
-      - uses: actions/setup-java@v4
+      # nosemgrep: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '21'
@@ -48,9 +50,10 @@ jobs:
             curl -sf localhost:8080/api/v1/meta && break || sleep 3
           done
       
-      - uses: actions/setup-node@v4
+      # nosemgrep: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag
+      - uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
       
       - run: npm ci

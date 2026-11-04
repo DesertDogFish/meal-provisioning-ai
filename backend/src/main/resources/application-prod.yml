@@ -27,7 +27,8 @@ springdoc:
   api-docs:
     enabled: false
 
-server:
-  error:
-    include-message: false
-    include-binding-errors: never
+spring:
+  web:
+    error:
+      include-message: false
+      include-binding-errors: never

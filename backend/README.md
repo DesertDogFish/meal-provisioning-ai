@@ -4,7 +4,7 @@
 
 ## Технологический стек
 
-- Java 21 (target — `pom.xml <java.version>`), Spring Boot 3.2.5
+- Java 21 (target — `pom.xml <java.version>`), Spring Boot 4.1.2
 - Spring Data JPA + Hibernate (`ddl-auto=validate`), PostgreSQL 15
 - Spring Security: stateless JWT (access 1 ч / refresh 7 д с ротацией, хэш refresh в БД), CORS из ENV, fail-fast `JWT_SECRET`
 - Flyway (apply at startup; список версий — источник правды `src/main/resources/db/migration/`)

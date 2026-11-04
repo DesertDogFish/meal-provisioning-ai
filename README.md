@@ -161,7 +161,7 @@ build-флагу: `vercel.json → build.env.VITE_ENABLE_MOCK=true` — демо
 
 ## Технологический стек
 
-- **Backend:** Java 21, Spring Boot 3.2.5 (Web, Security, Data JPA, Validation), PostgreSQL 15 + Flyway (список миграций — источник правды `backend/src/main/resources/db/migration/`), JJWT, springdoc-openapi, MapStruct-free (ручные DTO), JUnit 5 + AssertJ + Mockito + Testcontainers/LocalPgFallback
+- **Backend:** Java 21, Spring Boot 4.1.2 (Web, Security, Data JPA, Validation), PostgreSQL 15 + Flyway (список миграций — источник правды `backend/src/main/resources/db/migration/`), JJWT, springdoc-openapi, MapStruct-free (ручные DTO), JUnit 5 + AssertJ + Mockito + Testcontainers/LocalPgFallback
 - **Frontend:** React 18 + TypeScript + Vite, Tailwind 4, React Router, lucide-react, нативный ввод дат (`DatePicker.tsx`); раздаётся nginx
 - **Шрифты:** Unbounded/Manrope — self-host woff2 в `public/fonts/` (`@font-face` в `src/index.css`); внешних запросов к CDN шрифтов нет — prod-CSP (`font-src 'self'`) не блокирует бренд, service worker кэширует их same-origin
 - **Инфраструктура:** Docker Compose (postgres + backend + frontend), GitHub Actions (CI, Docker Stack Smoke, contract parity nightly, e2e nightly)

@@ -10,7 +10,7 @@ import com.provision.entity.UserRole;
 import com.provision.repository.UserRepository;
 import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -179,6 +179,7 @@ class SecurityIntegrationTest {
     @Order(6)
     @DisplayName("SEC-06: Invalid JWT signature returns 401")
     void sec06_invalidJwtSignature() throws Exception {
+        // nosemgrep: generic.secrets.security.detected-jwt-token.detected-jwt-token
         String invalidToken = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ0ZXN0In0.invalid_signature";
 
         mockMvc.perform(get("/api/v1/auth/me")

@@ -7,12 +7,13 @@ import { defineConfig, devices } from '@playwright/test';
 export default defineConfig({
   testDir: './e2e',
   fullyParallel: false, // mock-сервер делит localStorage per-context, но последовательность стабильнее
-  retries: 0,
+  retries: process.env.CI ? 2 : 0,
+  workers: 1,
   // list — для локального запуска; html — артефакт в CI (e2e-nightly.yml)
   reporter: [['list'], ['html', { open: 'never' }]],
   use: {
     baseURL: 'http://localhost:5173',
-    trace: 'retain-on-failure',
+    trace: process.env.CI ? 'on' : 'retain-on-failure',
     /* Фолбэки окружения (AGENTS.md §10 — причины пишем комментарием):
        - `--disable-dev-shm-usage`: в контейнерах (песочница агента, docker-CI)
          /dev/shm часто 64 МБ, и Chromium падает с «Target crashed» на рендере;

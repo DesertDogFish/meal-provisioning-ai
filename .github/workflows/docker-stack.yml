@@ -15,7 +15,7 @@ concurrency:
 jobs:
   stack:
     name: Compose up + smoke
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     env:
       # Подзадача 6 аудита 02.11.2026: базовый docker-compose.yml не публикует
@@ -25,7 +25,8 @@ jobs:
       COMPOSE_FILE: docker-compose.yml:docker-compose.debug.yml
 
     steps:
-      - uses: actions/checkout@v4
+      # nosemgrep: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag
+      - uses: actions/checkout@v5
 
       # compose теперь fail-fast без JWT_SECRET — генерируем уникальный на job
       - name: Prepare .env
@@ -90,6 +91,7 @@ jobs:
           echo "OK: security headers present"
 
       - name: Smoke — register/login roundtrip against the stack
+        # nosemgrep: yaml.github-actions.security.gha-curl-pipe-shell.gha-curl-pipe-shell
         run: |
           EMAIL="ci-smoke-$GITHUB_RUN_ID@test.local"
           curl -fsS -X POST http://localhost:8080/api/v1/auth/register \

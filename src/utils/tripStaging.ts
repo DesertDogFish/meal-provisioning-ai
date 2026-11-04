@@ -293,6 +293,7 @@ function dropUnsendableBoughtKeys(tripId: string, rejected: string[]) {
   for (const key of rejected) if (cur.delete(key)) dropped.push(key);
   if (dropped.length === 0) return;
   console.warn(
+    // nosemgrep: javascript.lang.security.audit.unsafe-formatstring.unsafe-formatstring
     `[checklist-bought] dropped ${dropped.length} unsendable key(s) from local cache of trip ${tripId}:`,
     dropped.slice(0, 10),
   );
@@ -525,6 +526,7 @@ function dropUnsendableActualKeys(tripId: string, rejected: string[]) {
   for (const key of rejected) if (cur[key]) { delete cur[key]; dropped.push(key); }
   if (dropped.length === 0) return;
   console.warn(
+    // nosemgrep: javascript.lang.security.audit.unsafe-formatstring.unsafe-formatstring
     `[checklist-actual-qty] dropped ${dropped.length} unsendable key(s) from local cache of trip ${tripId}:`,
     dropped.slice(0, 10),
   );

@@ -53,10 +53,14 @@ spring:
     ignore-migration-patterns: "*:missing"
 
   jackson:
-    serialization:
-      write-dates-as-timestamps: false
     deserialization:
       fail-on-unknown-properties: false
+
+  # Spring Boot 4: server.error.* -> spring.web.error.*
+  web:
+    error:
+      include-message: always
+      include-binding-errors: always
 
   # Загрузка выгрузки ЕМИСС файлом («Интеграции → Загрузить файл выгрузки», Запуск №17).
   # Полная SDMX-выгрузка показателя — 65 МБ, поэтому лимит совпадает по смыслу с
@@ -73,9 +77,6 @@ server:
   # BL-38: доверяем X-Forwarded-* от nginx (proxy_set_header в nginx.conf),
   # иначе Spring видит IP контейнера, а не клиента.
   forward-headers-strategy: framework
-  error:
-    include-message: always
-    include-binding-errors: always
 
 # Аудит 29.10.2026, подзадача 18: метрики и health (Micrometer + Prometheus).
 # exposure намеренно НЕ "*": env/heapdump/threaddump публично — дыра; наружу только

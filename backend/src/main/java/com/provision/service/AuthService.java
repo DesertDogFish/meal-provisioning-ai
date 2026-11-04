@@ -60,6 +60,7 @@ public class AuthService {
      * важно лишь, что BCrypt-проверка выполняется и в этой ветке тоже.
      */
     private static final String DUMMY_PASSWORD_HASH =
+    // nosemgrep: generic.secrets.security.detected-bcrypt-hash.detected-bcrypt-hash
             "$2a$10$dXJ3SW6G7P50lGmMkkmwe.20cQQubK3.HZWzG3YB1tlRy.fqvM/BG";
 
     @Transactional

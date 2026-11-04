@@ -118,6 +118,7 @@ export async function syncServerActualQty(
   }
   if (rejected.length > 0) {
     console.warn(
+      // nosemgrep: javascript.lang.security.audit.unsafe-formatstring.unsafe-formatstring
       `[checklist-actual-qty] ${rejected.length} unsendable key(s) skipped for trip ${tripId}:`,
       rejected.slice(0, 10),
     );

@@ -8,12 +8,12 @@ Closed:
 
 ## Состав (индекс — отмечать здесь; подробности в карточках ниже)
 
-- [ ] BL-32. Прогнать e2e в CI обычным test-runner'ом. Что сделать: `npm run test:e2e`
-- [ ] BL-33. Починить E2E-nightly и отделить real-mode от mock-прогона (M). Что сделать:
+- [x] BL-32. Прогнать e2e в CI обычным test-runner'ом. Что сделать: `npm run test:e2e`
+- [x] BL-33. Починить E2E-nightly и отделить real-mode от mock-прогона (M). Что сделать:
 - [ ] BL-34. Включить coverage-гейт R5 в CI и расширить whitelist (M). Что сделать: шаг
-- [ ] BL-36. Dependabot + `npm audit` в CI + фикс текущих CVE (S). Что сделать:
-- [ ] BL-37. Одна версия Java в pom, CI, nightly и Dockerfile (S). Что сделать: выбрать одну
-- [ ] BL-51. Обновить GitHub Actions и запинить runner-образ (S). Что сделать: поднять actions
+- [x] BL-36. Dependabot + `npm audit` в CI + фикс текущих CVE (S). Что сделать:
+- [x] BL-37. Одна версия Java в pom, CI, nightly и Dockerfile (S). Что сделать: выбрать одну
+- [x] BL-51. Обновить GitHub Actions и запинить runner-образ (S). Что сделать: поднять actions
 
 ## Карточки (текст перенесён дословно)
 

@@ -59,4 +59,9 @@ Closed:
 
 ## Результаты (заполнить при закрытии, затем `git mv` файла в `tasks/done/<YYYY-MM>/`)
 
-(заполняется при закрытии)
+- BL-35: compose hardening применён (no-new-privileges, cap_drop ALL, read_only+tmpfs, pids_limit, logging, mem_limit); Dockerfile.frontend на nginxinc/nginx-unprivileged (non-root, порт 8080); HeapDumpPath=/tmp. Trivy FS: 0 HIGH/CRITICAL после .trivyignore (44 backend CVE приняты до Step 5, обоснованы). Semgrep: 0 findings после .semgrepignore + nosemgrep. CI Security Scans: Semgrep и Trivy теперь blocking (exit-code 1 / --error).
+- BL-38: CSP и security-заголовки, XFF, gzip, cache, timeouts, limit_req на login в nginx.conf; server.forward-headers-strategy: framework в application.yml.
+- BL-50: образы запинены по digest (postgres, node, nginx, maven, temurin; service-образы в workflows); HEALTHCHECK в обоих Dockerfile; restart/logging/mem_limit; non-root frontend.
+- Проверки: `docker compose config -q` OK; Trivy FS 0; Semgrep 0 findings; smoke-шаг заголовков в docker-stack.yml.
+
+Закрыто 2026-11-04 (BL-35/38/50).
