@@ -26,7 +26,6 @@
         <mapstruct.version>1.6.3</mapstruct.version>
         <jjwt.version>0.13.0</jjwt.version>
         <springdoc.version>3.2.0</springdoc.version>
-        <flyway.version>10.10.0</flyway.version>
         <mockito.version>5.14.2</mockito.version>
         <!-- Явная версия Testcontainers: 1.19.7 иногда отдаёт 502 на Maven Central (битый кэш артефакта) -->
         <testcontainers.version>1.20.4</testcontainers.version>
@@ -70,9 +69,13 @@
             <artifactId>postgresql</artifactId>
             <scope>runtime</scope>
         </dependency>
+        <!-- Spring Boot 4 размодулировал автоконфигурацию: flyway-core сам по себе больше
+             не создаёт бин Flyway, нужен модуль spring-boot-flyway (входит в стартер).
+             Без него миграции не запускаются, а ddl-auto=validate падает на
+             "Schema validation: missing table [emis_prices]" (05.11.2026). -->
         <dependency>
-            <groupId>org.flywaydb</groupId>
-            <artifactId>flyway-core</artifactId>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-flyway</artifactId>
         </dependency>
         <dependency>
             <groupId>org.flywaydb</groupId>
