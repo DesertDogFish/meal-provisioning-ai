@@ -22,7 +22,7 @@ jobs:
 
     steps:
       # nosemgrep: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: Java version consistency (BL-37)
         run: |
@@ -82,7 +82,7 @@ jobs:
     timeout-minutes: 5
     steps:
       # nosemgrep: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - name: Validate commit messages / PR title
@@ -117,10 +117,10 @@ jobs:
     
     steps:
       # nosemgrep: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       
       # nosemgrep: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag
-      - uses: actions/setup-java@v5
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '21'  # синхронно с backend/pom.xml (<java.version>21</java.version>)
@@ -182,7 +182,7 @@ jobs:
       - name: Upload JaCoCo report
         if: always()
         # nosemgrep: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: backend-jacoco
           path: backend/target/site/jacoco/
@@ -191,7 +191,7 @@ jobs:
       - name: Upload surefire reports
         if: failure()
         # nosemgrep: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: backend-surefire
           path: backend/target/surefire-reports/
@@ -237,12 +237,12 @@ jobs:
 
     steps:
       # nosemgrep: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0   # нужны теги и история, чтобы достать предыдущую версию дерева
 
       # nosemgrep: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag
-      - uses: actions/setup-java@v5
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '21'   # синхронно с backend/pom.xml
@@ -354,7 +354,7 @@ jobs:
       - name: Upload upgrade artifacts
         if: failure()
         # nosemgrep: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: migration-upgrade-logs
           path: |
@@ -369,10 +369,10 @@ jobs:
     
     steps:
       # nosemgrep: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       
       # nosemgrep: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -402,7 +402,7 @@ jobs:
           awk "BEGIN{exit !($total_gzip <= $limit)}" || { echo "::error::Bundle gzip \${total_gzip} KB exceeds limit \${limit} KB"; exit 1; }
 
       - name: Upload bundle stats (BL-47)
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: bundle-stats
           path: dist/stats.html
@@ -475,7 +475,7 @@ jobs:
       - name: Upload vitest reports
         if: failure()
         # nosemgrep: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: frontend-vitest
           path: coverage/
@@ -487,10 +487,10 @@ jobs:
 
     steps:
       # nosemgrep: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       # nosemgrep: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -506,7 +506,7 @@ jobs:
       - name: Upload Playwright report
         if: always()
         # nosemgrep: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-report
           path: playwright-report/
@@ -519,7 +519,7 @@ jobs:
     
     steps:
       # nosemgrep: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       
       # compose fail-fast без JWT_SECRET (${JWT_SECRET:?...}) — задаём CI-only секрет.
       # Значение не используется в рантайме (config/build только интерполируют файл),
@@ -543,7 +543,7 @@ jobs:
     
     steps:
       # nosemgrep: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       
       - name: Semgrep (blocking)
         run: |
@@ -597,10 +597,10 @@ jobs:
 
     steps:
       # nosemgrep: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       # nosemgrep: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag
-      - uses: actions/setup-java@v5
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '21'
@@ -631,7 +631,7 @@ jobs:
         run: mvn -B -ntp verify
 
       # nosemgrep: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -644,7 +644,7 @@ jobs:
       - name: Upload e2e artifacts
         if: failure()
         # nosemgrep: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: e2e-nightly-logs
           path: |
