@@ -26,7 +26,7 @@ jobs:
 
     steps:
       # nosemgrep: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       # compose теперь fail-fast без JWT_SECRET — генерируем уникальный на job
       - name: Prepare .env
