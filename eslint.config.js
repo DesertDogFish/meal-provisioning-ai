@@ -4,8 +4,8 @@ import tsParser from '@typescript-eslint/parser';
 import tsPlugin from '@typescript-eslint/eslint-plugin';
 import reactHooks from 'eslint-plugin-react-hooks';
 import reactRefresh from 'eslint-plugin-react-refresh';
-import jsxA11y from 'eslint-plugin-jsx-a11y';
-import importPlugin from 'eslint-plugin-import';
+import jsxA11y from 'eslint-plugin-jsx-a11y-x';
+import importPlugin from 'eslint-plugin-import-x';
 
 export default [
   {
@@ -48,12 +48,14 @@ export default [
       '@typescript-eslint': tsPlugin,
       'react-hooks': reactHooks,
       'react-refresh': reactRefresh,
-      'jsx-a11y': jsxA11y,
-      import: importPlugin,
+      'jsx-a11y-x': jsxA11y,
+      'import-x': importPlugin,
     },
     rules: {
       ...Object.fromEntries(
-        Object.entries(jsxA11y.configs.recommended.rules).map(([k]) => [k, 'warn'])
+        Object.entries(jsxA11y.configs.recommended.rules)
+          .filter(([rule]) => Object.hasOwn(jsxA11y.rules, rule.slice('jsx-a11y-x/'.length)))
+          .map(([rule]) => [rule, 'warn'])
       ),
       ...tsPlugin.configs.recommended.rules,
       'no-unused-vars': 'off',
@@ -68,12 +70,12 @@ export default [
       'react-hooks/rules-of-hooks': 'error',
       'react-hooks/exhaustive-deps': 'warn',
       'react-refresh/only-export-components': 'off',
-      'jsx-a11y/alt-text': 'warn',
-      'import/order': [
+      'jsx-a11y-x/alt-text': 'warn',
+      'import-x/order': [
         'warn',
         { groups: ['builtin', 'external', 'internal', 'parent', 'sibling', 'index'], 'newlines-between': 'always' },
       ],
-      'import/no-cycle': 'warn',
+      'import-x/no-cycle': 'warn',
     },
   },
   {

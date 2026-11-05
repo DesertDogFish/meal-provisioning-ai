@@ -75,8 +75,8 @@ function buildProgressMap(tripsData: Trip[]): Record<string, TripProgress> {
     // (utils/readiness, единый источник), а не «по нарастающей»: введённые чеки
     // при незакрытой закупке/магазине больше не рисуют заполненную полосу.
     const stage: StageId = earliestOpenStage(readiness, { checklistTotal });
-    let done = 0;
-    let total = 0;
+    let done: number;
+    let total: number;
     if (stage === 'menu') {
       // transparency-п.6: знаменатель «days×3» (норма «3 приёма в день») —
       // выдуманный: у этапа ① нет реального знаменателя. Готовность ① = «меню
