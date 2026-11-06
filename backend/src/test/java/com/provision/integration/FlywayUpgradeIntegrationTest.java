@@ -72,27 +72,15 @@ class FlywayUpgradeIntegrationTest {
             new String[]{"14", "seed demo users", "V14__seed_demo_users.sql"},
             new String[]{"15", "seed demo trips", "V15__seed_demo_trips.sql"});
 
-    /** Docker есть → Testcontainers; нет → локальный кластер PostgreSQL (LocalPgFallback). */
-    private static final boolean LOCAL_PG = !LocalPgFallback.dockerAvailable();
-
-    static PostgreSQLContainer<?> postgres = LOCAL_PG ? null
-            : new PostgreSQLContainer<>("postgres:15-alpine")
-                    .withDatabaseName(DB_NAME)
-                    .withUsername("test")
-                    .withPassword("test");
-
     private static final String URL;
     private static final String USER;
     private static final String PASSWORD;
     private static final String CURRENT_MAX_VERSION;
 
     static {
-        if (!LOCAL_PG && postgres != null && !postgres.isRunning()) {
-            postgres.start();
-        }
-        URL = LOCAL_PG ? LocalPgFallback.jdbcUrl(DB_NAME) : postgres.getJdbcUrl();
-        USER = LOCAL_PG ? "test" : postgres.getUsername();
-        PASSWORD = LOCAL_PG ? "test" : postgres.getPassword();
+        URL = SharedPostgres.jdbcUrl(DB_NAME);
+        USER = SharedPostgres.username();
+        PASSWORD = SharedPostgres.password();
         CURRENT_MAX_VERSION = currentMaxVersion();
         // ДО старта Spring-контекста: приложение обязано увидеть уже «старую» БД.
         seedDatabaseOfPreviousDeployment();

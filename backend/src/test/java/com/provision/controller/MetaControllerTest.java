@@ -11,7 +11,6 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import com.provision.integration.ContainerSuite;
 import com.provision.integration.LocalPgFallback;
-import org.testcontainers.containers.PostgreSQLContainer;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -31,24 +30,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @DisplayName("MetaController")
 class MetaControllerTest {
 
-    private static final boolean LOCAL_PG = !LocalPgFallback.dockerAvailable();
-
-    static PostgreSQLContainer<?> postgres = LOCAL_PG ? null : new PostgreSQLContainer<>("postgres:15-alpine")
-            .withDatabaseName("provision_meta_test")
-            .withUsername("test")
-            .withPassword("test");
-
-    static {
-        if (!LOCAL_PG && postgres != null && !postgres.isRunning()) {
-            postgres.start();
-        }
-    }
-
     @DynamicPropertySource
     static void configureProperties(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", () -> LOCAL_PG ? LocalPgFallback.jdbcUrl("provision_meta_test") : postgres.getJdbcUrl());
-        registry.add("spring.datasource.username", () -> LOCAL_PG ? "test" : postgres.getUsername());
-        registry.add("spring.datasource.password", () -> LOCAL_PG ? "test" : postgres.getPassword());
+        registry.add("spring.datasource.url", () -> com.provision.integration.SharedPostgres.jdbcUrl("provision_meta_test"));
+        registry.add("spring.datasource.username", com.provision.integration.SharedPostgres::username);
+        registry.add("spring.datasource.password", com.provision.integration.SharedPostgres::password);
     }
 
     @Autowired

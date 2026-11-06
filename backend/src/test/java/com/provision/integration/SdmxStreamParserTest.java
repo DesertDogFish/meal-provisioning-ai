@@ -49,7 +49,7 @@ class SdmxStreamParserTest {
     @Test
     @DisplayName("Боевая фикстура SDMX 1.0: каталог 4 позиции, регион 643, 8 точек фарша (golden)")
     void parsesRealFixtureWithGoldenValues() throws IOException {
-        String xml = resource("emis/data-31448-real.xml");
+        String xml = SdmxTestXml.resource("emis/data-31448-real.xml");
 
         EmisSnapshot snap = parse(xml, RF);
 
@@ -74,7 +74,7 @@ class SdmxStreamParserTest {
     @Test
     @DisplayName("Обёртка RosstatEmisProvider.parseSdmx(String) даёт тот же слепок, что поток")
     void stringWrapperIsEquivalentToStream() throws IOException {
-        String xml = resource("emis/data-31448-real.xml");
+        String xml = SdmxTestXml.resource("emis/data-31448-real.xml");
 
         EmisSnapshot stream = parse(xml, RF);
         EmisSnapshot viaString = RosstatEmisProvider.parseSdmx(xml, RF);
@@ -89,7 +89,7 @@ class SdmxStreamParserTest {
     @Test
     @DisplayName("SDMX 2.1: время из ObsDimension, значение из ObsValue")
     void parsesSdmx21Shape() {
-        String xml = doc("""
+        String xml = SdmxTestXml.doc("""
                 <CodeLists>
                  <structure:CodeList id="30"><structure:Name>ОКАТО</structure:Name>
                   <structure:Code value="1">Российская Федерация</structure:Code>
@@ -129,7 +129,7 @@ class SdmxStreamParserTest {
     @Test
     @DisplayName("SDMX 1.0: год из Obs/Time + месяц из атрибута ряда PERIOD")
     void parsesRealSdmx10Shape() {
-        String xml = doc("""
+        String xml = SdmxTestXml.doc("""
                 <CodeLists>
                  <structure:CodeList id="s_OKATO"><structure:Name>Классификатор ОКАТО</structure:Name>
                   <structure:Code value="643"><structure:Description>Российская Федерация</structure:Description></structure:Code>
@@ -158,7 +158,7 @@ class SdmxStreamParserTest {
     @Test
     @DisplayName("Годовой ряд без месяца: 1 января (дефект №7 закрытого плана не регрессирует)")
     void yearlySeriesWithoutMonthGivesFirstOfJanuary() {
-        String xml = doc("""
+        String xml = SdmxTestXml.doc("""
                 <CodeLists>
                  <structure:CodeList id="30"><structure:Name>ОКАТО</structure:Name>
                   <structure:Code value="643">Российская Федерация</structure:Code>
@@ -186,7 +186,7 @@ class SdmxStreamParserTest {
     @Test
     @DisplayName("Текст узла — конкатенация потомков (паритет DOM getTextContent)")
     void nodeTextConcatenatesDescendants() {
-        String xml = doc("""
+        String xml = SdmxTestXml.doc("""
                 <CodeLists>
                  <structure:CodeList id="30"><structure:Name>ОКАТО</structure:Name>
                   <structure:Code value="643">Российская <b>Федерация</b></structure:Code>
@@ -208,7 +208,7 @@ class SdmxStreamParserTest {
     @Test
     @DisplayName("Виды показателя: ряды без «цен» в заголовке отбрасываются")
     void keepsOnlyPriceSeriesWhenTypeDimensionExists() {
-        String xml = doc("""
+        String xml = SdmxTestXml.doc("""
                 <CodeLists>
                  <structure:CodeList id="30"><structure:Name>ОКАТО</structure:Name>
                   <structure:Code value="643">Российская Федерация</structure:Code>
@@ -249,7 +249,7 @@ class SdmxStreamParserTest {
     @Test
     @DisplayName("Наблюдения без цены, с нулём/минусом и без даты отбрасываются, ряд сортируется")
     void dropsGarbageObservationsAndSortsByDate() {
-        String xml = doc("""
+        String xml = SdmxTestXml.doc("""
                 <CodeLists>
                  <structure:CodeList id="30"><structure:Name>ОКАТО</structure:Name>
                   <structure:Code value="643">Российская Федерация</structure:Code>
@@ -297,7 +297,7 @@ class SdmxStreamParserTest {
     @Test
     @DisplayName("Ряд чужого региона отбрасывается, регион берётся из конфига")
     void filtersSeriesByConfiguredRegion() {
-        String xml = doc("""
+        String xml = SdmxTestXml.doc("""
                 <CodeLists>
                  <structure:CodeList id="30"><structure:Name>ОКАТО</structure:Name>
                   <structure:Code value="643">Российская Федерация</structure:Code>
@@ -327,7 +327,7 @@ class SdmxStreamParserTest {
     @Test
     @DisplayName("Без словаря товаров — внятная ошибка, а не пустой слепок")
     void failsWhenProductDimensionIsMissing() {
-        String xml = doc("""
+        String xml = SdmxTestXml.doc("""
                 <CodeLists>
                  <structure:CodeList id="30"><structure:Name>ОКАТО</structure:Name>
                   <structure:Code value="643">Российская Федерация</structure:Code>
@@ -345,7 +345,7 @@ class SdmxStreamParserTest {
     @Test
     @DisplayName("maxBytes обрывает ЧТЕНИЕ: сообщение называет лимит и чем его поднять")
     void abortsReadingWhenByteLimitExceeded() {
-        String xml = bigDoc(200, 12, "643");
+        String xml = SdmxTestXml.bigDoc(200, 12, "643");
 
         assertThatThrownBy(() -> parse(xml, RF, 4096L))
                 .isInstanceOf(IntegrationUnavailableException.class)
@@ -357,7 +357,7 @@ class SdmxStreamParserTest {
     @Test
     @DisplayName("maxBytes = 0 — без ограничения: тот же документ разбирается целиком")
     void zeroLimitMeansUnlimited() {
-        String xml = bigDoc(200, 12, "643");
+        String xml = SdmxTestXml.bigDoc(200, 12, "643");
 
         EmisSnapshot snap = parse(xml, RF, 0L);
 
@@ -383,7 +383,7 @@ class SdmxStreamParserTest {
     @Test
     @DisplayName("Ряды раньше словарей буферизуются и разбираются (в боевом ответе так не бывает)")
     void buffersSeriesThatPrecedeCodeLists() {
-        String xml = doc("""
+        String xml = SdmxTestXml.doc("""
                 <DataSet>
                  <generic:Series>
                   <generic:SeriesKey>
@@ -412,7 +412,7 @@ class SdmxStreamParserTest {
     @DisplayName("Больше 10 000 рядов до словарей — разбор прерывается, а не съедает heap")
     void failsWhenTooManySeriesPrecedeCodeLists() {
         StringBuilder sb = new StringBuilder(2_000_000);
-        sb.append(docOpen()).append("<DataSet>");
+        sb.append(SdmxTestXml.docOpen()).append("<DataSet>");
         for (int i = 0; i < 10_001; i++) {
             sb.append("<generic:Series><generic:SeriesKey>")
               .append("<generic:Value concept=\"30\" value=\"643\"/>")
@@ -431,7 +431,7 @@ class SdmxStreamParserTest {
     @Test
     @DisplayName("Большой документ (1200 позиций × 2 региона × 12 месяцев) разбирается с верными счётчиками")
     void parsesLargeDocumentWithCorrectCounters() {
-        String xml = bigDocWithSecondRegion(1200, 12);
+        String xml = SdmxTestXml.bigDocWithSecondRegion(1200, 12);
 
         EmisSnapshot snap = parse(xml, RF);
 
@@ -480,9 +480,6 @@ class SdmxStreamParserTest {
                 .as("peak heap used during parse")
                 .isLessThanOrEqualTo(threshold);
     }
-
-    // ==================== помощники ====================
-
     private static EmisSnapshot parse(String xml, String regionTitle) {
         return parse(xml, regionTitle, 0L);
     }
@@ -493,104 +490,5 @@ class SdmxStreamParserTest {
         } catch (IOException e) {
             throw new IllegalStateException(e);
         }
-    }
-
-    private static String resource(String path) throws IOException {
-        try (InputStream in = SdmxStreamParserTest.class.getClassLoader().getResourceAsStream(path)) {
-            if (in == null) throw new IOException("нет тестового ресурса: " + path);
-            return new String(in.readAllBytes(), StandardCharsets.UTF_8);
-        }
-    }
-
-    private static String docOpen() {
-        return """
-                <?xml version="1.0" encoding="UTF-8"?>
-                <GenericData xmlns="http://www.SDMX.org/resources/SDMXML/schemas/v1_0/message"
-                             xmlns:generic="http://www.SDMX.org/resources/SDMXML/schemas/v1_0/generic"
-                             xmlns:structure="http://www.SDMX.org/resources/SDMXML/schemas/v1_0/structure">
-                """;
-    }
-
-    /** Обёртка тела документа в {@code GenericData} с пространствами имён боевого ответа. */
-    private static String doc(String body) {
-        return docOpen() + body + "\n</GenericData>";
-    }
-
-    /** Один регион, {@code goods} позиций справочника, по {@code months} месяцев 2025 года. */
-    private static String bigDoc(int goods, int months, String regionCode) {
-        StringBuilder sb = new StringBuilder(goods * months * 200);
-        sb.append(docOpen()).append("<CodeLists>");
-        sb.append(codelist("30", "ОКАТО", List.of(regionCode + "|Российская Федерация")));
-        List<String> items = new ArrayList<>();
-        for (int i = 0; i < goods; i++) {
-            items.add(code(105 + i) + "|Товар " + i + ", кг");
-        }
-        sb.append(codelist("32", "Виды товаров и услуг", items));
-        sb.append("</CodeLists><DataSet>");
-        for (int i = 0; i < goods; i++) {
-            sb.append(series(regionCode, String.valueOf(105 + i), months));
-        }
-        sb.append("</DataSet></GenericData>");
-        return sb.toString();
-    }
-
-    /** То же, но каждый товар продублирован рядом чужого региона («030»). */
-    private static String bigDocWithSecondRegion(int goods, int months) {
-        StringBuilder sb = new StringBuilder(goods * months * 400);
-        sb.append(docOpen()).append("<CodeLists>");
-        sb.append(codelist("30", "ОКАТО",
-                List.of("643|Российская Федерация", "030|Центральный федеральный округ")));
-        List<String> items = new ArrayList<>();
-        for (int i = 0; i < goods; i++) {
-            items.add(code(105 + i) + "|Товар " + i + ", кг");
-        }
-        sb.append(codelist("32", "Виды товаров и услуг", items));
-        sb.append("</CodeLists><DataSet>");
-        for (int i = 0; i < goods; i++) {
-            sb.append(series("643", String.valueOf(105 + i), months));
-            sb.append(series("030", String.valueOf(105 + i), months));
-        }
-        sb.append("</DataSet></GenericData>");
-        return sb.toString();
-    }
-
-    /** Код справочника; {@code value} — строка, чтобы значения не сливались после 1000. */
-    private static String code(int value) {
-        return String.valueOf(value);
-    }
-
-    private static String codelist(String id, String title, List<String> values) {
-        StringBuilder sb = new StringBuilder();
-        sb.append("<structure:CodeList id=\"").append(id).append("\">")
-          .append("<structure:Name xml:lang=\"ru\">").append(title).append("</structure:Name>");
-        for (String v : values) {
-            int sep = v.indexOf('|');
-            sb.append("<structure:Code value=\"").append(v, 0, sep).append("\">")
-              .append("<structure:Description xml:lang=\"ru\">").append(v.substring(sep + 1))
-              .append("</structure:Description></structure:Code>");
-        }
-        return sb.append("</structure:CodeList>").toString();
-    }
-
-    /** Ряд боевой формы: месяц — атрибут PERIOD, год — в {@code Obs/Time}. */
-    private static String series(String regionCode, String goodsCode, int months) {
-        StringBuilder sb = new StringBuilder();
-        for (int m = 1; m <= months; m++) {
-            sb.append("<generic:Series><generic:SeriesKey>")
-              .append("<generic:Value concept=\"30\" value=\"").append(regionCode).append("\"/>")
-              .append("<generic:Value concept=\"32\" value=\"").append(goodsCode).append("\"/>")
-              .append("</generic:SeriesKey>")
-              .append("<generic:Attributes><generic:Value concept=\"PERIOD\" value=\"")
-              .append(monthName(m)).append("\"/></generic:Attributes>")
-              .append("<generic:Obs><generic:Time>2025</generic:Time>")
-              .append("<generic:ObsValue value=\"").append(100 + m).append(",50\"/></generic:Obs>")
-              .append("</generic:Series>");
-        }
-        return sb.toString();
-    }
-
-    private static String monthName(int month) {
-        return List.of("январь", "февраль", "март", "апрель", "май", "июнь",
-                "июль", "август", "сентябрь", "октябрь", "ноябрь", "декабрь").get(month - 1);
     }
 }

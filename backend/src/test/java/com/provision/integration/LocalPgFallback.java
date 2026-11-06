@@ -95,7 +95,10 @@ public final class LocalPgFallback {
             asPgPostgres(PG_BIN + "/initdb -D " + DATA_DIR + " -U " + SUPERUSER + " --auth=trust > " + INITDB_LOG + " 2>&1");
         }
         freshLogFile(PG_LOG);
-        asPgPostgres(PG_BIN + "/pg_ctl -D " + DATA_DIR + " -w -o \"-p " + PORT + " -k " + System.getProperty("java.io.tmpdir") + "\" -l " + PG_LOG + " start");
+        asPgPostgres(PG_BIN + "/pg_ctl -D " + DATA_DIR + " -w -o \"-p " + PORT + " -k " + System.getProperty("java.io.tmpdir")
+                // один сервер обслуживает все базы классов, контексты Spring не выгружаются:
+                // 21 пул Hikari × 10 соединений не влезает в дефолтные max_connections=100
+                + " -c max_connections=400\" -l " + PG_LOG + " start");
         Thread.sleep(1000);
     }
 
