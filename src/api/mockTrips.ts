@@ -1,7 +1,9 @@
-/**
- * Роуты /trips — делегирование в разбитые по R8 модули.
- * Публичный API (`handleTripsImpl`) сохранён.
- */
+/** Barrel / re-export layer for the split mockTrips route handlers (R8). */
+
+export { handleTripsPart1 } from './mockTripsPart1';
+export { handleTripsPart2 } from './mockTripsPart2';
+export { handleTripsPart3 } from './mockTripsPart3';
+export { MAX_CHECKLIST_BOUGHT_ITEMS, isoDay } from './mockTripsShared';
 
 import { handleTripsPart1 } from './mockTripsPart1';
 import { handleTripsPart2 } from './mockTripsPart2';
