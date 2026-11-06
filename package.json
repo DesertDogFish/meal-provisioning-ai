@@ -18,7 +18,9 @@
     "test:contract": "vitest run contract",
     "test:e2e": "playwright test",
     "typecheck:all": "npm run typecheck && tsc -p tsconfig.e2e.json && tsc -p tsconfig.node.json",
-    "depcheck": "depcheck"
+    "depcheck": "depcheck",
+    "kanban:triage": "python scripts/kanban_blocked_triage.py",
+    "kanban:triage:dry": "python scripts/kanban_blocked_triage.py --dry-run"
   },
   "dependencies": {
     "@testing-library/dom": "^10.4.2",

@@ -47,6 +47,7 @@ provisions/        дизайн-пак и сайт
 | Чинить баг | `skills/fix-bug.md` |
 | Запустить тесты / проверки | `skills/testing.md` |
 | Закрыть задачу + отчёт | `skills/close-task.md` |
+| Разбор заблокированных задач Kanban (triage) | `skills/kanban-triage.md` |
 | Миграция БД | `skills/migrations.md` |
 | Править доки / новый MD | `skills/docs-sync.md` |
 | Писать код (качество R1–R12) | `skills/coding-rules.md` |
