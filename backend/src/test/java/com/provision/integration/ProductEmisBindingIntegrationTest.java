@@ -112,15 +112,15 @@ class ProductEmisBindingIntegrationTest {
                                         productBody("Test product", "KG", "999999"))
                                 .getBytes(StandardCharsets.UTF_8)))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.error").value("Validation Error"))
+                .andExpect(jsonPath("$.title").value("Validation Error"))
                 .andExpect(jsonPath("$.detail").value(org.hamcrest.Matchers.containsString(
-                        "not found in local catalog")));
+                        "не найдена в локальном справочнике")));
     }
 
     @Test
     @DisplayName("BL-5: unbind (emisCode = null) -> 200, NOT_LINKED")
     void unbindProductFromEmisCodeSucceeds() throws Exception {
-        String code = freeEmisCode("Coffee");
+        String code = freeEmisCode("Кофе");
         long id = createProduct("Coffee test", "KG", code);
 
         String response = mockMvc.perform(auth(put("/api/v1/admin/products/" + id))
@@ -151,7 +151,7 @@ class ProductEmisBindingIntegrationTest {
                                         productBody(currentName + " v2", unit, null))
                                 .getBytes(StandardCharsets.UTF_8)))
                 .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.error").value("Conflict"))
+                .andExpect(jsonPath("$.title").value("Conflict"))
                 .andExpect(jsonPath("$.detail").value(org.hamcrest.Matchers.containsString(
                         "PRODUCT_IN_USE")));
     }
@@ -164,7 +164,7 @@ class ProductEmisBindingIntegrationTest {
                 "SELECT name FROM ingredients WHERE id = ?", String.class, id);
         String unit = jdbc.queryForObject(
                 "SELECT unit FROM ingredients WHERE id = ?", String.class, id);
-        String newCode = freeEmisCode("Coffee");
+        String newCode = freeEmisCode("Кофе");
 
         mockMvc.perform(auth(put("/api/v1/admin/products/" + id))
                         .contentType(MediaType.APPLICATION_JSON)
