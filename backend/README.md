@@ -116,6 +116,7 @@ Swagger: http://localhost:8080/swagger-ui.html (dev). Health: `GET /api/v1/meta`
 
 ```bash
 JWT_SECRET=<32+ символов> mvn -B test                 # весь сьют
+mvn test -P fast                                      # гейт на PR: без интеграционных
 mvn test -Dtest='*IntegrationTest'                    # интеграционные
 mvn test -Dtest=SnapshotIsolationIntegrationTest      # изоляция снепшотов (V20)
 # ЕМИСС (BL-23 + потоковый разбор SDMX): по классам, не всем сьютом (KB-10 — лимит памяти)
@@ -124,11 +125,32 @@ mvn test -Dtest='EmisUnitTest,EmisCatalogServiceTest,EmisControllerTest'
 mvn test -Dtest=EmisSharedCountIntegrationTest        # emisSharedCount на реальной БД
 ```
 
-- Интеграционные сьюты помечены `@ContainerSuite`: при наличии Docker — Testcontainers, иначе LocalPgFallback (initdb системного PostgreSQL 15; в CI ставится пакет postgresql-15/PGDG).
+Замеры (06.11.2026, Windows, Docker поднят; до оптимизации: полный сьют 4:20):
+
+| Прогон | Команда | Время | Тесты |
+|---|---|---|---|
+| полный | `mvn test` | 2:46 | 418 (1 skipped) |
+| полный, параллельно | `mvn test -DforkCount=3` | 1:21 | 418 |
+| быстрый гейт (PR) | `mvn test -P fast` | 1:04 | 319 |
+| 3 самых медленных класса | см. заметки ниже | 36 с (было 64 с) | 29 |
+
+- **Один PostgreSQL на сьют, отдельная база на класс.** `@ContainerSuite` + `SharedPostgres`:
+  один контейнер `postgres:15-alpine` (`max_connections=400`) на весь JVM, Docker недоступен —
+  LocalPgFallback (initdb системного PostgreSQL 15; в CI ставится пакет postgresql-15/PGDG).
+  Раньше каждый класс поднимал свой контейнер — 21 пуск за прогон.
+- **`TestDataIsolation` не гоняет миграции перед каждым тестом**: первый reset в JVM строит
+  шаблонную БД `<db>_tpl` (миграции V1..Vn со сидом каталога), дальше reset — это
+  `DROP DATABASE <db> WITH (FORCE)` + `CREATE DATABASE <db> TEMPLATE <db>_tpl` (~0.1 с вместо
+  1.32 с). Пул Hikari вытесняется **после** пересоздания БД, иначе FORCE убивает соединения,
+  которые драйвер выдаёт без проверки (aliveBypassWindow 500 мс) — тест получает
+  «An established connection was aborted». Откат на полный `drop + migrate` — автоматический,
+  если шаблон недоступен.
+- Миграции остаются повторно-безопасными: путь «шаблон недоступен» поднимает схему с нуля.
+
 - `SdmxStreamParserTest` разбирает боевую фикстуру `src/test/resources/emis/data-31448-real.xml` (SDMX 1.0, регион 643) и большой синтетический документ (1200 позиций × 2 региона × 12 месяцев); фикстуры — golden, результат разбора менять нельзя (`AGENTS.md` R1).
 - `EmisControllerTest` — срез `@WebMvcTest`: `JwtAuthenticationFilter` исключён через `excludeFilters` (иначе контекст требует `JwtService` и `UserRepository`).
 - Покрытие пакета `integration` (jacoco): 84,7 % инструкций / 70,9 % ветвей; `JdkEmisTransport` — 0 % (живая сеть к порталу, KB-10).
-- TestDataIsolation пересоздаёт схему каждого сьюта (drop + flyway migrate) — миграции обязаны быть повторо-безопасными.
+- `TestDataIsolation` приводит базу к состоянию «сразу после миграций» копией шаблонной БД (см. выше) — миграции обязаны быть повторно-безопасными, потому что путь «шаблон недоступен» поднимает схему с нуля.
 - **В песочнице агента не запускать** (лимит памяти ~1 ГБ, OOM 137): `EconomicConsistencyTest`,
   `UserPricesIntegrationTest`, `DockerStackSmokeTest` — в CI они выполняются обычным `mvn test`.
   Рецепты per-class прогонов и обоснование: `skills/testing.md` (история: KB-10, `tasks/done/2026-11/kb10-kb16-env-recipes.md`).
