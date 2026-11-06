@@ -1,9 +1,9 @@
 import type { Trip } from '../types';
 
 import { isoDay, MAX_CHECKLIST_BOUGHT_ITEMS } from './mockTripsShared';
-import { nextSubstitutionSeq, nextRemovedSeq, nextManualSeq, products, recipes, trips, priceOverrides, shoppingExcluded, checklistBought, checklistActualQty, substitutions, removedItems, manualItems, allTripEdits, applyTripEditsToRows, loadClientStage, users, UNIT_LABELS, r3, r2, editRecipeKey, editIngredientKey, findOwnTrip, ownTripOr404, takeConcurrentConflict } from './mockState';
-import { tripPricesFor, ingredientEditsFor, tripsWithProgress, denormalizeOverrideKey } from './mockTripProgress'; // cleanup-п.8
-import type { MockSubstitution, MockManualItem, MockChecklistBoughtItem, MockChecklistActualQtyItem } from './mockState';
+import { nextRemovedSeq, products, trips, priceOverrides, shoppingExcluded, checklistActualQty, removedItems, users, findOwnTrip } from './mockState';
+import { denormalizeOverrideKey } from './mockTripProgress'; // cleanup-п.8
+import type { MockSubstitution, MockChecklistActualQtyItem } from './mockState';
 
 let mockTripSeq = 0;
 

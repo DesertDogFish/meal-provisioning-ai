@@ -52,3 +52,7 @@ scripts/replace_lines.py
 # Design lab: эскизные ассеты и галерея (черновики, не в git;
 # в прод пойдёт только выбранное и оптимизированное)
 design-lab/
+
+# Kanban per-task worktrees (created by the Hermes dispatcher)
+.worktrees/
+__pycache__/

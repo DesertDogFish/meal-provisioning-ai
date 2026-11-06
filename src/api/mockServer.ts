@@ -17,7 +17,6 @@ import { applyCompositionPutImpl, buildCompositionResponseImpl, handleMealCompos
 import { currentPriceOfImpl, handleCategoriesImpl, handleProductsImpl, handleRecipesImpl, recipeToResponseImpl } from './mockCatalog';
 import { handleTripsImpl } from './mockTrips';
 import { handleAuthImpl } from './mockAuth';
-import {  } from './mockState';
 
 /** «Момент старта приложения» mock-сессии — паритет с MetaController.startedAt. */
 const MOCK_STARTED_AT = new Date().toISOString();

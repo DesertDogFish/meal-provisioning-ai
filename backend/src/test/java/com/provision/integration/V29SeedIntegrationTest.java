@@ -53,7 +53,7 @@ class V29SeedIntegrationTest {
                 "SELECT p.price_per_unit FROM ingredient_prices p "
                         + "JOIN ingredients i ON i.id = p.ingredient_id "
                         + "WHERE i.code = 'toilet_paper' AND i.trip_id IS NULL "
-                        + "ORDER BY p.effective_from DESC LIMIT 1",
+                        + "AND p.effective_from = DATE '2026-01-01'",
                 BigDecimal.class);
         assertThat(price).isEqualByComparingTo("20.00");
     }
@@ -70,7 +70,7 @@ class V29SeedIntegrationTest {
                 "SELECT p.price_per_unit FROM ingredient_prices p "
                         + "JOIN ingredients i ON i.id = p.ingredient_id "
                         + "WHERE i.code = 'wipes_wet' AND i.trip_id IS NULL "
-                        + "ORDER BY p.effective_from DESC LIMIT 1",
+                        + "AND p.effective_from = DATE '2026-01-01'",
                 BigDecimal.class);
         assertThat(price).isEqualByComparingTo("30.00");
     }
@@ -87,7 +87,7 @@ class V29SeedIntegrationTest {
                 "SELECT p.price_per_unit FROM ingredient_prices p "
                         + "JOIN ingredients i ON i.id = p.ingredient_id "
                         + "WHERE i.code = 'matches_waterproof' AND i.trip_id IS NULL "
-                        + "ORDER BY p.effective_from DESC LIMIT 1",
+                        + "AND p.effective_from = DATE '2026-01-01'",
                 BigDecimal.class);
         assertThat(price).isEqualByComparingTo("3.00");
     }

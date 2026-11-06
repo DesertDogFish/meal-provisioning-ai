@@ -3,7 +3,6 @@ package com.provision.service;
 import com.provision.dto.summary.DayShoppingResponse;
 import com.provision.dto.summary.ShoppingItemResponse;
 import com.provision.dto.summary.ShoppingListResponse;
-import com.provision.entity.Ingredient;
 import com.provision.entity.IngredientPrice;
 import com.provision.entity.Recipe;
 import com.provision.entity.Trip;
@@ -16,7 +15,6 @@ import com.provision.repository.TripManualItemRepository;
 import lombok.RequiredArgsConstructor;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -47,6 +45,7 @@ final class ShoppingListCalculator {
 
     SummaryService.ShoppingComputation compute(Trip trip, TripCalculationContext ctx, Long tripId,
                                                TripManualItemRepository manualItemRepository) {
+        ShoppingListValidator.validate(trip, ctx, tripId);
         Map<Long, BigDecimal> overrides = priceResolutionService.getAllOverrides(tripId);
 
         Map<Long, ShoppingAggregation> aggregation = new LinkedHashMap<>();
@@ -83,7 +82,7 @@ final class ShoppingListCalculator {
                 for (TripIngredientEditService.EffectiveLine line : lines) {
                     // EXTRA (absolute) — количество на приём «как есть» (spec §3): не масштабируется.
                     BigDecimal mealAmount = line.absolute()
-                            ? line.amountPerServing().setScale(3, RoundingMode.HALF_UP)
+                            ? ShoppingRounding.scaleAmount(line.amountPerServing())
                             : MealPlanCalculator.calculateAmountForMeal(
                                     line.amountPerServing(),
                                     recipe.getBaseServings(),
@@ -128,13 +127,7 @@ final class ShoppingListCalculator {
             }
         }
 
-        // --- Общий список покупок ---
-        List<ShoppingItemResponse> items = new ArrayList<>();
-        BigDecimal totalPlannedCost = BigDecimal.ZERO;
-        BigDecimal totalActualCost = BigDecimal.ZERO;
-        boolean hasMissingPrices = false;
-        List<String> missingIngredients = new ArrayList<>();
-        int overriddenCount = 0;
+        // --- Общий список покупок (сборка делегирована в ShoppingListAssembler) ---
 
         // FIX P1 (аудит): раньше findEffectivePrice вызывался внутри цикла по каждому
         // ингредиенту — N+1. Теперь плановые цены на дату окончания грузятся одним пакетным
@@ -158,321 +151,39 @@ final class ShoppingListCalculator {
             }
         }
 
-        for (ShoppingAggregation aggProto : aggregation.values()) {
-            Long ingredientId = aggProto.ingredient().getId();
-            BigDecimal overridePrice = overrides.get(ingredientId);
+        ShoppingListAssembler.OverallResult overall = ShoppingListAssembler.assembleOverall(
+                aggregation, perDayAggregation, overrides, plannedPricesByIngredient, overallPriceSeries);
 
-            BigDecimal totalAmount = BigDecimal.ZERO;
-            BigDecimal plannedCost = null;   // Σ qty_day × planPrice(day) — Known Bug #1
-            BigDecimal actualCost = null;    // Σ qty_day × actualPrice(day)
-            String substitutedFromName = null;
-            boolean itemHasPlannedPrice = false;
-            boolean itemHasActualPrice = false;
+        BigDecimal deltaPercent = ShoppingListAssembler.calculateDeltaPercent(overall.totalPlannedCost(), overall.totalActualCost());
 
-            // Обход по дням (порядок = порядок дней похода), берём количество данного
-            // ингредиента в каждом дне и его плановую цену на дату этого дня.
-            for (Map.Entry<LocalDate, Map<Long, ShoppingAggregation>> dayEntry : perDayAggregation.entrySet()) {
-                ShoppingAggregation dayAgg = dayEntry.getValue().get(ingredientId);
-                if (dayAgg == null) {
-                    continue;
-                }
-                totalAmount = totalAmount.add(dayAgg.totalAmount());
-                if (substitutedFromName == null) {
-                    substitutedFromName = dayAgg.substitutedFromName;
-                }
+        ShoppingListResponse shoppingList = ShoppingListAssembler.assembleShoppingList(
+                overall.items(), overall.totalPlannedCost(), overall.totalActualCost(), deltaPercent,
+                overall.overriddenCount(), overall.hasMissingPrices(), overall.missingIngredients());
 
-                // Плановая цена на фактическую дату дня (не на endDate!) — тот же
-                // механизм, что в getShoppingByDays: срез endDate + спуск по ряду.
-                BigDecimal dayPlannedUnitPrice = effectivePriceFromCache(
-                        ingredientId, dayEntry.getKey(),
-                        plannedPricesByIngredient, overallPriceSeries)
-                        .map(IngredientPrice::getPricePerUnit).orElse(null);
-                if (dayPlannedUnitPrice != null) {
-                    itemHasPlannedPrice = true;
-                    BigDecimal dayPlanned = dayAgg.totalAmount().multiply(dayPlannedUnitPrice)
-                            .setScale(2, RoundingMode.HALF_UP);
-                    plannedCost = (plannedCost == null) ? dayPlanned : plannedCost.add(dayPlanned);
-                }
-
-                // Фактическая цена дня: ручной оверрайд единого курса нет (он глобальный
-                // на поход), иначе — плановая цена этого дня.
-                BigDecimal dayActualUnitPrice = overridePrice != null ? overridePrice : dayPlannedUnitPrice;
-                if (dayActualUnitPrice != null) {
-                    itemHasActualPrice = true;
-                    BigDecimal dayActual = dayAgg.totalAmount().multiply(dayActualUnitPrice)
-                            .setScale(2, RoundingMode.HALF_UP);
-                    actualCost = (actualCost == null) ? dayActual : actualCost.add(dayActual);
-                }
-            }
-
-            boolean overridden = overridePrice != null;
-            // Средневзвешенная плановая цена за единицу = planCost / qty (scale 2).
-            // При нулевом количестве оставляем срез на endDate (как раньше).
-            BigDecimal plannedUnitPrice = (plannedCost != null && totalAmount.signum() > 0)
-                    ? plannedCost.divide(totalAmount, 2, RoundingMode.HALF_UP)
-                    : plannedPricesByIngredient.get(ingredientId) != null
-                            ? plannedPricesByIngredient.get(ingredientId).getPricePerUnit()
-                            : null;
-            BigDecimal actualUnitPrice = (actualCost != null && totalAmount.signum() > 0)
-                    ? actualCost.divide(totalAmount, 2, RoundingMode.HALF_UP)
-                    : (overridden ? overridePrice : plannedUnitPrice);
-
-            if (itemHasPlannedPrice) {
-                totalPlannedCost = totalPlannedCost.add(plannedCost);
-            } else if (overridePrice == null) {
-                hasMissingPrices = true;
-                missingIngredients.add(aggProto.ingredient().getName());
-            }
-
-            if (itemHasActualPrice) {
-                totalActualCost = totalActualCost.add(actualCost);
-            }
-
-            if (overridden) {
-                overriddenCount++;
-            }
-
-            PackCalculation packs = calculatePacks(aggProto.ingredient(), totalAmount);
-
-            items.add(new ShoppingItemResponse(
-                    ingredientId,
-                    aggProto.ingredient().getName(),
-                    aggProto.ingredient().getUnit(),
-                    totalAmount,
-                    plannedUnitPrice,
-                    actualUnitPrice,
-                    plannedCost,
-                    actualCost,
-                    overridden,
-                    itemHasPlannedPrice,
-                    packs.packSize(),      // FIX (P1): packSize из справочника
-                    packs.packsToBuy(),    // FIX (P1): ceil(total/packSize) при roundToPacks
-                    packs.buyAmount(),     // FIX (P1): сколько реально покупать
-                    packs.leftoverAmount(),// FIX (P1): излишек
-                    substitutedFromName    // Фаза 14: имя замещённого продукта (null = без замены)
-            ));
-        }
-
-        BigDecimal deltaPercent = calculateDeltaPercent(totalPlannedCost, totalActualCost);
-
-        // Фаза 14: итоговые суммы — целые рубли (позиции и цены за единицу остаются точными).
-        ShoppingListResponse shoppingList = new ShoppingListResponse(
-                items,
-                MealPlanCalculator.roundToRub(totalPlannedCost),
-                MealPlanCalculator.roundToRub(totalActualCost),
-                deltaPercent,
-                overriddenCount,
-                hasMissingPrices,
-                missingIngredients
-        );
-
-        // --- Покупки по дням ---
-        // FIX P1 (аудит): пакетная загрузка цен вместо N+1 внутри цикла по дням.
-        // 1) Один запрос DISTINCT ON на всю дату окончания — это нижняя грань:
-        //    для любой даты внутри похода эффективная цена либо совпадает, либо старше.
-        // 2) Собираем id всех ингредиентов рецептов похода и одним запросом тянем все
-        //    их ценовые ряды в память; для дат раньше endDate корректируем эффективную
-        //    цену pick'ом из ряда (иначе distinct-on вернул бы цену, ещё не действующую на день).
         Set<Long> allIngredientIds = new HashSet<>();
         for (Recipe r : ctx.recipesById().values()) {
-            if (r.getIngredients() != null) {
-                r.getIngredients().forEach(ri -> allIngredientIds.add(ri.getIngredient().getId()));
-            }
+            if (r.getIngredients() != null) r.getIngredients().forEach(ri -> allIngredientIds.add(ri.getIngredient().getId()));
         }
+        for (Map<Long, TripIngredientSubstitution> subs : edits.substitutionsByRecipeAndFrom().values())
+            for (TripIngredientSubstitution sub : subs.values()) if (sub.getToIngredient() != null) allIngredientIds.add(sub.getToIngredient().getId());
+        for (List<TripIngredientSubstitution> added : edits.addedByRecipe().values())
+            for (TripIngredientSubstitution a : added) if (a.getToIngredient() != null) allIngredientIds.add(a.getToIngredient().getId());
 
-        // Фаза 14 (N3): id замещённых/добавленных продуктов тоже в ценовой набор
-        for (Map<Long, TripIngredientSubstitution> subs : edits.substitutionsByRecipeAndFrom().values()) {
-            for (TripIngredientSubstitution sub : subs.values()) {
-                if (sub.getToIngredient() != null) allIngredientIds.add(sub.getToIngredient().getId());
-            }
-        }
-        for (List<TripIngredientSubstitution> added : edits.addedByRecipe().values()) {
-            for (TripIngredientSubstitution a : added) {
-                if (a.getToIngredient() != null) allIngredientIds.add(a.getToIngredient().getId());
-            }
-        }
-
-        LocalDate rangeEnd = trip.getEndDate();
-        Map<Long, IngredientPrice> basePrices = loadLatestPrices(allIngredientIds, rangeEnd);
+        Map<Long, IngredientPrice> basePrices = loadLatestPrices(allIngredientIds, trip.getEndDate());
         Map<Long, List<IngredientPrice>> priceSeries = new HashMap<>();
         if (!allIngredientIds.isEmpty()) {
-            // FIX P1: ценовые ряды нужны ТОЛЬКО для поправок на дни раньше endDate —
-            // один пакетный запрос вместо скрытого N+1 (раньше грузился полный ряд на
-            // каждый ингредиент похода, даже когда история цен не использовалась).
             Set<Long> needHistory = new HashSet<>();
-            for (Map.Entry<Long, IngredientPrice> e : basePrices.entrySet()) {
-                if (e.getValue().getEffectiveFrom().isAfter(trip.getStartDate())) {
-                    needHistory.add(e.getKey());
-                }
-            }
-            if (!needHistory.isEmpty()) {
-                for (IngredientPrice p : priceRepository.findByIngredientIdInOrderByEffectiveFromDesc(needHistory)) {
+            for (Map.Entry<Long, IngredientPrice> e : basePrices.entrySet())
+                if (e.getValue().getEffectiveFrom().isAfter(trip.getStartDate())) needHistory.add(e.getKey());
+            if (!needHistory.isEmpty())
+                for (IngredientPrice p : priceRepository.findByIngredientIdInOrderByEffectiveFromDesc(needHistory))
                     priceSeries.computeIfAbsent(p.getIngredient().getId(), k -> new ArrayList<>()).add(p);
-                }
-            }
         }
 
-        List<DayShoppingResponse> byDays = trip.getDays().stream()
-                .map(day -> {
-                    Map<Long, ShoppingAggregation> dayAggregation = new LinkedHashMap<>();
-                    BigDecimal dayPlannedCost = BigDecimal.ZERO;
-                    BigDecimal dayActualCost = BigDecimal.ZERO;
-                    boolean dayHasMissingPrices = false;
-
-                    LocalDate dayDate = day.getDayDate();
-
-                    for (TripMeal meal : day.getMeals()) {
-                        int mealPeople = MealPlanCalculator.calculateEffectivePeople(trip, day, meal);
-                        Recipe recipe = meal.getRecipe();
-
-                        // Тот же per-trip edits-bundle, что и в общей закупке (один раз на расчёт)
-                        List<TripIngredientEditService.EffectiveLine> lines = tripIngredientEditService.applyEdits(
-                                tripId, recipe, recipe.getIngredients(),
-                                edits.subsFor(recipe.getId()), edits.addedFor(recipe.getId()));
-
-                        for (TripIngredientEditService.EffectiveLine line : lines) {
-                            // EXTRA (absolute) — количество на приём «как есть» (spec §3).
-                            BigDecimal mealAmount = line.absolute()
-                                    ? line.amountPerServing().setScale(3, RoundingMode.HALF_UP)
-                                    : MealPlanCalculator.calculateAmountForMeal(
-                                            line.amountPerServing(),
-                                            recipe.getBaseServings(),
-                                            mealPeople
-                                    );
-
-                            ShoppingAggregation agg = dayAggregation.computeIfAbsent(line.ingredient().getId(), k ->
-                                    new ShoppingAggregation(line.ingredient()));
-                            agg.addAmount(mealAmount);
-                            if (agg.substitutedFromName == null && line.substitutedFromName() != null) {
-                                agg.substitutedFromName = line.substitutedFromName();
-                            }
-                        }
-                    }
-
-                    List<ShoppingItemResponse> dayItems = new ArrayList<>();
-                    for (ShoppingAggregation agg : dayAggregation.values()) {
-                        Long ingredientId = agg.ingredient().getId();
-                        BigDecimal overridePrice = overrides.get(ingredientId);
-
-                        // Эффективная цена на дату дня: из кэша (O(1)), без обращения к БД.
-                        Optional<IngredientPrice> plannedPriceOpt = effectivePriceFromCache(
-                                ingredientId, dayDate, basePrices, priceSeries);
-
-                        BigDecimal plannedUnitPrice = plannedPriceOpt.map(IngredientPrice::getPricePerUnit).orElse(null);
-                        BigDecimal actualUnitPrice = overridePrice != null ? overridePrice : plannedUnitPrice;
-
-                        BigDecimal plannedCost = null;
-                        BigDecimal actualCost = null;
-                        boolean hasPlannedPrice = plannedUnitPrice != null;
-                        boolean overridden = overridePrice != null;
-
-                        if (hasPlannedPrice) {
-                            plannedCost = agg.totalAmount().multiply(plannedUnitPrice).setScale(2, RoundingMode.HALF_UP);
-                            dayPlannedCost = dayPlannedCost.add(plannedCost);
-                        } else if (overridePrice == null) {
-                            dayHasMissingPrices = true;
-                        }
-
-                        if (actualUnitPrice != null) {
-                            actualCost = agg.totalAmount().multiply(actualUnitPrice).setScale(2, RoundingMode.HALF_UP);
-                            dayActualCost = dayActualCost.add(actualCost);
-                        }
-
-                        PackCalculation packs = calculatePacks(agg.ingredient(), agg.totalAmount());
-
-                        dayItems.add(new ShoppingItemResponse(
-                                ingredientId,
-                                agg.ingredient().getName(),
-                                agg.ingredient().getUnit(),
-                                agg.totalAmount(),
-                                plannedUnitPrice,
-                                actualUnitPrice,
-                                plannedCost,
-                                actualCost,
-                                overridden,
-                                hasPlannedPrice,
-                                packs.packSize(),
-                                packs.packsToBuy(),
-                                packs.buyAmount(),
-                                packs.leftoverAmount(),
-                                agg.substitutedFromName
-                        ));
-                    }
-
-                    return new DayShoppingResponse(
-                            day.getDayDate().toString(),
-                            dayItems,
-                            MealPlanCalculator.roundToRub(dayPlannedCost),   // Фаза 14: итоги — целые рубли
-                            MealPlanCalculator.roundToRub(dayActualCost),
-                            dayHasMissingPrices
-                    );
-                })
-                .toList();
+        List<DayShoppingResponse> byDays = ShoppingListAssembler.assembleByDays(
+                trip, ctx, tripIngredientEditService, edits, overrides, basePrices, priceSeries);
 
         return new SummaryService.ShoppingComputation(shoppingList, byDays, totalPersonMeals, totalCalories);
-    }
-
-    private BigDecimal calculateDeltaPercent(BigDecimal planned, BigDecimal actual) {
-        if (planned.compareTo(BigDecimal.ZERO) == 0) {
-            return BigDecimal.ZERO;
-        }
-        return actual.subtract(planned)
-                .divide(planned, 4, RoundingMode.HALF_UP)
-                .multiply(BigDecimal.valueOf(100))
-                .setScale(2, RoundingMode.HALF_UP);
-    }
-
-    private static class ShoppingAggregation {
-        private final Ingredient ingredient;
-        private BigDecimal totalAmount = BigDecimal.ZERO;
-        /** Фаза 14: имя продукта, замещённого пер-походной правкой (для колонки substitutedFrom). */
-        private String substitutedFromName;
-
-        ShoppingAggregation(Ingredient ingredient) {
-            this.ingredient = ingredient;
-        }
-
-        Ingredient ingredient() {
-            return ingredient;
-        }
-
-        BigDecimal totalAmount() {
-            return totalAmount;
-        }
-
-        void addAmount(BigDecimal amount) {
-            totalAmount = totalAmount.add(amount);
-        }
-    }
-
-    /**
-     * FIX (P1, аудит Phase 11): расчёт упаковок для позиций списка покупок.
-     * Раньше packSize/packsToBuy/buyAmount/leftoverAmount были захардкожены в null,
-     * и UI не мог показать «сколько пачек покупать».
-     *
-     * Правила (совпадают с mockServer.ts CONTRACT-P1):
-     *  - packSize берётся из Ingredient.packSize (размер упаковки в единицах измерения продукта);
-     *  - packsToBuy считается только при roundToPacks=true и валидном packSize (>0),
-     *    иначе все поля остаютcя null — UI показывает вес/объём вместо штук;
-     *  - buyAmount = packsToBuy * packSize (что реально класть в корзину);
-     *  - leftoverAmount = buyAmount - totalAmount (излишек).
-     */
-    private record PackCalculation(BigDecimal packSize, Integer packsToBuy,
-                                   BigDecimal buyAmount, BigDecimal leftoverAmount) {}
-
-    private PackCalculation calculatePacks(Ingredient ingredient, BigDecimal totalAmount) {
-        BigDecimal packSize = ingredient.getPackSize();
-        if (packSize == null || packSize.compareTo(BigDecimal.ZERO) <= 0) {
-            return new PackCalculation(packSize, null, null, null);
-        }
-        if (!Boolean.TRUE.equals(ingredient.getRoundToPacks())) {
-            return new PackCalculation(packSize, null, null, null);
-        }
-        int packsToBuy = totalAmount.divide(packSize, 0, RoundingMode.CEILING).intValue();
-        BigDecimal buyAmount = packSize.multiply(BigDecimal.valueOf(packsToBuy))
-                .setScale(3, RoundingMode.HALF_UP);
-        BigDecimal leftover = buyAmount.subtract(totalAmount).setScale(3, RoundingMode.HALF_UP);
-        return new PackCalculation(packSize, packsToBuy, buyAmount, leftover);
     }
 
     /**
