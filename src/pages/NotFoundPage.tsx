@@ -13,13 +13,22 @@
  * Копи и вариант поведения — решение владельца по карточке BL-66; выбран явный 404
  * (а не тост с редиректом): пользователь видит адрес, по которому промахнулся.
  */
+import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MapPinOff } from 'lucide-react';
 
 import { Button } from '../components/Button';
+import { isBooting } from '../ui/appBoot';
 
 export default function NotFoundPage() {
   const navigate = useNavigate();
+
+  // п.17: после рестарта оболочка восстанавливает последний URL, и он может не совпасть
+  // ни с одним маршрутом. На холодном старте пользователь должен увидеть походы, а не 404.
+  useEffect(() => {
+    if (isBooting()) navigate('/trips', { replace: true });
+  }, [navigate]);
+
   return (
     <div className="max-w-lg mx-auto p-6" data-testid="not-found-page">
       <div

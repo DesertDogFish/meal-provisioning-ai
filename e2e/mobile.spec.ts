@@ -395,7 +395,8 @@ test('M-15 п.7: поиск в чеклисте — липкий контрол,
   await expect(input).toBeVisible();
 
   // (а) контрол в липкой шапке: после прокрутки страницы он остаётся видимым
-  await page.mouse.wheel(0, 300);
+  // mobile-390 — WebKit, где mouse.wheel не поддерживается: скроллим программно
+  await page.evaluate(() => window.scrollBy(0, 300));
   await expect(input).toBeVisible();
   const box = await input.boundingBox();
   expect(box!.y).toBeGreaterThanOrEqual(0);

@@ -12,7 +12,8 @@ import { ArrowLeft } from 'lucide-react'; // redesign п.6: kebab удалён (
 
 import type { Trip } from '../types/tripDetail';
 
-import { Button } from './Button';
+import { AppMenuButton } from './AppMenuButton';
+import { HeaderIconButton } from './HeaderIconButton';
 
 export interface TripActionsProps {
   trip: Trip;
@@ -22,20 +23,22 @@ export interface TripActionsProps {
 
 export function TripActions({ trip, onBack }: TripActionsProps) {
   return (
-    <div className="flex items-start gap-3 md:gap-4">
-      {/* Ревизия скриншотов 29.10: на телефоне кнопка «назад» прижата к верхней
-          строке заголовка (items-start), а не висит по центру трёхстрочного h1. */}
-      <div className="shrink-0 mt-0.5">
-        <Button variant="ghost" onClick={onBack} aria-label="Назад к походам"><ArrowLeft size={20} /></Button>
+    <div className="trip-head-row">
+      {/* UX-список владельца: кнопка меню — размером с заголовок и перед «назад»;
+          даты/люди начинаются под кнопками на всю ширину. */}
+      <div className="flex items-center gap-1 min-w-0">
+        <AppMenuButton />
+        <HeaderIconButton label="Назад к походам" onClick={onBack} testId="trip-back">
+          <ArrowLeft size={20} />
+        </HeaderIconButton>
+        <h1 className="text-xl min-[480px]:text-2xl font-bold truncate flex-1 min-w-0" style={{ color: 'var(--text)' }}>{trip.name}</h1>
       </div>
-      <div className="flex-1 min-w-0">
-        <h1 className="text-xl min-[480px]:text-2xl font-bold truncate" style={{ color: 'var(--text)' }}>{trip.name}</h1>
-        <p className="text-sm" style={{ color: 'var(--muted)' }}>
-          {new Date(trip.startDate).toLocaleDateString('ru-RU')} — {new Date(trip.endDate).toLocaleDateString('ru-RU')} • {trip.defaultPeople} чел.
-        </p>
-      </div>
+      <p className="text-sm mt-1" style={{ color: 'var(--muted)' }}>
+        {new Date(trip.startDate).toLocaleDateString('ru-RU')} — {new Date(trip.endDate).toLocaleDateString('ru-RU')} • {trip.defaultPeople} чел.
+      </p>
     </div>
   );
+
 }
 
 export default TripActions;

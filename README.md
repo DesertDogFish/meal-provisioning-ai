@@ -66,6 +66,21 @@ docker compose up --build
 
 > ⚠️ Для публичного сервера: `SEED_DEMO_USERS=false` и `SPRING_PROFILES_ACTIVE=prod`. Демо-пароли из `.env` не должны быть тривиальными: учётка `admin` имеет полный доступ.
 
+### Мобильная оболочка (Android, отдельный репозиторий `meal-provisioning-mobile`)
+
+APK собирается из соседнего репозитория и ходит в этот же бэкенд. Команды — в
+`meal-provisioning-mobile/README.md` §Эмулятор; здесь только то, что касается этого стека:
+
+- **Адрес API для эмулятора:** `http://10.0.2.2:3000/api/v1` (`10.0.2.2` — хост-машина из
+  эмулятора, а `:3000` — этот nginx-фронт). Адрес вшивается в бандл при сборке.
+- **CORS:** origin оболочки — `https://localhost` (Capacitor WebView). Бэкенд пускает его через
+  `CORS_ALLOWED_ORIGINS`; дефолт в `docker-compose.yml` уже включает `https://localhost`.
+  Если задаёте переменную в `.env` — не забудьте этот origin, иначе приложение получит
+  `403 Invalid CORS request` («Failed to fetch» в UI).
+- **Схема оболочки:** `androidScheme: https`, а API локально по `http://` — это mixed content,
+  который Chromium блокирует; в шелле он разрешён явно (`MIXED_CONTENT_ALWAYS_ALLOW`),
+  cleartext — только в debug-манифесте. Для прод-хоста (https) ничего этого не нужно.
+
 ## Профили Spring
 
 | Профиль | Назначение |

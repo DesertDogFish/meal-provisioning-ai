@@ -156,7 +156,7 @@ export default function TripDetailPage() {
       {/* Этап ②: закупка — три вида одного списка (подзадача 3) */}
       {stage === 'shopping' && (
         <div className="space-y-3">
-          <div className="seg seg-scroll max-w-full overflow-x-auto" role="tablist" aria-label="Вид списка закупки">
+          <div className="seg seg--subtle seg-scroll max-w-full overflow-x-auto" role="tablist" aria-label="Вид списка закупки">
             {shopViews.map(v => (
               <button
                 key={v.id}

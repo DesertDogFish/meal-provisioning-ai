@@ -152,8 +152,10 @@ describe('RecipesPage — bugs-recipes-catalog пп.1–2', () => {
     await screen.findByText('Уха из рыбных консервов');
     const h1 = screen.getByRole('heading', { level: 1 });
     expect(h1.textContent?.trim()).toBe('Блюда');
-    expect(h1.parentElement?.textContent).toContain('1 блюдо');
-    expect(h1.parentElement?.textContent).toContain('1 категория');
+    // подпись живёт в шапке рядом с заголовком (после переноса кнопки меню — sibling, не внутри блока h1)
+    const hero = screen.getByTestId('page-hero');
+    expect(hero.textContent).toContain('1 блюдо');
+    expect(hero.textContent).toContain('1 категория');
   });
 
   it('п.2: фильтр подписан «Без огня»; «Только без огня» отсутствует', async () => {

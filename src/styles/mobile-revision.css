@@ -22,6 +22,22 @@
 
 /* 2. Скролл вкладок:fade по краям вместо «срезанных» глифов + активный таб
       центрируется из JSX (scrollIntoView inline:center). */
+/* UX-список владельца п.18: на тач-устройствах полоса прокрутки в чипсах-фильтрах
+   не нужна (жест скролла и так работает), в браузере с мышью полоса остаётся. */
+@media (pointer: coarse) {
+  .seg-scroll,
+  .checklist-sticky,
+  .overflow-x-auto {
+    scrollbar-width: none;
+  }
+  .seg-scroll::-webkit-scrollbar,
+  .checklist-sticky::-webkit-scrollbar,
+  .overflow-x-auto::-webkit-scrollbar {
+    display: none;
+    height: 0;
+  }
+}
+
 .seg-scroll {
   -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 14px, #000 calc(100% - 14px), transparent 100%);
   mask-image: linear-gradient(90deg, transparent 0, #000 14px, #000 calc(100% - 14px), transparent 100%);

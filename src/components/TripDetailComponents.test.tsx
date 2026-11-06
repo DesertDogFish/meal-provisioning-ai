@@ -158,7 +158,7 @@ describe('TripSummaryPanel', () => {
     expect(screen.getByText(/Магазин: взято 2 из 2/)).toBeTruthy();
   });
 
-  it('не готов: «В процессе» и «Посмотреть отчёт»', () => {
+  it('не готов: бейджа готовности нет, «Посмотреть отчёт» есть', () => {
     const view = deriveTripView(viewInput());
     const notReady = tripReadiness({ mealsCount: 2, checklistTotal: 2, boughtCount: 0, factCount: 0, checksTotal: 2, menuApproved: true }); // redesign п.4
     render(
@@ -167,7 +167,8 @@ describe('TripSummaryPanel', () => {
         readiness={notReady} boughtInList={0} checklistTotal={2} factCount={0} factsTotal={2}
       />
     );
-    expect(screen.getByText('В процессе')).toBeTruthy();
+    // UX-список владельца п.20: отдельного статуса «В процессе» больше нет
+expect(screen.queryByText('В процессе')).toBeNull();
     expect(screen.getByText(/Меню собрано/)).toBeTruthy();
     // п.7: иконочная кнопка отчёта — aria-label «Отчёт», смысл — в title
     expect(screen.getByLabelText('Отчёт').getAttribute('title')).toBe('Посмотреть отчёт (печать/PDF)');
@@ -371,9 +372,9 @@ describe('TripDaysList', () => {
 
   // bugs-trip-menu-stage пп.1–2: заголовок карточки «на поход» по состоянию,
   // пояснение про ручные позиции — в InfoTip, не в тексте карточки.
-  it('карточка к походу: без позиций — «Добавить дополнительные продукты и товары…», с позицией — «Продукты и товары»', () => {
+  it('карточка к походу: без позиций — «Добавить продукты и товары…», с позицией — «Продукты и товары»', () => {
     setup({ manualItems: [...manualDay] }); // trip-позиций нет
-    expect(screen.getByText('Добавить дополнительные продукты и товары…')).toBeTruthy();
+    expect(screen.getByText('Добавить продукты и товары…')).toBeTruthy();
     cleanup();
     setup(); // manualTrip — одна trip-позиция (Аптечка)
     expect(screen.getByText('Продукты и товары')).toBeTruthy();

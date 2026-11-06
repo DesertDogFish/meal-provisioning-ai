@@ -7,6 +7,10 @@
    ============================================================ */
 @media (max-width: 1023px) {
   .app-drawer {
+    /* UX-список владельца: боковое меню на телефоне занимает весь экран
+       (раньше было w-64 = 256px и обрезало пункты). */
+    width: 100vw;
+    max-width: 100vw;
     visibility: hidden;
     transition: transform var(--t-base) var(--ease), visibility 0s linear var(--t-base);
     padding-bottom: env(safe-area-inset-bottom, 0px);
@@ -23,13 +27,21 @@
     padding-top: calc(var(--sp-3) + env(safe-area-inset-top, 0px));
   }
   .app-main {
+    /* UX-список владельца: мобильное табло удалено, а верхний инсет раньше давало
+       именно оно (.app-topbar) — без этого контент уезжал под иконки статус-бара.
+       В WebView env(safe-area-inset-top) = 0, реальное значение приходит из нативного
+       шима как --pv-inset-top. */
+    padding-top: calc(var(--sp-3) + var(--pv-inset-top, env(safe-area-inset-top, 0px)));
     padding-bottom: calc(var(--sp-4) + env(safe-area-inset-bottom, 0px));
     /* Скролл-контейнер на телефоне — документ, а не main: иначе sticky
        (trip-strip, .checklist-sticky) липнет к непроворачиваемому боксу main
        и уезжает за экран. overflow-x: clip не создаёт scroll-контейнер,
        но страхует от горизонтального скролла документа. */
-    overflow-y: visible;
-    overflow-x: clip;
+    /* ВАЖНО: overflow-x: clip при overflow-y: visible вычисляется как auto —
+       main становится скролл-контейнером, и sticky-шапки (п.21/25) цепляются к нему,
+       а не к окну (визуально «не липнут»). Поэтому на телефоне overflow снят совсем;
+       горизонтальный скролл гасим через min-w-0 у колонок и .mob-scroll. */
+    overflow: visible;
   }
 }
 

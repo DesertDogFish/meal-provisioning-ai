@@ -20,3 +20,45 @@
   .scroll-top-btn { width: var(--touch-target); height: var(--touch-target); }
 }
 
+
+/* ============================================================
+   UX-список владельца п.21/п.25: шапка страницы (заголовок + действия) и фильтры
+   не уезжают при прокрутке. Отступ под статус-бар держим в переменной: в WebView
+   env(safe-area-inset-top) = 0, реальный инсет приходит из натива как --pv-inset-top.
+   margin-top: -var(--head-inset) компенсирует padding-top у main, поэтому в покое
+   шапка стоит там же, где раньше, а при залипании закрывает зону статус-бара.
+   ============================================================ */
+:root {
+  --head-inset: calc(var(--sp-3) + var(--pv-inset-top, env(safe-area-inset-top, 0px)));
+}
+@media (max-width: 1023px) {
+  .page-hero,
+  .trip-head-row {
+    /* !important — в atmosphere.css .page-hero объявлен position: relative, и он
+       подключается позже; без этого sticky не применялся (проверено: computed
+       position оставался relative, шапка уезжала). */
+    position: sticky !important;
+    top: 0;
+    z-index: calc(var(--z-nav) - 12);
+    margin-top: calc(-1 * var(--head-inset));
+    padding-top: var(--head-inset);
+    background: var(--bg);
+  }
+  .page-hero { border-radius: 0 0 var(--r-lg) var(--r-lg); }
+  /* полоса похода липнет сразу под шапкой (высота шапки = инсет + 60px контента);
+     двойной класс — чтобы перебить правило из trip-mobile-a.css (там было 52px от
+     удалённого мобильного табло). */
+  .trip-strip.trip-strip { top: calc(var(--head-inset) + 60px); }
+}
+
+/* п.25: строка фильтров/поиска липнет ровно под шапкой страницы; высоту шапки
+   PageHero пишет в --hero-sticky-h (ResizeObserver), т.к. она зависит от подписи и инсета. */
+@media (max-width: 1023px) {
+  .page-hero ~ .sticky,
+  .page-hero ~ .filters-row {
+    position: sticky;
+    top: var(--hero-sticky-h, 120px);
+    z-index: calc(var(--z-nav) - 14);
+    background: var(--bg);
+  }
+}

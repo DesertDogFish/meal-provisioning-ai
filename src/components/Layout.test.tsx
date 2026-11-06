@@ -1,9 +1,10 @@
 /// <reference types="vitest/globals" />
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 
 import Layout from './Layout';
+import { openAppDrawer } from '../ui/drawerBus';
 import { ToastProvider } from './ToastProvider';
 import { AuthProvider } from './AuthProvider'; // cleanup-п.7: профиль из контекста
 
@@ -89,13 +90,15 @@ describe('Layout — мобильный drawer (подзадача 9)', () => {
     });
   });
 
-  it('гамбургер открывает drawer, затемнение закрывает', () => {
+  // UX-список владельца п.13: мобильное верхнее табло убрано, меню открывают кнопки
+  // в шапках страниц — они дёргают шину openAppDrawer(), Layout слушает.
+  it('шина openAppDrawer открывает drawer, затемнение закрывает', () => {
     const { baseElement } = renderLayout();
     const aside = baseElement.querySelector('aside.app-drawer') as HTMLElement;
     expect(aside.className).not.toContain('app-drawer--open');
     expect(screen.queryByTestId('drawer-overlay')).toBeNull();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Открыть меню навигации' }));
+    act(() => openAppDrawer());
     expect(aside.className).toContain('app-drawer--open');
     expect(screen.getByTestId('drawer-overlay')).toBeTruthy();
     // фон заблокирован, пока drawer открыт
@@ -106,37 +109,32 @@ describe('Layout — мобильный drawer (подзадача 9)', () => {
     expect(document.body.style.overflow).not.toBe('hidden');
   });
 
-  it('Esc закрывает drawer и возвращает фокус на гамбургер', () => {
+  it('Esc закрывает drawer и возвращает фокус на кнопку, которая его открыла', () => {
     renderLayout();
-    const burger = screen.getByRole('button', { name: 'Открыть меню навигации' });
-    fireEvent.click(burger);
+    const opener = document.createElement('button');
+    opener.textContent = 'Открыть меню навигации';
+    document.body.appendChild(opener);
+    opener.focus();
+    act(() => openAppDrawer());
     expect(screen.getByTestId('drawer-overlay')).toBeTruthy();
     fireEvent.keyDown(document, { key: 'Escape' });
     expect(screen.queryByTestId('drawer-overlay')).toBeNull();
-    expect(document.activeElement).toBe(burger);
+    expect(document.activeElement).toBe(opener);
     expect(document.body.style.overflow).not.toBe('hidden');
+    opener.remove();
   });
 
-  it('у контента есть оболочка .app-shell и липкая шапка .app-topbar', () => {
+  it('у контента есть оболочка .app-shell, а мобильного табло .app-topbar больше нет', () => {
     const { baseElement } = renderLayout();
     expect(baseElement.querySelector('.app-shell')).toBeTruthy();
-    expect(baseElement.querySelector('header.app-topbar')).toBeTruthy();
+    // п.13: табло с гамбургером и сменой темы удалено — кнопка меню живёт в шапках страниц
+    expect(baseElement.querySelector('header.app-topbar')).toBeNull();
+  });
+
+  it('бейдж режима API перенесён в боковое меню', () => {
+    const { baseElement } = renderLayout();
+    const aside = baseElement.querySelector('aside.app-drawer') as HTMLElement;
+    expect(aside.querySelector('.api-badge')).toBeTruthy();
   });
 });
 
-describe('Layout — мобильный topbar без логотипа (bugs-app-ui п.4)', () => {
-  it('в мобильном topbar нет BrandMark и слова «Провиант»; бургер остаётся, справа — распорка', () => {
-    const { baseElement } = renderLayout();
-    const topbar = baseElement.querySelector('header.app-topbar');
-    expect(topbar).toBeTruthy();
-    expect(topbar!.querySelector('.brand-mark')).toBeNull();
-    expect(topbar!.querySelector('h1')).toBeNull();
-    expect(topbar!.textContent).not.toContain('Провиант');
-    // бургер на месте
-    expect(topbar!.querySelector('button[aria-label="Открыть меню навигации"]')).toBeTruthy();
-    // распорка flex-1 прижимает бейдж режима и тогл темы к правому краю
-    expect(topbar!.querySelector('.flex-1')).toBeTruthy();
-    // десктопный сайдбар логотип СОХРАНЯЕТ
-    expect(baseElement.querySelector('aside')!.textContent).toContain('Провиант');
-  });
-});

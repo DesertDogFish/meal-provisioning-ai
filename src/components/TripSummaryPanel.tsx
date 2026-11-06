@@ -113,13 +113,15 @@ export function TripSummaryPanel({
         </span>
       ))}
       <ChevronRight size={13} style={{ color: 'var(--line-strong)' }} aria-hidden />
-      <span className="px-2 py-0.5 text-xs font-extrabold rounded-full whitespace-nowrap"
-        style={readiness.ready
-          ? { background: 'var(--success)', color: 'var(--snow)' }
-          : { background: 'var(--elev)', color: 'var(--muted)' }}
-      >
-        {readiness.ready ? 'Поход готов ✓' : 'В процессе'}
-      </span>
+      {/* UX-список владельца п.20: «В процессе» — дубль пятого пункта цепочки,
+          отдельный статус не нужен: показываем бейдж только у готового похода. */}
+      {readiness.ready && (
+        <span className="px-2 py-0.5 text-xs font-extrabold rounded-full whitespace-nowrap"
+          style={{ background: 'var(--success)', color: 'var(--snow)' }}
+        >
+          Поход готов ✓
+        </span>
+      )}
     </>
   );
 
