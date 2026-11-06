@@ -55,3 +55,4 @@ design-lab/
 
 # Kanban per-task worktrees (created by the Hermes dispatcher)
 .worktrees/
+__pycache__/
