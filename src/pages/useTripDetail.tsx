@@ -13,6 +13,7 @@ import { useParams, useSearchParams } from 'react-router-dom';
 import { api } from '../api/client';
 import { useToast } from '../components/ToastProvider';
 import { useConfirm } from '../components/ConfirmDialog'; // Fix-6 (п.7)
+import { checklistRowKey } from '../utils/checklist';
 import { loadActualPrices, saveActualPrice, loadExcluded, setExcluded as persistExcluded, loadBought, setBought as persistBought, loadActualQty, setActualQty, onTripStageChange, refreshBoughtFromServer, forgetTripBoughtSyncState, refreshActualQtyFromServer, forgetTripActualQtySyncState, type ChecklistActual, type ActualPriceDraft } from '../utils/tripStaging'; // U32 + Fix-2(п.6) + Fix-5(п.21) + Fix-8(п.6)
 import { unitFromTotal } from '../utils/checkInput'; // cleanup-п.5: чек-мутация переехала со вкладки на страницу
 import type { CheckRow } from '../components/ChecksModel';
@@ -324,6 +325,17 @@ export function useTripDetail() {
       const unit = unitFromTotal(total, row.totalAmount);
       if (unit == null) return; // нулевое количество — вводить некуда
       saveActualPrice(tripKey, row.ingredientId, { price: unit, total });
+    }
+    // Владелец 07.11.2026: ввели цену в «Чеках» — значит товар уже куплен;
+    // отмечаем его в чеклисте магазина («Взято»), чтобы не отмечать дважды.
+    if (total != null && !Number.isNaN(total) && total > 0) {
+      const key = checklistRowKey({ ingredientId: String(row.ingredientId), needed: row.totalAmount });
+      if (!checklistBought.has(key)) {
+        const next = new Set(checklistBought);
+        next.add(key);
+        persistBought(tripKey, next);
+        setChecklistBought(next);
+      }
     }
     setDraftOverrides(loadActualPrices(tripKey));
     try {
