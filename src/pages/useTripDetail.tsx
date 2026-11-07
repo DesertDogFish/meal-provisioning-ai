@@ -326,16 +326,17 @@ export function useTripDetail() {
       if (unit == null) return; // нулевое количество — вводить некуда
       saveActualPrice(tripKey, row.ingredientId, { price: unit, total });
     }
-    // Владелец 07.11.2026: ввели цену в «Чеках» — значит товар уже куплен;
-    // отмечаем его в чеклисте магазина («Взято»), чтобы не отмечать дважды.
-    if (total != null && !Number.isNaN(total) && total > 0) {
-      const key = checklistRowKey({ ingredientId: String(row.ingredientId), needed: row.totalAmount });
-      if (!checklistBought.has(key)) {
-        const next = new Set(checklistBought);
-        next.add(key);
-        persistBought(tripKey, next);
-        setChecklistBought(next);
-      }
+    // Владелец 07.11.2026: цена в «Чеках» = товар куплен -> отметка «Взято» в
+    // чеклисте магазина. Пустая цена = «как будто её никогда не было»: снимаем
+    // отметку, и строка возвращается к исходному виду («+ стоимость, ₽»).
+    const boughtKey = checklistRowKey({ ingredientId: String(row.ingredientId), needed: row.totalAmount });
+    const hasTotal = total != null && !Number.isNaN(total) && total > 0;
+    const wantsBought = hasTotal;
+    if (checklistBought.has(boughtKey) !== wantsBought) {
+      const next = new Set(checklistBought);
+      if (wantsBought) next.add(boughtKey); else next.delete(boughtKey);
+      persistBought(tripKey, next);
+      setChecklistBought(next);
     }
     setDraftOverrides(loadActualPrices(tripKey));
     try {
