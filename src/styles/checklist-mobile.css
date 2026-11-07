@@ -54,6 +54,9 @@
   /* владелец 07.11.2026: как в «Магазине» — та же скруглённая плашка (12px) */
   border-radius: 12px;
 }
+/* Зазор до поиска — только там, где над ним стоит плашка прогресса (Магазин).
+   В «Чеках» над поиском ничего нет, лишние 12px читались пустотой. */
+.checklist-sticky.checks-search-bar .list-search { margin-top: 0; }
 .checklist-sticky {
   position: sticky;
   top: 0;
