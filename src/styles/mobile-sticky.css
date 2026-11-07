@@ -59,3 +59,37 @@
     bottom: calc(var(--stage-bar-h) + max(env(safe-area-inset-bottom, 0px), var(--pv-inset-bottom, 0px)) + 12px);
   }
 }
+
+
+/* ------------------------------------------------------------
+   Фейды у кромок прокрутки (владелец 07.11.2026): список растворяется,
+   не касаясь липких плашек. Цвет градиента = фон страницы.
+   Верхний фейд начинается ПОД липким стеком: его кромку Layout считает
+   на лету (--sticky-fade-top) — иначе он прятался за плашкой поиска.
+   ------------------------------------------------------------ */
+.scroll-fade {
+  position: fixed;
+  left: 0;
+  right: 0;
+  height: 26px;
+  pointer-events: none;
+  z-index: 30; /* выше контента (0), ниже липких плашек (40+) */
+  opacity: 0;
+  transition: opacity .18s ease;
+}
+.scroll-fade--top {
+  top: var(--sticky-fade-top, 0px);
+  background: linear-gradient(to bottom, var(--bg) 0%, color-mix(in srgb, var(--bg) 55%, transparent) 45%, transparent 100%);
+}
+html.is-scrolled.has-sticky-top .scroll-fade--top { opacity: 1; }
+
+.scroll-fade--bottom {
+  bottom: 0;
+  background: linear-gradient(to top, var(--bg) 0%, color-mix(in srgb, var(--bg) 55%, transparent) 45%, transparent 100%);
+}
+html.is-scrolled .scroll-fade--bottom { opacity: 1; }
+
+/* Страница похода: снизу над баром этапов, сверху — под всем стеком */
+body:has(.stage-bar) .scroll-fade--bottom {
+  bottom: calc(var(--stage-bar-h, 52px) + max(env(safe-area-inset-bottom, 0px), var(--pv-inset-bottom, 0px)));
+}

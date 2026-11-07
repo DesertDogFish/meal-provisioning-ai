@@ -41,16 +41,36 @@ export default function Layout({ children }: { children: React.ReactNode }) {
      верхние углы острые. Флаг вешаем на <html>: CSS ниже живёт в mobile-shell.css. */
   useEffect(() => {
     const root = document.documentElement;
+    // Верхний фейд должен начинаться ПОД текущим липким стеком (шапка + полоса +
+    // липкий поиск), иначе он прячется за непрозрачной плашкой. Считаем нижнюю
+    // кромку самого нижнего «залипшего» элемента и пишем в --sticky-fade-top.
+    const STICKY_SELECTOR = '.page-hero, .trip-head-row, .trip-strip, .checklist-sticky, .sticky, .filters-row';
+    const updateStickyEdge = () => {
+      let bottom = 0;
+      document.querySelectorAll<HTMLElement>(STICKY_SELECTOR).forEach((el) => {
+        const cs = getComputedStyle(el);
+        if (cs.position !== 'sticky' || cs.display === 'none') return;
+        const r = el.getBoundingClientRect();
+        if (r.height === 0) return;
+        const topOffset = parseFloat(cs.top) || 0;
+        if (r.top <= topOffset + 2) bottom = Math.max(bottom, r.bottom);
+      });
+      root.style.setProperty('--sticky-fade-top', `${Math.round(bottom)}px`);
+      root.classList.toggle('has-sticky-top', bottom > 8);
+    };
     const onScroll = () => {
       const y = window.scrollY;
       root.classList.toggle('is-scrolled', y > 4);
       // «глубокий» скролл: плашка прогресса чеклиста плавно убирается (владелец 07.11.2026)
       root.classList.toggle('is-scrolled-deep', y > 48);
+      updateStickyEdge();
     };
     onScroll();
     window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onScroll);
     return () => {
       window.removeEventListener('scroll', onScroll);
+      window.removeEventListener('resize', onScroll);
       root.classList.remove('is-scrolled');
     };
   }, []);
@@ -276,6 +296,11 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             {children}
           </div>
         </main>
+        {/* Владелец 07.11.2026: у кромок прокрутки — мягкий фейд, чтобы элементы
+            не «касались» липких плашек, а растворялись под ними (сверху — под
+            липким стеком, снизу — над нижним баром этапов). */}
+        <div className="scroll-fade scroll-fade--top" aria-hidden />
+        <div className="scroll-fade scroll-fade--bottom" aria-hidden />
         {/* Fix-7 (п.9): плавающая кнопка «наверх» (появляется, когда шапка скрыта) */}
         <ScrollTopButton />
       </div>
