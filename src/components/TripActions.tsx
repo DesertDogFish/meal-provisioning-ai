@@ -8,6 +8,8 @@
  * здесь kebab-меню «Отчёт по походу» / «Печать / PDF» (случайное нажатие
  * исключено, действия только через меню).
  */
+import { useEffect, useRef } from 'react';
+
 import type { Trip } from '../types/tripDetail';
 
 import { AppMenuButton } from './AppMenuButton';
@@ -17,8 +19,21 @@ export interface TripActionsProps {
 }
 
 export function TripActions({ trip }: TripActionsProps) {
+  // Владелец 07.11.2026: полоса похода липла на «расчётные» 96px (инсет + 60px),
+  // а фактическая высота шапки — 72px: между ними оставалась щель 24px, в которой
+  // просвечивала прокрутка. Пишем реальную высоту в --trip-head-h, липкость — по ней.
+  const headRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = headRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const apply = () => document.documentElement.style.setProperty('--trip-head-h', `${Math.round(el.getBoundingClientRect().height)}px`);
+    apply();
+    const ro = new ResizeObserver(apply);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
   return (
-    <div className="trip-head-row">
+    <div className="trip-head-row" ref={headRef}>
       {/* Просьба владельца 07.11.2026: дублирующая стрелка «назад» убрана —
           из похода выходят кнопкой меню (слева от заголовка). Даты и число
           людей тоже убраны: они есть в сводке похода (.trip-strip / KPI). */}

@@ -13,7 +13,7 @@
  * готовностью (данные те же — дублей состояния нет). Кнопка отчёта на
  * мобильном переезжает в этап ④ и в kebab шапки (props onOpenReport).
  */
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ChevronRight, ChevronDown, FileDown, Check } from 'lucide-react';
 
 import { formatRub } from '../utils/format' // cleanup-п.9: shim formatRub удалён; // Фаза 13: итоги — целые рубли
@@ -59,6 +59,18 @@ export function TripSummaryPanel({
   stage, done, onStage, onOpenReport,
 }: TripSummaryPanelProps) {
   const [sheetOpen, setSheetOpen] = useState(false);
+  // Владелец 07.11.2026: липкий поиск в чеках должен вставать ровно под полосой —
+  // пишем её фактическую высоту в --trip-strip-h (раньше было «магическое» 120px).
+  const stripRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    const el = stripRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const apply = () => document.documentElement.style.setProperty('--trip-strip-h', `${Math.round(el.getBoundingClientRect().height)}px`);
+    apply();
+    const ro = new ResizeObserver(apply);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
   const days = trip.days?.length || 0;
   const meals = trip.days?.reduce((a, d) => a + (d.meals?.length || 0), 0) || 0;
 
@@ -163,6 +175,7 @@ export function TripSummaryPanel({
       <button
         type="button"
         className="trip-strip"
+        ref={stripRef}
         aria-haspopup="dialog"
         aria-expanded={sheetOpen}
         aria-label="Сводка похода: раскрыть показатели и готовность"

@@ -64,7 +64,7 @@
    раньше здесь стояли «магические» 104px, которые не совпадали со стеком. */
 @media (max-width: 1023px) {
   .checklist-sticky {
-    top: calc(var(--head-inset, 0px) + 120px);
+    top: calc(var(--trip-head-h, 72px) + var(--trip-strip-h, 60px));
   }
 }
 .checklist-group-toggle {
