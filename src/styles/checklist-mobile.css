@@ -50,9 +50,12 @@
    липнет к окну, фон непрозрачный, без скруглений карточки. */
 .checklist-sticky.checks-search-bar {
   padding: var(--sp-2) var(--pv-gutter, 12px);
-  background: var(--bg);
-  /* владелец 07.11.2026: как в «Магазине» — та же скруглённая плашка (12px) */
-  border-radius: 12px;
+  /* своя поверхность: на фоне страницы скругления не читались вообще */
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 0 0 12px 12px;
+  /* швы сверху (под полосой воркфлоу) и снизу (под плашкой) заклеены фоном */
+  box-shadow: 0 -1px 0 0 var(--bg), 0 1px 0 0 var(--bg);
 }
 /* Зазор до поиска — только там, где над ним стоит плашка прогресса (Магазин).
    В «Чеках» над поиском ничего нет, лишние 12px читались пустотой. */
@@ -191,13 +194,11 @@
   .checklist-sticky.checks-search-bar {
     padding-top: var(--sp-2);
     padding-bottom: var(--sp-2);
-    /* владелец 07.11.2026: скругление снизу + шов под плашкой заклеен */
-    border-radius: 0 0 12px 12px;
-    box-shadow: 0 1px 0 0 var(--bg);
   }
-  /* общее правило is-scrolled гасит скругления — здесь они нужны */
+  /* общее правило is-scrolled гасит скругления и перебивает тень — здесь они нужны */
   html.is-scrolled .checklist-sticky.checks-search-bar {
     border-radius: 0 0 12px 12px;
+    box-shadow: 0 -1px 0 0 var(--bg), 0 1px 0 0 var(--bg);
   }
 }
 .checklist-group-toggle {
