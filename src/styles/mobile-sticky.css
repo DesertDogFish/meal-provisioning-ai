@@ -27,26 +27,14 @@
   /* Шапка при прокрутке: непрозрачная БАЗА под артом (раньше фон был
      полупрозрачным linear-gradient, и сквозь него просвечивал список).
      Арт-слой и вуаль остаются на месте — их видно, как и до прокрутки.
-     Углы снизу «вырезаются» фоном страницы отдельным слоем ::before:
-     border-radius тут не годится — в его зоне была бы видна прокрутка. */
+     Углы НЕ скругляем: шапка во всю ширину экрана, «вырезанные» градиентом
+     углы поверх арта читались как артефакты. Квадратная кромка не даёт
+     и дыр, через которые видна прокрутка. */
   html.is-scrolled .page-hero {
     background-color: var(--bg);
     background-image: none;
     border-radius: 0;
     box-shadow: 0 6px 18px color-mix(in srgb, var(--bg-0) 55%, transparent);
-  }
-  html.is-scrolled .page-hero::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    z-index: 1;
-    pointer-events: none;
-    background-image:
-      radial-gradient(circle at 0 100%, transparent calc(var(--r-lg) - 1px), var(--bg) calc(var(--r-lg) - 1px)),
-      radial-gradient(circle at 100% 100%, transparent calc(var(--r-lg) - 1px), var(--bg) calc(var(--r-lg) - 1px));
-    background-size: var(--r-lg) var(--r-lg);
-    background-position: left bottom, right bottom;
-    background-repeat: no-repeat;
   }
   html.is-scrolled .trip-strip {
     background-color: var(--bg-1);
