@@ -89,11 +89,15 @@
   .checklist-toolbar button svg { width: 12px; height: 12px; }
   .checklist-toolbar { gap: 6px; }
 
+  /* Плашка плавно сворачивается (max-height) и гаснет. Тряска была не из-за
+     сворачивания, а из-за дребезга порога и пересчёта стилей на каждом событии
+     скролла — теперь в Layout гистерезис и rAF (владелец 07.11.2026). */
   .checklist-head,
   .checklist-toolbar {
     overflow: hidden;
-    transition: opacity .22s ease, max-height .28s ease, margin .28s ease, padding .28s ease;
+    transition: opacity .2s ease, max-height .26s ease, padding .26s ease, margin .26s ease;
     max-height: 96px;
+    will-change: opacity, max-height;
   }
   html.is-scrolled-deep .checklist-head,
   html.is-scrolled-deep .checklist-toolbar {
@@ -106,6 +110,15 @@
     pointer-events: none;
   }
 
+  /* До прокрутки поиск отделён от плашки прогресса (были впритык).
+     Когда плашка свернулась (is-scrolled-deep), зазор тоже убираем. */
+  .checklist-sticky .list-search {
+    margin-top: var(--sp-3);
+    transition: margin-top .26s ease;
+  }
+  html.is-scrolled-deep .checklist-sticky .list-search {
+    margin-top: 0;
+  }
   html.is-scrolled .checklist-sticky {
     border-radius: 0;
   }

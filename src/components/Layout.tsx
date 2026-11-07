@@ -45,6 +45,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     // липкий поиск), иначе он прячется за непрозрачной плашкой. Считаем нижнюю
     // кромку самого нижнего «залипшего» элемента и пишем в --sticky-fade-top.
     const STICKY_SELECTOR = '.page-hero, .trip-head-row, .trip-strip, .checklist-sticky, .sticky, .filters-row';
+    let lastEdge = -1;
     const updateStickyEdge = () => {
       let bottom = 0;
       document.querySelectorAll<HTMLElement>(STICKY_SELECTOR).forEach((el) => {
@@ -55,15 +56,32 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         const topOffset = parseFloat(cs.top) || 0;
         if (r.top <= topOffset + 2) bottom = Math.max(bottom, r.bottom);
       });
-      root.style.setProperty('--sticky-fade-top', `${Math.round(bottom)}px`);
-      root.classList.toggle('has-sticky-top', bottom > 8);
+      // Пишем только при изменении: иначе на каждый кадр скролла — лишний style recalc
+      // (липкие плашки «трясло» у порога, владелец 07.11.2026).
+      const edge = Math.round(bottom);
+      if (edge !== lastEdge) {
+        lastEdge = edge;
+        root.style.setProperty('--sticky-fade-top', `${edge}px`);
+        root.classList.toggle('has-sticky-top', edge > 8);
+      }
     };
-    const onScroll = () => {
+    let raf = 0;
+    let deep = false;
+    const applyScrollState = () => {
+      raf = 0;
       const y = window.scrollY;
       root.classList.toggle('is-scrolled', y > 4);
-      // «глубокий» скролл: плашка прогресса чеклиста плавно убирается (владелец 07.11.2026)
-      root.classList.toggle('is-scrolled-deep', y > 48);
+      // «Глубокий» скролл с гистерезисом (скрыть на 64px, вернуть на 32px):
+      // один порог давал дребезг — плашка то сворачивалась, то разворачивалась,
+      // и её «колбасило» (владелец 07.11.2026).
+      if (!deep && y > 64) { deep = true; root.classList.add('is-scrolled-deep'); }
+      else if (deep && y < 32) { deep = false; root.classList.remove('is-scrolled-deep'); }
       updateStickyEdge();
+    };
+    // Скролл-события пачками — считаем не чаще одного раза за кадр.
+    const onScroll = () => {
+      if (raf) return;
+      raf = requestAnimationFrame(applyScrollState);
     };
     onScroll();
     window.addEventListener('scroll', onScroll, { passive: true });
@@ -71,6 +89,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     return () => {
       window.removeEventListener('scroll', onScroll);
       window.removeEventListener('resize', onScroll);
+      if (raf) cancelAnimationFrame(raf);
       root.classList.remove('is-scrolled');
     };
   }, []);
