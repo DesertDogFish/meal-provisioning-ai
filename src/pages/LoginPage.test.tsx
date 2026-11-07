@@ -15,8 +15,10 @@ vi.mock('../api/client', () => ({
   api: { get: vi.fn(), post: vi.fn(), put: vi.fn(), del: vi.fn(), onSessionLost: vi.fn(() => () => {}) },
 }));
 const refreshMock = vi.fn();
+// Сессия для рендера: тесты приветствия выставляют authState.user.
+const authState: { user: null | { id: string; email: string; firstName: string; lastName: string; role: string } } = { user: null };
 vi.mock('../components/AuthProvider', () => ({
-  useAuth: () => ({ user: null, refresh: refreshMock, loading: false }),
+  useAuth: () => ({ user: authState.user, refresh: refreshMock, loading: false }),
 }));
 
 import { api } from '../api/client';
@@ -187,13 +189,63 @@ describe('LoginPage — атмосферный фон (design-п.3)', () => {
   });
 });
 
-describe('LoginPage — демо-карточки (bugs-app-ui п.1)', () => {
-  it('демо-карточки центрованы: text-center на контейнерах карточек', () => {
+describe('LoginPage — просьбы владельца 07.11.2026', () => {
+  it('нет заголовка «Вход в систему» и нет демо-учёток', () => {
     renderPage();
-    for (const email of ['admin@provision.app', 'user@provision.app']) {
-      const card = screen.getByText(email).closest('div.rounded-lg');
-      expect(card, `карточка ${email}`).toBeTruthy();
-      expect(card!.classList.contains('text-center')).toBe(true);
+    expect(screen.queryByText('Вход в систему')).toBeNull();
+    expect(screen.queryByText('Демо-доступ:')).toBeNull();
+    expect(screen.queryByText('admin@provision.app')).toBeNull();
+    expect(screen.queryByText('user@provision.app')).toBeNull();
+  });
+
+  it('токен уже выдан: вместо формы — приветствие и кнопка «Войти»', () => {
+    authState.user = { id: '1', email: 'user@provision.app', firstName: 'Олег', lastName: 'Петров', role: 'USER' };
+    try {
+      renderPage();
+      expect(screen.getByTestId('login-greeting').textContent).toContain('Олег');
+      expect(screen.getByTestId('login-enter').textContent).toContain('Войти');
+      expect(screen.queryByLabelText('Email')).toBeNull();
+    } finally {
+      authState.user = null;
     }
+  });
+});
+
+/**
+ * п.3 списка владельца: «в офлайне можно зайти и зарегаться» — первый запуск
+ * должен быть только онлайн. Плагин сети подменяем: useOffline читает
+ * networkMonitor.isOnline(), поэтому без сети форма не отправляется и виден
+ * объясняющий баннер.
+ */
+const netState = { online: true };
+vi.mock('../sync/NetworkMonitor', () => ({
+  networkMonitor: {
+    isOnline: () => netState.online,
+    subscribe: () => () => {},
+    start: () => {},
+    stop: () => {},
+  },
+}));
+
+describe('LoginPage — офлайн (п.3)', () => {
+  it('без сети: баннер + отправка формы блокируется, api не вызывается', async () => {
+    netState.online = false;
+    try {
+      renderPage();
+      expect(screen.getByTestId('login-offline')).toBeTruthy();
+      fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'user@provision.app' } });
+      fireEvent.change(screen.getByPlaceholderText('••••••••'), { target: { value: 'secret123' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Войти' }));
+      await waitFor(() => expect(document.getElementById('login-error')?.textContent).toMatch(/Нет соединения/));
+      expect((api.post as unknown as { mock: { calls: unknown[] } }).mock.calls.length).toBe(0);
+    } finally {
+      netState.online = true;
+    }
+  });
+
+  it('с сетью: баннера нет', () => {
+    netState.online = true;
+    renderPage();
+    expect(screen.queryByTestId('login-offline')).toBeNull();
   });
 });

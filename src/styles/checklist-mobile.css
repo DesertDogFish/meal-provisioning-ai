@@ -39,18 +39,26 @@
 .checklist-row__toggle:focus-visible { outline: 2px solid var(--amber-500); outline-offset: -2px; }
 .checklist-row__hit { position: relative; z-index: 1; }
 /* Липкая шапка чеклиста: прогресс «Взято N из M» и массовые действия видны всегда */
+/* п.15/п.22: карточка чеков больше не клипует содержимое.
+   `overflow: hidden` делал карточку скролл-контейнером → `position: sticky`
+   у поиска считалась от карточки, а не от окна: поиск «уезжал» при прокрутке,
+   а `top: 104px` дополнительно сдвигал его вниз и создавал зазор под заголовком.
+   `overflow: clip` НЕ создаёт скролл-контейнер (в отличие от hidden/auto),
+   поэтому sticky продолжает липнуть к окну, а скругления остаются. */
+.checks-card { overflow: clip; }
 .checklist-sticky {
   position: sticky;
   top: 0;
   z-index: calc(var(--z-nav) - 20);
   background: var(--bg-1);
 }
-/* На телефоне скроллится документ, а над липким итогом ещё две липкие
-   полосы: шапка (52px) и trip-strip (~52px) —.offset считаем от них.
-   Используется только на странице похода, где trip-strip есть всегда. */
-@media (max-width: 767px) {
+/* На телефоне над липким поиском стоит липкий стек страницы похода:
+   шапка (.trip-head-row, top 0, высота --head-inset+60) и полоса похода
+   (.trip-strip, top --head-inset+60, высота 60). Поиск липнет под ними;
+   раньше здесь стояли «магические» 104px, которые не совпадали со стеком. */
+@media (max-width: 1023px) {
   .checklist-sticky {
-    top: calc(104px + env(safe-area-inset-top, 0px));
+    top: calc(var(--head-inset, 0px) + 120px);
   }
 }
 .checklist-group-toggle {

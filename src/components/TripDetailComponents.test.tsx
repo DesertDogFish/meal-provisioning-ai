@@ -79,13 +79,13 @@ afterEach(() => {
 });
 
 describe('TripActions', () => {
-  it('шапка: название, даты, люди; «назад» — колбэк', () => {
-    const onBack = vi.fn();
-    render(<TripActions trip={trip} onBack={onBack} />);
+  it('шапка: только меню и название — без «назад» и без строки дат/людей', () => {
+    render(<TripActions trip={trip} />);
     expect(screen.getByRole('heading', { name: 'Тестовый поход' })).toBeTruthy();
-    expect(screen.getByText(/01\.07\.2026.*02\.07\.2026.*2 чел\./)).toBeTruthy();
-    fireEvent.click(screen.getByLabelText('Назад к походам'));
-    expect(onBack).toHaveBeenCalledTimes(1);
+    // просьбы владельца 07.11.2026: стрелка «назад» и подпись «даты • N чел.» убраны
+    expect(screen.queryByLabelText('Назад к походам')).toBeNull();
+    expect(screen.queryByText(/чел\./)).toBeNull();
+    expect(screen.queryByText(/2026/)).toBeNull();
   });
 });
 

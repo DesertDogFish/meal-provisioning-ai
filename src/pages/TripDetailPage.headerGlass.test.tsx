@@ -73,7 +73,9 @@ describe('TripDetailPage — glass-шапка «стекло поверх арт
   it('обёртка trip-header-glass содержит TripActions и сводку; .seg-дубля нет (redesign п.6)', async () => {
     renderPage();
     // дожидаемся отрисовки шапки похода
-    await screen.findByRole('button', { name: /назад к походам/i });
+    // просьба владельца 07.11.2026: стрелка «назад» из шапки похода убрана —
+    // ждём кнопку меню, она осталась первой в шапке
+    await screen.findByRole('button', { name: /Открыть меню навигации/i });
     const glass = await screen.findByTestId('trip-header-glass');
     // название похода (TripActions) — внутри карточки
     expect(within(glass).getByText('У моря')).toBeTruthy();

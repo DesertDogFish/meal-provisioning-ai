@@ -45,7 +45,7 @@ export function ChecksMobile(props: ChecksMobileProps) {
   const cardRef = useRef<HTMLDivElement>(null);
   const searchItems = groups.flatMap(g => g.items.map(i => ({ id: i.ingredientId, text: i.ingredientName })));
   return (
-    <div ref={cardRef} className="md:hidden rounded-xl overflow-hidden max-w-3xl" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }} data-testid="checks-mobile">
+    <div ref={cardRef} className="md:hidden checks-card rounded-xl max-w-3xl" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }} data-testid="checks-mobile">
       <div className="px-4 py-3 flex items-center justify-between" style={{ background: 'var(--elev)' }}>
         <b style={{ color: 'var(--text)' }}>Ввести чек</b>
         <span className="keep-num cap" style={{ color: 'var(--text-2)' }}>{factCount} из {factsTotal}</span>

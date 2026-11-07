@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { Printer, ArrowLeft } from 'lucide-react';
 
 import { formatAmount } from '../utils/calculations';
@@ -50,6 +50,7 @@ const fmtDate = (iso: string, opts?: Intl.DateTimeFormatOptions) =>
 
 export default function TripPrintPage() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -164,10 +165,19 @@ export default function TripPrintPage() {
       {/* Панель управления — на печати скрыта */}
       <div className="flex items-center gap-3 px-6 py-3" style={{ borderBottom: '1px solid #d8dee3' }}>
         <button
-          onClick={() => window.close()}
+          onClick={() => {
+            // п.16: window.close() в Android WebView игнорируется (и не закрывает
+            // вкладку, открытую приложением) — кнопка «Закрыть» ничего не делала.
+            // Сначала пробуем закрыть окно (браузер/отдельная вкладка), затем
+            // уводим маршрут: назад по истории приложения, иначе — на страницу похода.
+            try { window.close(); } catch { /* WebView: игнорируем */ }
+            if (window.history.length > 1) navigate(-1);
+            else navigate(`/trips/${id}`, { replace: true });
+          }}
           className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold"
           style={{ border: '1px solid #c7d0d6', borderRadius: 999, color: '#10202b', background: '#fff' }}
           aria-label="Закрыть"
+          data-testid="print-close"
         >
           <ArrowLeft size={16} /> Закрыть
         </button>

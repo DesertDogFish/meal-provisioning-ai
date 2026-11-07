@@ -10,7 +10,6 @@ import PageLoader from './components/PageLoader';
 import { AuthProvider } from './components/AuthProvider'; // cleanup-п.7: один /auth/me на сессию
 import LoginPage from './pages/LoginPage';
 import NotFoundPage from './pages/NotFoundPage';
-import { markBooted } from './ui/appBoot';
 
 /**
  * Fix-10 (п.4): тяжёлые страницы — ленивые чанки (React.lazy). Первый пейнт
@@ -29,13 +28,6 @@ const IntegrationsPage = lazy(() => import('./pages/IntegrationsPage'));
 const ProductsPage = lazy(() => import('./pages/ProductsPage'));
 
 function App() {
-  // п.17: даём смонтироваться роутеру на старте, затем снимаем флаг «booting» —
-  // с этого момента осознанный 404 внутри сессии показывается как раньше (BL-66).
-  useEffect(() => {
-    const t = setTimeout(markBooted, 0);
-    return () => clearTimeout(t);
-  }, []);
-
   return (
     <ErrorBoundary>
       <ToastProvider>

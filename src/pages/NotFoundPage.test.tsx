@@ -3,15 +3,14 @@
  * Проверяем ровно контракт карточки: заголовок + CTA ведёт на /trips.
  */
 import { render, screen, fireEvent } from '@testing-library/react';
-import { beforeEach } from 'vitest';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 
 import NotFoundPage from './NotFoundPage';
-import { markBooted } from '../ui/appBoot';
 
 function renderAt(initial: string) {
   return render(
-    <MemoryRouter initialEntries={[initial]}>
+    // ключ истории явно не 'default' — это навигация ВНУТРИ сессии, а не холодный старт
+    <MemoryRouter initialEntries={[{ pathname: initial, key: 'in-session' }]}>
       <Routes>
         <Route path="/trips" element={<div data-testid="trips-stub">Походы</div>} />
         <Route path="*" element={<NotFoundPage />} />
@@ -21,8 +20,8 @@ function renderAt(initial: string) {
 }
 
 describe('NotFoundPage (BL-66)', () => {
-  // п.17: редирект на /trips срабатывает ТОЛЬКО на холодном старте; в сессии — честный 404.
-  beforeEach(() => markBooted());
+  // п.17: редирект на /trips срабатывает ТОЛЬКО на холодном старте (первая запись истории,
+  // её ключ — 'default'); внутри сессии у записи свой ключ, поэтому 404 честный.
 
   it('показывает заголовок и подсказку про опечатку в адресе', () => {
     renderAt('/ololo');

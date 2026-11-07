@@ -65,7 +65,7 @@ export function ChecksTable(props: ChecksTableProps) {
       </div>
 
       {/* Десктоп: таблица закупки (группы по категориям, как в чеклисте) */}
-      <div ref={tableScope} className="check-table-mobile-hide rounded-xl overflow-hidden max-w-5xl mob-scroll table-cards" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+      <div ref={tableScope} className="check-table-mobile-hide checks-card rounded-xl max-w-5xl mob-scroll table-cards" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
         {/* Fix-7 (п.18): table-layout fixed + colgroup — заголовки ровно над полями */}
         <table className="w-full text-sm" style={{ tableLayout: 'fixed' }}>
           <colgroup>
@@ -139,7 +139,7 @@ export function ChecksTable(props: ChecksTableProps) {
       </div>
 
       {/* По дням: стоимость — только десктоп (пп.3–4: без плана и отклонения) */}
-      <div className="check-table-mobile-hide rounded-xl overflow-hidden max-w-3xl mob-scroll table-cards" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+      <div className="check-table-mobile-hide checks-card rounded-xl max-w-3xl mob-scroll table-cards" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
         <table className="w-full text-sm">
           <thead>
             <tr style={{ borderBottom: '1px solid var(--border)' }}>

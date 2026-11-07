@@ -20,6 +20,18 @@
   .scroll-top-btn { width: var(--touch-target); height: var(--touch-target); }
 }
 
+/* п.24 («наверх» нужна и в походах): на странице похода кнопку перекрывал
+   нижний бар этапов — .stage-bar (z-index --z-nav = 60 > 55 у кнопки, высота
+   56px + нативный инсет снизу), из-за чего «наверх» была видима, но не нажимаема
+   (проверено: elementFromPoint в центре кнопки возвращал .stage-bar__btn).
+   Поднимаем кнопку над баром. */
+@media (max-width: 1023px) {
+  body:has(.stage-bar) .scroll-top-btn {
+    bottom: calc(56px + max(env(safe-area-inset-bottom, 0px), var(--pv-inset-bottom, 0px)) + 12px);
+    z-index: calc(var(--z-nav) + 1);
+  }
+}
+
 
 /* ============================================================
    UX-список владельца п.21/п.25: шапка страницы (заголовок + действия) и фильтры
