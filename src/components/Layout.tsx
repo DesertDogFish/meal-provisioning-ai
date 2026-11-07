@@ -41,7 +41,12 @@ export default function Layout({ children }: { children: React.ReactNode }) {
      верхние углы острые. Флаг вешаем на <html>: CSS ниже живёт в mobile-shell.css. */
   useEffect(() => {
     const root = document.documentElement;
-    const onScroll = () => root.classList.toggle('is-scrolled', window.scrollY > 4);
+    const onScroll = () => {
+      const y = window.scrollY;
+      root.classList.toggle('is-scrolled', y > 4);
+      // «глубокий» скролл: плашка прогресса чеклиста плавно убирается (владелец 07.11.2026)
+      root.classList.toggle('is-scrolled-deep', y > 48);
+    };
     onScroll();
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => {

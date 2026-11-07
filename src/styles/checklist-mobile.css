@@ -67,6 +67,64 @@
     top: calc(var(--trip-head-h, 72px) + var(--trip-strip-h, 60px));
   }
 }
+
+/* ------------------------------------------------------------
+   Владелец 07.11.2026 (этап «Магазин»):
+   - кнопки в плашке прогресса в два раза меньше (были 42px/15px);
+   - при прокрутке плашка («80 из 80» + кнопки) плавно уезжает;
+   - скругления у липкой плашки при прокрутке убираем: в их зоне
+     просвечивал прокручивающийся список.
+   ------------------------------------------------------------ */
+@media (max-width: 1023px) {
+  /* кнопки — вдвое меньше: было 42px высоты и 15px шрифта. Селектор по тегу:
+     у Button из CSS-модуля хешированное имя класса (.btn там не совпадает). */
+  .checklist-toolbar button {
+    height: 24px;
+    min-height: 24px;
+    padding: 0 8px;
+    font-size: 11px;
+    gap: 4px;
+    border-radius: 8px;
+  }
+  .checklist-toolbar button svg { width: 12px; height: 12px; }
+  .checklist-toolbar { gap: 6px; }
+
+  .checklist-head,
+  .checklist-toolbar {
+    overflow: hidden;
+    transition: opacity .22s ease, max-height .28s ease, margin .28s ease, padding .28s ease;
+    max-height: 96px;
+  }
+  html.is-scrolled-deep .checklist-head,
+  html.is-scrolled-deep .checklist-toolbar {
+    opacity: 0;
+    max-height: 0;
+    margin-top: 0;
+    margin-bottom: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    pointer-events: none;
+  }
+
+  html.is-scrolled .checklist-sticky {
+    border-radius: 0;
+  }
+
+  /* Липкая плашка во всю ширину: карточка шириной в контент (387 из 411)
+     оставляла по краям по 12px, где просвечивал прокручивающийся список
+     (владелец 07.11.2026: «под элементом с поиском торчит прокрутка»). */
+  .checklist-sticky {
+    margin-left: calc(-1 * var(--pv-gutter, 12px));
+    margin-right: calc(-1 * var(--pv-gutter, 12px));
+    padding-left: var(--pv-gutter, 12px);
+    padding-right: var(--pv-gutter, 12px);
+    background: var(--bg);
+  }
+  .checklist-sticky.checks-search-bar {
+    padding-top: var(--sp-2);
+    padding-bottom: var(--sp-2);
+  }
+}
 .checklist-group-toggle {
   display: flex;
   width: 100%;
