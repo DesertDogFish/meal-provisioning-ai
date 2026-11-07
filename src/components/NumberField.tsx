@@ -75,8 +75,14 @@ export function NumberField({
         value={draft}
         onChange={e => setDraft(e.target.value)}
         onBlur={e => commit(e.target.value)}
-        onKeyDown={e => { 
-          if (e.key === 'Enter') commit((e.target as HTMLInputElement).value);
+        enterKeyHint="done"
+        onKeyDown={e => {
+          // Владелец 07.11.2026: по «Готово» на экранной клавиатуре значение подтверждалось,
+          // но фокус оставался в поле — клавиатура не убиралась. Блюрим явно.
+          if (e.key === 'Enter') {
+            commit(e.currentTarget.value);
+            e.currentTarget.blur();
+          }
           if (e.key === 'ArrowUp') {
             e.preventDefault();
             bump(1);

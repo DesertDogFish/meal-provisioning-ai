@@ -11,6 +11,7 @@ import { AuthProvider } from './components/AuthProvider'; // cleanup-п.7: од�
 import LoginPage from './pages/LoginPage';
 import NotFoundPage from './pages/NotFoundPage';
 import { syncManager } from './sync/SyncManager';
+import { installEnterBlur } from './ui/enterBlur';
 
 /**
  * Fix-10 (п.4): тяжёлые страницы — ленивые чанки (React.lazy). Первый пейнт
@@ -34,6 +35,8 @@ function App() {
   useEffect(() => {
     syncManager.startAutoSync();
   }, []);
+  // «Готово» на экранной клавиатуре закрывает её (числовые поля).
+  useEffect(() => installEnterBlur(), []);
 
   return (
     <ErrorBoundary>

@@ -147,6 +147,10 @@ export function AmountInput({
           disabled={disabled}
           value={text}
           placeholder={placeholder ?? '0'}
+          enterKeyHint="done"
+          // Enter с экранной клавиатуры («Готово») закрывает клавиатуру:
+          // значение уже ушло в onChange, blur нормализует текст.
+          onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
           onFocus={() => { focused.current = true; }}
           onBlur={() => {
             focused.current = false;
