@@ -93,3 +93,11 @@ html.is-scrolled .scroll-fade--bottom { opacity: 1; }
 body:has(.stage-bar) .scroll-fade--bottom {
   bottom: calc(var(--stage-bar-h, 52px) + max(env(safe-area-inset-bottom, 0px), var(--pv-inset-bottom, 0px)));
 }
+
+
+/* Плашка прогресса сворачивается над областью прокрутки — без этого браузер
+   «привязывает» позицию (scroll anchoring) и подкручивает scrollY на её высоту,
+   из-за чего контент прыгает дважды. Владелец 07.11.2026. */
+@media (max-width: 1023px) {
+  html { overflow-anchor: none; }
+}

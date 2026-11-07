@@ -89,35 +89,44 @@
   .checklist-toolbar button svg { width: 12px; height: 12px; }
   .checklist-toolbar { gap: 6px; }
 
-  /* Плашка — ОДНА строка: прогресс слева, кнопки справа (владелец 07.11.2026).
-     Сворачивается и гаснет целиком; высоту компенсирует .scroll-spacer
-     (иначе документ короче — браузер поджимает scrollY и плашку дёргает). */
+  /* Плашка — ОДНА строка (владелец 07.11.2026): прогресс слева, кнопки справа.
+     Голова плашки не переносится: бар сжимается, проценты уменьшены. */
   .checklist-plaque {
     display: flex;
     align-items: center;
     gap: var(--sp-2);
+
     overflow: hidden;
-    transition: opacity .2s ease, max-height .26s ease, padding .26s ease;
+    /* гаснет по мере прокрутки: --plaque-fade 0..1 считает Layout */
+    opacity: calc(1 - var(--plaque-fade, 0));
     max-height: 72px;
   }
   .checklist-plaque .checklist-head {
     flex: 1 1 auto;
     min-width: 0;
-    gap: var(--sp-2);
+    flex-wrap: nowrap;
+    gap: 6px;
   }
-  /* подсказка-инфо в одну строку не влезает — на мобилке скрыта */
+  .checklist-plaque .checklist-head__count { font-size: 12px; white-space: nowrap; }
   .checklist-plaque .checklist-head .keep-pair { display: none; }
-  .checklist-plaque .checklist-head [role="progressbar"] { min-width: 32px; }
+  .checklist-plaque .checklist-head [role="progressbar"] { flex: 1 1 32px; min-width: 24px; }
+  .checklist-plaque .checklist-head .chip-delta { font-size: 10px; padding: 2px 5px !important; }
   .checklist-plaque .checklist-toolbar {
     flex: 0 0 auto;
     gap: 4px;
+    flex-wrap: nowrap;
   }
   .checklist-plaque .checklist-toolbar button {
     font-size: 10px;
     padding: 0 6px;
     gap: 3px;
+    white-space: nowrap;
   }
   .checklist-plaque .checklist-toolbar button svg { width: 11px; height: 11px; }
+
+  /* Фаза 2 (владелец 07.11.2026): плашка уже невидима — сворачиваем РЕЗКО,
+     без анимации высоты. Анимированное сворачивание вместе с анимированным
+     спейсером давало болтанку высоты документа на каждом кадре. */
   html.is-scrolled-deep .checklist-plaque {
     opacity: 0;
     max-height: 0;
@@ -125,15 +134,13 @@
     padding-bottom: 0;
     pointer-events: none;
   }
-  /* Спейсер: компенсирует исчезнувшую плашку, чтобы высота документа была стабильна */
+  /* Спейсер держит высоту документа: растёт мгновенно, вместе со сворачиванием */
   .scroll-spacer {
     height: 0;
-    transition: height .26s ease;
   }
   html.is-scrolled-deep .scroll-spacer {
     height: var(--plaque-h, 0px);
   }
-
   /* До прокрутки поиск отделён от плашки прогресса (были впритык).
      Когда плашка свернулась (is-scrolled-deep), зазор тоже убираем. */
   .checklist-sticky .list-search {
