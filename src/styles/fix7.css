@@ -147,7 +147,13 @@ input.compact-input {
 /* п.10: гибкая вёрстка — смартфонная ширина: меньше отступы, широкие таблицы
    скроллятся горизонтально внутри карточки (всё остаётся доступно) */
 @media (max-width: 767px) {
-  main { padding: 12px !important; }
+  /* Верхний отступ обязан включать инсет статус-бара: мобильное табло удалено
+     (UX-список владельца п.13), а раньше инсет давало именно оно. В WebView
+     env(safe-area-inset-top) = 0, реальное значение — из нативного шима (--pv-inset-top). */
+  main {
+    padding: 12px !important;
+    padding-top: calc(12px + var(--pv-inset-top, env(safe-area-inset-top, 0px))) !important;
+  }
   .mob-scroll { overflow-x: auto !important; }
   .mob-scroll > table { min-width: 560px; }
   /* шапки KPI в одну колонку не ломаются: grid-cols-2 уже есть — уменьшаем зазоры */

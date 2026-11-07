@@ -26,11 +26,22 @@ interface NumberFieldProps {
   ariaLabel?: string;
   /** Fix-3 (п.2): блокировка ввода (например, чек — до подтверждения закупки) */
   disabled?: boolean;
+  /** Владелец 07.11.2026: без кнопок −/+ (ввод суммы чека прямо в строке) */
+  noSteppers?: boolean;
+  /** автофокус: «нажал + стоимость → сразу печатаю» */
+  autoFocus?: boolean;
+  /**
+   * Владелец 07.11.2026: на Android у `type=number` клавиатура отдаёт действие
+   * «Next» — фокус уезжал на следующее поле вместо закрытия клавиатуры.
+   * `text` + inputmode=decimal даёт честную кнопку «Готово».
+   */
+  inputType?: 'number' | 'text';
 }
 
 export function NumberField({
   value, onCommit, stepRef, placeholder = '= план', min = 0,
   maxDecimals = 2, minStep = 0, size = 'md', testId, ariaLabel, disabled = false,
+  noSteppers = false, autoFocus = false, inputType = 'number',
 }: NumberFieldProps) {
   const [draft, setDraft] = useState<string>(value == null ? '' : String(value));
   useEffect(() => setDraft(value == null ? '' : String(value)), [value]);
@@ -53,6 +64,7 @@ export function NumberField({
 
   return (
     <span className={`nf nf-${size}${disabled ? ' nf-disabled' : ''}`} data-testid={testId ? `${testId}-wrap` : undefined}>
+      {!noSteppers && (
       <button 
         type="button" 
         className="nf-btn" 
@@ -63,9 +75,10 @@ export function NumberField({
       >
         −
       </button>
+      )}
       <input
         className="nf-input" 
-        type="number" 
+        type={inputType}
         inputMode="decimal" 
         step={step}
         data-testid={testId} 
@@ -73,10 +86,17 @@ export function NumberField({
         placeholder={placeholder}
         disabled={disabled}
         value={draft}
+        autoFocus={autoFocus}
         onChange={e => setDraft(e.target.value)}
         onBlur={e => commit(e.target.value)}
-        onKeyDown={e => { 
-          if (e.key === 'Enter') commit((e.target as HTMLInputElement).value);
+        enterKeyHint="done"
+        onKeyDown={e => {
+          // Владелец 07.11.2026: по «Готово» на экранной клавиатуре значение подтверждалось,
+          // но фокус оставался в поле — клавиатура не убиралась. Блюрим явно.
+          if (e.key === 'Enter') {
+            commit(e.currentTarget.value);
+            e.currentTarget.blur();
+          }
           if (e.key === 'ArrowUp') {
             e.preventDefault();
             bump(1);
@@ -87,6 +107,7 @@ export function NumberField({
           }
         }}
       />
+      {!noSteppers && (
       <button 
         type="button" 
         className="nf-btn" 
@@ -97,6 +118,7 @@ export function NumberField({
       >
         +
       </button>
+      )}
     </span>
   );
 }

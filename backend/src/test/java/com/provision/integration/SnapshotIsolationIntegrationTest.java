@@ -19,7 +19,6 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
-import org.testcontainers.containers.PostgreSQLContainer;
 
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
@@ -47,26 +46,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @DisplayName("V20: Snapshot isolation of trip catalog")
 class SnapshotIsolationIntegrationTest {
 
-    private static final boolean LOCAL_PG = !LocalPgFallback.dockerAvailable();
-
-    static PostgreSQLContainer<?> postgres = LOCAL_PG ? null : new PostgreSQLContainer<>("postgres:15-alpine")
-            .withDatabaseName("provision_test_snapshot")
-            .withUsername("test")
-            .withPassword("test");
-
-    static {
-        if (!LOCAL_PG && postgres != null && !postgres.isRunning()) {
-            postgres.start();
-        }
-    }
-
     @DynamicPropertySource
     static void configureProperties(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", () -> LOCAL_PG
-                ? LocalPgFallback.jdbcUrl("provision_test_snapshot")
-                : postgres.getJdbcUrl());
-        registry.add("spring.datasource.username", () -> "test");
-        registry.add("spring.datasource.password", () -> "test");
+        registry.add("spring.datasource.url", () -> SharedPostgres.jdbcUrl("provision_test_snapshot"));
+        registry.add("spring.datasource.username", SharedPostgres::username);
+        registry.add("spring.datasource.password", SharedPostgres::password);
     }
 
     @Autowired

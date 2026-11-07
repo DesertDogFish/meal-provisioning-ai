@@ -103,12 +103,13 @@ describe('PriceOverridesTab — props-driven этап ④ (cleanup-п.5)', () =>
     expect(total).toBe(120);
   });
 
-  it('чек-бокс «в расчёте» → onToggleExcluded; «взято» (моб. строка) → onToggleBought', async () => {
-    const user = userEvent.setup();
-    const props = renderTab({}, { boughtSet: new Set(['k1']) });
-    const excl = await screen.findAllByLabelText('Исключить из расчёта: Гречка');
-    await user.click(excl[0]);
-    expect(props.onToggleExcluded).toHaveBeenCalledWith('i1');
+  // Владелец 07.11.2026: галки «исключить из расчёта» и «взято» из чеков убраны —
+  // исключение позиции живёт только в этапе ② «Проверка».
+  it('в этапе ④ нет чек-боксов «исключить из расчёта» и «взято»', async () => {
+    renderTab({}, { boughtSet: new Set(['k1']) });
+    await screen.findAllByText('Гречка');
+    expect(screen.queryAllByLabelText('Исключить из расчёта: Гречка')).toHaveLength(0);
+    expect(screen.queryAllByLabelText('Взято: Гречка')).toHaveLength(0);
   });
 
   // bugs-trip-checks-stage п.2: тест «итоги полосы план/факт» удалён вместе

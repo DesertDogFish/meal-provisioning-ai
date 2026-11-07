@@ -39,18 +39,168 @@
 .checklist-row__toggle:focus-visible { outline: 2px solid var(--amber-500); outline-offset: -2px; }
 .checklist-row__hit { position: relative; z-index: 1; }
 /* Липкая шапка чеклиста: прогресс «Взято N из M» и массовые действия видны всегда */
+/* п.15/п.22: карточка чеков больше не клипует содержимое.
+   `overflow: hidden` делал карточку скролл-контейнером → `position: sticky`
+   у поиска считалась от карточки, а не от окна: поиск «уезжал» при прокрутке,
+   а `top: 104px` дополнительно сдвигал его вниз и создавал зазор под заголовком.
+   `overflow: clip` НЕ создаёт скролл-контейнер (в отличие от hidden/auto),
+   поэтому sticky продолжает липнуть к окну, а скругления остаются. */
+.checks-card { overflow: clip; }
+/* Поиск в чеках — отдельная полоса НАД карточкой (владелец 07.11.2026):
+   липнет к окну, фон непрозрачный, без скруглений карточки. */
+.checklist-sticky.checks-search-bar {
+  /* Владелец 07.11.2026: никакой внешней «шляпы» вокруг поля — только полоса
+     фоном страницы (чтобы контент не просвечивал), без рамки и скруглений.
+     Поле поиска само скруглено и с рамкой. */
+  padding: var(--sp-2) var(--pv-gutter, 12px);
+  background: var(--bg);
+  border: 0;
+  border-radius: 0;
+  /* заклейка субпиксельного шва: 1px цветом фона — невидима */
+  box-shadow: 0 -1px 0 0 var(--bg), 0 1px 0 0 var(--bg);
+}
+/* Зазор до поиска — только там, где над ним стоит плашка прогресса (Магазин).
+   В «Чеках» над поиском ничего нет, лишние 12px читались пустотой. */
+.checklist-sticky.checks-search-bar .list-search { margin-top: 0; }
 .checklist-sticky {
   position: sticky;
   top: 0;
   z-index: calc(var(--z-nav) - 20);
   background: var(--bg-1);
 }
-/* На телефоне скроллится документ, а над липким итогом ещё две липкие
-   полосы: шапка (52px) и trip-strip (~52px) —.offset считаем от них.
-   Используется только на странице похода, где trip-strip есть всегда. */
-@media (max-width: 767px) {
+/* На телефоне над липким поиском стоит липкий стек страницы похода:
+   шапка (.trip-head-row, top 0, высота --head-inset+60) и полоса похода
+   (.trip-strip, top --head-inset+60, высота 60). Поиск липнет под ними;
+   раньше здесь стояли «магические» 104px, которые не совпадали со стеком. */
+@media (max-width: 1023px) {
   .checklist-sticky {
-    top: calc(104px + env(safe-area-inset-top, 0px));
+    top: calc(var(--trip-head-h, 72px) + var(--trip-strip-h, 60px));
+  }
+}
+
+/* ------------------------------------------------------------
+   Владелец 07.11.2026 (этап «Магазин»):
+   - кнопки в плашке прогресса в два раза меньше (были 42px/15px);
+   - при прокрутке плашка («80 из 80» + кнопки) плавно уезжает;
+   - скругления у липкой плашки при прокрутке убираем: в их зоне
+     просвечивал прокручивающийся список.
+   ------------------------------------------------------------ */
+@media (max-width: 1023px) {
+  /* кнопки — вдвое меньше: было 42px высоты и 15px шрифта. Селектор по тегу:
+     у Button из CSS-модуля хешированное имя класса (.btn там не совпадает). */
+  .checklist-toolbar button {
+    height: 24px;
+    min-height: 24px;
+    padding: 0 8px;
+    font-size: 11px;
+    gap: 4px;
+    border-radius: 8px;
+  }
+  .checklist-toolbar button svg { width: 12px; height: 12px; }
+  .checklist-toolbar { gap: 6px; }
+
+  /* Плашка — ОДНА строка (владелец 07.11.2026): прогресс слева, кнопки справа.
+     Голова плашки не переносится: бар сжимается, проценты уменьшены. */
+  .checklist-plaque {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-2);
+
+    overflow: hidden;
+    /* одна плашка-карточка, а не две склеенные половины */
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    /* в trip-mobile-a.css есть `.checklist-sticky > :first-child {border-bottom-*-radius:0}`
+       (сделано под старую склейку из двух половин); двойной класс перебивает его */
+    border-bottom-left-radius: var(--r-md);
+    border-bottom-right-radius: var(--r-md);
+    padding: 8px 10px;
+    /* исчезает сразу при начале прокрутки (владелец 07.11.2026) */
+    opacity: 1;
+    transition: opacity .15s ease;
+    max-height: 72px;
+  }
+  /* дети без своих фонов, рамок и скруглений — иначе плашка делится на две части */
+  .checklist-sticky > .checklist-plaque.checklist-plaque {
+    border-radius: var(--r-md);
+  }
+  .checklist-plaque .checklist-head,
+  .checklist-plaque .checklist-toolbar {
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    padding: 0;
+  }
+  .checklist-plaque .checklist-head {
+    flex: 1 1 auto;
+    min-width: 0;
+    flex-wrap: nowrap;
+    gap: 6px;
+  }
+  .checklist-plaque .checklist-head__count { font-size: 12px; white-space: nowrap; }
+  .checklist-plaque .checklist-head .keep-pair { display: none; }
+  .checklist-plaque .checklist-head [role="progressbar"] { flex: 1 1 32px; min-width: 24px; }
+  .checklist-plaque .checklist-head .chip-delta { font-size: 10px; padding: 2px 5px !important; }
+  .checklist-plaque .checklist-toolbar {
+    flex: 0 0 auto;
+    gap: 4px;
+    flex-wrap: nowrap;
+  }
+  .checklist-plaque .checklist-toolbar button {
+    font-size: 10px;
+    padding: 0 6px;
+    gap: 3px;
+    white-space: nowrap;
+  }
+  .checklist-plaque .checklist-toolbar button svg { width: 11px; height: 11px; }
+
+  /* Фаза 2 (владелец 07.11.2026): плашка уже невидима — сворачиваем РЕЗКО,
+     без анимации высоты. Анимированное сворачивание вместе с анимированным
+     спейсером давало болтанку высоты документа на каждом кадре. */
+  html.is-scrolled .checklist-plaque {
+    opacity: 0;
+    max-height: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    pointer-events: none;
+  }
+  /* Спейсер держит высоту документа: растёт мгновенно, вместе со сворачиванием */
+  .scroll-spacer {
+    height: 0;
+  }
+  html.is-scrolled .scroll-spacer {
+    height: var(--plaque-h, 0px);
+  }
+  /* До прокрутки поиск отделён от плашки прогресса (были впритык).
+     Когда плашка свернулась (is-scrolled), зазор тоже убираем. */
+  .checklist-sticky .list-search {
+    margin-top: var(--sp-3);
+    transition: margin-top .26s ease;
+  }
+
+  html.is-scrolled .checklist-sticky {
+    border-radius: 0;
+  }
+
+  /* Липкая плашка во всю ширину: карточка шириной в контент (387 из 411)
+     оставляла по краям по 12px, где просвечивал прокручивающийся список
+     (владелец 07.11.2026: «под элементом с поиском торчит прокрутка»). */
+  .checklist-sticky {
+    margin-left: calc(-1 * var(--pv-gutter, 12px));
+    margin-right: calc(-1 * var(--pv-gutter, 12px));
+    padding-left: var(--pv-gutter, 12px);
+    padding-right: var(--pv-gutter, 12px);
+    background: var(--bg);
+  }
+  .checklist-sticky.checks-search-bar {
+    padding-top: var(--sp-2);
+    padding-bottom: var(--sp-2);
+  }
+  /* общее правило is-scrolled перебивает тень — дублируем заклейку шва */
+  html.is-scrolled .checklist-sticky.checks-search-bar {
+    border-radius: 0;
+    box-shadow: 0 -1px 0 0 var(--bg), 0 1px 0 0 var(--bg);
   }
 }
 .checklist-group-toggle {

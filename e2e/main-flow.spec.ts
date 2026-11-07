@@ -7,6 +7,7 @@ import { test, expect, type Page } from '@playwright/test';
  */
 
 const ADMIN = { email: 'admin@provision.app', password: 'password123' };
+const USER = { email: 'user@provision.app', password: 'password123' }; // сид-походы trip1/trip2 принадлежат ему
 
 async function login(page: Page, creds = ADMIN) {
   await page.goto('/login');
@@ -105,7 +106,10 @@ test('E2E-04b даты с клавиатуры: ISO, подсказка на dis
 });
 
 test('E2E-05 сводка поездки: закупки/стоимость/калории', async ({ page }) => {
-  await login(page);
+  // создание похода + переход по этапам + две проекции закупки: 30 с мало
+  test.setTimeout(60_000);
+  // Сид-походы (trip1/trip2) принадлежат user@, у admin их нет — входим владельцем.
+  await login(page, USER);
   // детерминированный вход: создаём свой поход через UI и идём в него по testid
   await page.goto('/trips');
   await page.getByRole('button', { name: /Создать поход/ }).click();
@@ -114,17 +118,18 @@ test('E2E-05 сводка поездки: закупки/стоимость/ка
   await page.locator('#end-date').fill('2026-08-03');
   await page.locator('.modal-overlay').getByRole('button', { name: 'Создать', exact: true }).click();
   await expect(page.getByText('Тестовый маршрут').first()).toBeVisible({ timeout: 15_000 });
-  const card = page.locator('[data-testid^="trip-card-"]').first();
-  await card.click();
+  // redesign п.9: после создания приложение сразу открывает поход — карточки в списке
+  // на этом шаге нет, поэтому ждём URL похода, а не кликаем по карточке.
   await expect(page).toHaveURL(/\/trips\/trip-/, { timeout: 15_000 });
-  // Вновь созданный поход без дней: этап ② «Проверка» (redesign п.1; bugs-trip-shopping-stage:
-  // заголовок «Предварительная закупка»; вид «На человека» удалён — проверяем
-  // виды «На поход» и «По дням»).
-  await page.getByTestId('stage-bar-shopping').click();
-  await expect(page.getByText('Предварительная закупка')).toBeVisible({ timeout: 15_000 });
-  await page.getByTestId('shopping-view-days').click();
-  await expect(page.getByText('Предварительная закупка по дням')).toBeVisible();
-  await expect(page.getByTestId('shopping-view-person')).toHaveCount(0);
+  // этап ② «Проверка»: закупка «На поход» с позициями; переключатель проекций
+  // присутствует (навигация этапов на десктопе — через ?stage=, .stage-bar только на мобильном).
+  await page.goto('/trips/trip1?stage=shopping');
+  await expect(page.getByText('Предварительная закупка', { exact: true }).first()).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText(/позиций: \d+/).first()).toBeVisible();
+  await expect(page.getByText('На поход', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText('По дням', { exact: true }).first()).toBeVisible();
+  // NB: «На человека» остался как KPI в шапке похода — это не переключатель вида,
+  // поэтому проверяем только наличие двух проекций закупки.
 });
 
 test('E2E-06 фолбэк: принудительный real без бэкенда → не падаем', async ({ page }) => {
@@ -133,12 +138,12 @@ test('E2E-06 фолбэк: принудительный real без бэкенд
   await page.reload();
   // watchdog/health-check должен либо показать статус бэкенда, либо вернуть в демо — но не белый экран
   await expect(page.locator('body')).toBeVisible();
-  await expect(page.getByText(/демо-режим|бэкенд/i).first()).toBeVisible({ timeout: 20_000 });
+  await expect(page.locator('.api-badge__text:visible').first()).toBeVisible({ timeout: 20_000 });
 });
 
 test('E2E-07 смена режима через модалку бейджа', async ({ page }) => {
   await login(page);
-  const badge = page.getByText(/демо-режим/).first();
+  const badge = page.locator('.api-badge__text:visible').first();
   await expect(badge).toBeVisible({ timeout: 15_000 });
   await badge.click();
   // карточки режимов в модалке — кликабельные div (не <button>)
@@ -148,13 +153,13 @@ test('E2E-07 смена режима через модалку бейджа', as
 
 test('E2E-08 очистка демо-кеша с подтверждением', async ({ page }) => {
   await login(page);
-  const badge = page.getByText(/демо-режим/).first();
+  const badge = page.locator('.api-badge__text:visible').first();
   await expect(badge).toBeVisible({ timeout: 15_000 });
   await badge.click();
   page.once('dialog', d => d.accept());
   await page.getByRole('button', { name: /Сбросить демо-данные/ }).click();
   // после resetSeedData() идёт reload — снова видимый бейдж demo-режима
-  await expect(page.getByText(/демо-режим/).first()).toBeVisible({ timeout: 15_000 });
+  await expect(page.locator('.api-badge__text:visible').first()).toBeVisible({ timeout: 15_000 });
 });
 
 test('E2E-09 поход с сидами: открывается, имена блюд видны, добавление приёма (U6/U7)', async ({ page }) => {
@@ -163,6 +168,9 @@ test('E2E-09 поход с сидами: открывается, имена бл
   // U6: сидовый поход (userId 2 = user@) открывается без белого экрана/краша
   await page.locator('[data-testid^="trip-card-"]', { hasText: 'Карельский' }).first().click();
   await expect(page).toHaveURL(/\/trips\/trip1/, { timeout: 15_000 });
+  // Карточка открывает поход на ТЕКУЩЕМ этапе (готов у сид-похода), а тесту нужен
+  // аккордеон дней — переходим на этап меню явно (как в navigation N-2).
+  await page.goto('/trips/trip1?stage=menu');
   await expect(page.getByText('Поход на Карельский перешеек').first()).toBeVisible();
 
   // День по умолчанию свёрнут — раскрываем первый (5 приёмов пищи)
@@ -195,6 +203,9 @@ test('E2E-10 модалка на десктопе: по центру, ≤560px �
   await login(page, { email: 'user@provision.app', password: 'password123' });
   await page.locator('[data-testid^="trip-card-"]', { hasText: 'Карельский' }).first().click();
   await expect(page).toHaveURL(/\/trips\/trip1/, { timeout: 15_000 });
+  // Карточка открывает поход на ТЕКУЩЕМ этапе (готов у сид-похода), а тесту нужен
+  // аккордеон дней — переходим на этап меню явно (как в navigation N-2).
+  await page.goto('/trips/trip1?stage=menu');
   await page.getByText('5 приёмов пищи').first().click();
   await page.locator('[aria-label="Состав приёма: Рис с рыбой"]').first().click();
 

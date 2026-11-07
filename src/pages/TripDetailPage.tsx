@@ -105,7 +105,7 @@ export default function TripDetailPage() {
       <div className="trip-header-glass__art" aria-hidden style={{ backgroundImage: `url(${headerArt})` }} />
       <div className="trip-header-glass__in space-y-4 md:space-y-6">
       {/* Header — подзадача 26: TripActions (+ kebab с отчётом, подзадача 7) */}
-      <TripActions trip={trip} onBack={() => navigate('/trips')} />
+      <TripActions trip={trip} />
 
       {/* Мобильная sticky-полоса похода (подзадача 1); на десктопе — прежние KPI */}
       <TripSummaryPanel
@@ -156,7 +156,7 @@ export default function TripDetailPage() {
       {/* Этап ②: закупка — три вида одного списка (подзадача 3) */}
       {stage === 'shopping' && (
         <div className="space-y-3">
-          <div className="seg seg-scroll max-w-full overflow-x-auto" role="tablist" aria-label="Вид списка закупки">
+          <div className="seg seg--subtle seg-scroll max-w-full overflow-x-auto" role="tablist" aria-label="Вид списка закупки">
             {shopViews.map(v => (
               <button
                 key={v.id}

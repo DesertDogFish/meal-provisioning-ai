@@ -20,3 +20,60 @@
   .scroll-top-btn { width: var(--touch-target); height: var(--touch-target); }
 }
 
+/* п.24 («наверх» нужна и в походах): на странице похода кнопку перекрывал
+   нижний бар этапов — .stage-bar (z-index --z-nav = 60 > 55 у кнопки, высота
+   56px + нативный инсет снизу), из-за чего «наверх» была видима, но не нажимаема
+   (проверено: elementFromPoint в центре кнопки возвращал .stage-bar__btn).
+   Поднимаем кнопку над баром. */
+@media (max-width: 1023px) {
+  body:has(.stage-bar) .scroll-top-btn {
+    bottom: calc(56px + max(env(safe-area-inset-bottom, 0px), var(--pv-inset-bottom, 0px)) + 12px);
+    z-index: calc(var(--z-nav) + 1);
+  }
+}
+
+
+/* ============================================================
+   UX-список владельца п.21/п.25: шапка страницы (заголовок + действия) и фильтры
+   не уезжают при прокрутке. Отступ под статус-бар держим в переменной: в WebView
+   env(safe-area-inset-top) = 0, реальный инсет приходит из натива как --pv-inset-top.
+   margin-top: -var(--head-inset) компенсирует padding-top у main, поэтому в покое
+   шапка стоит там же, где раньше, а при залипании закрывает зону статус-бара.
+   ============================================================ */
+:root {
+  --head-inset: calc(var(--sp-3) + var(--pv-inset-top, env(safe-area-inset-top, 0px)));
+}
+@media (max-width: 1023px) {
+  .page-hero,
+  .trip-head-row {
+    /* !important — в atmosphere.css .page-hero объявлен position: relative, и он
+       подключается позже; без этого sticky не применялся (проверено: computed
+       position оставался relative, шапка уезжала). */
+    position: sticky !important;
+    top: 0;
+    z-index: calc(var(--z-nav) - 12);
+    margin-top: calc(-1 * var(--head-inset));
+    padding-top: var(--head-inset);
+    background: var(--bg);
+  }
+  /* скругления шапки — только при прокрутке, см. mobile-sticky.css (п.6) */
+  /* полоса похода липнет сразу под шапкой (высота шапки = инсет + 60px контента);
+     двойной класс — чтобы перебить правило из trip-mobile-a.css (там было 52px от
+     удалённого мобильного табло). */
+  /* Полоса липнет ровно к низу шапки: высоту шапки пишет TripActions в --trip-head-h
+     (было «инсет + 60px» = 96px против реальных 72px → щель 24px, в которой
+     просвечивала прокрутка). */
+  .trip-strip.trip-strip { top: var(--trip-head-h, 72px); }
+}
+
+/* п.25: строка фильтров/поиска липнет ровно под шапкой страницы; высоту шапки
+   PageHero пишет в --hero-sticky-h (ResizeObserver), т.к. она зависит от подписи и инсета. */
+@media (max-width: 1023px) {
+  .page-hero ~ .sticky,
+  .page-hero ~ .filters-row {
+    position: sticky;
+    top: var(--hero-sticky-h, 120px);
+    z-index: calc(var(--z-nav) - 14);
+    background: var(--bg);
+  }
+}

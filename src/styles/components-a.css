@@ -158,6 +158,22 @@
   box-shadow: var(--shadow-glow);
 }
 
+/* UX-список владельца п.11: переключатель «На поход / По дням» — служебный, а не главный
+   CTA: вдвое ниже и в нейтральном стиле (активный — поверхность с рамкой, без брендового
+   градиента и свечения). */
+.seg--subtle .seg-btn {
+  padding: 2px var(--sp-2);
+  font: 700 11px Manrope;
+  min-height: 26px;
+}
+.seg--subtle .seg-btn.active {
+  background: var(--surface);
+  color: var(--text-1);
+  box-shadow: none;
+  outline: 1px solid var(--line-strong);
+  outline-offset: -1px;
+}
+
 /* transparency-п.2 (решение владельца 31.10 — «кликабельные чипы»): статусы
    готовности убраны из десктоп-.seg (класс .seg-badge удалён) — готовность
    этапов изображается ровно один раз: кликабельные чипы readiness-цепочки

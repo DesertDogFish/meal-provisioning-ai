@@ -157,12 +157,22 @@ jobs:
           fi
           psql --version || true
           ls /usr/lib/postgresql/
+      # Гейт на PR — быстрая полоса: unit + web-слой без интеграционных (их 100 из 418 и
+      # они держат время прогона в 4+ минуты). Полный набор с покрытием запускается на
+      # push в main (см. следующий шаг) и PR не блокирует.
+      - name: Backend tests (fast lane, PR gate)
+        if: github.event_name == 'pull_request'
+        working-directory: backend
+        env:
+          JWT_SECRET: ci-test-secret-key-for-jwt-tokens-must-be-at-least-256-bits-long-hs256-ok
+        run: mvn -B -ntp -P fast test
       # KB-37 (аудит 02.11.2026): прежний отдельный шаг `jacoco:check@coverage-gate`
       # не работал — профиль не активировался, id execution не совпадал с селектором,
       # а threshold=60 при шкале COVEREDRATIO 0.0–1.0 означал 6000 %. Теперь гейт —
       # часть `verify` в профиле coverage-gate (один шаг вместе с тестами, exec-файл
       # от prepare-agent уже на месте), порог — <minimum> в долях.
       - name: Backend tests + coverage gate (JaCoCo LINE >= 0.60)
+        if: github.event_name != 'pull_request'
         working-directory: backend
         env:
           JWT_SECRET: ci-test-secret-key-for-jwt-tokens-must-be-at-least-256-bits-long-hs256-ok

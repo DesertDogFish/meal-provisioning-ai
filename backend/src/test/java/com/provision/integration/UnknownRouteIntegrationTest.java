@@ -14,7 +14,6 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
-import org.testcontainers.containers.PostgreSQLContainer;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
@@ -40,26 +39,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @DisplayName("Неизвестный API-путь → 404 ProblemDetail (подзадача 10 аудита 02.11.2026)")
 class UnknownRouteIntegrationTest {
 
-    private static final boolean LOCAL_PG = !LocalPgFallback.dockerAvailable();
-
-    static PostgreSQLContainer<?> postgres = LOCAL_PG ? null
-            : new PostgreSQLContainer<>("postgres:15-alpine")
-                    .withDatabaseName("provision_test_unknown_route")
-                    .withUsername("test")
-                    .withPassword("test");
-
-    static {
-        if (!LOCAL_PG && postgres != null && !postgres.isRunning()) {
-            postgres.start();
-        }
-    }
-
     @DynamicPropertySource
     static void configureProperties(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", () -> LOCAL_PG
-                ? LocalPgFallback.jdbcUrl("provision_test_unknown_route") : postgres.getJdbcUrl());
-        registry.add("spring.datasource.username", () -> LOCAL_PG ? "test" : postgres.getUsername());
-        registry.add("spring.datasource.password", () -> LOCAL_PG ? "test" : postgres.getPassword());
+        registry.add("spring.datasource.url", () -> SharedPostgres.jdbcUrl("provision_test_unknown_route"));
+        registry.add("spring.datasource.username", SharedPostgres::username);
+        registry.add("spring.datasource.password", SharedPostgres::password);
     }
 
     @Autowired

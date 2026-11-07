@@ -49,9 +49,13 @@ test('cleanup R3: /errors-demo и /dashboard → /trips', async ({ page }) => {
   await expect(page).toHaveURL(/\/trips(\?|$)/, { timeout: 15_000 });
 });
 
-test('cleanup R4: неизвестный маршрут не оставляет тупика (→ /login → /trips)', async ({ page }) => {
+test('cleanup R4: неизвестный маршрут не оставляет тупика (404 + CTA «К списку походов»)', async ({ page }) => {
   await login(page);
   await page.goto('/no-such-page');
-  // catch-all → /login; LoginPage видит авторизованного пользователя → /trips
+  // BL-66 (аудит 02.11.2026): в сессии catch-all показывает явный 404 с CTA, а не
+  // молчаливый редирект на /login → /trips. Тест приведён к текущему поведению.
+  await expect(page.getByTestId('not-found-page')).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText('Страница не найдена')).toBeVisible();
+  await page.getByTestId('not-found-cta').click();
   await expect(page).toHaveURL(/\/trips(\?|$)/, { timeout: 15_000 });
 });

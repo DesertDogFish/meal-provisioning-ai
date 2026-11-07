@@ -13,6 +13,7 @@ import { useParams, useSearchParams } from 'react-router-dom';
 import { api } from '../api/client';
 import { useToast } from '../components/ToastProvider';
 import { useConfirm } from '../components/ConfirmDialog'; // Fix-6 (п.7)
+import { checklistRowKey } from '../utils/checklist';
 import { loadActualPrices, saveActualPrice, loadExcluded, setExcluded as persistExcluded, loadBought, setBought as persistBought, loadActualQty, setActualQty, onTripStageChange, refreshBoughtFromServer, forgetTripBoughtSyncState, refreshActualQtyFromServer, forgetTripActualQtySyncState, type ChecklistActual, type ActualPriceDraft } from '../utils/tripStaging'; // U32 + Fix-2(п.6) + Fix-5(п.21) + Fix-8(п.6)
 import { unitFromTotal } from '../utils/checkInput'; // cleanup-п.5: чек-мутация переехала со вкладки на страницу
 import type { CheckRow } from '../components/ChecksModel';
@@ -98,6 +99,9 @@ export function useTripDetail() {
   const [serverOverrides, setServerOverrides] = useState<Record<string, ActualPriceDraft>>({});
   const [shoppingExcluded, setShoppingExcluded] = useState<Set<string>>(new Set());
   const [checklistBought, setChecklistBought] = useState<Set<string>>(new Set());
+  // Владелец 07.11.2026: очищенная цена должна исчезнуть и с серверной части —
+  // иначе старый серверный оверрайд возвращался и строка оставалась зачёркнутой.
+  const [clearedPrices, setClearedPrices] = useState<Set<string>>(new Set());
   // Fix-6 (п.8): сколько РЕАЛЬНО берём — {amount, unit} свободно (г/кг/мл/л/шт/уп),
   // общий стейдж с чеком («Взяли» в чеке берётся ОТСЮДА, повторного ввода нет)
   const [actualQty, setActualQtyState] = useState<Record<string, ChecklistActual>>({});
@@ -320,10 +324,33 @@ export function useTripDetail() {
   const commitCheckTotal = async (row: CheckRow, total: number | null) => {
     if (total == null || Number.isNaN(total)) {
       saveActualPrice(tripKey, row.ingredientId, null);
+      setClearedPrices((prev) => {
+        const next = new Set(prev);
+        next.add(String(row.ingredientId));
+        return next;
+      });
     } else {
+      setClearedPrices((prev) => {
+        if (!prev.has(String(row.ingredientId))) return prev;
+        const next = new Set(prev);
+        next.delete(String(row.ingredientId));
+        return next;
+      });
       const unit = unitFromTotal(total, row.totalAmount);
       if (unit == null) return; // нулевое количество — вводить некуда
       saveActualPrice(tripKey, row.ingredientId, { price: unit, total });
+    }
+    // Владелец 07.11.2026: цена в «Чеках» = товар куплен -> отметка «Взято» в
+    // чеклисте магазина. Пустая цена = «как будто её никогда не было»: снимаем
+    // отметку, и строка возвращается к исходному виду («+ стоимость, ₽»).
+    const boughtKey = checklistRowKey({ ingredientId: String(row.ingredientId), needed: row.totalAmount });
+    const hasTotal = total != null && !Number.isNaN(total) && total > 0;
+    const wantsBought = hasTotal;
+    if (checklistBought.has(boughtKey) !== wantsBought) {
+      const next = new Set(checklistBought);
+      if (wantsBought) next.add(boughtKey); else next.delete(boughtKey);
+      persistBought(tripKey, next);
+      setChecklistBought(next);
     }
     setDraftOverrides(loadActualPrices(tripKey));
     try {
@@ -335,11 +362,29 @@ export function useTripDetail() {
     } catch { /* нет роута/прав — локальный стейдж уже сохранён */ }
   };
 
+  /**
+   * Владелец 07.11.2026: сняли отметку «взято» в Магазине — цена в «Чеках»
+   * тоже должна слететь (товар не куплен, значит и чека нет).
+   */
+  const clearCheckPrice = (ingredientId: string) => {
+    saveActualPrice(tripKey, ingredientId, null);
+    setClearedPrices((prev) => {
+      const next = new Set(prev);
+      next.add(ingredientId);
+      return next;
+    });
+    setDraftOverrides(loadActualPrices(tripKey));
+    void api.put(`/trips/${tripKey}/price-overrides/${ingredientId}`, { actualPrice: null })
+      .catch(() => { /* нет роута/прав — локальный стейдж уже сохранён */ });
+  };
   const toggleBought = (key: string) => {
     const next = new Set(checklistBought);
-    if (next.has(key)) next.delete(key); else next.add(key);
+    const wasBought = next.has(key);
+    if (wasBought) next.delete(key); else next.add(key);
     persistBought(tripKey, next);
     setChecklistBought(next);
+    // отметку сняли -> цена в «Чеках» слетает (ключ = ingredientId@нужно)
+    if (wasBought) clearCheckPrice(String(key).split('@')[0]);
   };
 
   // Fix-8 (п.6): факт «Взяли» НЕ штампуется потребностью — изменение числа
@@ -378,6 +423,8 @@ export function useTripDetail() {
     const next = on ? new Set(allKeys) : new Set<string>();
     persistBought(tripKey, next);
     setChecklistBought(next);
+    // «Снять всё» — снимаем и цены чеков затронутых позиций
+    if (!on) allKeys.forEach((k) => clearCheckPrice(String(k).split('@')[0]));
   };
 
   /** U26: клик по заголовку таблицы — то же поле меняет направление, другое — asc. */
@@ -389,10 +436,12 @@ export function useTripDetail() {
 
   // cleanup-п.5: факт-цены = локальный стейдж поверх серверных оверрайдов —
   // ЕДИНЫЙ источник для всех этапов (②, ④, отчёт): цифры не могут разъехаться.
-  const effectiveOverrides = useMemo(
-    () => ({ ...serverOverrides, ...draftOverrides }),
-    [serverOverrides, draftOverrides],
-  );
+  const effectiveOverrides = useMemo(() => {
+    const merged: Record<string, ActualPriceDraft> = { ...serverOverrides, ...draftOverrides };
+    // локально очищенные цены перебивают серверные (запись удалена пользователем)
+    clearedPrices.forEach((id) => { delete merged[id]; });
+    return merged;
+  }, [serverOverrides, draftOverrides, clearedPrices]);
 
   // Производные view-модели — чистый модуль (тот же порядок вычислений, что
   // раньше был в теле страницы). До загрузки похода считать нечего.

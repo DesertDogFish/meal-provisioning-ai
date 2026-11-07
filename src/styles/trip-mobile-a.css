@@ -46,7 +46,8 @@
 }
 .trip-strip__sep { color: var(--text-3); }
 .trip-strip__sum { color: var(--amber-300); font-weight: 800; }
-.trip-strip .chev { margin-left: auto; flex: none; color: var(--text-2); }
+/* владелец 07.11.2026: стрелка сливалась с фоном (была --text-2, холодный серо-синий) */
+.trip-strip .chev { margin-left: auto; flex: none; color: var(--text-1); }
 @media (min-width: 768px) {
   .trip-strip { display: none; }
 }
@@ -85,7 +86,12 @@
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
   border-top: 1px solid var(--line);
-  padding-bottom: env(safe-area-inset-bottom, 0px);
+  /* UX-список владельца п.6: бар должен прилегать к кромке. Зазор 16px давала НЕ эта
+     правка, а утилита space-y родителя (.stage-page > * + *: margin-block-end).
+     В WebView env(safe-area-inset-bottom) всегда 0 — реальный инсет приходит из
+     нативного шима (native-ui.js) как --pv-inset-bottom. */
+  margin-bottom: 0 !important;
+  padding-bottom: max(env(safe-area-inset-bottom, 0px), var(--pv-inset-bottom, 0px));
 }
 .stage-bar__btn {
   position: relative;

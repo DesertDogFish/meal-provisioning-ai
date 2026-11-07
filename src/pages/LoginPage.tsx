@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Mail, Lock, User, Eye, EyeOff } from 'lucide-react';
 
@@ -8,6 +8,7 @@ import { useAuth } from '../components/AuthProvider'; // cleanup-п.7
 import BrandMark from '../components/BrandMark';
 // design-п.3 (tasks/design-atmosphere-art.md, утверждено 03.11.2026): фон-арт
 import seaLogin from '../assets/atmosphere/sea-login.webp';
+import { useOffline } from '../hooks/useOffline';
 import { Button } from '../components/Button';
 
 interface AuthResponse {
@@ -26,21 +27,55 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  // п.3 (список владельца): первый запуск — только онлайн. Логин и регистрация
+  // требуют бэкенда (токен выдаёт сервер), поэтому без сети форма не отправляется,
+  // а под заголовком видно объяснение.
+  const { online } = useOffline();
   // cleanup-п.7: проверка сессии при монтировании — в AuthProvider (один /auth/me);
   // страница просто уходит на канон, когда контекст сообщает о валидной сессии.
   const { user, refresh } = useAuth();
 
-  useEffect(() => {
-    if (user) navigate('/trips');
-  }, [user, navigate]);
-
+  // Просьба владельца 07.11.2026: если токен уже выдан (сессия жива), форму не показываем —
+  // только приветствие и кнопка «Войти». Раньше страница молча редиректила на /trips.
   if (user) {
-    return null;
+    const hi = user.firstName || user.lastName || user.email;
+    return (
+      <div className="relative overflow-hidden min-h-screen flex items-center justify-center p-4" style={{
+        background: 'radial-gradient(1100px 500px at 85% -10%, color-mix(in srgb, var(--wave-400) 9%, transparent), transparent), radial-gradient(900px 500px at -10% 30%, color-mix(in srgb, var(--wave-400) 7%, transparent), transparent), var(--bg-0)'
+      }}>
+        <div className="login-art" aria-hidden style={{ backgroundImage: `url(${seaLogin})` }} />
+        <div className="login-art-veil" aria-hidden />
+        <div className="login-content w-full max-w-md">
+          <div className="text-center mb-8">
+            <div className="inline-flex items-center justify-center rounded-[var(--r-lg)] mb-4" style={{
+              width: 88, height: 88, background: 'var(--bg-1)',
+              border: '1px solid var(--line-strong)', boxShadow: 'var(--shadow-glow)'
+            }}>
+              <BrandMark size={64} />
+            </div>
+            <h1 className="text-3xl font-bold mb-2" style={{ fontFamily: 'var(--font-display)', color: 'var(--text-1)' }}>Провиант</h1>
+          </div>
+          <div className="rounded-2xl p-8 text-center" style={{ background: 'var(--bg-1)', border: '1px solid var(--line)' }}>
+            <p className="text-lg font-semibold mb-6" style={{ color: 'var(--text-1)' }} data-testid="login-greeting">
+              Здравствуйте, {hi}
+            </p>
+            <Button variant="primary" className="w-full" onClick={() => navigate('/trips')} data-testid="login-enter">
+              Войти
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    // п.3: без сети вход/регистрация невозможны — токен выдаёт бэкенд.
+    if (!online) {
+      setError('Нет соединения. Первый вход и регистрация требуют интернета.');
+      return;
+    }
     setLoading(true);
 
     try {
@@ -117,9 +152,19 @@ export default function LoginPage() {
         </div>
 
         <div className="rounded-2xl p-8" style={{ background: 'var(--bg-1)', border: '1px solid var(--line)' }}>
-          <h2 className="text-xl font-bold mb-6" style={{ color: 'var(--text-1)' }}>
-            {isRegister ? 'Регистрация' : 'Вход в систему'}
-          </h2>
+          {/* Заголовок «Вход в систему» убран (просьба владельца 07.11.2026). */}
+
+          {!online && (
+            <div role="status" data-testid="login-offline"
+              className="px-4 py-3 rounded-lg mb-4 text-sm"
+              style={{
+                background: 'color-mix(in srgb, var(--amber-500) 12%, transparent)',
+                border: '1px solid color-mix(in srgb, var(--amber-500) 35%, transparent)',
+                color: 'var(--text-1)',
+              }}>
+              Нет соединения. Вход и регистрация работают только онлайн.
+            </div>
+          )}
 
           {/* Подзадача 8 (аудит 02.11.2026): role="alert" (неявный aria-live=
               assertive) — скринридер объявляет ошибку входа сразу при появлении
@@ -238,20 +283,6 @@ export default function LoginPage() {
             </button>
           </div>
 
-          <div className="mt-6 pt-6" style={{ borderTop: '1px solid var(--line)' }}>
-            <p className="text-xs text-center mb-3" style={{ color: 'var(--text-2)' }}>Демо-доступ:</p>
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              {/* bugs-app-ui п.1: text-center — карточки согласованы с заголовком «Демо-доступ» */}
-              <div className="rounded-lg p-2 text-center" style={{ background: 'var(--bg-2)' }}>
-                <p className="font-medium" style={{ color: 'var(--text-1)' }}>Админ</p>
-                <p style={{ color: 'var(--text-2)' }}>admin@provision.app</p>
-              </div>
-              <div className="rounded-lg p-2 text-center" style={{ background: 'var(--bg-2)' }}>
-                <p className="font-medium" style={{ color: 'var(--text-1)' }}>Пользователь</p>
-                <p style={{ color: 'var(--text-2)' }}>user@provision.app</p>
-              </div>
-            </div>
-          </div>
         </div>
       </div>
     </div>

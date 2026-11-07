@@ -131,6 +131,9 @@
 }
 .list-search__input::placeholder { color: var(--text-3); }
 .list-search:focus-within { border-color: var(--amber-500); }
+/* Глобальное правило input:focus-visible рисует ВТОРУЮ янтарную рамку внутри
+   поля — в поиске она лишняя (рамку даёт сам .list-search). Владелец 07.11.2026. */
+.list-search input.list-search__input:focus-visible { outline: none; }
 /* Совпадение поиска: строка, к которой ListSearch прокрутил (scrollIntoView
    center) и перевёл фокус — янтарный контур, виден в обеих темах. */
 .search-hit {

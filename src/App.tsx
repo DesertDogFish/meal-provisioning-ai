@@ -1,4 +1,4 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -10,6 +10,8 @@ import PageLoader from './components/PageLoader';
 import { AuthProvider } from './components/AuthProvider'; // cleanup-п.7: один /auth/me на сессию
 import LoginPage from './pages/LoginPage';
 import NotFoundPage from './pages/NotFoundPage';
+import { syncManager } from './sync/SyncManager';
+import { installEnterBlur } from './ui/enterBlur';
 
 /**
  * Fix-10 (п.4): тяжёлые страницы — ленивые чанки (React.lazy). Первый пейнт
@@ -28,6 +30,14 @@ const IntegrationsPage = lazy(() => import('./pages/IntegrationsPage'));
 const ProductsPage = lazy(() => import('./pages/ProductsPage'));
 
 function App() {
+  // п.14 (07.11.2026): автосинхронизация офлайн-очереди стартует на старте приложения,
+  // а не только когда открыто меню. Интервал берётся из настроек (по умолчанию 5 минут).
+  useEffect(() => {
+    syncManager.startAutoSync();
+  }, []);
+  // «Готово» на экранной клавиатуре закрывает её (числовые поля).
+  useEffect(() => installEnterBlur(), []);
+
   return (
     <ErrorBoundary>
       <ToastProvider>

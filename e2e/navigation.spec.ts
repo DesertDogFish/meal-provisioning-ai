@@ -71,12 +71,15 @@ test('N-1 блюдо → «В меню похода…» → предвыбор 
 });
 
 test('N-2 ① → CTA ② → CTA ③ → всё взято → CTA ④ → чеки → отчёт → Поделиться-фолбэк (navigation-п.2)', async ({ page, context }) => {
+  // Сквозной флоу по 4 этапам + заполнение чеков по всем позициям: 30 с не хватает,
+  // таймаут поднят осознанно (замер: проход по чекам занимает ~40 с).
+  test.setTimeout(120_000);
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   await login(page, USER);
   await page.goto('/trips/trip1?stage=menu');
 
-  // ① меню собрано → CTA «К закупке ②»
-  await expect(page.getByTestId('stage-next-cta')).toHaveText(/К закупке ②/);
+  // ① меню собрано → CTA «К проверке ②» (redesign п.1)
+  await expect(page.getByTestId('stage-next-cta')).toHaveText(/К проверке ②/);
   await page.getByTestId('stage-next-cta').click();
   await expect(page).toHaveURL(/stage=shopping/);
 
@@ -92,12 +95,14 @@ test('N-2 ① → CTA ② → CTA ③ → всё взято → CTA ④ → че
   await page.getByTestId('stage-next-cta').click();
   await expect(page).toHaveURL(/stage=checks/);
 
-  // ④ вводим чек по каждой позиции → CTA «Отчёт и поделиться».
+  // ④ вводим чек по каждой позиции → CTA «К отчёту ⑤».
   // Несколько проходов: после Enter строки перерендериваются (итги/доступность),
   // за один проход часть позиций остаётся незаполненной.
   const cta4 = page.getByTestId('stage-next-cta');
   for (let pass = 0; pass < 6; pass++) {
-    if (/Отчёт и поделиться/.test(await cta4.innerText().catch(() => ''))) break;
+    // CTA может не быть вовсе (вместо него подсказка) — innerText без таймаута висел бы 30 с
+    const label = (await cta4.count()) ? await cta4.innerText({ timeout: 1000 }).catch(() => '') : '';
+    if (/К отчёту ⑤/.test(label)) break;
     const actualInputs = page.locator('input[data-testid^="actual-input-"]');
     const n = await actualInputs.count();
     expect(n, 'в сид-походе должны быть позиции для чека').toBeGreaterThan(0);
@@ -110,9 +115,10 @@ test('N-2 ① → CTA ② → CTA ③ → всё взято → CTA ④ → че
       await input.press('Enter');
     }
   }
-  await expect(cta4).toHaveText(/Отчёт и поделиться/, { timeout: 15_000 });
+  await expect(cta4).toHaveText(/К отчёту ⑤/, { timeout: 15_000 });
   await page.getByTestId('stage-next-cta').click();
-  await expect(page).toHaveURL(/\/trips\/trip1\/report/, { timeout: 15_000 });
+  // redesign п.5: отчёт — этап ⑤ внутри страницы (?stage=ready), а не отдельный /report
+  await expect(page).toHaveURL(/\/trips\/trip1\?stage=ready/, { timeout: 15_000 });
 
   // Поделиться: navigator.share в десктоп-chromium нет → фолбэк-копирование в буфер
   await page.getByTestId('report-share').click();
@@ -188,7 +194,7 @@ test('N-5 создание похода → этап ①; пустые сост�
   await page.locator('#start-date').fill('2026-09-01');
   await page.locator('#end-date').fill('2026-09-02');
   await page.locator('.modal-overlay').getByRole('button', { name: 'Создать', exact: true }).click();
-  await expect(page).toHaveURL(/\/trips\/trip-\d+\?stage=menu/, { timeout: 15_000 });
+  await expect(page).toHaveURL(/\/trips\/trip-[A-Za-z0-9-]+\?stage=menu/, { timeout: 15_000 });
   await expect(page.getByText('Поход создан — добавьте первый приём пищи')).toBeVisible();
 
   // ②③④ без меню — empty-state с рабочими CTA. ВАЖНО: переходы — чипсами этапов

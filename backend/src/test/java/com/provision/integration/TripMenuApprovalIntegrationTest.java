@@ -17,7 +17,6 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
-import org.testcontainers.containers.PostgreSQLContainer;
 
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.CountDownLatch;
@@ -49,24 +48,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @DisplayName("Trip Menu Approval Integration Tests (redesign п.2)")
 class TripMenuApprovalIntegrationTest {
 
-    private static final boolean LOCAL_PG = !LocalPgFallback.dockerAvailable();
-
-    static PostgreSQLContainer<?> postgres = LOCAL_PG ? null : new PostgreSQLContainer<>("postgres:15-alpine")
-            .withDatabaseName("provision_test_menu_approval")
-            .withUsername("test")
-            .withPassword("test");
-
-    static {
-        if (!LOCAL_PG && postgres != null && !postgres.isRunning()) {
-            postgres.start();
-        }
-    }
-
     @DynamicPropertySource
     static void configureProperties(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", () -> LOCAL_PG ? LocalPgFallback.jdbcUrl("provision_test_menu_approval") : postgres.getJdbcUrl());
-        registry.add("spring.datasource.username", () -> LOCAL_PG ? "test" : postgres.getUsername());
-        registry.add("spring.datasource.password", () -> LOCAL_PG ? "test" : postgres.getPassword());
+        registry.add("spring.datasource.url", () -> SharedPostgres.jdbcUrl("provision_test_menu_approval"));
+        registry.add("spring.datasource.username", SharedPostgres::username);
+        registry.add("spring.datasource.password", SharedPostgres::password);
     }
 
     @Autowired private MockMvc mockMvc;

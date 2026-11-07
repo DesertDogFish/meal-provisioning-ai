@@ -23,6 +23,7 @@ import { api } from '../api/client';
 import EmisSettingsTab, { formatFileSize, type IntegrationInfo } from '../components/EmisSettingsTab';
 import SyncLogsTab from '../components/SyncLogsTab';
 import CatalogImportTab from '../components/CatalogImportTab';
+import PageHero from '../components/PageHero';
 
 /** Запуск синхронизации в короткой форме SyncLogDto (GET /admin/integrations/sync-logs)
  * — нужен только для поллинга watchedLogId; полный журнал — в SyncLogsTab. */
@@ -285,12 +286,14 @@ export default function IntegrationsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl md:text-3xl font-bold" style={{ color: 'var(--text)' }}>Интеграции</h1>
-        <p className="mt-1" style={{ color: 'var(--muted)' }}>
-          Локальная копия ЕМИСС Росстата — источник плановых цен
-        </p>
-      </div>
+      {/* Просьба владельца 07.11.2026: на странице не было кнопки меню — заголовок
+          переведён на общий PageHero (как «Походы»/«Блюда»/«Продукты»), он же даёт
+          гамбургер, липкую шапку и полноширинную плашку на телефоне. */}
+      <PageHero
+        title="Интеграции"
+        subtitle="Локальная копия ЕМИСС Росстата — источник плановых цен"
+        testId="integrations-hero"
+      />
 
       {/* Табы раздела (cleanup-п.2/3): настройка, журнал, импорт каталога */}
       <div className="seg seg-scroll max-w-full overflow-x-auto" role="tablist" aria-label="Разделы интеграций">

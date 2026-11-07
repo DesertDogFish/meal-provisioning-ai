@@ -22,18 +22,32 @@
 
 /* 2. Скролл вкладок:fade по краям вместо «срезанных» глифов + активный таб
       центрируется из JSX (scrollIntoView inline:center). */
+/* UX-список владельца п.18: на тач-устройствах полоса прокрутки в чипсах-фильтрах
+   не нужна (жест скролла и так работает), в браузере с мышью полоса остаётся. */
+@media (pointer: coarse) {
+  .seg-scroll,
+  .checklist-sticky,
+  .overflow-x-auto {
+    scrollbar-width: none;
+  }
+  .seg-scroll::-webkit-scrollbar,
+  .checklist-sticky::-webkit-scrollbar,
+  .overflow-x-auto::-webkit-scrollbar {
+    display: none;
+    height: 0;
+  }
+}
+
 .seg-scroll {
   -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 14px, #000 calc(100% - 14px), transparent 100%);
   mask-image: linear-gradient(90deg, transparent 0, #000 14px, #000 calc(100% - 14px), transparent 100%);
   scroll-padding-inline: 16px;
 }
 
-/* 3. Чеклист: шапка и строка прогресса — ОДНА карточка (раньше стык
-      скруглений рисовал «швов» и прогресс уезжал под шапку). */
-.checklist-sticky > *:first-child {
-  border-bottom-left-radius: 0;
-  border-bottom-right-radius: 0;
-}
+/* 3. Чеклист: правило гасило нижние углы первого ребёнка липкой полосы — это
+      было нужно, когда шапка и прогресс были двумя половинами одной карточки.
+      Сейчас плашка — одна карточка, а в «Чеках» первый ребёнок — поле поиска,
+      у которого из-за этого не было нижнего скругления (владелец 07.11.2026). */
 
 /* 4. Модалка состава на телефоне: 4 колонки таблицы не влезают в 336px —
       строка становится карточкой с областями «название/статус» +

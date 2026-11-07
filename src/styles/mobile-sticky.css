@@ -1,0 +1,112 @@
+/* ============================================================
+   Владелец 07.11.2026, раунд 3-5: полноширинные шапки, липкий стек,
+   нижний бар этапов.
+   ============================================================ */
+
+/* Горизонтальный жёлоб main — чтобы полноширинная плашка-заголовок
+   выходила ровно к краям экрана (12px при <=767, 24px при 768-1023). */
+@media (max-width: 767px) {
+  :root { --pv-gutter: 12px; }
+}
+@media (min-width: 768px) and (max-width: 1023px) {
+  :root { --pv-gutter: 24px; }
+}
+
+@media (max-width: 1023px) {
+  /* п.7: плашки-заголовки «Походы / Блюда / Продукты / Интеграции» во всю ширину. */
+  .page-hero {
+    margin-left: calc(-1 * var(--pv-gutter, 12px));
+    margin-right: calc(-1 * var(--pv-gutter, 12px));
+    border-left: 0;
+    border-right: 0;
+    border-radius: 0;
+  }
+
+  /* п.6: при прокрутке шапка непрозрачная (база под артом), арт остаётся.
+     Углы не скругляем: полноширинная шапка упирается в кромку экрана,
+     а «вырезанные» градиентом углы поверх арта читались как артефакты. */
+  html.is-scrolled .page-hero {
+    background-color: var(--bg);
+    background-image: none;
+    border-radius: 0;
+    box-shadow: 0 6px 18px color-mix(in srgb, var(--bg-0) 55%, transparent);
+  }
+  /* Шапка похода стоит над полосой: те же условия, чтобы стык не читался швом. */
+  html.is-scrolled .trip-head-row {
+    background: var(--bg);
+    border-radius: 0;
+  }
+  /* Полоса похода сливается с шапкой (один фон, без рамки и скруглений). */
+  html.is-scrolled .trip-strip {
+    background: var(--bg);
+    border: 0;
+    border-radius: 0;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
+
+/* п.3/п.4: нижний бар этапов. Высота в переменной — её же использует кнопка «наверх».
+   07.11.2026: бар уменьшен на четверть (69px -> 52px), содержимое сдвинуто вниз. */
+:root { --stage-bar-h: 52px; }
+
+@media (max-width: 1023px) {
+  .stage-bar__btn {
+    min-height: var(--stage-bar-h);
+    padding: 11px 2px 6px;
+  }
+  body:has(.stage-bar) .scroll-top-btn {
+    bottom: calc(var(--stage-bar-h) + max(env(safe-area-inset-bottom, 0px), var(--pv-inset-bottom, 0px)) + 12px);
+  }
+}
+
+
+/* ------------------------------------------------------------
+   Фейды у кромок прокрутки (владелец 07.11.2026): список растворяется,
+   не касаясь липких плашек. Цвет градиента = фон страницы.
+   Верхний фейд начинается ПОД липким стеком: его кромку Layout считает
+   на лету (--sticky-fade-top) — иначе он прятался за плашкой поиска.
+   ------------------------------------------------------------ */
+.scroll-fade {
+  position: fixed;
+  left: 0;
+  right: 0;
+  height: 26px;
+  pointer-events: none;
+  z-index: 30; /* выше контента (0), ниже липких плашек (40+) */
+  opacity: 0;
+  transition: opacity .18s ease;
+}
+.scroll-fade--top {
+  top: var(--sticky-fade-top, 0px);
+  background: linear-gradient(to bottom, var(--bg) 0%, color-mix(in srgb, var(--bg) 55%, transparent) 45%, transparent 100%);
+}
+html.is-scrolled.has-sticky-top .scroll-fade--top { opacity: 1; }
+
+/* Субпиксельный шов между липкими плашками: полоса похода кончается на 130.8px,
+   а липкая плашка начинается с 131px — в эти 0.2px просвечивал текст списка
+   (владелец 07.11.2026: «тонкой полоской видно»). Заклеиваем фоном страницы. */
+html.is-scrolled .trip-strip { box-shadow: 0 1px 0 0 var(--bg); }
+html.is-scrolled .checklist-sticky { box-shadow: 0 -1px 0 0 var(--bg); }
+/* то же для липких строк под шапкой списков (высота шапки округляется до px) */
+html.is-scrolled .page-hero ~ .sticky,
+html.is-scrolled .page-hero ~ .filters-row { box-shadow: 0 -1px 0 0 var(--bg); }
+
+.scroll-fade--bottom {
+  bottom: 0;
+  background: linear-gradient(to top, var(--bg) 0%, color-mix(in srgb, var(--bg) 55%, transparent) 45%, transparent 100%);
+}
+html.is-scrolled .scroll-fade--bottom { opacity: 1; }
+
+/* Страница похода: снизу над баром этапов, сверху — под всем стеком */
+body:has(.stage-bar) .scroll-fade--bottom {
+  bottom: calc(var(--stage-bar-h, 52px) + max(env(safe-area-inset-bottom, 0px), var(--pv-inset-bottom, 0px)));
+}
+
+
+/* Плашка прогресса сворачивается над областью прокрутки — без этого браузер
+   «привязывает» позицию (scroll anchoring) и подкручивает scrollY на её высоту,
+   из-за чего контент прыгает дважды. Владелец 07.11.2026. */
+@media (max-width: 1023px) {
+  html { overflow-anchor: none; }
+}

@@ -13,13 +13,27 @@
  * Копи и вариант поведения — решение владельца по карточке BL-66; выбран явный 404
  * (а не тост с редиректом): пользователь видит адрес, по которому промахнулся.
  */
-import { useNavigate } from 'react-router-dom';
+import { useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { MapPinOff } from 'lucide-react';
 
 import { Button } from '../components/Button';
 
 export default function NotFoundPage() {
   const navigate = useNavigate();
+
+  // п.17: после рестарта оболочка восстанавливает последний URL, и он может не совпасть
+  // ни с одним маршрутом. Холодный старт определяем по ключу записи истории: у самой
+  // первой записи react-router его нет (у BrowserRouter это всегда 'default'),
+  // все навигации внутри приложения получают свои ключи. Раньше был флаг booting,
+  // который снимался таймером через 0 мс — к моменту рендера 404 (после /auth/me)
+  // он уже был снят, и рестарт снова показывал «Страница не найдена».
+  const location = useLocation();
+  const coldStart = location.key === 'default';
+  useEffect(() => {
+    if (coldStart) navigate('/trips', { replace: true });
+  }, [coldStart, navigate]);
+
   return (
     <div className="max-w-lg mx-auto p-6" data-testid="not-found-page">
       <div

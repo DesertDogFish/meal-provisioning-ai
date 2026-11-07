@@ -108,9 +108,10 @@ export default function ManualItemsModal({ tripId, dayId, dayLabel, items, produ
     }
   };
 
+  // Владелец (07.11.2026): «продукты к дню» → «Доп. закупка».
   const title = dayId == null
-    ? 'Продукты к походу'
-    : `Продукты к дню${dayLabel ? ` · ${dayLabel}` : ''}`;
+    ? 'Доп. закупка на поход'
+    : `Доп. закупка${dayLabel ? ` · ${dayLabel}` : ''}`;
 
   return (
     <Modal onClose={onClose}>

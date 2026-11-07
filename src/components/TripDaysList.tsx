@@ -197,7 +197,7 @@ export function TripDaysList(props: TripDaysListProps) {
               <p className="font-semibold flex items-center gap-1.5 keep-pair" style={{ color: 'var(--text)' }}>
                 {manualForTrip(manualItems).length > 0
                   ? <>Продукты и товары <span className="text-xs font-normal" style={{ color: 'var(--muted)' }}>· {manualForTrip(manualItems).length} поз.</span></>
-                  : 'Добавить дополнительные продукты и товары…'}
+                  : 'Добавить продукты и товары…'}
                 <InfoTip
                   label="Что добавляют к походу"
                   text="Ручные позиции: аптечка, антисептик, топливо… — продукты и товары, которые берутся на весь поход, а не в конкретный день. Они попадают в закупку и в чек наравне с ингредиентами блюд."
@@ -209,7 +209,7 @@ export function TripDaysList(props: TripDaysListProps) {
               bugs-trip-menu-stage п.3 — та же формулировка, bugs-app-ui п.5 — .icon-action */}
           <button
             onClick={onAddTripProduct}
-            className="icon-action p-1.5 rounded touch-hit"
+            className="icon-action p-1.5 rounded touch-hit shrink-0"
             title="Добавить продукт или товар (на весь поход)"
             aria-label="Добавить продукт или товар (на весь поход)"
           >
