@@ -89,21 +89,49 @@
   .checklist-toolbar button svg { width: 12px; height: 12px; }
   .checklist-toolbar { gap: 6px; }
 
-  /* ВАЖНО: плашка только ГАСНЕТ, высота не меняется.
-     Сворачивание через max-height уменьшало высоту документа; когда страница
-     чуть выше экрана, браузер поджимал scrollY, состояние переключалось назад —
-     и плашку начинало дёргать бесконечно (воспроизведено: y 45->49->35->37->8->0).
-     Поэтому анимируем только opacity/transform: раскладка не меняется — нет петли. */
-  .checklist-head,
-  .checklist-toolbar {
-    transition: opacity .2s ease, transform .2s ease;
-    will-change: opacity, transform;
+  /* Плашка — ОДНА строка: прогресс слева, кнопки справа (владелец 07.11.2026).
+     Сворачивается и гаснет целиком; высоту компенсирует .scroll-spacer
+     (иначе документ короче — браузер поджимает scrollY и плашку дёргает). */
+  .checklist-plaque {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-2);
+    overflow: hidden;
+    transition: opacity .2s ease, max-height .26s ease, padding .26s ease;
+    max-height: 72px;
   }
-  html.is-scrolled-deep .checklist-head,
-  html.is-scrolled-deep .checklist-toolbar {
+  .checklist-plaque .checklist-head {
+    flex: 1 1 auto;
+    min-width: 0;
+    gap: var(--sp-2);
+  }
+  /* подсказка-инфо в одну строку не влезает — на мобилке скрыта */
+  .checklist-plaque .checklist-head .keep-pair { display: none; }
+  .checklist-plaque .checklist-head [role="progressbar"] { min-width: 32px; }
+  .checklist-plaque .checklist-toolbar {
+    flex: 0 0 auto;
+    gap: 4px;
+  }
+  .checklist-plaque .checklist-toolbar button {
+    font-size: 10px;
+    padding: 0 6px;
+    gap: 3px;
+  }
+  .checklist-plaque .checklist-toolbar button svg { width: 11px; height: 11px; }
+  html.is-scrolled-deep .checklist-plaque {
     opacity: 0;
-    transform: translateY(-4px);
+    max-height: 0;
+    padding-top: 0;
+    padding-bottom: 0;
     pointer-events: none;
+  }
+  /* Спейсер: компенсирует исчезнувшую плашку, чтобы высота документа была стабильна */
+  .scroll-spacer {
+    height: 0;
+    transition: height .26s ease;
+  }
+  html.is-scrolled-deep .scroll-spacer {
+    height: var(--plaque-h, 0px);
   }
 
   /* До прокрутки поиск отделён от плашки прогресса (были впритык).
@@ -112,9 +140,7 @@
     margin-top: var(--sp-3);
     transition: margin-top .26s ease;
   }
-  html.is-scrolled-deep .checklist-sticky .list-search {
-    margin-top: 0;
-  }
+
   html.is-scrolled .checklist-sticky {
     border-radius: 0;
   }

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDown, ChevronRight, ClipboardList, Filter } from 'lucide-react';
 
 import { isActualLessThanNeeded, neededAsActual, type ActualAmount } from '../utils/checkUnits';
@@ -120,12 +120,38 @@ export function ChecklistTab({
     if (ok) onSetAll(on);
   };
 
+  /* Владелец 07.11.2026: плашка при прокрутке должна не просто гаснуть — контент
+     ниже обязан подниматься на её место. Сворачивание уменьшало высоту документа
+     и браузер поджимал scrollY (страница чуть выше экрана) — плашку дёргало.
+     Поэтому меряем высоту плашки и отдаём её в --plaque-h: Layout добавляет такой
+     же спейсер снизу, итоговая высота документа не меняется — сворачивание стабильно. */
+  const rowRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const measure = () => {
+      // Пока плашка свернута, её высота — часть анимации (0..70). Такие замеры
+      // игнорируем: иначе спейсер получит промежуточное значение и документ
+      // всё равно просядет, а плашку снова задёргает.
+      if (document.documentElement.classList.contains('is-scrolled-deep')) return;
+      const h = rowRef.current?.getBoundingClientRect().height ?? 0;
+      if (h > 24) document.documentElement.style.setProperty('--plaque-h', `${Math.round(h)}px`);
+    };
+    measure();
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measure) : null;
+    if (ro && rowRef.current) ro.observe(rowRef.current);
+    return () => {
+      ro?.disconnect();
+      document.documentElement.style.setProperty('--plaque-h', '0px');
+    };
+  }, []);
+
   return (
     <div className="space-y-3 max-w-3xl">
       {/* Липкая шапка: прогресс и массовые действия видны при любом скролле списка.
           30.10.2026 (подзадача 5): две строки — прогресс и тулбар действий;
           «Снять всё» ушло в kebab (случайный сброс отметок исключён). */}
       <div className="checklist-sticky rounded-xl">
+        {/* Владелец 07.11.2026: плашка в одну строку — прогресс слева, кнопки справа. */}
+        <div className="checklist-plaque" ref={rowRef}>
         <div className="checklist-head">
           <span className="checklist-head__count keep-num" data-testid="checklist-progress-count">
             {boughtCount} из {total}
@@ -183,6 +209,7 @@ export function ChecklistTab({
             ]}
           />
         </div>
+        </div>{/* /.checklist-plaque */}
         {/* bugs-trip-checks-stage п.7: поиск прилипает к верху списка (зона
             .checklist-sticky) и прокручивает к найденному (scrollIntoView
             center, Enter/стрелки — следующее совпадение, промах — «Не найдено») */}
