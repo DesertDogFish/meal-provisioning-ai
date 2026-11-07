@@ -97,9 +97,29 @@
     gap: var(--sp-2);
 
     overflow: hidden;
+    /* одна плашка-карточка, а не две склеенные половины */
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    /* в trip-mobile-a.css есть `.checklist-sticky > :first-child {border-bottom-*-radius:0}`
+       (сделано под старую склейку из двух половин); двойной класс перебивает его */
+    border-bottom-left-radius: var(--r-md);
+    border-bottom-right-radius: var(--r-md);
+    padding: 8px 10px;
     /* гаснет по мере прокрутки: --plaque-fade 0..1 считает Layout */
     opacity: calc(1 - var(--plaque-fade, 0));
     max-height: 72px;
+  }
+  /* дети без своих фонов, рамок и скруглений — иначе плашка делится на две части */
+  .checklist-sticky > .checklist-plaque.checklist-plaque {
+    border-radius: var(--r-md);
+  }
+  .checklist-plaque .checklist-head,
+  .checklist-plaque .checklist-toolbar {
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    padding: 0;
   }
   .checklist-plaque .checklist-head {
     flex: 1 1 auto;
