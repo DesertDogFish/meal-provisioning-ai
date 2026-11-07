@@ -233,6 +233,7 @@ function GroupRows(props: GroupRowsProps) {
             <td className="px-2 py-2.5 text-right" data-label="Стоимость ₽">
               {/* Fix-10 (п.3): sm — одной высоты с «Взяли» в этой строке */}
               <NumberField
+                inputType="text"
                 value={actualTotal}
                 size="sm"
                 stepRef={item.plannedCost}

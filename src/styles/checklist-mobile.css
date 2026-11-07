@@ -51,9 +51,8 @@
 .checklist-sticky.checks-search-bar {
   padding: var(--sp-2) var(--pv-gutter, 12px);
   background: var(--bg);
-  /* владелец 07.11.2026: как в «Магазине» — плашка поиска скруглена снизу */
-  border-bottom-left-radius: var(--r-md);
-  border-bottom-right-radius: var(--r-md);
+  /* владелец 07.11.2026: как в «Магазине» — та же скруглённая плашка (12px) */
+  border-radius: 12px;
 }
 .checklist-sticky {
   position: sticky;

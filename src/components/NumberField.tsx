@@ -30,12 +30,18 @@ interface NumberFieldProps {
   noSteppers?: boolean;
   /** автофокус: «нажал + стоимость → сразу печатаю» */
   autoFocus?: boolean;
+  /**
+   * Владелец 07.11.2026: на Android у `type=number` клавиатура отдаёт действие
+   * «Next» — фокус уезжал на следующее поле вместо закрытия клавиатуры.
+   * `text` + inputmode=decimal даёт честную кнопку «Готово».
+   */
+  inputType?: 'number' | 'text';
 }
 
 export function NumberField({
   value, onCommit, stepRef, placeholder = '= план', min = 0,
   maxDecimals = 2, minStep = 0, size = 'md', testId, ariaLabel, disabled = false,
-  noSteppers = false, autoFocus = false,
+  noSteppers = false, autoFocus = false, inputType = 'number',
 }: NumberFieldProps) {
   const [draft, setDraft] = useState<string>(value == null ? '' : String(value));
   useEffect(() => setDraft(value == null ? '' : String(value)), [value]);
@@ -72,7 +78,7 @@ export function NumberField({
       )}
       <input
         className="nf-input" 
-        type="number" 
+        type={inputType}
         inputMode="decimal" 
         step={step}
         data-testid={testId} 

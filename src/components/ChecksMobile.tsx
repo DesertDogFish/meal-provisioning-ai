@@ -188,6 +188,7 @@ function MobileCheckRow(props: MobileCheckRowProps) {
                 value={actualTotal}
                 size="sm"
                 noSteppers
+                inputType="text"
                 autoFocus={entering && actualTotal == null}
                 stepRef={item.plannedCost}
                 placeholder="стоимость, ₽"
