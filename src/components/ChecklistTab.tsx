@@ -131,7 +131,7 @@ export function ChecklistTab({
       // Пока плашка свернута, её высота — часть анимации (0..70). Такие замеры
       // игнорируем: иначе спейсер получит промежуточное значение и документ
       // всё равно просядет, а плашку снова задёргает.
-      if (document.documentElement.classList.contains('is-scrolled-deep')) return;
+      if (document.documentElement.classList.contains('is-scrolled')) return;
       const h = rowRef.current?.getBoundingClientRect().height ?? 0;
       if (h > 24) document.documentElement.style.setProperty('--plaque-h', `${Math.round(h)}px`);
     };

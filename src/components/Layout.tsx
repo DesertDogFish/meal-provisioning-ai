@@ -46,7 +46,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     // кромку самого нижнего «залипшего» элемента и пишем в --sticky-fade-top.
     const STICKY_SELECTOR = '.page-hero, .trip-head-row, .trip-strip, .checklist-sticky, .sticky, .filters-row';
     let lastEdge = -1;
-    let lastFade = -1;
     const updateStickyEdge = () => {
       let bottom = 0;
       document.querySelectorAll<HTMLElement>(STICKY_SELECTOR).forEach((el) => {
@@ -67,25 +66,12 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       }
     };
     let raf = 0;
-    let deep = false;
     const applyScrollState = () => {
       raf = 0;
       const y = window.scrollY;
+      // Пошла прокрутка — плашка прогресса гаснет и сворачивается сразу,
+      // поиск встаёт на её место. Вернулись наверх — всё возвращается.
       root.classList.toggle('is-scrolled', y > 4);
-      // «Глубокий» скролл с гистерезисом (скрыть на 64px, вернуть на 32px):
-      // один порог давал дребезг — плашка то сворачивалась, то разворачивалась,
-      // и её «колбасило» (владелец 07.11.2026).
-      // Плашка гаснет пропорционально прокрутке (0..110px), раскладка не меняется —
-      // дёргаться нечему. После полного исчезновения (is-scrolled-deep) она
-      // сворачивается мгновенно, и поиск встаёт на её место.
-      const fade = Math.min(1, Math.max(0, y / 110));
-      const fadeRounded = Math.round(fade * 100) / 100;
-      if (fadeRounded !== lastFade) {
-        lastFade = fadeRounded;
-        root.style.setProperty('--plaque-fade', String(fadeRounded));
-      }
-      if (!deep && y > 110) { deep = true; root.classList.add('is-scrolled-deep'); }
-      else if (deep && y < 40) { deep = false; root.classList.remove('is-scrolled-deep'); }
       updateStickyEdge();
     };
     // Скролл-события пачками — считаем не чаще одного раза за кадр.

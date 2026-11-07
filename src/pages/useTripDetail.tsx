@@ -362,11 +362,29 @@ export function useTripDetail() {
     } catch { /* нет роута/прав — локальный стейдж уже сохранён */ }
   };
 
+  /**
+   * Владелец 07.11.2026: сняли отметку «взято» в Магазине — цена в «Чеках»
+   * тоже должна слететь (товар не куплен, значит и чека нет).
+   */
+  const clearCheckPrice = (ingredientId: string) => {
+    saveActualPrice(tripKey, ingredientId, null);
+    setClearedPrices((prev) => {
+      const next = new Set(prev);
+      next.add(ingredientId);
+      return next;
+    });
+    setDraftOverrides(loadActualPrices(tripKey));
+    void api.put(`/trips/${tripKey}/price-overrides/${ingredientId}`, { actualPrice: null })
+      .catch(() => { /* нет роута/прав — локальный стейдж уже сохранён */ });
+  };
   const toggleBought = (key: string) => {
     const next = new Set(checklistBought);
-    if (next.has(key)) next.delete(key); else next.add(key);
+    const wasBought = next.has(key);
+    if (wasBought) next.delete(key); else next.add(key);
     persistBought(tripKey, next);
     setChecklistBought(next);
+    // отметку сняли -> цена в «Чеках» слетает (ключ = ingredientId@нужно)
+    if (wasBought) clearCheckPrice(String(key).split('@')[0]);
   };
 
   // Fix-8 (п.6): факт «Взяли» НЕ штампуется потребностью — изменение числа
@@ -405,6 +423,8 @@ export function useTripDetail() {
     const next = on ? new Set(allKeys) : new Set<string>();
     persistBought(tripKey, next);
     setChecklistBought(next);
+    // «Снять всё» — снимаем и цены чеков затронутых позиций
+    if (!on) allKeys.forEach((k) => clearCheckPrice(String(k).split('@')[0]));
   };
 
   /** U26: клик по заголовку таблицы — то же поле меняет направление, другое — asc. */

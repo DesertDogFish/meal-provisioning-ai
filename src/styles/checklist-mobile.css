@@ -111,8 +111,9 @@
     border-bottom-left-radius: var(--r-md);
     border-bottom-right-radius: var(--r-md);
     padding: 8px 10px;
-    /* гаснет по мере прокрутки: --plaque-fade 0..1 считает Layout */
-    opacity: calc(1 - var(--plaque-fade, 0));
+    /* исчезает сразу при начале прокрутки (владелец 07.11.2026) */
+    opacity: 1;
+    transition: opacity .15s ease;
     max-height: 72px;
   }
   /* дети без своих фонов, рамок и скруглений — иначе плашка делится на две части */
@@ -152,7 +153,7 @@
   /* Фаза 2 (владелец 07.11.2026): плашка уже невидима — сворачиваем РЕЗКО,
      без анимации высоты. Анимированное сворачивание вместе с анимированным
      спейсером давало болтанку высоты документа на каждом кадре. */
-  html.is-scrolled-deep .checklist-plaque {
+  html.is-scrolled .checklist-plaque {
     opacity: 0;
     max-height: 0;
     padding-top: 0;
@@ -163,11 +164,11 @@
   .scroll-spacer {
     height: 0;
   }
-  html.is-scrolled-deep .scroll-spacer {
+  html.is-scrolled .scroll-spacer {
     height: var(--plaque-h, 0px);
   }
   /* До прокрутки поиск отделён от плашки прогресса (были впритык).
-     Когда плашка свернулась (is-scrolled-deep), зазор тоже убираем. */
+     Когда плашка свернулась (is-scrolled), зазор тоже убираем. */
   .checklist-sticky .list-search {
     margin-top: var(--sp-3);
     transition: margin-top .26s ease;
@@ -190,6 +191,13 @@
   .checklist-sticky.checks-search-bar {
     padding-top: var(--sp-2);
     padding-bottom: var(--sp-2);
+    /* владелец 07.11.2026: скругление снизу + шов под плашкой заклеен */
+    border-radius: 0 0 12px 12px;
+    box-shadow: 0 1px 0 0 var(--bg);
+  }
+  /* общее правило is-scrolled гасит скругления — здесь они нужны */
+  html.is-scrolled .checklist-sticky.checks-search-bar {
+    border-radius: 0 0 12px 12px;
   }
 }
 .checklist-group-toggle {
