@@ -24,41 +24,30 @@
     border-radius: 0;
   }
 
-  /* п.6: при прокрутке шапка и полоса похода становятся НЕПРОЗРАЧНЫМИ и принимают
-     U-образную форму — скругления только внизу, сверху острые углы (шапка
-     «прилипает» к верхней кромке, арт-слой под ней больше не просвечивает). */
-  /* Та же логика, что у полосы похода: углы «вырезаются» фоном страницы
-     градиентами, а не border-radius — иначе в зоне скругления видна прокрутка. */
+  /* Шапка при прокрутке: непрозрачная БАЗА под артом (раньше фон был
+     полупрозрачным linear-gradient, и сквозь него просвечивал список).
+     Арт-слой и вуаль остаются на месте — их видно, как и до прокрутки.
+     Углы снизу «вырезаются» фоном страницы отдельным слоем ::before:
+     border-radius тут не годится — в его зоне была бы видна прокрутка. */
   html.is-scrolled .page-hero {
     background-color: var(--bg);
+    background-image: none;
+    border-radius: 0;
+    box-shadow: 0 6px 18px color-mix(in srgb, var(--bg-0) 55%, transparent);
+  }
+  html.is-scrolled .page-hero::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
     background-image:
       radial-gradient(circle at 0 100%, transparent calc(var(--r-lg) - 1px), var(--bg) calc(var(--r-lg) - 1px)),
       radial-gradient(circle at 100% 100%, transparent calc(var(--r-lg) - 1px), var(--bg) calc(var(--r-lg) - 1px));
     background-size: var(--r-lg) var(--r-lg);
     background-position: left bottom, right bottom;
     background-repeat: no-repeat;
-    border-radius: 0;
-    box-shadow: 0 6px 18px color-mix(in srgb, var(--bg-0) 55%, transparent);
   }
-  /* Шапка похода стоит НАД полосой, поэтому её нижние углы остаются острыми:
-     U-форму получает нижний элемент стека (.trip-strip), иначе на стыке видна щель. */
-  html.is-scrolled .trip-head-row {
-    background: var(--bg);
-    border-radius: 0;
-  }
-  /* !important: в светлой теме atmosphere.css объявляет
-     :root[data-theme="light"] .page-hero__art { opacity: .22 } — селектор
-     специфичнее, и без !important арт просвечивал через непрозрачную шапку. */
-  html.is-scrolled .page-hero .page-hero__art {
-    opacity: 0 !important;
-  }
-  html.is-scrolled .page-hero::after {
-    opacity: 0;
-  }
-  /* Полоса при прокрутке: фон --bg-1, а углы «вырезаны» фоном страницы.
-     Через border-radius это не сделать: элемент сзади (прокрутка) виден в зоне
-     скругления — владелец это и заметил. Поэтому рисуем углы фоном --bg
-     радиальными градиентами в двух угловых квадратах r×r (внешняя часть круга). */
   html.is-scrolled .trip-strip {
     background-color: var(--bg-1);
     background-image:
