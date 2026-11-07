@@ -26,11 +26,16 @@ interface NumberFieldProps {
   ariaLabel?: string;
   /** Fix-3 (п.2): блокировка ввода (например, чек — до подтверждения закупки) */
   disabled?: boolean;
+  /** Владелец 07.11.2026: без кнопок −/+ (ввод суммы чека прямо в строке) */
+  noSteppers?: boolean;
+  /** автофокус: «нажал + стоимость → сразу печатаю» */
+  autoFocus?: boolean;
 }
 
 export function NumberField({
   value, onCommit, stepRef, placeholder = '= план', min = 0,
   maxDecimals = 2, minStep = 0, size = 'md', testId, ariaLabel, disabled = false,
+  noSteppers = false, autoFocus = false,
 }: NumberFieldProps) {
   const [draft, setDraft] = useState<string>(value == null ? '' : String(value));
   useEffect(() => setDraft(value == null ? '' : String(value)), [value]);
@@ -53,6 +58,7 @@ export function NumberField({
 
   return (
     <span className={`nf nf-${size}${disabled ? ' nf-disabled' : ''}`} data-testid={testId ? `${testId}-wrap` : undefined}>
+      {!noSteppers && (
       <button 
         type="button" 
         className="nf-btn" 
@@ -63,6 +69,7 @@ export function NumberField({
       >
         −
       </button>
+      )}
       <input
         className="nf-input" 
         type="number" 
@@ -73,6 +80,7 @@ export function NumberField({
         placeholder={placeholder}
         disabled={disabled}
         value={draft}
+        autoFocus={autoFocus}
         onChange={e => setDraft(e.target.value)}
         onBlur={e => commit(e.target.value)}
         enterKeyHint="done"
@@ -93,6 +101,7 @@ export function NumberField({
           }
         }}
       />
+      {!noSteppers && (
       <button 
         type="button" 
         className="nf-btn" 
@@ -103,6 +112,7 @@ export function NumberField({
       >
         +
       </button>
+      )}
     </span>
   );
 }

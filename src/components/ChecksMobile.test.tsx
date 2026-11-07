@@ -126,11 +126,17 @@ describe('ChecksMobile — поведение сохранено после ре
     expect(screen.getByTestId('fact-add-i1')).toBeTruthy();
   });
 
-  it('«+ факт, ₽» раскрывает детали и открывает ввод суммы', () => {
+  it('«+ стоимость» открывает ввод ПРЯМО в строке — без деталей и без −/+', () => {
     const p = setup();
     fireEvent.click(screen.getByTestId('fact-add-i1'));
-    expect(screen.getByTestId('checkline-details-i1')).toBeTruthy();
-    expect(screen.getByTestId('actual-input-mobile-i1')).toBeTruthy();
+    // детали не раскрываются (владелец 07.11.2026)
+    expect(screen.queryByTestId('checkline-details-i1')).toBeNull();
+    // поле ввода — на месте кнопки, без кнопок-степперов
+    const input = screen.getByTestId('actual-input-i1') as HTMLInputElement;
+    expect(input).toBeTruthy();
+    expect(screen.queryByTestId('actual-input-mobile-i1')).toBeNull();
+    expect(screen.queryByLabelText('Уменьшить')).toBeNull();
+    expect(screen.queryByLabelText('Увеличить')).toBeNull();
     expect(p.onCommitActualTotal).not.toHaveBeenCalled();
   });
 

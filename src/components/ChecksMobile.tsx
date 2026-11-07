@@ -9,7 +9,7 @@
  * введённого чека подсвечена .row-attention; под шапкой — липкий поиск
  * (общий ListSearch, R8 — тот же контрол, что в чеклисте ③ и таблице ④).
  */
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { formatAmount } from '../utils/calculations';
 import { formatUnitPrice } from '../utils/format';
@@ -129,6 +129,18 @@ function MobileCheckRow(props: MobileCheckRowProps) {
   } = props;
   const [open, setOpen] = useState(false);
   const [entering, setEntering] = useState(false);
+
+  // «Нажал + стоимость → сразу печатаю»: фокусируем поле после его появления
+  // (autoFocus у только что смонтированного input в WebView срабатывал не всегда).
+  useEffect(() => {
+    if (!entering) return;
+    const id = window.setTimeout(() => {
+      const el = document.querySelector<HTMLInputElement>(`[data-testid="actual-input-${item.ingredientId}"]`);
+      el?.focus();
+    }, 30);
+    return () => window.clearTimeout(id);
+  }, [entering, item.ingredientId]);
+
   const actualTotal = enteredCheckTotal(item.enteredUnitPrice, item.totalAmount);
   // п.6: чек по позиции ещё не введён — строка требует внимания
   const needsAttention = !excluded && actualTotal == null;
@@ -169,14 +181,18 @@ function MobileCheckRow(props: MobileCheckRowProps) {
         <div className="checkline__fact">
           {/* пп.3–4: «план N ₽» и бейдж отклонения удалены — только стоимость */}
           <span className="checkline__hit inline-flex items-center gap-2">
-            {actualTotal != null ? (
+            {/* Владелец 07.11.2026: никаких кнопок −/+ и никакого второго поля в
+                деталях. Тап по «+ стоимость» сразу открывает ввод здесь же. */}
+            {actualTotal != null || entering ? (
               <NumberField
                 value={actualTotal}
                 size="sm"
+                noSteppers
+                autoFocus={entering && actualTotal == null}
                 stepRef={item.plannedCost}
                 placeholder="стоимость, ₽"
                 disabled={!canEnterCheck}
-                onCommit={v => onCommitActualTotal(item, v)}
+                onCommit={v => { onCommitActualTotal(item, v); setEntering(false); }}
                 testId={`actual-input-${item.ingredientId}`}
                 ariaLabel={`Сумма из чека (₽): ${item.ingredientName}`}
               />
@@ -187,7 +203,7 @@ function MobileCheckRow(props: MobileCheckRowProps) {
                 disabled={!canEnterCheck}
                 data-testid={`fact-add-${item.ingredientId}`}
                 aria-label={`Ввести сумму из чека: ${item.ingredientName}`}
-                onClick={() => { setOpen(true); setEntering(true); }}
+                onClick={() => setEntering(true)}
               >
                 + стоимость, ₽
               </button>
@@ -227,18 +243,6 @@ function MobileCheckRow(props: MobileCheckRowProps) {
               />
             </span>
           </div>
-          {actualTotal == null && entering && (
-            <NumberField
-              value={null}
-              size="sm"
-              stepRef={item.plannedCost}
-              placeholder="стоимость, ₽"
-              disabled={!canEnterCheck}
-              onCommit={v => onCommitActualTotal(item, v)}
-              testId={`actual-input-mobile-${item.ingredientId}`}
-              ariaLabel={`Сумма из чека (₽): ${item.ingredientName}`}
-            />
-          )}
           {/* Владелец 07.11.2026: галка «в расчёте / исключить» из чеков убрана совсем —
               исключение позиции живёт в этапе ② «Проверка» (ExclusionCheckbox). */}
         </div>
