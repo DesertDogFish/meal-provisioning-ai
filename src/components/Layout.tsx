@@ -6,6 +6,7 @@ import ApiModeBadge from './ApiModeBadge';
 import BrandMark from './BrandMark';
 import ThemeToggle from './ThemeToggle';
 import ScrollTopButton from './ScrollTopButton';
+import SyncSection from './SyncSection';
 import { lockBodyScroll, unlockBodyScroll } from './Modal';
 import { onOpenAppDrawer } from '../ui/drawerBus'; // подзадача 9: фон не скроллится под открытым drawer
 import { useToast } from './ToastProvider';
@@ -35,6 +36,19 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     };
   }, [profileOpen]);
 
+  /* Владелец 07.11.2026: при прокрутке липкая шапка страницы (и полоса похода)
+     становится непрозрачной и принимает U-образную форму — скругления только снизу,
+     верхние углы острые. Флаг вешаем на <html>: CSS ниже живёт в mobile-shell.css. */
+  useEffect(() => {
+    const root = document.documentElement;
+    const onScroll = () => root.classList.toggle('is-scrolled', window.scrollY > 4);
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      root.classList.remove('is-scrolled');
+    };
+  }, []);
   // ЗАДАЧА 3 + cleanup-п.7: сбой загрузки профиля виден пользователю (тост),
   // но сообщается из ОДНОГО места — провайдер держит profileError.
   useEffect(() => {
@@ -158,6 +172,11 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             </NavLink>
           ))}
         </nav>
+
+        {/* п.14 (список владельца): синхронизация и статус сети — в боковом меню:
+            онлайн/офлайн, размер очереди, кнопка принудительного запуска и интервал
+            автосинка (по умолчанию 5 минут). Сама автосинхронизация стартует в App. */}
+        <SyncSection onAfterAction={() => setSidebarOpen(false)} />
 
         {/* Футер сайдбара. U29 (список 26.10): «Выйти» больше не торчит отдельной
             кнопкой с краю — профиль стал меню: клик по карточке пользователя открывает

@@ -46,6 +46,12 @@
    `overflow: clip` НЕ создаёт скролл-контейнер (в отличие от hidden/auto),
    поэтому sticky продолжает липнуть к окну, а скругления остаются. */
 .checks-card { overflow: clip; }
+/* Поиск в чеках — отдельная полоса НАД карточкой (владелец 07.11.2026):
+   липнет к окну, фон непрозрачный, без скруглений карточки. */
+.checklist-sticky.checks-search-bar {
+  padding: var(--sp-2) 0;
+  background: var(--bg);
+}
 .checklist-sticky {
   position: sticky;
   top: 0;

@@ -69,7 +69,7 @@ export function ChecksTable(props: ChecksTableProps) {
         {/* Fix-7 (п.18): table-layout fixed + colgroup — заголовки ровно над полями */}
         <table className="w-full text-sm" style={{ tableLayout: 'fixed' }}>
           <colgroup>
-            <col style={{ width: 32 }} />
+            {/* Владелец 07.11.2026: колонка-галка «исключить из расчёта» удалена. */}
             <col />
             <col style={{ width: 84 }} />
             <col style={{ width: 120 }} />
@@ -77,7 +77,6 @@ export function ChecksTable(props: ChecksTableProps) {
           </colgroup>
           <thead>
             <tr style={{ borderBottom: '1px solid var(--border)' }}>
-              <th className="px-2 py-3" title="Снять галочку, чтобы исключить продукт из расчёта (не удаляя его)"></th>
               <th className="text-left px-2 py-3 font-bold" data-label="Продукт" style={{ color: 'var(--muted)', fontSize: 'var(--fs-caption)' }}>Продукт</th>
               <th className="text-right px-2 py-3 font-bold" style={{ color: 'var(--muted)', fontSize: 'var(--fs-caption)' }}>
                 <span className="keep-pair">
@@ -130,11 +129,7 @@ export function ChecksTable(props: ChecksTableProps) {
               <b className="keep-num" style={{ color: 'var(--muted)', fontWeight: 600 }}>нет данных</b>
             )}
           </span>
-          {excluded.size > 0 && (
-            <span className="keep-pair cap" style={{ color: 'var(--muted)' }}>
-              без <span className="keep-num">{excluded.size} искл.</span>
-            </span>
-          )}
+
         </div>
       </div>
 
@@ -190,7 +185,7 @@ function GroupRows(props: GroupRowsProps) {
     <>
       {/* Fix-6 (п.25/23): категория — заметная плашка-строка, формат как в чеклисте */}
       <tr>
-        <td colSpan={5} data-label="" className="cell-group px-3 py-1.5 text-xs font-extrabold uppercase tracking-wide"
+        <td colSpan={4} data-label="" className="cell-group px-3 py-1.5 text-xs font-extrabold uppercase tracking-wide"
             style={{ background: 'var(--elev)', color: 'var(--text)', borderTop: '1px solid var(--border)', borderBottom: '1px solid var(--border)' }}>
           {category}
         </td>
@@ -212,17 +207,7 @@ function GroupRows(props: GroupRowsProps) {
             className={needsAttention ? 'row-attention' : undefined}
             style={{ borderBottom: '1px solid var(--border)', opacity: isExcluded ? 0.45 : 1 }}
           >
-            <td className="cell-check px-2 py-2.5 text-center" data-label="">
-              <input
-                type="checkbox"
-                checked={!isExcluded}
-                onChange={() => onToggleExcluded(item.ingredientId)}
-                aria-label={isExcluded ? `Включить в расчёт: ${item.ingredientName}` : `Исключить из расчёта: ${item.ingredientName}`}
-                title={isExcluded ? 'Включить в расчёт' : 'Исключить из расчёта (не удаляя)'}
-                className="cursor-pointer"
-                style={{ accentColor: 'var(--w2)' }}
-              />
-            </td>
+
             <td className="row-title px-2 py-2.5" data-label="">
               <b style={{ color: 'var(--text)' }}>{item.ingredientName}</b>
               {item.manual && (

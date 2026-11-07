@@ -45,13 +45,11 @@ export function ChecksMobile(props: ChecksMobileProps) {
   const cardRef = useRef<HTMLDivElement>(null);
   const searchItems = groups.flatMap(g => g.items.map(i => ({ id: i.ingredientId, text: i.ingredientName })));
   return (
-    <div ref={cardRef} className="md:hidden checks-card rounded-xl max-w-3xl" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }} data-testid="checks-mobile">
-      <div className="px-4 py-3 flex items-center justify-between" style={{ background: 'var(--elev)' }}>
-        <b style={{ color: 'var(--text)' }}>Ввести чек</b>
-        <span className="keep-num cap" style={{ color: 'var(--text-2)' }}>{factCount} из {factsTotal}</span>
-      </div>
-      {/* п.7: липкий поиск — прилипает к верху списка и виден при прокрутке */}
-      <div className="checklist-sticky px-4 py-2" style={{ background: 'var(--bg-1)' }}>
+    <div ref={cardRef} className="md:hidden max-w-3xl space-y-2" data-testid="checks-mobile">
+      {/* п.22 (повторно, 07.11.2026): поиск стоит НАД карточкой и липнет к окну отдельной
+          полосой, а не «внутри таблицы». Раньше он был первым ребёнком карточки и
+          визуально читался как часть таблицы. */}
+      <div className="checklist-sticky checks-search-bar" data-testid="checks-search-bar">
         <ListSearch
           items={searchItems}
           scope={cardRef}
@@ -60,12 +58,18 @@ export function ChecksMobile(props: ChecksMobileProps) {
           placeholder="Найти позицию в чеке…"
         />
       </div>
-      {groups.map(group => (
-        <MobileGroupRows key={group.category} category={group.category} {...props} items={group.items} />
-      ))}
-      <p className="px-4 py-3 cap" style={{ color: 'var(--text-2)' }}>
-        Тап по строке — ввести или поправить стоимость. Детали (нужно/взяли/исключить) — в раскрытии строки.
-      </p>
+      <div className="checks-card rounded-xl" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+        <div className="px-4 py-3 flex items-center justify-between" style={{ background: 'var(--elev)' }}>
+          <b style={{ color: 'var(--text)' }}>Ввести чек</b>
+          <span className="keep-num cap" style={{ color: 'var(--text-2)' }}>{factCount} из {factsTotal}</span>
+        </div>
+        {groups.map(group => (
+          <MobileGroupRows key={group.category} category={group.category} {...props} items={group.items} />
+        ))}
+        <p className="px-4 py-3 cap" style={{ color: 'var(--text-2)' }}>
+          Тап по строке — ввести или поправить стоимость. Детали (нужно/взяли) — в раскрытии строки.
+        </p>
+      </div>
     </div>
   );
 }
@@ -120,8 +124,8 @@ interface MobileCheckRowProps {
 
 function MobileCheckRow(props: MobileCheckRowProps) {
   const {
-    item, excluded, tookValue, pieceWeightG, canEnterCheck, bought,
-    onToggleBought, onCommitActualTotal, onCommitTook, onToggleExcluded,
+    item, excluded, tookValue, pieceWeightG, canEnterCheck,
+    onCommitActualTotal, onCommitTook,
   } = props;
   const [open, setOpen] = useState(false);
   const [entering, setEntering] = useState(false);
@@ -141,19 +145,10 @@ function MobileCheckRow(props: MobileCheckRowProps) {
           по-прежнему раскрывает детали, но DOM валиден и клавиатура честная. */}
       <div className={`checkline${needsAttention ? ' row-attention' : ''}`} data-search-id={item.ingredientId}>
         <div className="checkline__top">
-          {/* UX-осмотр 31.10 (п.7): чекбокс 22×22 — промах пальцем. Хит-зону
-              даёт обёртка-<label> .check-hit (≥40px на pointer:coarse); псевдоэлемент
-              на <input> не работает, поэтому именно обёртка, а не ::after. */}
-          <label className="check-hit checkline__hit">
-            <input
-              type="checkbox"
-              checked={bought}
-              onChange={() => onToggleBought()}
-              aria-label={`Взято: ${item.ingredientName}`}
-              className="checklist-check cursor-pointer"
-              style={{ accentColor: 'var(--w2)', width: 22, height: 22 }}
-            />
-          </label>
+          {/* Владелец 07.11.2026: чекбокс «взято» из строки чека убран — он дублировал
+              отметку в этапе ③ и мешал вводу суммы. Зачёркивание теперь только у позиций
+              с введённой стоимостью (см. ниже). */}
+
           <button
             type="button"
             className="checkline__toggle"
@@ -163,7 +158,7 @@ function MobileCheckRow(props: MobileCheckRowProps) {
             data-testid={`checkline-toggle-${item.ingredientId}`}
             onClick={() => setOpen(v => !v)}
           >
-            <span className="checkline__name" style={{ textDecoration: bought ? 'line-through' : 'none' }}>
+            <span className="checkline__name" style={{ textDecoration: actualTotal != null ? 'line-through' : 'none' }}>
               {item.ingredientName}
             </span>
           </button>
@@ -244,16 +239,8 @@ function MobileCheckRow(props: MobileCheckRowProps) {
               ariaLabel={`Сумма из чека (₽): ${item.ingredientName}`}
             />
           )}
-          <label className="keep-pair keep-pair-center cap cursor-pointer" style={{ color: 'var(--text-2)' }}>
-            <input
-              type="checkbox"
-              checked={!excluded}
-              onChange={() => onToggleExcluded(String(item.ingredientId))}
-              aria-label={excluded ? `Включить в расчёт: ${item.ingredientName}` : `Исключить из расчёта: ${item.ingredientName}`}
-              style={{ accentColor: 'var(--w2)' }}
-            />
-            В расчёте (исключить — снять галочку)
-          </label>
+          {/* Владелец 07.11.2026: галка «в расчёте / исключить» из чеков убрана совсем —
+              исключение позиции живёт в этапе ② «Проверка» (ExclusionCheckbox). */}
         </div>
       )}
     </div>
