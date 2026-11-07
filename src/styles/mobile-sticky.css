@@ -77,9 +77,20 @@
   opacity: 0;
   transition: opacity .18s ease;
 }
-/* Верхний фейд убран (владелец 07.11.2026): под полосой воркфлоу он читался
-   как полупрозрачная щель со списком. Плашки непрозрачные — содержимое под
-   ними и так не видно. */
+.scroll-fade--top {
+  top: var(--sticky-fade-top, 0px);
+  background: linear-gradient(to bottom, var(--bg) 0%, color-mix(in srgb, var(--bg) 55%, transparent) 45%, transparent 100%);
+}
+html.is-scrolled.has-sticky-top .scroll-fade--top { opacity: 1; }
+
+/* Субпиксельный шов между липкими плашками: полоса похода кончается на 130.8px,
+   а липкая плашка начинается с 131px — в эти 0.2px просвечивал текст списка
+   (владелец 07.11.2026: «тонкой полоской видно»). Заклеиваем фоном страницы. */
+html.is-scrolled .trip-strip { box-shadow: 0 1px 0 0 var(--bg); }
+html.is-scrolled .checklist-sticky { box-shadow: 0 -1px 0 0 var(--bg); }
+/* то же для липких строк под шапкой списков (высота шапки округляется до px) */
+html.is-scrolled .page-hero ~ .sticky,
+html.is-scrolled .page-hero ~ .filters-row { box-shadow: 0 -1px 0 0 var(--bg); }
 
 .scroll-fade--bottom {
   bottom: 0;
