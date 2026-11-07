@@ -89,24 +89,20 @@
   .checklist-toolbar button svg { width: 12px; height: 12px; }
   .checklist-toolbar { gap: 6px; }
 
-  /* Плашка плавно сворачивается (max-height) и гаснет. Тряска была не из-за
-     сворачивания, а из-за дребезга порога и пересчёта стилей на каждом событии
-     скролла — теперь в Layout гистерезис и rAF (владелец 07.11.2026). */
+  /* ВАЖНО: плашка только ГАСНЕТ, высота не меняется.
+     Сворачивание через max-height уменьшало высоту документа; когда страница
+     чуть выше экрана, браузер поджимал scrollY, состояние переключалось назад —
+     и плашку начинало дёргать бесконечно (воспроизведено: y 45->49->35->37->8->0).
+     Поэтому анимируем только opacity/transform: раскладка не меняется — нет петли. */
   .checklist-head,
   .checklist-toolbar {
-    overflow: hidden;
-    transition: opacity .2s ease, max-height .26s ease, padding .26s ease, margin .26s ease;
-    max-height: 96px;
-    will-change: opacity, max-height;
+    transition: opacity .2s ease, transform .2s ease;
+    will-change: opacity, transform;
   }
   html.is-scrolled-deep .checklist-head,
   html.is-scrolled-deep .checklist-toolbar {
     opacity: 0;
-    max-height: 0;
-    margin-top: 0;
-    margin-bottom: 0;
-    padding-top: 0;
-    padding-bottom: 0;
+    transform: translateY(-4px);
     pointer-events: none;
   }
 
