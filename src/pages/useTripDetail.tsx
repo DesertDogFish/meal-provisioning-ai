@@ -99,6 +99,9 @@ export function useTripDetail() {
   const [serverOverrides, setServerOverrides] = useState<Record<string, ActualPriceDraft>>({});
   const [shoppingExcluded, setShoppingExcluded] = useState<Set<string>>(new Set());
   const [checklistBought, setChecklistBought] = useState<Set<string>>(new Set());
+  // Владелец 07.11.2026: очищенная цена должна исчезнуть и с серверной части —
+  // иначе старый серверный оверрайд возвращался и строка оставалась зачёркнутой.
+  const [clearedPrices, setClearedPrices] = useState<Set<string>>(new Set());
   // Fix-6 (п.8): сколько РЕАЛЬНО берём — {amount, unit} свободно (г/кг/мл/л/шт/уп),
   // общий стейдж с чеком («Взяли» в чеке берётся ОТСЮДА, повторного ввода нет)
   const [actualQty, setActualQtyState] = useState<Record<string, ChecklistActual>>({});
@@ -321,7 +324,18 @@ export function useTripDetail() {
   const commitCheckTotal = async (row: CheckRow, total: number | null) => {
     if (total == null || Number.isNaN(total)) {
       saveActualPrice(tripKey, row.ingredientId, null);
+      setClearedPrices((prev) => {
+        const next = new Set(prev);
+        next.add(String(row.ingredientId));
+        return next;
+      });
     } else {
+      setClearedPrices((prev) => {
+        if (!prev.has(String(row.ingredientId))) return prev;
+        const next = new Set(prev);
+        next.delete(String(row.ingredientId));
+        return next;
+      });
       const unit = unitFromTotal(total, row.totalAmount);
       if (unit == null) return; // нулевое количество — вводить некуда
       saveActualPrice(tripKey, row.ingredientId, { price: unit, total });
@@ -402,10 +416,12 @@ export function useTripDetail() {
 
   // cleanup-п.5: факт-цены = локальный стейдж поверх серверных оверрайдов —
   // ЕДИНЫЙ источник для всех этапов (②, ④, отчёт): цифры не могут разъехаться.
-  const effectiveOverrides = useMemo(
-    () => ({ ...serverOverrides, ...draftOverrides }),
-    [serverOverrides, draftOverrides],
-  );
+  const effectiveOverrides = useMemo(() => {
+    const merged: Record<string, ActualPriceDraft> = { ...serverOverrides, ...draftOverrides };
+    // локально очищенные цены перебивают серверные (запись удалена пользователем)
+    clearedPrices.forEach((id) => { delete merged[id]; });
+    return merged;
+  }, [serverOverrides, draftOverrides, clearedPrices]);
 
   // Производные view-модели — чистый модуль (тот же порядок вычислений, что
   // раньше был в теле страницы). До загрузки похода считать нечего.
