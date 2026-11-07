@@ -331,7 +331,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         {/* Владелец 07.11.2026: у кромок прокрутки — мягкий фейд, чтобы элементы
             не «касались» липких плашек, а растворялись под ними (сверху — под
             липким стеком, снизу — над нижним баром этапов). */}
-        <div className="scroll-fade scroll-fade--top" aria-hidden />
         <div className="scroll-fade scroll-fade--bottom" aria-hidden />
         {/* Fix-7 (п.9): плавающая кнопка «наверх» (появляется, когда шапка скрыта) */}
         <ScrollTopButton />

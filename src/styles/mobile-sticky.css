@@ -77,11 +77,9 @@
   opacity: 0;
   transition: opacity .18s ease;
 }
-.scroll-fade--top {
-  top: var(--sticky-fade-top, 0px);
-  background: linear-gradient(to bottom, var(--bg) 0%, color-mix(in srgb, var(--bg) 55%, transparent) 45%, transparent 100%);
-}
-html.is-scrolled.has-sticky-top .scroll-fade--top { opacity: 1; }
+/* Верхний фейд убран (владелец 07.11.2026): под полосой воркфлоу он читался
+   как полупрозрачная щель со списком. Плашки непрозрачные — содержимое под
+   ними и так не видно. */
 
 .scroll-fade--bottom {
   bottom: 0;
